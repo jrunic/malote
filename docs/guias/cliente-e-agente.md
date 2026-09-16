@@ -41,7 +41,13 @@ O binário é o próprio repositório, rodando da fonte (sem build):
 git clone https://github.com/jrunic/malote.git
 cd malote
 npm ci
+npm link
 ```
+
+O `npm link` é o que coloca `malote` no PATH — sem ele, `npm ci` sozinho deixa o
+código instalado, mas nenhum comando `malote` disponível fora da pasta do
+repositório. Sem privilégio para link global, rode direto pelo caminho do
+próprio checkout: `./bin/malote conversas --limite 30`.
 
 O que uma consulta por rede usa — duas variáveis de ambiente:
 
