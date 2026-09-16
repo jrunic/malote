@@ -23,6 +23,20 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.18.0] — 2026-09-16
+
+### Adicionado
+
+- **Consulta por rede na CLI.** O mesmo binário consulta o servidor com
+  `MALOTE_SERVIDOR` + `MALOTE_CHAVE_DE_ACESSO`: `conversas` (com busca, fonte,
+  natureza e limite), `mensagens` (janela, autor, paginação por cursor opaco
+  composto — instantes iguais não pulam nem repetem), `buscar` (com filtros),
+  `pessoas` (resolução por texto), `participantes` (com a pergunta de Presença
+  por data) e `relatorio` (por fonte e natureza). Códigos de saída por classe
+  de falha (credencial/conexão/servidor/uso/timeout), no molde do tili.
+  Somente leitura: comando de escrita com `--servidor` recusa antes de abrir
+  base nenhuma.
+
 ## [0.17.0] — 2026-09-16
 
 ### Adicionado
