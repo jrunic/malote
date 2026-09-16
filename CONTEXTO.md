@@ -142,6 +142,24 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
 
 ## Restrições
 
+- **O modo REDE é fail-closed e a guarda morre ANTES de qualquer I/O.** Só os comandos de
+  leitura declarados em `COMANDOS_DE_REDE` consultam por HTTP; comando de escrita com
+  `--servidor` recusa **antes de abrir Registro ou Acervo** — invocação errada não nasce
+  `registro.db` (testado com instalação vazia). A resolução de modo é global: nunca desce
+  para dentro de handler.
+- **Cliente HTTP mora em `src/cli/`, nunca em `src/rede/`.** `src/rede/` é a zona do
+  baileys e a fronteira proíbe `cli` importá-la — a guarda pegou a violação no commit em
+  que nasceu (ciclo 21).
+- **Paginação de Mensagens usa cursor COMPOSTO `(ocorrida_em, id)`, opaco.** O instante
+  sozinho não pagina: instantes iguais pulam ou repetem. O consumidor devolve o token
+  `proximo` que recebeu; a rota trata token inválido como **400**, nunca como primeira
+  página. O oráculo: três Mensagens no mesmo instante, limite 2, virar a página.
+- **Termo do usuário em `LIKE` é literal** — `%` e `_` escapados com `ESCAPE`; busca que
+  interpreta curinga é busca errada em silêncio.
+- **A CLI no modo rede tem código de saída POR CLASSE de falha** (3 credencial, 4 conexão,
+  5 servidor, 6 uso, 7 timeout com resultado desconhecido) — é o que permite agente
+  tratar erro de consulta deterministicamente. `--chave` continua sendo Chave de Operador;
+  a Chave de Acesso vai só por env.
 - **A saída default de `ouvinte estado` é contrato com quem vigia a instalação.** O health-check passa a
   linha **inteira** para `date -u -d`; qualquer linha a mais e a conversão falha, o instante
   vira zero, e a idade calculada vira alarme de silêncio em todas as contas. Sinal novo entra
