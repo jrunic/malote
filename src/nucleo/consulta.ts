@@ -284,6 +284,11 @@ export interface FiltroDeBusca {
   texto: string;
   limite?: number;
   pessoaId?: PessoaId;
+  /** Restringe a busca a uma Conversa. */
+  conversaId?: ConversaId;
+  /** Instantes, na mesma semântica de `--desde`/`--ate` (inclusivos). */
+  de?: number;
+  ate?: number;
 }
 
 export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): MensagemLida[] {
@@ -295,6 +300,18 @@ export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): Mensagem
       `m.autor_id IN (SELECT id FROM identificadores WHERE pessoa_id IN (${SQL_FAMILIA}))`,
     );
     valores.push(filtro.pessoaId, filtro.pessoaId);
+  }
+  if (filtro.conversaId !== undefined) {
+    condicoes.push('m.conversa_id = ?');
+    valores.push(filtro.conversaId);
+  }
+  if (filtro.de !== undefined) {
+    condicoes.push('m.ocorrida_em >= ?');
+    valores.push(filtro.de);
+  }
+  if (filtro.ate !== undefined) {
+    condicoes.push('m.ocorrida_em <= ?');
+    valores.push(filtro.ate);
   }
 
   const linhas = acervo.preparar(

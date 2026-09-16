@@ -3,6 +3,8 @@ import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { raizDeDados, raizDeEstado } from './caminhos.js';
 import { pedirGet } from './cliente.js';
+import { decodificarCursor } from '../nucleo/cursor.js';
+import { expandirData } from '../nucleo/consulta.js';
 import { ehPontoDeEntrada } from './entrada.js';
 import { join } from 'node:path';
 import type { Fonte } from '../nucleo/tipos.js';
@@ -20,6 +22,7 @@ import { passosAplicados } from '../nucleo/migracao.js';
 import {
   listarConversas,
   buscarMensagens,
+  lerMensagens,
   listarSemEndereco,
   conversaExiste,
 } from '../nucleo/consulta.js';
@@ -346,6 +349,7 @@ export async function executarConsultaRede(
   }
   let caminho = '';
   if (grupo === 'conversas') caminho = '/conversas';
+  else if (grupo === 'buscar') caminho = '/buscar';
   else if (grupo === 'mensagens') {
     const conversa = opcao(argumentos, 'conversa');
     if (conversa === undefined) {
@@ -1294,6 +1298,39 @@ function executarComAtor(
       return 0;
     }
 
+    if (grupo === 'mensagens') {
+      const conversa = opcao(argumentos, 'conversa');
+      if (conversa === undefined) throw new Error('Informe --conversa <id>.');
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino.');
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const desde = opcao(argumentos, 'desde');
+        const ate = opcao(argumentos, 'ate');
+        const autor = opcao(argumentos, 'autor');
+        const limite = opcao(argumentos, 'limite');
+        const antes = opcao(argumentos, 'antes');
+        const mensagens = lerMensagens(acervo, {
+          conversaId: conversa,
+          ...(desde === undefined ? {} : { de: expandirData(desde, 'inicio') }),
+          ...(ate === undefined ? {} : { ate: expandirData(ate, 'fim') }),
+          ...(autor === undefined ? {} : { pessoaId: autor }),
+          ...(limite === undefined ? {} : { limite: Number(limite) }),
+          ...(antes === undefined ? {} : { cursor: decodificarCursor(antes) ?? (() => { throw new Error('Cursor invalido — devolva o token proximo tal como recebeu.'); })(), ordem: 'cronologica' as const }),
+        });
+        if (temBandeira(argumentos, 'json')) {
+          escrever(JSON.stringify(mensagens, null, 2));
+        } else {
+          for (const m of mensagens) {
+            escrever(`${new Date(m.ocorridaEm).toISOString()}  ${m.conteudo ?? '(sem texto)'}`);
+          }
+        }
+      } finally {
+        acervo.fechar();
+      }
+      return 0;
+    }
+
     if (grupo === 'conversas') {
       const inquilino = opcao(argumentos, 'inquilino');
       if (inquilino === undefined) throw new Error('Informe --inquilino.');
@@ -1336,9 +1373,17 @@ function executarComAtor(
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
         const pessoa = opcao(argumentos, 'pessoa');
+        const conversa = opcao(argumentos, 'conversa');
+        const desde = opcao(argumentos, 'desde');
+        const ate = opcao(argumentos, 'ate');
+        const limite = opcao(argumentos, 'limite');
         const achadas = buscarMensagens(acervo, {
           texto,
           ...(pessoa === undefined ? {} : { pessoaId: pessoa }),
+          ...(conversa === undefined ? {} : { conversaId: conversa }),
+          ...(desde === undefined ? {} : { de: expandirData(desde, 'inicio') }),
+          ...(ate === undefined ? {} : { ate: expandirData(ate, 'fim') }),
+          ...(limite === undefined ? {} : { limite: Number(limite) }),
         });
         if (temBandeira(argumentos, 'json')) {
           escrever(JSON.stringify(achadas, null, 2));

@@ -145,7 +145,29 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       json(res, 400, { erro: 'informe o parametro texto' });
       return;
     }
-    json(res, 200, { mensagens: buscarMensagens(ctx.acervo, { texto }) });
+    const q = url.searchParams;
+    const limite = q.get('limite');
+    const desde = q.get('desde');
+    const ate = q.get('ate');
+    const autor = q.get('autor');
+    const conversa = q.get('conversa');
+    let filtroDe: number | undefined;
+    let filtroAte: number | undefined;
+    try {
+      if (desde !== null) filtroDe = expandirData(desde, 'inicio');
+      if (ate !== null) filtroAte = expandirData(ate, 'fim');
+    } catch (e) {
+      json(res, 400, { erro: (e as Error).message });
+      return;
+    }
+    json(res, 200, { mensagens: buscarMensagens(ctx.acervo, {
+      texto,
+      ...(autor !== null ? { pessoaId: autor } : {}),
+      ...(conversa !== null ? { conversaId: conversa } : {}),
+      ...(filtroDe !== undefined ? { de: filtroDe } : {}),
+      ...(filtroAte !== undefined ? { ate: filtroAte } : {}),
+      ...(limite !== null ? { limite: Number(limite) } : {}),
+    }) });
     return;
   }
 
