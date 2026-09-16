@@ -347,7 +347,7 @@ export async function executarConsultaRede(
     const valor = opcao(argumentos, nome);
     if (valor !== undefined) q.set(nome, valor);
   }
-  let caminho = '';
+  let caminho: string;
   if (grupo === 'conversas') caminho = '/conversas';
   else if (grupo === 'buscar') caminho = '/buscar';
   else if (grupo === 'pessoas') caminho = '/pessoas';

@@ -87,7 +87,7 @@ test('5xx sai com classe SERVIDOR (5); 404 sai com classe USO (6)', async () => 
 
 test('timeout sai com classe INDETERMINADO (7) e mensagem declara resultado desconhecido', async () => {
   const porta = await portaLivre();
-  const srv = createServer((_req, res) => {
+  const srv = createServer(() => {
     // NÃO responde: deixa o cliente estourar o tempo.
   });
   await new Promise<void>((r) => srv.listen(porta, '127.0.0.1', r));

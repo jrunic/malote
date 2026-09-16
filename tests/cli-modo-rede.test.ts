@@ -73,7 +73,6 @@ test('mensagens por rede, ponta a ponta: subprocesso consulta o servidor real', 
 
     // Servidor de consulta real sobre o Acervo de fixture.
     const { criarServidor } = await import('../src/rede/servidor.js');
-    const { createServer } = await import('node:http');
     const srv = criarServidor({ dados: cena.raiz, porta: 0 });
     const http = srv.listen(0, '127.0.0.1');
     await new Promise<void>((r) => http.once('listening', r));
