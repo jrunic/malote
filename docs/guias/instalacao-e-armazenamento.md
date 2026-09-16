@@ -16,6 +16,8 @@ Como instalar o malote para uso contínuo, onde ele guarda cada coisa, e como op
 backup, serviço de sistema, movimentação de instalação. Para o primeiro contato, comece pelo
 [tutorial](../tutoriais/instalar.md). A decisão de armazenamento está registrada na
 [ADR de armazenamento por categoria](../decisoes/20260916-armazenamento-por-categoria-xdg.md).
+A arquitetura completa num host 24/7 — ouvinte por conta e servidor de consulta — está no
+[guia do host contínuo](host-continuo-ouvinte-e-api.md).
 
 ## Onde está cada coisa
 
