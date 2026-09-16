@@ -374,15 +374,12 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
-- 13/09/2026 — **v0.13.0 em produção** (`production` em `bbc62c4`, tag `v0.13.0`). Acervo
-  **v17** nos dois lados. Suíte: **808 testes, 0 falhas**. CI verde.
-- 13/09/2026 — **a Autoridade da Atribuição de Nome existe e está resolvida em produção**:
-  13.351 Atribuições `titular`, e **13.666 endereços de WhatsApp com nome** contra 7.953 antes
-  do ciclo. O nome de membro de Conversa coletiva entra desde a v0.13.0.
-- 13/09/2026 — **2.276 Atribuições que não nomeavam ninguém foram removidas por Operação**,
-  e a reimportação seguinte **não recriou nenhuma** — o gerador está corrigido, não só o
-  resíduo.
-
+- 16/09/2026 — **repositório público.** O histórico público começa no commit "Initial
+  public release"; o histórico de construção anterior pertence ao repositório privado de
+  origem. **v0.17.0 em produção**, armazenamento XDG por categoria (`XDG_DATA_HOME` para
+  dado, `XDG_STATE_HOME` para estado do ouvinte, `MALOTE_HOME` como válvula). Suíte:
+  **873 testes, 0 falhas**. CI verde (Node 22, Linux). Sem tags públicas ainda — a primeira
+  sai da próxima release.
 - 2026-08-24 — repo criado **privado**. Torna-se público só depois da varredura anti-vazamento de conteúdo E do espaço de refs do remoto — refs de pull request sobrevivem ao squash, e a única remoção confiável é apagar e recriar.
 - 2026-08-26 — **ciclo 2 entregue**: segundo adaptador (Instagram, material exportado). Suíte em 138 verdes. O teste de aceite do desenho passou — acrescentar Fonte não alterou uma linha de `src/nucleo/` nem de `src/registro/`, medido por diff contra a linha de base do ciclo.
 - 2026-08-28 — **ciclo 4 entregue**: ingestão recorrente. Suíte em 244 verdes. O Acervo passou a lembrar qual Material já entrou (schema v5), a Configuração de Adaptador saiu de tabela morta para chave do Estado de Sincronização, e o adaptador de WhatsApp passou a ler a conta business — que era ilegível.
