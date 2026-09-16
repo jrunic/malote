@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { criarServidor } from '../src/rede/servidor.js';
-import { pedirGet, CodigoDeFalha } from '../src/rede/cliente.js';
+import { pedirGet, CodigoDeFalha } from '../src/cli/cliente.js';
 
 const SERVIDOR = 'http://127.0.0.1';
 

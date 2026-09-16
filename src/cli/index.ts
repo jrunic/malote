@@ -2,8 +2,10 @@
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { raizDeDados, raizDeEstado } from './caminhos.js';
+import { pedirGet } from './cliente.js';
 import { ehPontoDeEntrada } from './entrada.js';
 import { join } from 'node:path';
+import type { Fonte } from '../nucleo/tipos.js';
 import {
   abrirRegistro,
   criarInquilino,
@@ -327,6 +329,39 @@ const COMANDOS_DE_REDE = new Set([
 ]);
 
 /**
+ * Modo REDE: executa um comando de consulta por HTTP. A resposta sai no MESMO
+ * formato do modo local quando ha saida em texto; o --json devolve o corpo da
+ * API. O codigo de saida e o contrato do cliente (3/4/5/6/7).
+ */
+export async function executarConsultaRede(
+  argumentos: string[],
+  rede: { servidor: string; chave: string; escrever: (t: string) => void },
+): Promise<number> {
+  const grupo = argumentos[0];
+  const q = new URLSearchParams();
+  for (const nome of ['busca', 'fonte', 'coletiva', 'pessoa', 'limite', 'conversa',
+    'autor', 'desde', 'ate', 'antes', 'em', 'texto']) {
+    const valor = opcao(argumentos, nome);
+    if (valor !== undefined) q.set(nome, valor);
+  }
+  let caminho = '';
+  if (grupo === 'conversas') caminho = '/conversas';
+  else {
+    rede.escrever(`"${grupo}" ainda nao consulta por rede.`);
+    return 2;
+  }
+  const qs = q.toString();
+  try {
+    const r = await pedirGet(rede.servidor, rede.chave, `${caminho}${qs ? `?${qs}` : ''}`);
+    rede.escrever(JSON.stringify(JSON.parse(r.corpo), null, 2));
+    return 0;
+  } catch (e) {
+    rede.escrever((e as Error).message);
+    return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
+  }
+}
+
+/**
  * Executa a CLI. Recebe o ambiente por parâmetro em vez de ler `process`,
  * para que o teste rode o caminho real sem tocar no processo nem no HOME.
  */
@@ -355,15 +390,12 @@ export function executar(argumentos: string[], ambiente: Ambiente): number {
   // todo o resto com --servidor/MALOTE_SERVIDOR recusa como operacao local.
   const servidorRede = opcao(argumentos, 'servidor') ?? ambiente.servidor;
   if (servidorRede !== undefined) {
-    const grupo = argumentos[0];
-    if (grupo === undefined || !COMANDOS_DE_REDE.has(grupo)) {
-      escrever(`"${argumentos[0] ?? ''}" e uma operacao LOCAL — o modo rede so consulta.`);
-      return 2;
-    }
-    if (ambiente.chave === undefined) {
-      escrever('Informe MALOTE_CHAVE_DE_ACESSO: a Chave de Acesso e a identidade da consulta por rede.');
-      return 2;
-    }
+    // O caminho legitimo da rede e interceptado no bloco de entrada
+    // (executarConsultaRede). Se chegou AQUI com servidor declarado, ou e
+    // comando que a rede nao atende (escrita/operacao), ou a invocacao veio
+    // direta — nos dois casos, e local.
+    escrever(`"${argumentos[0] ?? ''}" e uma operacao LOCAL — o modo rede so consulta.`);
+    return 2;
   }
 
   // Abrir o Registro pode MIGRAR, e migrar grava Operacao — entao a abertura
@@ -1264,7 +1296,17 @@ function executarComAtor(
         // exactOptionalPropertyTypes, propriedade opcional nao aceita
         // `undefined` explicito, e o tipo de `opcao` e `string | undefined`.
         const pessoa = opcao(argumentos, 'pessoa');
-        const conversas = listarConversas(acervo, pessoa === undefined ? {} : { pessoaId: pessoa });
+        const busca = opcao(argumentos, 'busca');
+        const fonte = opcao(argumentos, 'fonte');
+        const coletiva = opcao(argumentos, 'coletiva');
+        const limite = opcao(argumentos, 'limite');
+        const conversas = listarConversas(acervo, {
+          ...(pessoa === undefined ? {} : { pessoaId: pessoa }),
+          ...(busca === undefined ? {} : { busca }),
+          ...(fonte === undefined ? {} : { fonte: fonte as Fonte }),
+          ...(coletiva === undefined ? {} : { coletiva: coletiva === 'true' }),
+          ...(limite === undefined ? {} : { limite: Number(limite) }),
+        });
         if (temBandeira(argumentos, 'json')) {
           escrever(JSON.stringify(conversas, null, 2));
         } else {
@@ -2036,6 +2078,12 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
   const ambiente: Ambiente = {
     dados: raizDeDados(process.env),
     estado: raizDeEstado(process.env),
+    ...(process.env['MALOTE_SERVIDOR'] !== undefined
+      ? { servidor: process.env['MALOTE_SERVIDOR'] }
+      : {}),
+    ...(process.env['MALOTE_CHAVE_DE_ACESSO'] !== undefined
+      ? { chave: process.env['MALOTE_CHAVE_DE_ACESSO'] }
+      : {}),
     escrever: (texto) => console.log(texto),
   };
   // O ouvinte e o unico comando assincrono: ele nao termina sozinho. Despacha-lo
@@ -2045,6 +2093,20 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
     void ouvir(argumentos, ambiente).then((codigo) => process.exit(codigo));
   } else if (argumentos[0] === 'servir') {
     void servir(argumentos, ambiente).then((codigo) => process.exit(codigo));
+  } else if (COMANDOS_DE_REDE.has(argumentos[0] ?? '') && ambiente.servidor !== undefined) {
+    // Modo REDE: a consulta e async (HTTP), e o executar e sincrono — mesmo
+    // padrao do ouvir. A chave e a identidade; sem ela, recusa com o contrato
+    // do cliente.
+    const chave = ambiente.chave;
+    if (chave === undefined) {
+      console.log('Informe MALOTE_CHAVE_DE_ACESSO: a Chave de Acesso e a identidade da consulta por rede.');
+      process.exit(2);
+    }
+    void executarConsultaRede(argumentos, {
+      servidor: opcao(argumentos, 'servidor') ?? (ambiente.servidor as string),
+      chave,
+      escrever: (t) => console.log(t),
+    }).then((codigo) => process.exit(codigo));
   } else {
     process.exit(executar(argumentos, ambiente));
   }

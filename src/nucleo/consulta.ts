@@ -81,6 +81,9 @@ export interface FiltroDeConversa {
   fonte?: Fonte;
   coletiva?: boolean;
   pessoaId?: PessoaId;
+  /** Assunto contém o termo, case-insensitive, LITERAL — `%` e `_` escapados. */
+  busca?: string;
+  limite?: number;
 }
 
 export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): ConversaListada[] {
@@ -104,7 +107,19 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
     );
     valores.push(filtro.pessoaId, filtro.pessoaId);
   }
+  if (filtro.busca !== undefined) {
+    // Termo do usuario e LITERAL: % e _ sao escapados, senao "100%" casa
+    // qualquer coisa. LOWER para case-insensitive por ser ASCII-safe.
+    condicoes.push(
+      "LOWER(m.assunto) LIKE LOWER(?) ESCAPE '\\'",
+    );
+    valores.push(
+      filtro.busca.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
+        .replace(/^/, '%') + '%',
+    );
+  }
   const onde = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
+  const limite = filtro.limite !== undefined ? ` LIMIT ${Number(filtro.limite)}` : '';
 
   const linhas = acervo.preparar(
       `SELECT c.id, c.fonte, c.coletiva, m.assunto,
@@ -112,7 +127,7 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
          FROM conversas c
          LEFT JOIN metadados_de_coletiva m ON m.conversa_id = c.id
          ${onde}
-         ORDER BY c.criada_em`,
+         ORDER BY c.criada_em${limite}`,
     )
     .all(...valores) as Array<Record<string, unknown>>;
 

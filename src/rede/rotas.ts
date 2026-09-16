@@ -4,7 +4,7 @@ import { buscarMensagens, lerMensagens, listarConversas } from '../nucleo/consul
 import { abrirRegistro } from '../registro/registro.js';
 import { listarChavesDeAcesso } from '../registro/chave-de-acesso.js';
 import type { IdentidadeDeAcesso } from '../registro/chave-de-acesso.js';
-import type { ConversaId } from '../nucleo/tipos.js';
+import type { ConversaId, Fonte } from '../nucleo/tipos.js';
 
 /**
  * As rotas. Cada uma recebe o Acervo que a Chave abriu e devolve dado.
@@ -48,7 +48,21 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
   }
 
   if (partes.length === 1 && partes[0] === 'conversas') {
-    const conversas = listarConversas(ctx.acervo, {}).map((c) => ({
+    // Parametros OPCIONAIS: quem nao os envia recebe a resposta de sempre —
+    // o contrato publicado no guia do cliente nao muda de significado.
+    const q = url.searchParams;
+    const fonte = q.get('fonte') ?? undefined;
+    const coletiva = q.get('coletiva');
+    const busca = q.get('busca') ?? undefined;
+    const pessoa = q.get('pessoa') ?? undefined;
+    const limite = q.get('limite') ?? undefined;
+    const conversas = listarConversas(ctx.acervo, {
+      ...(fonte !== undefined ? { fonte: fonte as Fonte } : {}),
+      ...(coletiva !== undefined ? { coletiva: coletiva === 'true' } : {}),
+      ...(busca !== undefined ? { busca } : {}),
+      ...(pessoa !== undefined ? { pessoaId: pessoa } : {}),
+      ...(limite !== undefined ? { limite: Number(limite) } : {}),
+    }).map((c) => ({
       id: c.id,
       fonte: c.fonte,
       coletiva: c.coletiva,
