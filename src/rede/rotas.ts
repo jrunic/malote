@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Acervo } from '../nucleo/acervo.js';
-import { buscarMensagens, lerMensagens, listarConversas } from '../nucleo/consulta.js';
+import { buscarMensagens, expandirData, lerMensagens, listarConversas } from '../nucleo/consulta.js';
+import { codificarCursor, decodificarCursor } from '../nucleo/cursor.js';
 import { abrirRegistro } from '../registro/registro.js';
 import { listarChavesDeAcesso } from '../registro/chave-de-acesso.js';
 import type { IdentidadeDeAcesso } from '../registro/chave-de-acesso.js';
@@ -75,7 +76,43 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
 
   if (partes.length === 3 && partes[0] === 'conversas' && partes[2] === 'mensagens') {
     const conversaId = partes[1] as ConversaId;
-    const mensagens = lerMensagens(ctx.acervo, { conversaId });
+    const q = url.searchParams;
+    const limite = q.get('limite');
+    const desde = q.get('desde');
+    const ate = q.get('ate');
+    const autor = q.get('autor');
+    const antes = q.get('antes');
+    let cursor: { ocorridaEm: number; id: string } | undefined;
+    if (antes !== null) {
+      cursor = decodificarCursor(antes);
+      // Cursor invalido e erro de USO: tratar como primeira pagina seria uma
+      // leitura silenciosamente errada (revisao do ciclo 21).
+      if (cursor === undefined) {
+        json(res, 400, { erro: 'cursor invalido — devolva o token `proximo` tal como recebeu' });
+        return;
+      }
+    }
+    let filtroDe: number | undefined;
+    let filtroAte: number | undefined;
+    try {
+      if (desde !== null) filtroDe = expandirData(desde, 'inicio');
+      if (ate !== null) filtroAte = expandirData(ate, 'fim');
+    } catch (e) {
+      json(res, 400, { erro: (e as Error).message });
+      return;
+    }
+    const mensagens = lerMensagens(ctx.acervo, {
+      conversaId,
+      ...(filtroDe !== undefined ? { de: filtroDe } : {}),
+      ...(filtroAte !== undefined ? { ate: filtroAte } : {}),
+      ...(autor !== null ? { pessoaId: autor } : {}),
+      ...(limite !== null ? { limite: Number(limite) } : {}),
+      ...(cursor !== undefined
+        ? { cursor, ordem: q.get('ordem') === 'cronologica' ? ('cronologica' as const) : ('recentes' as const) }
+        : q.get('ordem') === 'cronologica'
+          ? { ordem: 'cronologica' as const }
+          : {}),
+    });
     if (mensagens.length === 0) {
       // Conversa vazia e Conversa inexistente respondem igual. E limitacao
       // conhecida e preferivel ao inverso: distinguir exigiria confirmar a
@@ -83,7 +120,20 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       naoEncontrado(res);
       return;
     }
-    json(res, 200, { mensagens });
+    // O cursor `proximo` so existe quando ha mais paginas: o consumidor nunca
+    // monta cursor, devolve o que recebeu.
+    const temMais = limite !== null && mensagens.length >= Number(limite);
+    json(res, 200, {
+      mensagens,
+      ...(temMais
+        ? {
+            proximo: codificarCursor({
+              ocorridaEm: mensagens[mensagens.length - 1]!.ocorridaEm,
+              id: mensagens[mensagens.length - 1]!.id,
+            }),
+          }
+        : {}),
+    });
     return;
   }
 

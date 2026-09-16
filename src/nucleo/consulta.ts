@@ -190,6 +190,25 @@ function montarMensagens(acervo: Acervo, linhas: Array<Record<string, unknown>>)
   });
 }
 
+/**
+ * `AAAA-MM-DD` expande para inicio/fim do dia em UTC — o mesmo valor em
+ * qualquer maquina cliente (revisao do ciclo 21). Instante completo `...Z`
+ * passa cru. `--desde`/`--ate` sao inclusivos: inicio e fim, respectivamente.
+ */
+export function expandirData(
+  valor: string,
+  borda: 'inicio' | 'fim',
+): number {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+    const base = Date.parse(`${valor}T00:00:00Z`);
+    if (Number.isNaN(base)) throw new Error(`data invalida: ${valor}`);
+    return borda === 'inicio' ? base : base + 86_399_999;
+  }
+  const instante = Date.parse(valor);
+  if (Number.isNaN(instante)) throw new Error(`instante invalido: ${valor}`);
+  return instante;
+}
+
 export function lerMensagens(acervo: Acervo, filtro: FiltroDeMensagem): MensagemLida[] {
   const condicoes: string[] = [];
   const valores: unknown[] = [];

@@ -346,7 +346,14 @@ export async function executarConsultaRede(
   }
   let caminho = '';
   if (grupo === 'conversas') caminho = '/conversas';
-  else {
+  else if (grupo === 'mensagens') {
+    const conversa = opcao(argumentos, 'conversa');
+    if (conversa === undefined) {
+      rede.escrever('Informe --conversa <id>.');
+      return 2;
+    }
+    caminho = `/conversas/${conversa}/mensagens`;
+  } else {
     rede.escrever(`"${grupo}" ainda nao consulta por rede.`);
     return 2;
   }
