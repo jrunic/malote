@@ -424,3 +424,78 @@ export function conversaExiste(acervo: Acervo, conversaId: string): boolean {
     .get(conversaId) as { achou: number } | undefined;
   return linha !== undefined;
 }
+
+/** Pessoa resolvida por texto: id + nomes + identificadores, para a rede. */
+export interface PessoaResolvida {
+  id: string;
+  nome: string | null;
+  identificadores: string[];
+}
+
+/**
+ * Resolve Pessoa por texto — nome de atribuicao, titular ou endereco. A busca
+ * por rede e a UNICA entrada por texto: os demais pontos recebem o id.
+ */
+export function procurarPessoas(acervo: Acervo, filtro: { texto: string }): PessoaResolvida[] {
+  const termo = `%${filtro.texto.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}%`;
+  const linhas = acervo.preparar(
+      `SELECT p.id,
+              (SELECT a.nome FROM atribuicoes_de_nome a
+                 JOIN identificadores i2 ON i2.id = a.identificador_id
+                WHERE i2.pessoa_id = p.id
+                ORDER BY a.autoridade DESC, a.ultimo_avistamento DESC LIMIT 1) AS nome,
+              (SELECT GROUP_CONCAT(i.valor, char(10)) FROM identificadores i WHERE i.pessoa_id = p.id) AS identificadores
+         FROM pessoas p
+        WHERE p.id IN (
+                SELECT pessoa_id FROM identificadores WHERE valor LIKE ? ESCAPE '\\'
+              )
+           OR p.id IN (
+                SELECT i.pessoa_id FROM identificadores i
+                 JOIN atribuicoes_de_nome a ON a.identificador_id = i.id
+                WHERE LOWER(a.nome) LIKE LOWER(?) ESCAPE '\\'
+              )
+        LIMIT 30`,
+    )
+    .all(termo, termo) as Array<Record<string, unknown>>;
+  return linhas.map((l) => ({
+    id: l['id'] as string,
+    nome: (l['nome'] as string | null) ?? null,
+    identificadores: ((l['identificadores'] as string | null) ?? '').length
+      ? (l['identificadores'] as string).split('\n')
+      : [],
+  }));
+}
+
+/** Totais por Fonte — direta/coletiva vale para Conversas; Mensagens por Fonte. */
+export interface ContagemPorFonte {
+  conversas: { porFonte: Record<string, { direta: number; coletiva: number; total: number }>; total: number };
+  mensagens: { porFonte: Record<string, number>; total: number };
+}
+
+export function contarPorFonte(acervo: Acervo): ContagemPorFonte {
+  const linhasConversas = acervo.preparar(
+      'SELECT fonte, coletiva, COUNT(*) AS n FROM conversas GROUP BY fonte, coletiva',
+    )
+    .all() as Array<Record<string, unknown>>;
+  const conversas: ContagemPorFonte['conversas'] = { porFonte: {}, total: 0 };
+  for (const l of linhasConversas) {
+    const fonte = l['fonte'] as string;
+    const n = l['n'] as number;
+    conversas.porFonte[fonte] ??= { direta: 0, coletiva: 0, total: 0 };
+    if (l['coletiva'] === 1) conversas.porFonte[fonte]!.coletiva += n;
+    else conversas.porFonte[fonte]!.direta += n;
+    conversas.porFonte[fonte]!.total += n;
+    conversas.total += n;
+  }
+  const linhasMensagens = acervo.preparar(
+      'SELECT fonte, COUNT(*) AS n FROM mensagens GROUP BY fonte',
+    )
+    .all() as Array<Record<string, unknown>>;
+  const mensagens: ContagemPorFonte['mensagens'] = { porFonte: {}, total: 0 };
+  for (const l of linhasMensagens) {
+    const fonte = l['fonte'] as string;
+    mensagens.porFonte[fonte] = l['n'] as number;
+    mensagens.total += l['n'] as number;
+  }
+  return { conversas, mensagens };
+}

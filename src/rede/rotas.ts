@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Acervo } from '../nucleo/acervo.js';
-import { buscarMensagens, expandirData, lerMensagens, listarConversas } from '../nucleo/consulta.js';
+import { buscarMensagens, contarPorFonte, expandirData, lerMensagens, listarConversas, procurarPessoas } from '../nucleo/consulta.js';
+import { quemEstavaEm } from '../nucleo/presenca.js';
 import { codificarCursor, decodificarCursor } from '../nucleo/cursor.js';
 import { abrirRegistro } from '../registro/registro.js';
 import { listarChavesDeAcesso } from '../registro/chave-de-acesso.js';
@@ -184,6 +185,41 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     } finally {
       registro.fechar();
     }
+    return;
+  }
+
+  if (partes.length === 1 && partes[0] === 'pessoas') {
+    const texto = url.searchParams.get('texto');
+    if (texto === null || texto === '') {
+      json(res, 400, { erro: 'informe o parametro texto' });
+      return;
+    }
+    // Envoltorio nomeado, forma das outras rotas; Pessoa inexistente e lista
+    // vazia — e busca, nao endereco.
+    json(res, 200, { pessoas: procurarPessoas(ctx.acervo, { texto }) });
+    return;
+  }
+
+  if (partes.length === 3 && partes[0] === 'conversas' && partes[2] === 'participantes') {
+    const conversaId = partes[1] as ConversaId;
+    const emParam = url.searchParams.get('em');
+    let em = Date.now();
+    if (emParam !== null) {
+      try {
+        em = expandirData(emParam, 'fim');
+      } catch (e) {
+        json(res, 400, { erro: (e as Error).message });
+        return;
+      }
+    }
+    // A pergunta de Presenca que o modelo ja responde; o --em e o fim do dia
+    // capado ao Alcance, regra medida (CONTEXTO.md).
+    json(res, 200, { presenca: quemEstavaEm(ctx.acervo, { conversaId, em }) });
+    return;
+  }
+
+  if (partes.length === 1 && partes[0] === 'relatorio') {
+    json(res, 200, { relatorio: contarPorFonte(ctx.acervo) });
     return;
   }
 

@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { raizDeDados, raizDeEstado } from './caminhos.js';
 import { pedirGet } from './cliente.js';
 import { decodificarCursor } from '../nucleo/cursor.js';
-import { expandirData } from '../nucleo/consulta.js';
+import { expandirData, procurarPessoas } from '../nucleo/consulta.js';
 import { ehPontoDeEntrada } from './entrada.js';
 import { join } from 'node:path';
 import type { Fonte } from '../nucleo/tipos.js';
@@ -350,6 +350,16 @@ export async function executarConsultaRede(
   let caminho = '';
   if (grupo === 'conversas') caminho = '/conversas';
   else if (grupo === 'buscar') caminho = '/buscar';
+  else if (grupo === 'pessoas') caminho = '/pessoas';
+  else if (grupo === 'participantes') {
+    const conversa = opcao(argumentos, 'conversa');
+    if (conversa === undefined) {
+      rede.escrever('Informe --conversa <id>.');
+      return 2;
+    }
+    caminho = `/conversas/${conversa}/participantes`;
+  }
+  else if (grupo === 'relatorio') caminho = '/relatorio';
   else if (grupo === 'mensagens') {
     const conversa = opcao(argumentos, 'conversa');
     if (conversa === undefined) {
@@ -1292,6 +1302,39 @@ function executarComAtor(
               `${l.valor}\t${l.identificadorId}`,
           );
         }
+      } finally {
+        acervo.fechar();
+      }
+      return 0;
+    }
+
+    if (grupo === 'pessoas') {
+      const texto = opcao(argumentos, 'texto');
+      if (texto === undefined) throw new Error('Informe --texto.');
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino.');
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const achadas = procurarPessoas(acervo, { texto });
+        escrever(JSON.stringify({ pessoas: achadas }, null, 2));
+      } finally {
+        acervo.fechar();
+      }
+      return 0;
+    }
+
+    if (grupo === 'participantes') {
+      const conversa = opcao(argumentos, 'conversa');
+      if (conversa === undefined) throw new Error('Informe --conversa <id>.');
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino.');
+      const emParam = opcao(argumentos, 'em');
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        // Sem --em: agora. Com --em: fim do dia capado ao Alcance, a regra
+        // medida que o CONTEXTO registra.
+        const em = emParam === undefined ? Date.now() : expandirData(emParam, 'fim');
+        escrever(JSON.stringify(quemEstavaEm(acervo, { conversaId: conversa, em }), null, 2));
       } finally {
         acervo.fechar();
       }
