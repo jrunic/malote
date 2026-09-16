@@ -167,6 +167,12 @@ export interface FiltroDeMensagem {
     */
   favorito?: boolean;
   configuracaoId?: string;
+  /** Quantidade maxima de Mensagens devolvidas. */
+  limite?: number;
+  /** 'cronologica' (default) ou 'recentes' — sempre por (ocorrida_em, id). */
+  ordem?: 'cronologica' | 'recentes';
+  /** Paginacao: token composto (ocorrida_em, id) EXCLUSIVO — sem pular nem repetir. */
+  cursor?: { ocorridaEm: number; id: string };
 }
 
 function montarMensagens(acervo: Acervo, linhas: Array<Record<string, unknown>>): MensagemLida[] {
@@ -187,6 +193,7 @@ function montarMensagens(acervo: Acervo, linhas: Array<Record<string, unknown>>)
 export function lerMensagens(acervo: Acervo, filtro: FiltroDeMensagem): MensagemLida[] {
   const condicoes: string[] = [];
   const valores: unknown[] = [];
+  const limites: string[] = [];
 
   if (filtro.conversaId !== undefined) {
     condicoes.push('m.conversa_id = ?');
@@ -211,6 +218,20 @@ export function lerMensagens(acervo: Acervo, filtro: FiltroDeMensagem): Mensagem
     condicoes.push('m.ocorrida_em <= ?');
     valores.push(filtro.ate);
   }
+  // Cursor COMPOSTO e EXCLUSIVO: o instante sozinho nao pagina — duas
+  // Mensagens podem ter o mesmo instante, e o limite caindo no meio desse
+  // conjunto pularia ou repetiria (revisao do ciclo 21).
+  if (filtro.cursor !== undefined) {
+    if (filtro.ordem === 'recentes') {
+      condicoes.push('(m.ocorrida_em < ? OR (m.ocorrida_em = ? AND m.id < ?))');
+    } else {
+      condicoes.push('(m.ocorrida_em > ? OR (m.ocorrida_em = ? AND m.id > ?))');
+    }
+    valores.push(filtro.cursor.ocorridaEm, filtro.cursor.ocorridaEm, filtro.cursor.id);
+  }
+  if (filtro.limite !== undefined) {
+    limites.push(` LIMIT ${Number(filtro.limite)}`);
+  }
   // `=== true` por explicitude, e NAO porque um teste separe as duas formas: o
   // campo e `boolean | undefined`, entao `if (filtro.favorito)` se comporta
   // igual em todo input possivel. O mutante que trocou uma pela outra
@@ -230,9 +251,10 @@ export function lerMensagens(acervo: Acervo, filtro: FiltroDeMensagem): Mensagem
   }
 
   const onde = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
+  const ordem = filtro.ordem === 'recentes' ? 'DESC' : 'ASC';
   const linhas = acervo.preparar(
       `SELECT m.id, m.conversa_id, m.fonte, m.autor_id, m.conteudo, m.ocorrida_em
-         FROM mensagens m ${onde} ORDER BY m.ocorrida_em`,
+         FROM mensagens m ${onde} ORDER BY m.ocorrida_em ${ordem}, m.id ${ordem}${limites.join('')}`,
     )
     .all(...valores) as Array<Record<string, unknown>>;
 
