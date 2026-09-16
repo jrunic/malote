@@ -17,8 +17,9 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o
 versionamento segue [SemVer](https://semver.org/lang/pt-BR/). Enquanto a versão
 maior for `0`, a interface pode mudar entre versões menores.
 
-Cada entrada tem uma tag `vX.Y.Z` no commit publicado, e o intervalo entre duas
-tags é o que este arquivo descreve.
+Cada entrada tem uma tag `vX.Y.Z` no commit publicado. O histórico público começa no
+commit "Initial public release": as entradas anteriores são o registro fiel do que foi
+publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
 ## [Não publicado]
 
