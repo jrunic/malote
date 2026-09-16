@@ -1,0 +1,28 @@
+#!/usr/bin/env node
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+// O produto roda DA FONTE, sem build (decisao de 03/09/2026 — ver CONTEXTO.md):
+// `dist/` nunca existe numa instalacao real da frota nem de terceiro.
+//
+// `node --import tsx` resolve o pacote `tsx` pelo CWD do PROCESSO, e nao pelo
+// caminho do script que o invoca. Sem fixar `cwd` na raiz do repositorio
+// (onde `tsx` esta em `node_modules`), rodar `malote` de qualquer outro
+// diretorio falha com ERR_MODULE_NOT_FOUND — era a gambiarra que a instalacao
+// na frota precisou inventar do lado de fora (tarefa #991/#992).
+const raizDoRepositorio = dirname(dirname(fileURLToPath(import.meta.url)));
+const cliDaFonte = join(raizDoRepositorio, 'src', 'cli', 'index.ts');
+
+const resultado = spawnSync(
+  process.execPath,
+  ['--import', 'tsx', cliDaFonte, ...process.argv.slice(2)],
+  { cwd: raizDoRepositorio, stdio: 'inherit' },
+);
+
+if (resultado.error) {
+  console.error(resultado.error.message);
+  process.exit(1);
+}
+
+process.exit(resultado.status ?? 1);
