@@ -12,11 +12,26 @@ tags: [guia, cliente, api, agente, http]
 
 # Guia: consultar o Acervo de uma máquina cliente — e ensinar um agente
 
-A forma recomendada de consultar é a **CLI do próprio malote**: mesmo binário, comandos com
-o vocabulário do domínio, código de saída tratável. O servidor que atende é o `malote
-servir` — a sua instalação está descrita no
-[guia do host contínuo](host-continuo-ouvinte-e-api.md). A API HTTP por trás (`curl`) fica
-como referência na segunda metade deste guia.
+## Cliente × servidor: quem é o quê
+
+São **duas máquinas com papéis diferentes**, e confundi-las é a origem de quase toda
+pergunta de instalação:
+
+| | **Servidor** (host 24/7) | **Cliente** (sua máquina de trabalho) |
+|---|---|---|
+| O que tem | **o dado todo** (Registro, Acervos, mídia, material) + os serviços (ouvinte, `servir`) | **só o código** do repositório + a Chave de Acesso |
+| Guarda conversa? | Sim — e é o único lugar | **Não. Nada do Acervo vive aqui.** |
+| Instalação | clonar + `npm ci` + unidades systemd ([guia do host](host-continuo-ouvinte-e-api.md)) | clonar + `npm ci` — sem serviço, sem base, sem pasta de estado |
+| Como acessa o Acervo | direto no disco | **por rede, com a Chave** — nada é copiado para a cliente |
+| Perde a máquina? | perde o dado — backup obrigatório ([guia de armazenamento](instalacao-e-armazenamento.md)) | perde nada: clona de novo e usa a chave de novo (ou emite outra) |
+
+Consequência prática: **a máquina cliente não guarda conversa nenhuma** — nem em banco,
+nem em cache. O que ela tem é o código que pergunta e a credencial que autoriza. É por
+isso que um cliente não precisa de backup do Acervo, não precisa das pastas XDG do
+produto, e não roda ouvinte nem servidor.
+
+Esta guia cobre o lado cliente. O servidor inteiro está no
+[guia do host contínuo](host-continuo-ouvinte-e-api.md).
 
 ## 1. Instalar a CLI na máquina cliente
 
@@ -38,6 +53,13 @@ O que uma consulta por rede usa — duas variáveis de ambiente:
 A chave é segredo: uma por consumidor (um por agente/aplicação), revogável no servidor.
 Não a escreva em arquivo versionado, script commitado ou log. Com `--servidor <url>` você
 declara o endereço por invocação, em vez de env.
+
+Duas coisas que a máquina cliente **não** precisa:
+
+- **nenhuma pasta do produto** — consulta por rede não abre base, não cria diretório, não
+  lê XDG (`MALOTE_HOME`/`XDG_*_HOME` são assunto do servidor);
+- **nenhuma unidade de serviço** — quem roda 24/7 é o servidor; a cliente só executa o
+  comando quando alguém pergunta algo.
 
 ## 2. Os comandos
 

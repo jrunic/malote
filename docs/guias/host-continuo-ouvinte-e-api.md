@@ -19,6 +19,12 @@ produto foi desenhado. Ao final você terá:
 - o **servidor de consulta** expondo o Acervo por rede, autenticado;
 - dado protegido por categoria e saúde verificável de fora.
 
+**Esta é a máquina do dado**: tudo que este guia instala e protege — Acervo, mídia,
+Registro, vínculos, serviços — vive AQUI, e em nenhuma outra. As máquinas de quem consulta
+(o dia a dia, o agente) são **clientes**: levam só o código e a Chave de Acesso, nunca o
+dado — o que elas instalam e o que elas *não* precisam ter está no
+[guia do cliente e do agente](cliente-e-agente.md).
+
 É a continuação do [tutorial](../tutoriais/instalar.md) (faça-o primeiro: Chave de
 Operador, Inquilino e primeiro material) e do
 [guia de instalação e armazenamento](instalacao-e-armazenamento.md) (categorias XDG e

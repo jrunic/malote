@@ -21,6 +21,10 @@ A arquitetura completa num host 24/7 — ouvinte por conta e servidor de consult
 
 ## Onde está cada coisa
 
+**Tudo desta seção vive na máquina servidora** — a que guarda o Acervo e roda os serviços.
+A máquina cliente não tem pasta do produto, não guarda conversa e não precisa de backup de
+Acervo (ver [cliente × servidor](cliente-e-agente.md)).
+
 | variável | o que guarda | se perder |
 |---|---|---|
 | `XDG_DATA_HOME` (default `~/.local/share`) | `malote/` com Registro, Acervos, mídia, material — **dado** | não se reconstrói |
