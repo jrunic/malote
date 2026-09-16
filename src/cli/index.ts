@@ -182,6 +182,13 @@ export interface Ambiente {
    * refaz, mais a credencial do vinculo, que se move com a pasta.
    */
   estado: string;
+  /**
+   * Modo REDE, quando presente: a consulta vai por HTTP para este servidor
+   * com esta Chave de Acesso (a chave e a identidade — Inquilino dela, nunca
+   * do chamador). Ausentes = modo local, que nada aqui muda.
+   */
+  servidor?: string;
+  chave?: string;
   escrever: (texto: string) => void;
   /**
    * Se ha alguem escutando esta conta. Injetavel porque perguntar ao sistema e
@@ -306,6 +313,20 @@ function acervoDoInquilino(registro: Registro, raiz: string, inquilinoId: string
 }
 
 /**
+ * Comandos que o modo REDE atende. FAIL-CLOSED: leitura declarada, todo o
+ * resto e local — comando novo de leitura que deva ir por rede ENTRA AQUI,
+ * e o teste cli-modo-rede cobre a recusa do resto.
+ */
+const COMANDOS_DE_REDE = new Set([
+  'conversas',
+  'mensagens',
+  'buscar',
+  'pessoas',
+  'participantes',
+  'relatorio',
+]);
+
+/**
  * Executa a CLI. Recebe o ambiente por parâmetro em vez de ler `process`,
  * para que o teste rode o caminho real sem tocar no processo nem no HOME.
  */
@@ -326,6 +347,23 @@ export function executar(argumentos: string[], ambiente: Ambiente): number {
   if (temBandeira(argumentos, 'versao')) {
     escrever(versaoDoProduto());
     return 0;
+  }
+
+  // Despacho PRECOCE do modo rede — antes de abrir Registro, Acervo ou criar
+  // pasta nenhuma: invocacao errada nao produz efeito local (criterio 9 do
+  // ciclo 21). FAIL-CLOSED: a rede so atende comandos de LEITURA declarados;
+  // todo o resto com --servidor/MALOTE_SERVIDOR recusa como operacao local.
+  const servidorRede = opcao(argumentos, 'servidor') ?? ambiente.servidor;
+  if (servidorRede !== undefined) {
+    const grupo = argumentos[0];
+    if (grupo === undefined || !COMANDOS_DE_REDE.has(grupo)) {
+      escrever(`"${argumentos[0] ?? ''}" e uma operacao LOCAL — o modo rede so consulta.`);
+      return 2;
+    }
+    if (ambiente.chave === undefined) {
+      escrever('Informe MALOTE_CHAVE_DE_ACESSO: a Chave de Acesso e a identidade da consulta por rede.');
+      return 2;
+    }
   }
 
   // Abrir o Registro pode MIGRAR, e migrar grava Operacao — entao a abertura
