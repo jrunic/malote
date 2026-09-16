@@ -1,0 +1,19 @@
+{
+  // Verificacao de TIPOS. O `tsconfig.json` e o BUILD: ele emite `dist/` a
+  // partir de `src/` e por isso nao pode incluir `tests/` — `rootDir: src`
+  // reprovaria todo arquivo de teste com TS6059.
+  //
+  // Este existe para que `tests/` deixe de ficar fora do alcance do compilador.
+  // Medido em 30/08/2026: com os testes dentro, apareceram dois defeitos reais
+  // que a suite verde nao mostrava — um `rodar` importado E redeclarado no
+  // mesmo modulo, e uma fixture de Mensagem com seis de sete campos que NAO
+  // existem no tipo, silenciosamente ignorados.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

@@ -1,0 +1,51 @@
+# Portão do repositório. Roda em pull request e em push para `main`.
+#
+# POR QUE ELE EXISTE, e não é higiene abstrata:
+#
+#   1. A suíte nunca tinha rodado em Linux. Os testes verdes existiam só no
+#      macOS, e este repositório já teve duas suítes macOS-only cujo desfecho
+#      não foi vermelho — foi VACUIDADE: o filtro por host não casava, o laço
+#      não iterava, e as asserções que exigem silêncio passavam sem exercitar
+#      nada. Runner Linux é a única coisa que revela essa classe.
+#
+#   2. O portão anterior era uma pessoa rodando `npm test` antes do merge.
+#      Portão em forma de hábito falha do jeito que hábito falha: quando este
+#      arquivo foi escrito, `npm run lint` estava REPROVANDO em `main` havia
+#      dias, e ninguém tinha visto.
+#
+# O `lint` é passo próprio e não um `&&` colado no teste: com `&&`, a primeira
+# falha esconde a segunda, e quem lê o resultado não sabe qual portão caiu.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22 CRAVADO, e de propósito. A fonte de verdade da versão de runtime
+      # da frota é a ADR de versões fixas, não o `engines` do manifesto — que
+      # declara `>=22`, um RANGE. Apontar o `node-version-file` para ele faria o
+      # CI resolver a major mais nova que existisse no dia, que é o contrário de
+      # reproduzir o host. O host roda 22; o portão roda 22.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` e não `npm install`: instala exatamente o `package-lock.json`
+      # já aprovado, sem resolução nova. Isso é o que mantém o CI fora da
+      # política de quarentena de dependências da frota — ele não escolhe
+      # versão, obedece ao lockfile.
+      - run: npm ci
+
+      # `npm test` já roda `tsc` antes dos testes; o compilador é parte do
+      # portão desde o ciclo 13.
+      - run: npm test
+
+      - run: npm run lint

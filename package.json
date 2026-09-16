@@ -1,0 +1,37 @@
+{
+  "name": "malote",
+  "version": "0.17.0",
+  "description": "Arquivo local das conversas de uma pessoa, consultável por humano e por agente.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "malote": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc -p tsconfig.check.json",
+    "test": "npm run typecheck && node --import tsx --test \"tests/**/*.test.ts\"",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "baileys": "6.7.24",
+    "better-sqlite3": "^13.0.3",
+    "tsx": "^4.23.12"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.2.0",
+    "eslint": "^10.9.0",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.67.0"
+  }
+}
