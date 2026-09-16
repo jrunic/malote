@@ -5,14 +5,11 @@ import {
   registrarConversa,
   registrarMensagem,
   registrarIdentificador,
-  registrarParticipacao,
   registrarTransicao,
 } from '../src/nucleo/escrita.js';
 import { criarPessoa, vincularIdentificador, registrarNome } from '../src/nucleo/identidade.js';
 import { contarPorFonte, procurarPessoas } from '../src/nucleo/consulta.js';
 import { quemEstavaEm } from '../src/nucleo/presenca.js';
-
-const CFG = { id: 'cfg-1', fonte: 'whatsapp' as const };
 
 function fixture() {
   const c = cenario();
