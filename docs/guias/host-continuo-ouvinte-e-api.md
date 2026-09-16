@@ -185,7 +185,9 @@ WantedBy=multi-user.target
 
 Exponha ao mundo por um proxy reverso com TLS (Caddy, nginx…). O servidor responde
 **uma recusa de corpo vazio** para credencial ausente, inválida ou revogada — não
-distingue, para não revelar a existência de Inquilinos alheios.
+distingue, para não revelar a existência de Inquilinos alheios. O lado de quem consome —
+autenticação, rotas e como instruir um agente — está no
+[guia do cliente e do agente](cliente-e-agente.md).
 
 ## 5. Verificar a saúde de fora
 
