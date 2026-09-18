@@ -1,12 +1,15 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Acervo } from '../nucleo/acervo.js';
-import { buscarMensagens, contarPorFonte, expandirData, fonteDaConversa, lerMensagens, listarConversas, procurarPessoas } from '../nucleo/consulta.js';
+import { buscarMensagens, contarPorFonte, expandirData, fonteDaConversa, lerAnexoPorId, lerMensagens, listarConversas, procurarPessoas } from '../nucleo/consulta.js';
 import { quemEstavaEm } from '../nucleo/presenca.js';
 import { codificarCursor, decodificarCursor } from '../nucleo/cursor.js';
 import { abrirRegistro } from '../registro/registro.js';
 import { listarChavesDeAcesso } from '../registro/chave-de-acesso.js';
 import { listarConfiguracoes, resolverFiltroDeConfiguracao } from '../registro/configuracao-adaptador.js';
 import { conversasMarcadas } from '../nucleo/marca-do-titular.js';
+import { lerDestinoDeMidia } from '../registro/destino-midia.js';
 import type { IdentidadeDeAcesso } from '../registro/chave-de-acesso.js';
 import type { ConversaId, Fonte } from '../nucleo/tipos.js';
 
@@ -40,6 +43,17 @@ function naoEncontrado(res: ServerResponse): void {
   res.writeHead(404, { 'content-type': 'application/json' });
   res.end('');
 }
+
+/**
+ * `video` fica de fora: recusado com sinal dedicado (415), nunca chega aqui.
+ * Tipo desconhecido cai em `application/octet-stream` — generico, nao quebra.
+ */
+const CONTENT_TYPE_POR_TIPO: Record<string, string> = {
+  image: 'image/jpeg',
+  audio: 'audio/opus',
+  document: 'application/octet-stream',
+  sticker: 'image/webp',
+};
 
 export function responder(req: IncomingMessage, res: ServerResponse, ctx: ContextoDaRequisicao): void {
   const url = new URL(req.url ?? '/', 'http://interno');
@@ -327,6 +341,51 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     } finally {
       registro.fechar();
     }
+    return;
+  }
+
+  if (partes.length === 2 && partes[0] === 'midia') {
+    const anexoId = partes[1] as string;
+    const anexo = lerAnexoPorId(ctx.acervo, anexoId);
+    if (anexo === undefined || anexo.presenca !== 'presente' || anexo.caminho === null) {
+      naoEncontrado(res);
+      return;
+    }
+    if (anexo.tipo === 'video') {
+      // Sinal DEDICADO, nao o 404 generico dos demais casos — aqui a posse
+      // ja foi confirmada (o Anexo existe e e deste Inquilino), entao nomear
+      // o tipo nao vaza nada que a posse ja nao tivesse revelado.
+      json(res, 415, { erro: `tipo de Anexo nao suportado nesta rota: ${anexo.tipo}` });
+      return;
+    }
+
+    const registro = abrirRegistro(ctx.dados);
+    let destino;
+    try {
+      destino = lerDestinoDeMidia(registro, ctx.identidade.inquilinoId);
+    } finally {
+      registro.fechar();
+    }
+    if (destino === undefined) {
+      naoEncontrado(res);
+      return;
+    }
+
+    let bytes: Buffer;
+    try {
+      bytes = readFileSync(join(destino.endereco, anexo.caminho));
+    } catch {
+      // Presenca diz 'presente' e o arquivo nao esta la — disco perdeu o
+      // dado sem o banco saber. Mesma classe "sem bytes disponiveis" dos
+      // demais 404, nao um caso novo.
+      naoEncontrado(res);
+      return;
+    }
+
+    res.writeHead(200, {
+      'content-type': CONTENT_TYPE_POR_TIPO[anexo.tipo] ?? 'application/octet-stream',
+    });
+    res.end(bytes);
     return;
   }
 

@@ -9,6 +9,11 @@ import { registrarConversa } from '../src/nucleo/escrita.js';
 import { resolverConfiguracao } from '../src/registro/configuracao-adaptador.js';
 import { registrarMensagem } from '../src/nucleo/escrita.js';
 import { marcarMensagem, marcarConversa } from '../src/nucleo/marca-do-titular.js';
+import { registrarAnexo } from '../src/nucleo/escrita.js';
+import { gravarArquivoDeAnexo } from '../src/nucleo/arquivo-de-anexo.js';
+import { configurarDestinoDeMidia } from '../src/registro/destino-midia.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 test('o Titular lista as Chaves do proprio Inquilino, sem valor nenhum', async () => {
   // A metade que a CLI nao entrega: la so existe Chave de Operador. E o que
@@ -403,6 +408,178 @@ test('fixada=true sem configuracao devolve 400', async () => {
     const corpo = JSON.parse(r.corpo) as { erro: string };
     assert.match(corpo.erro, /fixada/i);
     assert.match(corpo.erro, /configuracao/i);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('GET /midia/<id> devolve os bytes com o content-type do tipo', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const destino = mkdtempSync(join(tmpdir(), 'malote-midia-'));
+    configurarDestinoDeMidia(c.registro, c.inquilinoA, { natureza: 'local', endereco: destino });
+
+    const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
+    let anexoId: string;
+    const bytesOriginais = Buffer.from('conteudo de teste da imagem');
+    try {
+      const conversaId = registrarConversa(acervo, {
+        fonte: 'whatsapp', idExterno: '666@s.whatsapp.net', coletiva: false,
+        configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
+      });
+      const mensagemId = registrarMensagem(acervo, {
+        conversaId, fonte: 'whatsapp', idExterno: 'm-midia',
+        ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
+      });
+      anexoId = registrarAnexo(acervo, { mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
+      gravarArquivoDeAnexo(acervo, { anexoId, destino, bytes: bytesOriginais });
+    } finally {
+      acervo.fechar();
+    }
+
+    const r = await c.pedirBinario(`/midia/${anexoId}`, chave.valor);
+    assert.equal(r.status, 200);
+    assert.equal(r.contentType, 'image/jpeg');
+    assert.deepEqual(r.bytes, bytesOriginais);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('GET /midia/<id> de Anexo tipo video devolve 415 nomeando o tipo', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const destino = mkdtempSync(join(tmpdir(), 'malote-midia-'));
+    configurarDestinoDeMidia(c.registro, c.inquilinoA, { natureza: 'local', endereco: destino });
+
+    const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
+    let anexoId: string;
+    try {
+      const conversaId = registrarConversa(acervo, {
+        fonte: 'whatsapp', idExterno: '777@s.whatsapp.net', coletiva: false,
+        configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
+      });
+      const mensagemId = registrarMensagem(acervo, {
+        conversaId, fonte: 'whatsapp', idExterno: 'm-video',
+        ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
+      });
+      anexoId = registrarAnexo(acervo, { mensagemId, tipo: 'video', presenca: 'nunca-obtido' });
+      gravarArquivoDeAnexo(acervo, { anexoId, destino, bytes: Buffer.from('bytes de video') });
+    } finally {
+      acervo.fechar();
+    }
+
+    const r = await c.pedir(`/midia/${anexoId}`, chave.valor);
+    assert.equal(r.status, 415);
+    const corpo = JSON.parse(r.corpo) as { erro: string };
+    assert.match(corpo.erro, /video/i);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('GET /midia/<id> inexistente devolve 404 vazio', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const r = await c.pedir('/midia/nao-existe', chave.valor);
+    assert.equal(r.status, 404);
+    assert.equal(r.corpo, '');
+  } finally {
+    await c.parar();
+  }
+});
+
+test('GET /midia/<id> de Anexo de OUTRO Inquilino devolve o mesmo 404 vazio', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chaveA = c.emitir(c.inquilinoA);
+    const acervoB = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoB);
+    let anexoDeB: string;
+    try {
+      const conversaId = registrarConversa(acervoB, {
+        fonte: 'whatsapp', idExterno: '888@s.whatsapp.net', coletiva: false,
+        configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
+      });
+      const mensagemId = registrarMensagem(acervoB, {
+        conversaId, fonte: 'whatsapp', idExterno: 'm-de-b',
+        ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
+      });
+      anexoDeB = registrarAnexo(acervoB, { mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
+    } finally {
+      acervoB.fechar();
+    }
+
+    const inexistente = await c.pedir('/midia/nao-existe', chaveA.valor);
+    const deOutro = await c.pedir(`/midia/${anexoDeB}`, chaveA.valor);
+    assert.equal(deOutro.status, inexistente.status);
+    assert.equal(deOutro.corpo, inexistente.corpo);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('GET /midia/<id> sem bytes (nunca-obtido) devolve 404 vazio', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
+    let anexoId: string;
+    try {
+      const conversaId = registrarConversa(acervo, {
+        fonte: 'whatsapp', idExterno: '999@s.whatsapp.net', coletiva: false,
+        configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
+      });
+      const mensagemId = registrarMensagem(acervo, {
+        conversaId, fonte: 'whatsapp', idExterno: 'm-sem-bytes',
+        ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
+      });
+      anexoId = registrarAnexo(acervo, { mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
+    } finally {
+      acervo.fechar();
+    }
+
+    const r = await c.pedir(`/midia/${anexoId}`, chave.valor);
+    assert.equal(r.status, 404);
+    assert.equal(r.corpo, '');
+  } finally {
+    await c.parar();
+  }
+});
+
+test('GET /midia/<id> com presenca presente mas arquivo sumiu do disco devolve 404 vazio', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const destino = mkdtempSync(join(tmpdir(), 'malote-midia-'));
+    configurarDestinoDeMidia(c.registro, c.inquilinoA, { natureza: 'local', endereco: destino });
+
+    const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
+    let anexoId: string;
+    try {
+      const conversaId = registrarConversa(acervo, {
+        fonte: 'whatsapp', idExterno: '101010@s.whatsapp.net', coletiva: false,
+        configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
+      });
+      const mensagemId = registrarMensagem(acervo, {
+        conversaId, fonte: 'whatsapp', idExterno: 'm-sumido',
+        ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
+      });
+      anexoId = registrarAnexo(acervo, { mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
+      const { rmSync } = await import('node:fs');
+      const relativo = gravarArquivoDeAnexo(acervo, {
+        anexoId, destino, bytes: Buffer.from('vai sumir'),
+      });
+      rmSync(join(destino, relativo));
+    } finally {
+      acervo.fechar();
+    }
+
+    const r = await c.pedir(`/midia/${anexoId}`, chave.valor);
+    assert.equal(r.status, 404);
+    assert.equal(r.corpo, '');
   } finally {
     await c.parar();
   }

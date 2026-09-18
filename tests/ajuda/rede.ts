@@ -33,6 +33,11 @@ export interface CenarioDeRede {
   emitir: (inquilinoId: string) => ChaveDeAcessoCriada;
   revogar: (chaveId: string) => void;
   pedir: (caminho: string, chave?: string) => Promise<Resposta>;
+  pedirBinario: (caminho: string, chave?: string) => Promise<{
+    status: number;
+    contentType: string | null;
+    bytes: Buffer;
+  }>;
   parar: () => Promise<void>;
 }
 
@@ -108,6 +113,13 @@ export async function cenarioDeRede(): Promise<CenarioDeRede> {
       if (chave !== undefined) cabecalhos['authorization'] = `Bearer ${chave}`;
       const r = await fetch(`http://${address}:${port}${caminho}`, { headers: cabecalhos });
       return { status: r.status, corpo: await r.text() };
+    },
+    pedirBinario: async (caminho, chave) => {
+      const cabecalhos: Record<string, string> = {};
+      if (chave !== undefined) cabecalhos['authorization'] = `Bearer ${chave}`;
+      const r = await fetch(`http://${address}:${port}${caminho}`, { headers: cabecalhos });
+      const bytes = Buffer.from(await r.arrayBuffer());
+      return { status: r.status, contentType: r.headers.get('content-type'), bytes };
     },
     parar: async () => {
       servidor.close();
