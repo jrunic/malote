@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Acervo } from '../nucleo/acervo.js';
-import { buscarMensagens, contarPorFonte, expandirData, lerMensagens, listarConversas, procurarPessoas } from '../nucleo/consulta.js';
+import { buscarMensagens, contarPorFonte, expandirData, fonteDaConversa, lerMensagens, listarConversas, procurarPessoas } from '../nucleo/consulta.js';
 import { quemEstavaEm } from '../nucleo/presenca.js';
 import { codificarCursor, decodificarCursor } from '../nucleo/cursor.js';
 import { abrirRegistro } from '../registro/registro.js';
@@ -112,6 +112,8 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const ate = q.get('ate');
     const autor = q.get('autor');
     const antes = q.get('antes');
+    const favorito = q.get('favorito');
+    const configuracaoApelido = q.get('configuracao');
     let cursor: { ocorridaEm: number; id: string } | undefined;
     if (antes !== null) {
       cursor = decodificarCursor(antes);
@@ -131,22 +133,58 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       json(res, 400, { erro: (e as Error).message });
       return;
     }
+
+    let configuracaoId: string | undefined;
+    if (favorito === 'true') {
+      if (configuracaoApelido === null) {
+        json(res, 400, { erro: 'favorito exige configuracao' });
+        return;
+      }
+      // Fonte IMPLICITA da propria Conversa — esta rota nunca e ambigua,
+      // porque Conversa tem uma Fonte so. Se a Conversa nao existe, a
+      // resposta e o mesmo 404 vazio de sempre, sem distinguir.
+      const fonteDaConversaAtual = fonteDaConversa(ctx.acervo, conversaId);
+      if (fonteDaConversaAtual === undefined) {
+        naoEncontrado(res);
+        return;
+      }
+      const registro = abrirRegistro(ctx.dados);
+      let resolucao;
+      try {
+        resolucao = resolverFiltroDeConfiguracao(
+          registro, ctx.identidade.inquilinoId, configuracaoApelido, fonteDaConversaAtual,
+        );
+      } finally {
+        registro.fechar();
+      }
+      if (!resolucao.ok) {
+        json(res, 400, { erro: resolucao.erro });
+        return;
+      }
+      configuracaoId = resolucao.configuracao.id;
+      // A partir daqui, sabemos que a Conversa EXISTE (fonteDaConversa achou):
+      // lista vazia por filtro de favorito e resposta legitima, 200 — nao 404.
+    }
+
     const mensagens = lerMensagens(ctx.acervo, {
       conversaId,
       ...(filtroDe !== undefined ? { de: filtroDe } : {}),
       ...(filtroAte !== undefined ? { ate: filtroAte } : {}),
       ...(autor !== null ? { pessoaId: autor } : {}),
       ...(limite !== null ? { limite: Number(limite) } : {}),
+      ...(favorito === 'true' ? { favorito: true, configuracaoId: configuracaoId! } : {}),
       ...(cursor !== undefined
         ? { cursor, ordem: q.get('ordem') === 'cronologica' ? ('cronologica' as const) : ('recentes' as const) }
         : q.get('ordem') === 'cronologica'
           ? { ordem: 'cronologica' as const }
           : {}),
     });
-    if (mensagens.length === 0) {
-      // Conversa vazia e Conversa inexistente respondem igual. E limitacao
-      // conhecida e preferivel ao inverso: distinguir exigiria confirmar a
-      // existencia, e confirmar existencia e o que nao pode vazar.
+
+    if (mensagens.length === 0 && favorito !== 'true') {
+      // Conversa vazia e Conversa inexistente respondem igual — LIMITACAO
+      // HERDADA, mantida para os filtros pre-existentes (desde/ate/autor).
+      // Com favorito='true', a existencia ja foi confirmada acima
+      // (fonteDaConversa achou) — lista vazia ali e 200, nunca cai aqui.
       naoEncontrado(res);
       return;
     }

@@ -7,6 +7,8 @@ import { executar } from '../src/cli/index.js';
 import { abrirAcervo } from '../src/nucleo/acervo.js';
 import { registrarConversa } from '../src/nucleo/escrita.js';
 import { resolverConfiguracao } from '../src/registro/configuracao-adaptador.js';
+import { registrarMensagem } from '../src/nucleo/escrita.js';
+import { marcarMensagem } from '../src/nucleo/marca-do-titular.js';
 
 test('o Titular lista as Chaves do proprio Inquilino, sem valor nenhum', async () => {
   // A metade que a CLI nao entrega: la so existe Chave de Operador. E o que
@@ -213,6 +215,114 @@ test('GET /configuracoes devolve apelido e fonte, sem o id interno', async () =>
       corpo.configuracoes.map((cfg) => `${cfg.fonte}/${cfg.apelido}`).sort(),
       ['instagram/orlando', 'whatsapp/orlando'],
     );
+  } finally {
+    await c.parar();
+  }
+});
+
+test('GET /conversas/<id>/mensagens com favorito e configuracao filtra so as favoritadas', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
+    const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
+    let conversaId: string;
+    let marcadaId: string;
+    try {
+      conversaId = registrarConversa(acervo, {
+        fonte: 'whatsapp', idExterno: '222@s.whatsapp.net', coletiva: false,
+        configuracao: { id: cfg.id, fonte: 'whatsapp' },
+      });
+      marcadaId = registrarMensagem(acervo, {
+        conversaId, fonte: 'whatsapp', idExterno: 'm1', conteudo: 'favoritada',
+        ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
+      });
+      registrarMensagem(acervo, {
+        conversaId, fonte: 'whatsapp', idExterno: 'm2', conteudo: 'nao favoritada',
+        ocorridaEm: Date.parse('2026-09-01T12:01:00Z'), agora: Date.now(),
+      });
+      marcarMensagem(acervo, {
+        mensagemId: marcadaId, marca: 'favorito', configuracaoId: cfg.id, observadaEm: Date.now(),
+      });
+    } finally {
+      acervo.fechar();
+    }
+
+    const r = await c.pedir(`/conversas/${conversaId}/mensagens?favorito=true&configuracao=orlando`, chave.valor);
+    assert.equal(r.status, 200);
+    const corpo = JSON.parse(r.corpo) as { mensagens: Array<{ id: string }> };
+    assert.equal(corpo.mensagens.length, 1);
+    assert.equal(corpo.mensagens[0]!.id, marcadaId);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('favorito=true sem configuracao devolve 400', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const r = await c.pedir(`/conversas/${c.conversaDeA}/mensagens?favorito=true`, chave.valor);
+    assert.equal(r.status, 400);
+    const corpo = JSON.parse(r.corpo) as { erro: string };
+    assert.match(corpo.erro, /favorito/i);
+    assert.match(corpo.erro, /configuracao/i);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('configuracao sozinho, sem favorito=true, nao filtra nada — todas as Mensagens vem', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const r = await c.pedir(`/conversas/${c.conversaDeA}/mensagens?configuracao=qualquer-coisa`, chave.valor);
+    // qualquer-coisa nem existe como apelido — se configuracao SEM favorito
+    // fosse resolvido, isto daria 400. Nao dando, prova que foi ignorado.
+    assert.equal(r.status, 200);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('favorito=true com zero casos e a Conversa existe: 200 com lista vazia, nao 404', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
+    const r = await c.pedir(
+      `/conversas/${c.conversaDeA}/mensagens?favorito=true&configuracao=orlando`, chave.valor,
+    );
+    assert.equal(r.status, 200);
+    const corpo = JSON.parse(r.corpo) as { mensagens: unknown[] };
+    assert.deepEqual(corpo.mensagens, []);
+    void cfg; // so para garantir que a Configuracao existe e resolve — nao usado
+  } finally {
+    await c.parar();
+  }
+});
+
+test('favorito=true numa Conversa que nao existe: 404 vazio, igual a hoje', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
+    const r = await c.pedir('/conversas/nao-existe/mensagens?favorito=true&configuracao=orlando', chave.valor);
+    assert.equal(r.status, 404);
+    assert.equal(r.corpo, '');
+  } finally {
+    await c.parar();
+  }
+});
+
+test('favorito=true com apelido desconhecido devolve 400', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const r = await c.pedir(
+      `/conversas/${c.conversaDeA}/mensagens?favorito=true&configuracao=nao-existe`, chave.valor,
+    );
+    assert.equal(r.status, 400);
   } finally {
     await c.parar();
   }
