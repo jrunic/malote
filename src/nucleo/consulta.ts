@@ -47,6 +47,29 @@ export function lerAnexos(acervo: Acervo, mensagemId: MensagemId): AnexoLido[] {
   }));
 }
 
+/** Um Anexo pelo próprio id, ou `undefined` se não existe. */
+export function lerAnexoPorId(acervo: Acervo, anexoId: string): AnexoLido | undefined {
+  const linha = acervo.preparar(
+      `SELECT id, tipo, tamanho, nome_original, duracao, impressao, presenca, caminho,
+              descartado_em, descartado_por
+         FROM anexos WHERE id = ?`,
+    )
+    .get(anexoId) as Record<string, unknown> | undefined;
+  if (linha === undefined) return undefined;
+  return {
+    id: linha['id'] as string,
+    tipo: linha['tipo'] as string,
+    tamanho: (linha['tamanho'] as number | null) ?? null,
+    nomeOriginal: (linha['nome_original'] as string | null) ?? null,
+    duracao: (linha['duracao'] as number | null) ?? null,
+    impressao: (linha['impressao'] as string | null) ?? null,
+    presenca: linha['presenca'] as Presenca,
+    caminho: (linha['caminho'] as string | null) ?? null,
+    descartadoEm: (linha['descartado_em'] as string | null) ?? null,
+    descartadoPor: (linha['descartado_por'] as string | null) ?? null,
+  };
+}
+
 export interface ParticipacaoLida {
   identificadorId: string;
   comecouEm: string | null;
