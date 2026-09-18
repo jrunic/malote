@@ -158,6 +158,62 @@ export function configuracaoPorApelido(
   return linha === undefined ? undefined : paraConfiguracao(linha);
 }
 
+/**
+ * Todas as Configuracoes com este apelido, em qualquer Fonte — usado quando o
+ * chamador NAO informou a Fonte e o contexto nao a implica. Zero, uma ou mais:
+ * quem decide o que fazer com cada contagem e `resolverFiltroDeConfiguracao`,
+ * nao esta funcao — ela so lista.
+ */
+export function configuracoesPorApelido(
+  registro: Registro,
+  inquilinoId: InquilinoId,
+  apelido: string,
+): ConfiguracaoDeAdaptador[] {
+  const linhas = registro
+    .preparar(`${SELECAO} WHERE c.inquilino_id = ? AND c.apelido = ?`)
+    .all(inquilinoId, apelido) as LinhaConfiguracao[];
+  return linhas.map(paraConfiguracao);
+}
+
+export type ResultadoDoFiltroDeConfiguracao =
+  | { ok: true; configuracao: ConfiguracaoDeAdaptador }
+  | { ok: false; erro: string };
+
+/**
+ * A resolucao que as rotas de LEITURA usam — nunca cria, ao contrario de
+ * `resolverConfiguracao` (que e da INGESTAO). Apelido pode repetir entre
+ * Fontes diferentes (medido em producao: "orlando" existe em whatsapp E
+ * instagram), entao sem Fonte o resultado pode ser ambiguo — e a ambiguidade
+ * vira erro nomeado, nunca escolha silenciosa.
+ */
+export function resolverFiltroDeConfiguracao(
+  registro: Registro,
+  inquilinoId: InquilinoId,
+  apelido: string,
+  fonte?: string,
+): ResultadoDoFiltroDeConfiguracao {
+  if (fonte !== undefined) {
+    const cfg = configuracaoPorApelido(registro, inquilinoId, fonte, apelido);
+    if (cfg === undefined) {
+      return { ok: false, erro: `Configuracao desconhecida: ${fonte}/${apelido}` };
+    }
+    return { ok: true, configuracao: cfg };
+  }
+
+  const candidatas = configuracoesPorApelido(registro, inquilinoId, apelido);
+  if (candidatas.length === 0) {
+    return { ok: false, erro: `Configuracao desconhecida: ${apelido}` };
+  }
+  if (candidatas.length > 1) {
+    const fontes = candidatas.map((c) => c.fonte).sort().join(', ');
+    return {
+      ok: false,
+      erro: `apelido ambiguo: "${apelido}" existe em mais de uma Fonte (${fontes}) — informe fonte`,
+    };
+  }
+  return { ok: true, configuracao: candidatas[0]! };
+}
+
 export function listarConfiguracoes(
   registro: Registro,
   inquilinoId: InquilinoId,

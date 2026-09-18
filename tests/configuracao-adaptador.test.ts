@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { cenario } from './ajuda/acervo.js';
 import {
   APELIDO_PADRAO,
+  configuracoesPorApelido,
   definirContaDaConfiguracao,
   listarConfiguracoes,
   resolverConfiguracao,
+  resolverFiltroDeConfiguracao,
 } from '../src/registro/configuracao-adaptador.js';
 
 test('a Configuração padrão nasce por demanda e é estável', () => {
@@ -66,6 +68,93 @@ test('Inquilino desconhecido é recusado', () => {
       () => resolverConfiguracao(c.registro, 'nao-existe', 'whatsapp'),
       /Inquilino desconhecido/,
     );
+  } finally {
+    c.limpar();
+  }
+});
+
+test('configuracoesPorApelido devolve todas as Configuracoes com aquele apelido, em Fontes diferentes', () => {
+  const c = cenario();
+  try {
+    const { id: inquilino } = c.novoInquilino('Leia');
+    resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'orlando');
+    resolverConfiguracao(c.registro, inquilino, 'instagram', 'orlando');
+    resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'freud');
+
+    const achadas = configuracoesPorApelido(c.registro, inquilino, 'orlando');
+
+    assert.equal(achadas.length, 2);
+    assert.deepEqual(achadas.map((a) => a.fonte).sort(), ['instagram', 'whatsapp']);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('configuracoesPorApelido devolve lista vazia quando nao ha candidato', () => {
+  const c = cenario();
+  try {
+    const { id: inquilino } = c.novoInquilino('Leia');
+    assert.deepEqual(configuracoesPorApelido(c.registro, inquilino, 'inexistente'), []);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('resolverFiltroDeConfiguracao resolve direto quando a Fonte e informada', () => {
+  const c = cenario();
+  try {
+    const { id: inquilino } = c.novoInquilino('Leia');
+    const cfg = resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'orlando');
+
+    const r = resolverFiltroDeConfiguracao(c.registro, inquilino, 'orlando', 'whatsapp');
+
+    assert.equal(r.ok, true);
+    assert.equal(r.ok && r.configuracao.id, cfg.id);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('resolverFiltroDeConfiguracao resolve sem Fonte quando ha SO UM candidato', () => {
+  const c = cenario();
+  try {
+    const { id: inquilino } = c.novoInquilino('Leia');
+    const cfg = resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'freud');
+
+    const r = resolverFiltroDeConfiguracao(c.registro, inquilino, 'freud');
+
+    assert.equal(r.ok, true);
+    assert.equal(r.ok && r.configuracao.id, cfg.id);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('resolverFiltroDeConfiguracao recusa apelido AMBIGUO sem Fonte, nomeando as Fontes', () => {
+  const c = cenario();
+  try {
+    const { id: inquilino } = c.novoInquilino('Leia');
+    resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'orlando');
+    resolverConfiguracao(c.registro, inquilino, 'instagram', 'orlando');
+
+    const r = resolverFiltroDeConfiguracao(c.registro, inquilino, 'orlando');
+
+    assert.equal(r.ok, false);
+    assert.match(!r.ok ? r.erro : '', /ambigu/i);
+    assert.match(!r.ok ? r.erro : '', /instagram/);
+    assert.match(!r.ok ? r.erro : '', /whatsapp/);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('resolverFiltroDeConfiguracao recusa apelido DESCONHECIDO', () => {
+  const c = cenario();
+  try {
+    const { id: inquilino } = c.novoInquilino('Leia');
+    const r = resolverFiltroDeConfiguracao(c.registro, inquilino, 'nao-existe');
+    assert.equal(r.ok, false);
+    assert.match(!r.ok ? r.erro : '', /desconhec/i);
   } finally {
     c.limpar();
   }
