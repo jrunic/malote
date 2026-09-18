@@ -75,6 +75,8 @@ export interface ConversaListada {
   coletiva: boolean;
   assunto: string | null;
   mensagens: number;
+  /** Null para Conversa coletiva — ela pertence ao Inquilino, nao a uma Configuracao. */
+  configuracaoId: string | null;
 }
 
 export interface FiltroDeConversa {
@@ -83,6 +85,12 @@ export interface FiltroDeConversa {
   pessoaId?: PessoaId;
   /** Assunto contém o termo, case-insensitive, LITERAL — `%` e `_` escapados. */
   busca?: string;
+  /**
+   * So Conversa DIRETA tem Configuracao (`c.configuracao_id`). Coletiva nunca
+   * casa — o campo e NULL para ela, e NULL nunca satisfaz `= ?`. Nao e defeito:
+   * e o mesmo desenho que os dois indices parciais de #825 ja impoem.
+   */
+  configuracaoId?: string;
   limite?: number;
 }
 
@@ -118,11 +126,15 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
         .replace(/^/, '%') + '%',
     );
   }
+  if (filtro.configuracaoId !== undefined) {
+    condicoes.push('c.configuracao_id = ?');
+    valores.push(filtro.configuracaoId);
+  }
   const onde = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
   const limite = filtro.limite !== undefined ? ` LIMIT ${Number(filtro.limite)}` : '';
 
   const linhas = acervo.preparar(
-      `SELECT c.id, c.fonte, c.coletiva, m.assunto,
+      `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, m.assunto,
               (SELECT COUNT(*) FROM mensagens x WHERE x.conversa_id = c.id) AS mensagens
          FROM conversas c
          LEFT JOIN metadados_de_coletiva m ON m.conversa_id = c.id
@@ -137,6 +149,7 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
     coletiva: (l['coletiva'] as number) === 1,
     assunto: (l['assunto'] as string | null) ?? null,
     mensagens: l['mensagens'] as number,
+    configuracaoId: (l['configuracao_id'] as string | null) ?? null,
   }));
 }
 
