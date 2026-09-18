@@ -90,6 +90,10 @@ malote mensagens --conversa <id> --antes "<cursor>"
 # Busca no conteúdo, com filtros
 malote buscar --texto "orçamento" --conversa <id> --desde 2026-09-01 --limite 50
 
+# Bytes de um Anexo (foto/documento) — SO EM MODO REDE (MALOTE_SERVIDOR setado).
+# Local, o Anexo já está em disco: leia o campo `caminho` de `mensagens --json`.
+malote midia <anexoId> --saida ./foto.jpg
+
 # Resolução de pessoa: texto entra, id sai (os outros comandos pedem o id)
 malote pessoas --texto "Bail Organa"
 
@@ -146,6 +150,10 @@ Comandos (todos somente leitura):
   pedem o id, nunca o nome.
 - `malote participantes --conversa <id> [--em AAAA-MM-DD]` — quem estava na conversa.
 - `malote relatorio` — totais por fonte e natureza.
+- `malote midia <anexoId> --saida <arquivo>` — grava os bytes do Anexo (foto/documento)
+  no caminho local dado. Só existe em modo rede. **Não imprime** os bytes — não há
+  forma de "ler" mídia por esta CLI, só salvar em disco e abrir por fora. Anexo do
+  tipo vídeo é recusado (não suportado nesta rota).
 
 Regras:
 - Paginação: quando a resposta traz `proximo`, devolva-o em `--antes` na próxima
@@ -176,6 +184,15 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 | `GET /relatorio` | — | `{ relatorio: { conversas, mensagens } }` |
 | `GET /chaves` | — | `{ chaves: [...] }` — as chaves do próprio Inquilino |
 | `GET /configuracoes` | — | `{ configuracoes: [{ apelido, fonte }] }` |
+| `GET /midia/<anexoId>` | — | o **arquivo** do Anexo, com `content-type` próprio — não é JSON |
+
+`GET /midia/<anexoId>` foge do padrão das demais: sucesso é `200` com os bytes crus
+(não `{ ... }`). `404` vazio cobre inexistente, de outro Inquilino e sem bytes
+disponíveis (`nunca-obtido`/`descartado`, ou arquivo que sumiu do disco) —
+indistinguíveis por desenho, mesma razão das demais rotas. **`415`** é o único sinal
+desta rota que não é o 404 genérico: corpo `{ erro }` nomeando o tipo, reservado a
+Anexo do tipo `video` — a posse já foi confirmada antes desse sinal disparar, então
+nomear o tipo não vaza nada que a posse já não tivesse revelado.
 
 `configuracao` em `/conversas` é o **apelido**, não o id interno — em caso de apelido
 repetido entre Fontes diferentes (ex.: `orlando` existindo em `whatsapp` e `instagram`),

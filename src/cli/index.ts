@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { raizDeDados, raizDeEstado } from './caminhos.js';
-import { pedirGet } from './cliente.js';
+import { pedirGet, pedirGetBinario } from './cliente.js';
 import { decodificarCursor } from '../nucleo/cursor.js';
 import { expandirData, procurarPessoas } from '../nucleo/consulta.js';
 import { ehPontoDeEntrada } from './entrada.js';
@@ -265,6 +265,8 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
   malote servir     --porta <n> [--endereco <ip>] [--exposto]
   malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--json]
+  malote midia <id> --saida <arquivo>   (bytes do Anexo — SO em modo rede;
+                                          local, leia 'caminho' de 'mensagens --json')
   malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--json]
   malote conversas sem-endereco --inquilino <id> [--limite <n>]
   malote conversa presenca      --inquilino <id> --conversa <id> --em <AAAA-MM-DD> [--json]
@@ -332,6 +334,7 @@ const COMANDOS_DE_REDE = new Set([
   'participantes',
   'relatorio',
   'configuracao',
+  'midia',
 ]);
 
 /**
@@ -378,6 +381,27 @@ export async function executarConsultaRede(
       return 2;
     }
     caminho = `/conversas/${conversa}/mensagens`;
+  }
+  else if (grupo === 'midia') {
+    const anexoId = argumentos[1];
+    if (anexoId === undefined) {
+      rede.escrever('Informe o id do Anexo: malote midia <id> --saida <arquivo>.');
+      return 2;
+    }
+    const saida = opcao(argumentos, 'saida');
+    if (saida === undefined) {
+      rede.escrever('Informe --saida <arquivo>.');
+      return 2;
+    }
+    try {
+      const r = await pedirGetBinario(rede.servidor, rede.chave, `/midia/${anexoId}`);
+      writeFileSync(saida, r.bytes);
+      rede.escrever(`Gravado: ${saida} (${r.bytes.length} bytes, ${r.contentType ?? 'sem content-type'}).`);
+      return 0;
+    } catch (e) {
+      rede.escrever((e as Error).message);
+      return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
+    }
   } else {
     rede.escrever(`"${grupo}" ainda nao consulta por rede.`);
     return 2;
