@@ -26,6 +26,7 @@ import {
   listarSemEndereco,
   conversaExiste,
 } from '../nucleo/consulta.js';
+import { conversasMarcadas } from '../nucleo/marca-do-titular.js';
 import { importarMaterial } from '../adaptadores/whatsapp/importar.js';
 import { importarMaterialDeInstagram } from '../adaptadores/instagram/importar.js';
 import {
@@ -263,7 +264,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvinte estado --conta <nome> [--json]
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
   malote servir     --porta <n> [--endereco <ip>] [--exposto]
-  malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--json]
+  malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--json]
   malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--json]
   malote conversas sem-endereco --inquilino <id> [--limite <n>]
   malote conversa presenca      --inquilino <id> --conversa <id> --em <AAAA-MM-DD> [--json]
@@ -345,7 +346,7 @@ export async function executarConsultaRede(
   const grupo = argumentos[0];
   const q = new URLSearchParams();
   for (const nome of ['busca', 'fonte', 'coletiva', 'pessoa', 'limite', 'conversa',
-    'autor', 'desde', 'ate', 'antes', 'em', 'texto', 'configuracao']) {
+    'autor', 'desde', 'ate', 'antes', 'em', 'texto', 'configuracao', 'favorito', 'fixada']) {
     const valor = opcao(argumentos, nome);
     if (valor !== undefined) q.set(nome, valor);
   }
@@ -1398,6 +1399,12 @@ function executarComAtor(
         const coletiva = opcao(argumentos, 'coletiva');
         const limite = opcao(argumentos, 'limite');
         const configuracaoApelido = opcao(argumentos, 'configuracao');
+        const fixada = opcao(argumentos, 'fixada');
+
+        if (fixada === 'true' && configuracaoApelido === undefined) {
+          escrever('--fixada exige --configuracao (a Marca e por Configuracao).');
+          return 2;
+        }
 
         let configuracaoId: string | undefined;
         if (configuracaoApelido !== undefined) {
@@ -1411,17 +1418,23 @@ function executarComAtor(
           configuracaoId = resolucao.configuracao.id;
         }
 
+        // Mesma composicao da rota de rede: com fixada ativo, configuracao
+        // escopa a MARCA, e o filtro acontece depois, em JS.
+        const marcadas = fixada === 'true'
+          ? new Set(conversasMarcadas(acervo, { marca: 'fixada', configuracaoId: configuracaoId! }))
+          : undefined;
+
         const apelidoPorId = new Map(
           listarConfiguracoes(registro, inquilino).map((c) => [c.id, c.apelido]),
         );
 
-        const conversas = listarConversas(acervo, {
+        let conversas = listarConversas(acervo, {
           ...(pessoa === undefined ? {} : { pessoaId: pessoa }),
           ...(busca === undefined ? {} : { busca }),
           ...(fonte === undefined ? {} : { fonte: fonte as Fonte }),
           ...(coletiva === undefined ? {} : { coletiva: coletiva === 'true' }),
-          ...(limite === undefined ? {} : { limite: Number(limite) }),
-          ...(configuracaoId === undefined ? {} : { configuracaoId }),
+          ...(marcadas === undefined && limite !== undefined ? { limite: Number(limite) } : {}),
+          ...(marcadas === undefined && configuracaoId !== undefined ? { configuracaoId } : {}),
         }).map((c) => ({
           id: c.id,
           fonte: c.fonte,
@@ -1430,6 +1443,12 @@ function executarComAtor(
           mensagens: c.mensagens,
           configuracao: c.configuracaoId === null ? null : (apelidoPorId.get(c.configuracaoId) ?? null),
         }));
+
+        if (marcadas !== undefined) {
+          conversas = conversas.filter((c) => marcadas.has(c.id));
+          if (limite !== undefined) conversas = conversas.slice(0, Number(limite));
+        }
+
         if (temBandeira(argumentos, 'json')) {
           escrever(JSON.stringify(conversas, null, 2));
         } else {

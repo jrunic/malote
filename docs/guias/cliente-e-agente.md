@@ -75,6 +75,7 @@ malote conversas --limite 30
 malote conversas --busca "relatorio" --fonte whatsapp --coletiva
 malote conversas --configuracao orlando        # so a Conversa daquela Configuracao
 malote conversas --configuracao orlando --fonte whatsapp  # desempata apelido repetido em Fontes diferentes
+malote conversas --fixada true --configuracao orlando  # so as fixadas NAQUELA Configuracao (marca, nao atribuicao)
 
 # Quais Configuracoes existem (apelido + fonte) — antes de filtrar por uma
 malote configuracao listar
@@ -82,6 +83,7 @@ malote configuracao listar
 # Conteúdo de uma conversa, com janela e página
 malote mensagens --conversa <id> --limite 50
 malote mensagens --conversa <id> --desde 2026-09-01 --ate 2026-09-15
+malote mensagens --conversa <id> --favorito true --configuracao orlando  # so as favoritadas — SO EM MODO REDE (MALOTE_SERVIDOR setado)
 # Paginação: a resposta traz `proximo` quando há mais; devolva-o:
 malote mensagens --conversa <id> --antes "<cursor>"
 
@@ -127,12 +129,18 @@ Use a CLI do malote, no modo rede. As variáveis `MALOTE_SERVIDOR` e
 escreva em arquivo, commit ou log, e nunca a passe adiante.
 
 Comandos (todos somente leitura):
-- `malote conversas [--busca T] [--fonte F] [--coletiva true|false] [--configuracao A] [--limite N]` —
-  índice; comece sempre aqui. `--configuracao` filtra por apelido (`malote configuracao
-  listar` mostra o que existe) e só alcança Conversa DIRETA — coletiva pertence ao
-  Inquilino inteiro, não a uma Configuração, e nunca casa esse filtro.
+- `malote conversas [--busca T] [--fonte F] [--coletiva true|false] [--configuracao A] [--fixada true] [--limite N]` —
+  índice; comece sempre aqui. `--configuracao` sozinho filtra por apelido (`malote
+  configuracao listar` mostra o que existe) e só alcança Conversa DIRETA — coletiva
+  pertence ao Inquilino inteiro, não a uma Configuração, e nunca casa esse filtro. Com
+  `--fixada true`, `--configuracao` muda de sentido: passa a escopar a MARCA de fixada
+  daquela Configuração, não a atribuição — por isso coletiva fixada aparece.
+  `--fixada` exige `--configuracao` junto, e funciona local ou em modo rede.
 - `malote configuracao listar` — lista as Configurações do Inquilino (apelido + fonte).
-- `malote mensagens --conversa <id> [--desde D] [--ate D] [--limite N]` — conteúdo.
+- `malote mensagens --conversa <id> [--desde D] [--ate D] [--limite N] [--favorito true --configuracao A]` —
+  conteúdo. `--favorito` só existe em modo rede (`MALOTE_SERVIDOR` setado) e exige
+  `--configuracao`; a Fonte é resolvida automaticamente pela própria Conversa, nunca
+  ambígua.
 - `malote buscar --texto T [--conversa <id>] [--desde D] [--ate D]` — busca no conteúdo.
 - `malote pessoas --texto T` — resolve nome/endereço para `id`; os outros comandos
   pedem o id, nunca o nome.
@@ -160,8 +168,8 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 
 | rota | parâmetros opcionais | resposta |
 |---|---|---|
-| `GET /conversas` | `fonte`, `coletiva`, `busca`, `pessoa`, `limite`, `configuracao` | `{ conversas: [{ id, fonte, coletiva, assunto, mensagens, configuracao }] }` |
-| `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `antes`, `ordem` | `{ mensagens: [...], proximo? }` |
+| `GET /conversas` | `fonte`, `coletiva`, `busca`, `pessoa`, `limite`, `configuracao`, `fixada` | `{ conversas: [{ id, fonte, coletiva, assunto, mensagens, configuracao }] }` |
+| `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `antes`, `ordem`, `favorito`, `configuracao` | `{ mensagens: [...], proximo? }` |
 | `GET /buscar?texto=` | `conversa`, `autor`, `desde`, `ate`, `limite` | `{ mensagens: [...] }` |
 | `GET /pessoas?texto=` | — | `{ pessoas: [{ id, nome, identificadores }] }` |
 | `GET /conversas/<id>/participantes` | `em` | `{ presenca: {...} }` |
@@ -173,7 +181,10 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 repetido entre Fontes diferentes (ex.: `orlando` existindo em `whatsapp` e `instagram`),
 informe `fonte` junto ou a rota responde `400` nomeando a ambiguidade. `configuracao`
 no campo de saída é `null` para Conversa coletiva, sempre — ela não tem Configuração.
-`favorito`/`fixada` ainda não filtram por rede; ficam para um próximo incremento.
+Com `fixada=true`, `configuracao` escopa a Marca, não a atribuição — é o que permite
+achar coletiva fixada. `favorito` em `/conversas/<id>/mensagens` exige `configuracao`
+junto; a Fonte usada para resolver o apelido é a da própria Conversa (nunca ambígua),
+não uma que o chamador precise informar.
 
 Limites conhecidos: sem paginação fora de `/conversas/<id>/mensagens`; conversa vazia e
 inexistente respondem igual (`404`) — distinguir exigiria confirmar existência, e confirmar

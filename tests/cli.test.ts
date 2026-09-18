@@ -10,6 +10,11 @@ import {
 } from './ajuda/instalacao.js';
 import { backupFalso, paraCoreData } from './ajuda/material-falso.js';
 import Database from 'better-sqlite3';
+import { abrirRegistro } from '../src/registro/registro.js';
+import { abrirAcervo } from '../src/nucleo/acervo.js';
+import { marcarConversa } from '../src/nucleo/marca-do-titular.js';
+import { registrarConversa } from '../src/nucleo/escrita.js';
+import { resolverConfiguracao } from '../src/registro/configuracao-adaptador.js';
 
 test('criar Inquilino antes de existir Chave de Operador é recusado com instrução', () => {
   const { raiz, limpar } = instalacaoTemporaria();
@@ -440,6 +445,57 @@ test('malote conversas --configuracao com apelido ambiguo falha com codigo 2 e m
     const r = rodar(raiz, ['conversas', '--inquilino', inquilino, '--configuracao', 'orlando']);
     assert.equal(r.codigo, 2);
     assert.match(r.saida, /ambigu/i);
+  } finally {
+    limpar();
+  }
+});
+
+test('malote conversas --fixada devolve so as marcadas, escopado por Configuracao', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino } = instalacaoComChave(raiz);
+    const registro = abrirRegistro(raiz);
+    let cfg;
+    try {
+      cfg = resolverConfiguracao(registro, inquilino, 'whatsapp', 'orlando');
+    } finally {
+      registro.fechar();
+    }
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    let marcadaId;
+    try {
+      marcadaId = registrarConversa(acervo, {
+        fonte: 'whatsapp', idExterno: '111@s.whatsapp.net', coletiva: false,
+        configuracao: { id: cfg.id, fonte: 'whatsapp' },
+      });
+      registrarConversa(acervo, {
+        fonte: 'whatsapp', idExterno: '222@s.whatsapp.net', coletiva: false,
+        configuracao: { id: cfg.id, fonte: 'whatsapp' },
+      });
+      marcarConversa(acervo, {
+        conversaId: marcadaId, marca: 'fixada', configuracaoId: cfg.id, observadaEm: Date.now(),
+      });
+    } finally {
+      acervo.fechar();
+    }
+
+    const r = rodar(raiz, ['conversas', '--inquilino', inquilino, '--fixada', 'true', '--configuracao', 'orlando', '--json']);
+    assert.equal(r.codigo, 0, r.saida);
+    const conversas = JSON.parse(r.saida) as Array<{ id: string }>;
+    assert.deepEqual(conversas.map((c) => c.id), [marcadaId]);
+  } finally {
+    limpar();
+  }
+});
+
+test('malote conversas --fixada sem --configuracao falha com codigo 2', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino } = instalacaoComChave(raiz);
+    const r = rodar(raiz, ['conversas', '--inquilino', inquilino, '--fixada', 'true']);
+    assert.equal(r.codigo, 2);
+    assert.match(r.saida, /fixada/i);
+    assert.match(r.saida, /configuracao/i);
   } finally {
     limpar();
   }

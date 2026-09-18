@@ -166,3 +166,65 @@ test('malote configuracao listar em modo rede: subprocesso consulta o servidor r
     cena.limpar();
   }
 });
+
+test('malote conversas --fixada em modo rede: subprocesso encaminha fixada e configuracao', async () => {
+  const { cenario } = await import('./ajuda/acervo.js');
+  const cena = cenario();
+  try {
+    const { id: inquilinoId, acervo } = cena.novoInquilino('Ahsoka');
+    const { resolverConfiguracao } = await import('../src/registro/configuracao-adaptador.js');
+    const cfg = resolverConfiguracao(cena.registro, inquilinoId, 'whatsapp', 'orlando');
+    const { registrarConversa } = await import('../src/nucleo/escrita.js');
+    const { marcarConversa } = await import('../src/nucleo/marca-do-titular.js');
+    const marcadaId = registrarConversa(acervo, {
+      fonte: 'whatsapp', idExterno: '444@s.whatsapp.net', coletiva: false,
+      configuracao: { id: cfg.id, fonte: 'whatsapp' },
+    });
+    registrarConversa(acervo, {
+      fonte: 'whatsapp', idExterno: '555@s.whatsapp.net', coletiva: false,
+      configuracao: { id: cfg.id, fonte: 'whatsapp' },
+    });
+    marcarConversa(acervo, {
+      conversaId: marcadaId, marca: 'fixada', configuracaoId: cfg.id, observadaEm: Date.now(),
+    });
+    acervo.fechar();
+
+    const { criarServidor } = await import('../src/rede/servidor.js');
+    const srv = criarServidor({ dados: cena.raiz, porta: 0 });
+    const http = srv.listen(0, '127.0.0.1');
+    await new Promise<void>((r) => http.once('listening', r));
+    const porta = (http.address() as { port: number }).port;
+
+    const k = rodarComEnv(cena.raiz, {}, ['operador', 'chave', 'criar']);
+    const chaveOp = /valor:\s*(\S+)/.exec(k.saida)?.[1] ?? '';
+    const criacao = rodarComEnv(cena.raiz, {}, [
+      'acesso', 'chave', 'emitir', '--chave', chaveOp, '--inquilino', inquilinoId,
+    ]);
+    const chaveAcesso = /valor:\s*(\S+)/.exec(criacao.saida)?.[1] ?? '';
+
+    const saida = await new Promise<{ codigo: number | null; stdout: string; stderr: string }>(
+      (resolver) => {
+        const filho = spawn(
+          process.execPath,
+          ['--import', 'tsx', join(import.meta.dirname, '..', 'src', 'cli', 'index.ts'),
+            'conversas', '--fixada', 'true', '--configuracao', 'orlando', '--json'],
+          { env: { ...process.env,
+              MALOTE_HOME: cena.raiz,
+              MALOTE_SERVIDOR: `http://127.0.0.1:${porta}`,
+              MALOTE_CHAVE_DE_ACESSO: chaveAcesso } },
+        );
+        let stdout = '';
+        let stderr = '';
+        filho.stdout.on('data', (d) => (stdout += d));
+        filho.stderr.on('data', (d) => (stderr += d));
+        filho.on('close', (codigo) => resolver({ codigo: codigo ?? -1, stdout, stderr }));
+      },
+    );
+    assert.equal(saida.codigo, 0, `stdout=${saida.stdout}\nstderr=${saida.stderr}`);
+    const corpo = JSON.parse(saida.stdout) as { conversas: Array<{ id: string }> };
+    assert.deepEqual(corpo.conversas.map((c) => c.id), [marcadaId]);
+    http.close();
+  } finally {
+    cena.limpar();
+  }
+});
