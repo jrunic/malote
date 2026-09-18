@@ -64,6 +64,7 @@ import {
   definirContaDaConfiguracao,
   listarConfiguracoes,
   resolverConfiguracao,
+  resolverFiltroDeConfiguracao,
 } from '../registro/configuracao-adaptador.js';
 import { CONTA_PADRAO } from '../adaptadores/whatsapp/material.js';
 import { importarCatalogo } from '../adaptadores/contatos/importar.js';
@@ -262,7 +263,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvinte estado --conta <nome> [--json]
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
   malote servir     --porta <n> [--endereco <ip>] [--exposto]
-  malote conversas  --inquilino <id> [--pessoa <id>] [--json]
+  malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--json]
   malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--json]
   malote conversas sem-endereco --inquilino <id> [--limite <n>]
   malote conversa presenca      --inquilino <id> --conversa <id> --em <AAAA-MM-DD> [--json]
@@ -1396,13 +1397,39 @@ function executarComAtor(
         const fonte = opcao(argumentos, 'fonte');
         const coletiva = opcao(argumentos, 'coletiva');
         const limite = opcao(argumentos, 'limite');
+        const configuracaoApelido = opcao(argumentos, 'configuracao');
+
+        let configuracaoId: string | undefined;
+        if (configuracaoApelido !== undefined) {
+          const resolucao = resolverFiltroDeConfiguracao(registro, inquilino, configuracaoApelido, fonte);
+          if (!resolucao.ok) {
+            // Valor errado na linha de comando e erro de uso — codigo 2, nao
+            // o 1 generico do catch externo (precedente de 12/09, ator.test.ts).
+            escrever(resolucao.erro);
+            return 2;
+          }
+          configuracaoId = resolucao.configuracao.id;
+        }
+
+        const apelidoPorId = new Map(
+          listarConfiguracoes(registro, inquilino).map((c) => [c.id, c.apelido]),
+        );
+
         const conversas = listarConversas(acervo, {
           ...(pessoa === undefined ? {} : { pessoaId: pessoa }),
           ...(busca === undefined ? {} : { busca }),
           ...(fonte === undefined ? {} : { fonte: fonte as Fonte }),
           ...(coletiva === undefined ? {} : { coletiva: coletiva === 'true' }),
           ...(limite === undefined ? {} : { limite: Number(limite) }),
-        });
+          ...(configuracaoId === undefined ? {} : { configuracaoId }),
+        }).map((c) => ({
+          id: c.id,
+          fonte: c.fonte,
+          coletiva: c.coletiva,
+          assunto: c.assunto,
+          mensagens: c.mensagens,
+          configuracao: c.configuracaoId === null ? null : (apelidoPorId.get(c.configuracaoId) ?? null),
+        }));
         if (temBandeira(argumentos, 'json')) {
           escrever(JSON.stringify(conversas, null, 2));
         } else {

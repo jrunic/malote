@@ -396,3 +396,51 @@ test('importar --fonte contatos NÃO exige --titular', () => {
   assert.doesNotMatch(r.saida, /titular/i);
   limpar();
 });
+
+test('malote conversas --configuracao filtra por apelido, resolvendo contra o Registro', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  const b = backupFalso({
+    conversas: [{ pk: 1, endereco: '111@s.whatsapp.net', nome: 'Ana', tipoDeSessao: 0 }],
+    mensagens: [
+      { stanzaId: 'a1', chatSessionPk: 1, texto: 'oi', dataCoreData: paraCoreData('2026-01-10T12:00:00.000Z') },
+    ],
+  });
+  try {
+    const { inquilino } = instalacaoComChave(raiz);
+    rodar(raiz, ['importar', '--configuracao', 'orlando', '--inquilino', inquilino,
+      '--fonte', 'whatsapp', '--material', b.raiz]);
+
+    const r = rodar(raiz, ['conversas', '--inquilino', inquilino, '--configuracao', 'orlando', '--json']);
+    assert.equal(r.codigo, 0, r.saida);
+    const conversas = JSON.parse(r.saida) as Array<{ configuracao: string | null }>;
+    assert.ok(conversas.length > 0);
+    assert.ok(conversas.every((c) => c.configuracao === 'orlando'));
+  } finally {
+    b.limpar();
+    limpar();
+  }
+});
+
+test('malote conversas --configuracao com apelido ambiguo falha com codigo 2 e mensagem clara', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino } = instalacaoComChave(raiz);
+    // entrada declarar CRIA a Configuracao sem exigir material — mais barato
+    // que importar de verdade, e o suficiente para a ambiguidade existir no
+    // Registro (a resolucao falha ANTES de qualquer Conversa importar).
+    // whatsapp NAO e Fonte varrivel (chega pelo ouvinte/importar, nunca por
+    // pasta vigiada) — contatos e instagram sao, e bastam para a ambiguidade.
+    const declarar1 = rodar(raiz, ['entrada', 'declarar', '--inquilino', inquilino, '--fonte', 'contatos',
+      '--configuracao', 'orlando', '--pasta', '/tmp/entrada-contatos-orlando', '--natureza', 'parcial']);
+    assert.equal(declarar1.codigo, 0, declarar1.saida);
+    const declarar2 = rodar(raiz, ['entrada', 'declarar', '--inquilino', inquilino, '--fonte', 'instagram',
+      '--configuracao', 'orlando', '--pasta', '/tmp/entrada-instagram-orlando', '--natureza', 'parcial']);
+    assert.equal(declarar2.codigo, 0, declarar2.saida);
+
+    const r = rodar(raiz, ['conversas', '--inquilino', inquilino, '--configuracao', 'orlando']);
+    assert.equal(r.codigo, 2);
+    assert.match(r.saida, /ambigu/i);
+  } finally {
+    limpar();
+  }
+});
