@@ -252,5 +252,19 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     return;
   }
 
+  if (partes.length === 1 && partes[0] === 'configuracoes') {
+    const registro = abrirRegistro(ctx.dados);
+    try {
+      const configuracoes = listarConfiguracoes(registro, ctx.identidade.inquilinoId).map((c) => ({
+        apelido: c.apelido,
+        fonte: c.fonte,
+      }));
+      json(res, 200, { configuracoes });
+    } finally {
+      registro.fechar();
+    }
+    return;
+  }
+
   naoEncontrado(res);
 }

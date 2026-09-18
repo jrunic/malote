@@ -193,3 +193,27 @@ test('GET /conversas com configuracao desconhecida devolve 400', async () => {
     await c.parar();
   }
 });
+
+test('GET /configuracoes devolve apelido e fonte, sem o id interno', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
+    resolverConfiguracao(c.registro, c.inquilinoA, 'instagram', 'orlando');
+
+    const r = await c.pedir('/configuracoes', chave.valor);
+    assert.equal(r.status, 200);
+    const corpo = JSON.parse(r.corpo) as { configuracoes: Array<{ apelido: string; fonte: string }> };
+
+    assert.equal(corpo.configuracoes.length, 2);
+    for (const cfg of corpo.configuracoes) {
+      assert.equal(Object.keys(cfg).sort().join(','), 'apelido,fonte');
+    }
+    assert.deepEqual(
+      corpo.configuracoes.map((cfg) => `${cfg.fonte}/${cfg.apelido}`).sort(),
+      ['instagram/orlando', 'whatsapp/orlando'],
+    );
+  } finally {
+    await c.parar();
+  }
+});

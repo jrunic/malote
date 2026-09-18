@@ -329,6 +329,7 @@ const COMANDOS_DE_REDE = new Set([
   'pessoas',
   'participantes',
   'relatorio',
+  'configuracao',
 ]);
 
 /**
@@ -343,7 +344,7 @@ export async function executarConsultaRede(
   const grupo = argumentos[0];
   const q = new URLSearchParams();
   for (const nome of ['busca', 'fonte', 'coletiva', 'pessoa', 'limite', 'conversa',
-    'autor', 'desde', 'ate', 'antes', 'em', 'texto']) {
+    'autor', 'desde', 'ate', 'antes', 'em', 'texto', 'configuracao']) {
     const valor = opcao(argumentos, nome);
     if (valor !== undefined) q.set(nome, valor);
   }
@@ -360,6 +361,14 @@ export async function executarConsultaRede(
     caminho = `/conversas/${conversa}/participantes`;
   }
   else if (grupo === 'relatorio') caminho = '/relatorio';
+  else if (grupo === 'configuracao') {
+    const sub = argumentos[1];
+    if (sub !== 'listar') {
+      rede.escrever(`"configuracao ${sub ?? ''}" ainda nao consulta por rede.`);
+      return 2;
+    }
+    caminho = '/configuracoes';
+  }
   else if (grupo === 'mensagens') {
     const conversa = opcao(argumentos, 'conversa');
     if (conversa === undefined) {
