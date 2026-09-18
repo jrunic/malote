@@ -438,6 +438,13 @@ export function conversaExiste(acervo: Acervo, conversaId: string): boolean {
   return linha !== undefined;
 }
 
+/** A Fonte de uma Conversa específica, ou `undefined` se ela não existe. */
+export function fonteDaConversa(acervo: Acervo, conversaId: string): Fonte | undefined {
+  const linha = acervo.preparar('SELECT fonte FROM conversas WHERE id = ?')
+    .get(conversaId) as { fonte: Fonte } | undefined;
+  return linha?.fonte;
+}
+
 /** Pessoa resolvida por texto: id + nomes + identificadores, para a rede. */
 export interface PessoaResolvida {
   id: string;
