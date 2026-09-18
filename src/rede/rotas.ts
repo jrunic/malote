@@ -5,6 +5,7 @@ import { quemEstavaEm } from '../nucleo/presenca.js';
 import { codificarCursor, decodificarCursor } from '../nucleo/cursor.js';
 import { abrirRegistro } from '../registro/registro.js';
 import { listarChavesDeAcesso } from '../registro/chave-de-acesso.js';
+import { listarConfiguracoes, resolverFiltroDeConfiguracao } from '../registro/configuracao-adaptador.js';
 import type { IdentidadeDeAcesso } from '../registro/chave-de-acesso.js';
 import type { ConversaId, Fonte } from '../nucleo/tipos.js';
 
@@ -54,22 +55,50 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     // o contrato publicado no guia do cliente nao muda de significado.
     const q = url.searchParams;
     const fonte = q.get('fonte') ?? undefined;
-    const coletiva = q.get('coletiva');
+    const coletiva = q.get('coletiva') ?? undefined;
     const busca = q.get('busca') ?? undefined;
     const pessoa = q.get('pessoa') ?? undefined;
     const limite = q.get('limite') ?? undefined;
+    const configuracaoApelido = q.get('configuracao');
+
+    const registro = abrirRegistro(ctx.dados);
+    let configuracaoId: string | undefined;
+    let apelidoPorId: Map<string, string>;
+    try {
+      if (configuracaoApelido !== null) {
+        const resolucao = resolverFiltroDeConfiguracao(
+          registro,
+          ctx.identidade.inquilinoId,
+          configuracaoApelido,
+          fonte,
+        );
+        if (!resolucao.ok) {
+          json(res, 400, { erro: resolucao.erro });
+          return;
+        }
+        configuracaoId = resolucao.configuracao.id;
+      }
+      apelidoPorId = new Map(
+        listarConfiguracoes(registro, ctx.identidade.inquilinoId).map((c) => [c.id, c.apelido]),
+      );
+    } finally {
+      registro.fechar();
+    }
+
     const conversas = listarConversas(ctx.acervo, {
       ...(fonte !== undefined ? { fonte: fonte as Fonte } : {}),
       ...(coletiva !== undefined ? { coletiva: coletiva === 'true' } : {}),
       ...(busca !== undefined ? { busca } : {}),
       ...(pessoa !== undefined ? { pessoaId: pessoa } : {}),
       ...(limite !== undefined ? { limite: Number(limite) } : {}),
+      ...(configuracaoId !== undefined ? { configuracaoId } : {}),
     }).map((c) => ({
       id: c.id,
       fonte: c.fonte,
       coletiva: c.coletiva,
       assunto: c.assunto,
       mensagens: c.mensagens,
+      configuracao: c.configuracaoId === null ? null : (apelidoPorId.get(c.configuracaoId) ?? null),
     }));
     json(res, 200, { conversas });
     return;

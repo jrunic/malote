@@ -27,6 +27,9 @@ export interface CenarioDeRede {
   conversaDeB: string;
   chaveDeOperador: string;
   endereco: string;
+  /** Para testes que precisam criar Configuracao/Conversa fora do povoamento padrao. */
+  registro: Registro;
+  raiz: string;
   emitir: (inquilinoId: string) => ChaveDeAcessoCriada;
   revogar: (chaveId: string) => void;
   pedir: (caminho: string, chave?: string) => Promise<Resposta>;
@@ -96,6 +99,8 @@ export async function cenarioDeRede(): Promise<CenarioDeRede> {
     conversaDeB: b.conversa,
     chaveDeOperador,
     endereco: address,
+    registro,
+    raiz,
     emitir: (inquilinoId) => emitirChaveDeAcesso(registro, inquilinoId),
     revogar: (chaveId) => revogarChaveDeAcesso(registro, chaveId),
     pedir: async (caminho, chave) => {

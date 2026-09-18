@@ -1,8 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { join } from 'node:path';
 import { cenarioDeRede } from './ajuda/rede.js';
 import { instalacaoTemporaria } from './ajuda/instalacao.js';
 import { executar } from '../src/cli/index.js';
+import { abrirAcervo } from '../src/nucleo/acervo.js';
+import { registrarConversa } from '../src/nucleo/escrita.js';
+import { resolverConfiguracao } from '../src/registro/configuracao-adaptador.js';
 
 test('o Titular lista as Chaves do proprio Inquilino, sem valor nenhum', async () => {
   // A metade que a CLI nao entrega: la so existe Chave de Operador. E o que
@@ -106,5 +110,86 @@ test('endereco alcancavel exige ato explicito, e a recusa diz o que fazer', () =
     assert.match(texto, /TLS|terminador/i, 'e diz por que');
   } finally {
     limpar();
+  }
+});
+
+test('GET /conversas com configuracao filtra por apelido e a saida carrega o apelido', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
+    const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
+    try {
+      registrarConversa(acervo, {
+        fonte: 'whatsapp', idExterno: '222@s.whatsapp.net', coletiva: false,
+        configuracao: { id: cfg.id, fonte: 'whatsapp' },
+      });
+    } finally {
+      acervo.fechar();
+    }
+
+    const r = await c.pedir('/conversas?configuracao=orlando&fonte=whatsapp', chave.valor);
+    assert.equal(r.status, 200);
+    const corpo = JSON.parse(r.corpo) as {
+      conversas: Array<{ id: string; configuracao: string | null }>;
+    };
+    assert.equal(corpo.conversas.length, 1);
+    assert.equal(corpo.conversas[0]!.configuracao, 'orlando');
+  } finally {
+    await c.parar();
+  }
+});
+
+test('GET /conversas sem filtro: direta carrega o apelido, coletiva carrega null', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    // c.conversaDeA ja existe, direta, sob CFG_WHATSAPP (id sintetico, sem
+    // Configuracao real no Registro) — por isso o apelido dela vem null aqui;
+    // o que este teste mede e a COLETIVA nunca ter apelido, nao a direta ter.
+    const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
+    try {
+      registrarConversa(acervo, {
+        fonte: 'whatsapp', idExterno: 'grupo-1@g.us', coletiva: true,
+      });
+    } finally {
+      acervo.fechar();
+    }
+
+    const r = await c.pedir('/conversas', chave.valor);
+    const corpo = JSON.parse(r.corpo) as {
+      conversas: Array<{ coletiva: boolean; configuracao: string | null }>;
+    };
+    const coletiva = corpo.conversas.find((x) => x.coletiva);
+    assert.equal(coletiva?.configuracao, null);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('GET /conversas com configuracao ambigua (mesmo apelido, Fontes diferentes) sem fonte devolve 400', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
+    resolverConfiguracao(c.registro, c.inquilinoA, 'instagram', 'orlando');
+
+    const r = await c.pedir('/conversas?configuracao=orlando', chave.valor);
+    assert.equal(r.status, 400);
+    const corpo = JSON.parse(r.corpo) as { erro: string };
+    assert.match(corpo.erro, /ambigu/i);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('GET /conversas com configuracao desconhecida devolve 400', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const r = await c.pedir('/conversas?configuracao=nao-existe', chave.valor);
+    assert.equal(r.status, 400);
+  } finally {
+    await c.parar();
   }
 });
