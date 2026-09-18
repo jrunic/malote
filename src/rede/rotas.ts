@@ -6,6 +6,7 @@ import { codificarCursor, decodificarCursor } from '../nucleo/cursor.js';
 import { abrirRegistro } from '../registro/registro.js';
 import { listarChavesDeAcesso } from '../registro/chave-de-acesso.js';
 import { listarConfiguracoes, resolverFiltroDeConfiguracao } from '../registro/configuracao-adaptador.js';
+import { conversasMarcadas } from '../nucleo/marca-do-titular.js';
 import type { IdentidadeDeAcesso } from '../registro/chave-de-acesso.js';
 import type { ConversaId, Fonte } from '../nucleo/tipos.js';
 
@@ -60,6 +61,12 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const pessoa = q.get('pessoa') ?? undefined;
     const limite = q.get('limite') ?? undefined;
     const configuracaoApelido = q.get('configuracao');
+    const fixada = q.get('fixada') ?? undefined;
+
+    if (fixada === 'true' && configuracaoApelido === null) {
+      json(res, 400, { erro: 'fixada exige configuracao' });
+      return;
+    }
 
     const registro = abrirRegistro(ctx.dados);
     let configuracaoId: string | undefined;
@@ -85,13 +92,26 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       registro.fechar();
     }
 
-    const conversas = listarConversas(ctx.acervo, {
+    // Quando fixada esta ativo, `configuracao` escopa a MARCA
+    // (marcas_de_conversa.configuracao_id), NAO a atribuicao
+    // (conversas.configuracao_id) — compor os dois em AND mataria coletiva
+    // fixada, porque a atribuicao e NULL nela e a Marca nao depende dela. O
+    // filtro de marca acontece DEPOIS, em JS, contra o conjunto que
+    // conversasMarcadas devolve — nunca como condicao SQL a mais.
+    const marcadas = fixada === 'true'
+      ? new Set(conversasMarcadas(ctx.acervo, { marca: 'fixada', configuracaoId: configuracaoId! }))
+      : undefined;
+
+    let conversas = listarConversas(ctx.acervo, {
       ...(fonte !== undefined ? { fonte: fonte as Fonte } : {}),
       ...(coletiva !== undefined ? { coletiva: coletiva === 'true' } : {}),
       ...(busca !== undefined ? { busca } : {}),
       ...(pessoa !== undefined ? { pessoaId: pessoa } : {}),
-      ...(limite !== undefined ? { limite: Number(limite) } : {}),
-      ...(configuracaoId !== undefined ? { configuracaoId } : {}),
+      // limite so vai pro SQL quando NAO ha marca a filtrar depois — senao o
+      // corte aconteceria ANTES do filtro de marca, podendo devolver menos
+      // que o pedido mesmo havendo marcadas suficientes.
+      ...(marcadas === undefined && limite !== undefined ? { limite: Number(limite) } : {}),
+      ...(marcadas === undefined && configuracaoId !== undefined ? { configuracaoId } : {}),
     }).map((c) => ({
       id: c.id,
       fonte: c.fonte,
@@ -100,6 +120,12 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       mensagens: c.mensagens,
       configuracao: c.configuracaoId === null ? null : (apelidoPorId.get(c.configuracaoId) ?? null),
     }));
+
+    if (marcadas !== undefined) {
+      conversas = conversas.filter((c) => marcadas.has(c.id));
+      if (limite !== undefined) conversas = conversas.slice(0, Number(limite));
+    }
+
     json(res, 200, { conversas });
     return;
   }

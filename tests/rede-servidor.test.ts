@@ -8,7 +8,7 @@ import { abrirAcervo } from '../src/nucleo/acervo.js';
 import { registrarConversa } from '../src/nucleo/escrita.js';
 import { resolverConfiguracao } from '../src/registro/configuracao-adaptador.js';
 import { registrarMensagem } from '../src/nucleo/escrita.js';
-import { marcarMensagem } from '../src/nucleo/marca-do-titular.js';
+import { marcarMensagem, marcarConversa } from '../src/nucleo/marca-do-titular.js';
 
 test('o Titular lista as Chaves do proprio Inquilino, sem valor nenhum', async () => {
   // A metade que a CLI nao entrega: la so existe Chave de Operador. E o que
@@ -323,6 +323,86 @@ test('favorito=true com apelido desconhecido devolve 400', async () => {
       `/conversas/${c.conversaDeA}/mensagens?favorito=true&configuracao=nao-existe`, chave.valor,
     );
     assert.equal(r.status, 400);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('GET /conversas com fixada e configuracao devolve so as marcadas naquela Configuracao', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
+    const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
+    let marcadaId;
+    try {
+      marcadaId = registrarConversa(acervo, {
+        fonte: 'whatsapp', idExterno: '222@s.whatsapp.net', coletiva: false,
+        configuracao: { id: cfg.id, fonte: 'whatsapp' },
+      });
+      registrarConversa(acervo, {
+        fonte: 'whatsapp', idExterno: '333@s.whatsapp.net', coletiva: false,
+        configuracao: { id: cfg.id, fonte: 'whatsapp' },
+      });
+      marcarConversa(acervo, {
+        conversaId: marcadaId, marca: 'fixada', configuracaoId: cfg.id, observadaEm: Date.now(),
+      });
+    } finally {
+      acervo.fechar();
+    }
+
+    const r = await c.pedir('/conversas?fixada=true&configuracao=orlando', chave.valor);
+    assert.equal(r.status, 200);
+    const corpo = JSON.parse(r.corpo) as { conversas: Array<{ id: string }> };
+    assert.deepEqual(corpo.conversas.map((x) => x.id), [marcadaId]);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('Conversa COLETIVA fixada aparece — a Marca nao depende da atribuicao', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
+    const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
+    let coletivaId;
+    try {
+      coletivaId = registrarConversa(acervo, {
+        fonte: 'whatsapp', idExterno: 'grupo-fixado@g.us', coletiva: true,
+      });
+      // A coletiva NAO tem configuracao_id (atribuicao e NULL) — e mesmo
+      // assim a Marca de fixada vale, porque marcarConversa nao depende de
+      // atribuicao, so do id da Conversa e da Configuracao QUE MARCOU.
+      marcarConversa(acervo, {
+        conversaId: coletivaId, marca: 'fixada', configuracaoId: cfg.id, observadaEm: Date.now(),
+      });
+    } finally {
+      acervo.fechar();
+    }
+
+    const r = await c.pedir('/conversas?fixada=true&configuracao=orlando', chave.valor);
+    assert.equal(r.status, 200);
+    const corpo = JSON.parse(r.corpo) as { conversas: Array<{ id: string; coletiva: boolean; configuracao: string | null }> };
+    assert.deepEqual(corpo.conversas.map((x) => x.id), [coletivaId]);
+    assert.equal(corpo.conversas[0]!.coletiva, true);
+    // A saida de `configuracao` continua refletindo ATRIBUICAO, que e null
+    // na coletiva — mesmo ela tendo casado o filtro de fixada por MARCA.
+    assert.equal(corpo.conversas[0]!.configuracao, null);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('fixada=true sem configuracao devolve 400', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const r = await c.pedir('/conversas?fixada=true', chave.valor);
+    assert.equal(r.status, 400);
+    const corpo = JSON.parse(r.corpo) as { erro: string };
+    assert.match(corpo.erro, /fixada/i);
+    assert.match(corpo.erro, /configuracao/i);
   } finally {
     await c.parar();
   }
