@@ -47,6 +47,29 @@ export function lerAnexos(acervo: Acervo, mensagemId: MensagemId): AnexoLido[] {
   }));
 }
 
+/** Um Anexo pelo próprio id, ou `undefined` se não existe. */
+export function lerAnexoPorId(acervo: Acervo, anexoId: string): AnexoLido | undefined {
+  const linha = acervo.preparar(
+      `SELECT id, tipo, tamanho, nome_original, duracao, impressao, presenca, caminho,
+              descartado_em, descartado_por
+         FROM anexos WHERE id = ?`,
+    )
+    .get(anexoId) as Record<string, unknown> | undefined;
+  if (linha === undefined) return undefined;
+  return {
+    id: linha['id'] as string,
+    tipo: linha['tipo'] as string,
+    tamanho: (linha['tamanho'] as number | null) ?? null,
+    nomeOriginal: (linha['nome_original'] as string | null) ?? null,
+    duracao: (linha['duracao'] as number | null) ?? null,
+    impressao: (linha['impressao'] as string | null) ?? null,
+    presenca: linha['presenca'] as Presenca,
+    caminho: (linha['caminho'] as string | null) ?? null,
+    descartadoEm: (linha['descartado_em'] as string | null) ?? null,
+    descartadoPor: (linha['descartado_por'] as string | null) ?? null,
+  };
+}
+
 export interface ParticipacaoLida {
   identificadorId: string;
   comecouEm: string | null;
@@ -75,6 +98,8 @@ export interface ConversaListada {
   coletiva: boolean;
   assunto: string | null;
   mensagens: number;
+  /** Null para Conversa coletiva — ela pertence ao Inquilino, nao a uma Configuracao. */
+  configuracaoId: string | null;
 }
 
 export interface FiltroDeConversa {
@@ -83,6 +108,12 @@ export interface FiltroDeConversa {
   pessoaId?: PessoaId;
   /** Assunto contém o termo, case-insensitive, LITERAL — `%` e `_` escapados. */
   busca?: string;
+  /**
+   * So Conversa DIRETA tem Configuracao (`c.configuracao_id`). Coletiva nunca
+   * casa — o campo e NULL para ela, e NULL nunca satisfaz `= ?`. Nao e defeito:
+   * e o mesmo desenho que os dois indices parciais de #825 ja impoem.
+   */
+  configuracaoId?: string;
   limite?: number;
 }
 
@@ -118,11 +149,15 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
         .replace(/^/, '%') + '%',
     );
   }
+  if (filtro.configuracaoId !== undefined) {
+    condicoes.push('c.configuracao_id = ?');
+    valores.push(filtro.configuracaoId);
+  }
   const onde = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
   const limite = filtro.limite !== undefined ? ` LIMIT ${Number(filtro.limite)}` : '';
 
   const linhas = acervo.preparar(
-      `SELECT c.id, c.fonte, c.coletiva, m.assunto,
+      `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, m.assunto,
               (SELECT COUNT(*) FROM mensagens x WHERE x.conversa_id = c.id) AS mensagens
          FROM conversas c
          LEFT JOIN metadados_de_coletiva m ON m.conversa_id = c.id
@@ -137,6 +172,7 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
     coletiva: (l['coletiva'] as number) === 1,
     assunto: (l['assunto'] as string | null) ?? null,
     mensagens: l['mensagens'] as number,
+    configuracaoId: (l['configuracao_id'] as string | null) ?? null,
   }));
 }
 
@@ -423,6 +459,13 @@ export function conversaExiste(acervo: Acervo, conversaId: string): boolean {
   const linha = acervo.preparar('SELECT 1 AS achou FROM conversas WHERE id = ?')
     .get(conversaId) as { achou: number } | undefined;
   return linha !== undefined;
+}
+
+/** A Fonte de uma Conversa específica, ou `undefined` se ela não existe. */
+export function fonteDaConversa(acervo: Acervo, conversaId: string): Fonte | undefined {
+  const linha = acervo.preparar('SELECT fonte FROM conversas WHERE id = ?')
+    .get(conversaId) as { fonte: Fonte } | undefined;
+  return linha?.fonte;
 }
 
 /** Pessoa resolvida por texto: id + nomes + identificadores, para a rede. */

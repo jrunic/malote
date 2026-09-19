@@ -1,10 +1,15 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Acervo } from '../nucleo/acervo.js';
-import { buscarMensagens, contarPorFonte, expandirData, lerMensagens, listarConversas, procurarPessoas } from '../nucleo/consulta.js';
+import { buscarMensagens, contarPorFonte, expandirData, fonteDaConversa, lerAnexoPorId, lerMensagens, listarConversas, procurarPessoas } from '../nucleo/consulta.js';
 import { quemEstavaEm } from '../nucleo/presenca.js';
 import { codificarCursor, decodificarCursor } from '../nucleo/cursor.js';
 import { abrirRegistro } from '../registro/registro.js';
 import { listarChavesDeAcesso } from '../registro/chave-de-acesso.js';
+import { listarConfiguracoes, resolverFiltroDeConfiguracao } from '../registro/configuracao-adaptador.js';
+import { conversasMarcadas } from '../nucleo/marca-do-titular.js';
+import { lerDestinoDeMidia } from '../registro/destino-midia.js';
 import type { IdentidadeDeAcesso } from '../registro/chave-de-acesso.js';
 import type { ConversaId, Fonte } from '../nucleo/tipos.js';
 
@@ -39,6 +44,17 @@ function naoEncontrado(res: ServerResponse): void {
   res.end('');
 }
 
+/**
+ * `video` fica de fora: recusado com sinal dedicado (415), nunca chega aqui.
+ * Tipo desconhecido cai em `application/octet-stream` — generico, nao quebra.
+ */
+const CONTENT_TYPE_POR_TIPO: Record<string, string> = {
+  image: 'image/jpeg',
+  audio: 'audio/opus',
+  document: 'application/octet-stream',
+  sticker: 'image/webp',
+};
+
 export function responder(req: IncomingMessage, res: ServerResponse, ctx: ContextoDaRequisicao): void {
   const url = new URL(req.url ?? '/', 'http://interno');
   const partes = url.pathname.split('/').filter((p) => p !== '');
@@ -54,23 +70,76 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     // o contrato publicado no guia do cliente nao muda de significado.
     const q = url.searchParams;
     const fonte = q.get('fonte') ?? undefined;
-    const coletiva = q.get('coletiva');
+    const coletiva = q.get('coletiva') ?? undefined;
     const busca = q.get('busca') ?? undefined;
     const pessoa = q.get('pessoa') ?? undefined;
     const limite = q.get('limite') ?? undefined;
-    const conversas = listarConversas(ctx.acervo, {
+    const configuracaoApelido = q.get('configuracao');
+    const fixada = q.get('fixada') ?? undefined;
+
+    if (fixada === 'true' && configuracaoApelido === null) {
+      json(res, 400, { erro: 'fixada exige configuracao' });
+      return;
+    }
+
+    const registro = abrirRegistro(ctx.dados);
+    let configuracaoId: string | undefined;
+    let apelidoPorId: Map<string, string>;
+    try {
+      if (configuracaoApelido !== null) {
+        const resolucao = resolverFiltroDeConfiguracao(
+          registro,
+          ctx.identidade.inquilinoId,
+          configuracaoApelido,
+          fonte,
+        );
+        if (!resolucao.ok) {
+          json(res, 400, { erro: resolucao.erro });
+          return;
+        }
+        configuracaoId = resolucao.configuracao.id;
+      }
+      apelidoPorId = new Map(
+        listarConfiguracoes(registro, ctx.identidade.inquilinoId).map((c) => [c.id, c.apelido]),
+      );
+    } finally {
+      registro.fechar();
+    }
+
+    // Quando fixada esta ativo, `configuracao` escopa a MARCA
+    // (marcas_de_conversa.configuracao_id), NAO a atribuicao
+    // (conversas.configuracao_id) — compor os dois em AND mataria coletiva
+    // fixada, porque a atribuicao e NULL nela e a Marca nao depende dela. O
+    // filtro de marca acontece DEPOIS, em JS, contra o conjunto que
+    // conversasMarcadas devolve — nunca como condicao SQL a mais.
+    const marcadas = fixada === 'true'
+      ? new Set(conversasMarcadas(ctx.acervo, { marca: 'fixada', configuracaoId: configuracaoId! }))
+      : undefined;
+
+    let conversas = listarConversas(ctx.acervo, {
       ...(fonte !== undefined ? { fonte: fonte as Fonte } : {}),
       ...(coletiva !== undefined ? { coletiva: coletiva === 'true' } : {}),
       ...(busca !== undefined ? { busca } : {}),
       ...(pessoa !== undefined ? { pessoaId: pessoa } : {}),
-      ...(limite !== undefined ? { limite: Number(limite) } : {}),
+      // limite so vai pro SQL quando NAO ha marca a filtrar depois — senao o
+      // corte aconteceria ANTES do filtro de marca, podendo devolver menos
+      // que o pedido mesmo havendo marcadas suficientes.
+      ...(marcadas === undefined && limite !== undefined ? { limite: Number(limite) } : {}),
+      ...(marcadas === undefined && configuracaoId !== undefined ? { configuracaoId } : {}),
     }).map((c) => ({
       id: c.id,
       fonte: c.fonte,
       coletiva: c.coletiva,
       assunto: c.assunto,
       mensagens: c.mensagens,
+      configuracao: c.configuracaoId === null ? null : (apelidoPorId.get(c.configuracaoId) ?? null),
     }));
+
+    if (marcadas !== undefined) {
+      conversas = conversas.filter((c) => marcadas.has(c.id));
+      if (limite !== undefined) conversas = conversas.slice(0, Number(limite));
+    }
+
     json(res, 200, { conversas });
     return;
   }
@@ -83,6 +152,8 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const ate = q.get('ate');
     const autor = q.get('autor');
     const antes = q.get('antes');
+    const favorito = q.get('favorito');
+    const configuracaoApelido = q.get('configuracao');
     let cursor: { ocorridaEm: number; id: string } | undefined;
     if (antes !== null) {
       cursor = decodificarCursor(antes);
@@ -102,22 +173,58 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       json(res, 400, { erro: (e as Error).message });
       return;
     }
+
+    let configuracaoId: string | undefined;
+    if (favorito === 'true') {
+      if (configuracaoApelido === null) {
+        json(res, 400, { erro: 'favorito exige configuracao' });
+        return;
+      }
+      // Fonte IMPLICITA da propria Conversa — esta rota nunca e ambigua,
+      // porque Conversa tem uma Fonte so. Se a Conversa nao existe, a
+      // resposta e o mesmo 404 vazio de sempre, sem distinguir.
+      const fonteDaConversaAtual = fonteDaConversa(ctx.acervo, conversaId);
+      if (fonteDaConversaAtual === undefined) {
+        naoEncontrado(res);
+        return;
+      }
+      const registro = abrirRegistro(ctx.dados);
+      let resolucao;
+      try {
+        resolucao = resolverFiltroDeConfiguracao(
+          registro, ctx.identidade.inquilinoId, configuracaoApelido, fonteDaConversaAtual,
+        );
+      } finally {
+        registro.fechar();
+      }
+      if (!resolucao.ok) {
+        json(res, 400, { erro: resolucao.erro });
+        return;
+      }
+      configuracaoId = resolucao.configuracao.id;
+      // A partir daqui, sabemos que a Conversa EXISTE (fonteDaConversa achou):
+      // lista vazia por filtro de favorito e resposta legitima, 200 — nao 404.
+    }
+
     const mensagens = lerMensagens(ctx.acervo, {
       conversaId,
       ...(filtroDe !== undefined ? { de: filtroDe } : {}),
       ...(filtroAte !== undefined ? { ate: filtroAte } : {}),
       ...(autor !== null ? { pessoaId: autor } : {}),
       ...(limite !== null ? { limite: Number(limite) } : {}),
+      ...(favorito === 'true' ? { favorito: true, configuracaoId: configuracaoId! } : {}),
       ...(cursor !== undefined
         ? { cursor, ordem: q.get('ordem') === 'cronologica' ? ('cronologica' as const) : ('recentes' as const) }
         : q.get('ordem') === 'cronologica'
           ? { ordem: 'cronologica' as const }
           : {}),
     });
-    if (mensagens.length === 0) {
-      // Conversa vazia e Conversa inexistente respondem igual. E limitacao
-      // conhecida e preferivel ao inverso: distinguir exigiria confirmar a
-      // existencia, e confirmar existencia e o que nao pode vazar.
+
+    if (mensagens.length === 0 && favorito !== 'true') {
+      // Conversa vazia e Conversa inexistente respondem igual — LIMITACAO
+      // HERDADA, mantida para os filtros pre-existentes (desde/ate/autor).
+      // Com favorito='true', a existencia ja foi confirmada acima
+      // (fonteDaConversa achou) — lista vazia ali e 200, nunca cai aqui.
       naoEncontrado(res);
       return;
     }
@@ -220,6 +327,65 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
 
   if (partes.length === 1 && partes[0] === 'relatorio') {
     json(res, 200, { relatorio: contarPorFonte(ctx.acervo) });
+    return;
+  }
+
+  if (partes.length === 1 && partes[0] === 'configuracoes') {
+    const registro = abrirRegistro(ctx.dados);
+    try {
+      const configuracoes = listarConfiguracoes(registro, ctx.identidade.inquilinoId).map((c) => ({
+        apelido: c.apelido,
+        fonte: c.fonte,
+      }));
+      json(res, 200, { configuracoes });
+    } finally {
+      registro.fechar();
+    }
+    return;
+  }
+
+  if (partes.length === 2 && partes[0] === 'midia') {
+    const anexoId = partes[1] as string;
+    const anexo = lerAnexoPorId(ctx.acervo, anexoId);
+    if (anexo === undefined || anexo.presenca !== 'presente' || anexo.caminho === null) {
+      naoEncontrado(res);
+      return;
+    }
+    if (anexo.tipo === 'video') {
+      // Sinal DEDICADO, nao o 404 generico dos demais casos — aqui a posse
+      // ja foi confirmada (o Anexo existe e e deste Inquilino), entao nomear
+      // o tipo nao vaza nada que a posse ja nao tivesse revelado.
+      json(res, 415, { erro: `tipo de Anexo nao suportado nesta rota: ${anexo.tipo}` });
+      return;
+    }
+
+    const registro = abrirRegistro(ctx.dados);
+    let destino;
+    try {
+      destino = lerDestinoDeMidia(registro, ctx.identidade.inquilinoId);
+    } finally {
+      registro.fechar();
+    }
+    if (destino === undefined) {
+      naoEncontrado(res);
+      return;
+    }
+
+    let bytes: Buffer;
+    try {
+      bytes = readFileSync(join(destino.endereco, anexo.caminho));
+    } catch {
+      // Presenca diz 'presente' e o arquivo nao esta la — disco perdeu o
+      // dado sem o banco saber. Mesma classe "sem bytes disponiveis" dos
+      // demais 404, nao um caso novo.
+      naoEncontrado(res);
+      return;
+    }
+
+    res.writeHead(200, {
+      'content-type': CONTENT_TYPE_POR_TIPO[anexo.tipo] ?? 'application/octet-stream',
+    });
+    res.end(bytes);
     return;
   }
 

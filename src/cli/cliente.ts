@@ -73,3 +73,57 @@ export async function pedirGet(
   }
   return { status: resposta.status, corpo };
 }
+
+/**
+ * Irmã de `pedirGet` para corpo BINÁRIO — `.text()` corromperia bytes de
+ * imagem/documento. A classificação de status (401/5xx/4xx) é a mesma; só o
+ * corpo de sucesso muda de forma.
+ */
+export async function pedirGetBinario(
+  servidor: string,
+  chave: string,
+  caminho: string,
+  opcoes: { timeoutMs?: number } = {},
+): Promise<{ status: number; contentType: string | null; bytes: Buffer }> {
+  const url = `${servidor}${caminho}`;
+  let resposta: Response;
+  try {
+    resposta = await fetch(url, {
+      headers: { authorization: `Bearer ${chave}` },
+      signal: AbortSignal.timeout(opcoes.timeoutMs ?? TIMEOUT_PADRAO_MS),
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === 'TimeoutError') {
+      throw falha(
+        'indeterminado',
+        7,
+        'Tempo esgotado esperando o servidor — resultado DESCONHECIDO: ' +
+          'a consulta pode ter sido concluída de lá. Repetir é seguro (somente leitura).',
+      );
+    }
+    throw falha(
+      'conexao',
+      4,
+      `Não consegui falar com ${servidor}: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
+  if (resposta.status === 401) {
+    throw falha(
+      'credencial',
+      3,
+      'Credencial recusada — a Chave de Acesso está ausente, inválida ou revogada ' +
+        '(o servidor não distingue as três, e este cliente não adivinha).',
+    );
+  }
+  if (resposta.status >= 500) {
+    throw falha('servidor', 5, `Erro do servidor (${resposta.status}).`);
+  }
+  if (resposta.status >= 400) {
+    const corpo = await resposta.text();
+    throw falha('uso', 6, `Invocação recusada (${resposta.status}): ${corpo}`);
+  }
+
+  const bytes = Buffer.from(await resposta.arrayBuffer());
+  return { status: resposta.status, contentType: resposta.headers.get('content-type'), bytes };
+}

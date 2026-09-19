@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { raizDeDados, raizDeEstado } from './caminhos.js';
-import { pedirGet } from './cliente.js';
+import { pedirGet, pedirGetBinario } from './cliente.js';
 import { decodificarCursor } from '../nucleo/cursor.js';
 import { expandirData, procurarPessoas } from '../nucleo/consulta.js';
 import { ehPontoDeEntrada } from './entrada.js';
@@ -26,6 +26,7 @@ import {
   listarSemEndereco,
   conversaExiste,
 } from '../nucleo/consulta.js';
+import { conversasMarcadas } from '../nucleo/marca-do-titular.js';
 import { importarMaterial } from '../adaptadores/whatsapp/importar.js';
 import { importarMaterialDeInstagram } from '../adaptadores/instagram/importar.js';
 import {
@@ -64,6 +65,7 @@ import {
   definirContaDaConfiguracao,
   listarConfiguracoes,
   resolverConfiguracao,
+  resolverFiltroDeConfiguracao,
 } from '../registro/configuracao-adaptador.js';
 import { CONTA_PADRAO } from '../adaptadores/whatsapp/material.js';
 import { importarCatalogo } from '../adaptadores/contatos/importar.js';
@@ -262,7 +264,9 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvinte estado --conta <nome> [--json]
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
   malote servir     --porta <n> [--endereco <ip>] [--exposto]
-  malote conversas  --inquilino <id> [--pessoa <id>] [--json]
+  malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--json]
+  malote midia <id> --saida <arquivo>   (bytes do Anexo — SO em modo rede;
+                                          local, leia 'caminho' de 'mensagens --json')
   malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--json]
   malote conversas sem-endereco --inquilino <id> [--limite <n>]
   malote conversa presenca      --inquilino <id> --conversa <id> --em <AAAA-MM-DD> [--json]
@@ -329,6 +333,8 @@ const COMANDOS_DE_REDE = new Set([
   'pessoas',
   'participantes',
   'relatorio',
+  'configuracao',
+  'midia',
 ]);
 
 /**
@@ -343,7 +349,7 @@ export async function executarConsultaRede(
   const grupo = argumentos[0];
   const q = new URLSearchParams();
   for (const nome of ['busca', 'fonte', 'coletiva', 'pessoa', 'limite', 'conversa',
-    'autor', 'desde', 'ate', 'antes', 'em', 'texto']) {
+    'autor', 'desde', 'ate', 'antes', 'em', 'texto', 'configuracao', 'favorito', 'fixada']) {
     const valor = opcao(argumentos, nome);
     if (valor !== undefined) q.set(nome, valor);
   }
@@ -360,6 +366,14 @@ export async function executarConsultaRede(
     caminho = `/conversas/${conversa}/participantes`;
   }
   else if (grupo === 'relatorio') caminho = '/relatorio';
+  else if (grupo === 'configuracao') {
+    const sub = argumentos[1];
+    if (sub !== 'listar') {
+      rede.escrever(`"configuracao ${sub ?? ''}" ainda nao consulta por rede.`);
+      return 2;
+    }
+    caminho = '/configuracoes';
+  }
   else if (grupo === 'mensagens') {
     const conversa = opcao(argumentos, 'conversa');
     if (conversa === undefined) {
@@ -367,6 +381,27 @@ export async function executarConsultaRede(
       return 2;
     }
     caminho = `/conversas/${conversa}/mensagens`;
+  }
+  else if (grupo === 'midia') {
+    const anexoId = argumentos[1];
+    if (anexoId === undefined) {
+      rede.escrever('Informe o id do Anexo: malote midia <id> --saida <arquivo>.');
+      return 2;
+    }
+    const saida = opcao(argumentos, 'saida');
+    if (saida === undefined) {
+      rede.escrever('Informe --saida <arquivo>.');
+      return 2;
+    }
+    try {
+      const r = await pedirGetBinario(rede.servidor, rede.chave, `/midia/${anexoId}`);
+      writeFileSync(saida, r.bytes);
+      rede.escrever(`Gravado: ${saida} (${r.bytes.length} bytes, ${r.contentType ?? 'sem content-type'}).`);
+      return 0;
+    } catch (e) {
+      rede.escrever((e as Error).message);
+      return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
+    }
   } else {
     rede.escrever(`"${grupo}" ainda nao consulta por rede.`);
     return 2;
@@ -1387,13 +1422,57 @@ function executarComAtor(
         const fonte = opcao(argumentos, 'fonte');
         const coletiva = opcao(argumentos, 'coletiva');
         const limite = opcao(argumentos, 'limite');
-        const conversas = listarConversas(acervo, {
+        const configuracaoApelido = opcao(argumentos, 'configuracao');
+        const fixada = opcao(argumentos, 'fixada');
+
+        if (fixada === 'true' && configuracaoApelido === undefined) {
+          escrever('--fixada exige --configuracao (a Marca e por Configuracao).');
+          return 2;
+        }
+
+        let configuracaoId: string | undefined;
+        if (configuracaoApelido !== undefined) {
+          const resolucao = resolverFiltroDeConfiguracao(registro, inquilino, configuracaoApelido, fonte);
+          if (!resolucao.ok) {
+            // Valor errado na linha de comando e erro de uso — codigo 2, nao
+            // o 1 generico do catch externo (precedente de 12/09, ator.test.ts).
+            escrever(resolucao.erro);
+            return 2;
+          }
+          configuracaoId = resolucao.configuracao.id;
+        }
+
+        // Mesma composicao da rota de rede: com fixada ativo, configuracao
+        // escopa a MARCA, e o filtro acontece depois, em JS.
+        const marcadas = fixada === 'true'
+          ? new Set(conversasMarcadas(acervo, { marca: 'fixada', configuracaoId: configuracaoId! }))
+          : undefined;
+
+        const apelidoPorId = new Map(
+          listarConfiguracoes(registro, inquilino).map((c) => [c.id, c.apelido]),
+        );
+
+        let conversas = listarConversas(acervo, {
           ...(pessoa === undefined ? {} : { pessoaId: pessoa }),
           ...(busca === undefined ? {} : { busca }),
           ...(fonte === undefined ? {} : { fonte: fonte as Fonte }),
           ...(coletiva === undefined ? {} : { coletiva: coletiva === 'true' }),
-          ...(limite === undefined ? {} : { limite: Number(limite) }),
-        });
+          ...(marcadas === undefined && limite !== undefined ? { limite: Number(limite) } : {}),
+          ...(marcadas === undefined && configuracaoId !== undefined ? { configuracaoId } : {}),
+        }).map((c) => ({
+          id: c.id,
+          fonte: c.fonte,
+          coletiva: c.coletiva,
+          assunto: c.assunto,
+          mensagens: c.mensagens,
+          configuracao: c.configuracaoId === null ? null : (apelidoPorId.get(c.configuracaoId) ?? null),
+        }));
+
+        if (marcadas !== undefined) {
+          conversas = conversas.filter((c) => marcadas.has(c.id));
+          if (limite !== undefined) conversas = conversas.slice(0, Number(limite));
+        }
+
         if (temBandeira(argumentos, 'json')) {
           escrever(JSON.stringify(conversas, null, 2));
         } else {

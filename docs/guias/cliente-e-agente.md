@@ -70,18 +70,29 @@ Duas coisas que a máquina cliente **não** precisa:
 ## 2. Os comandos
 
 ```bash
-# Índice do Acervo: id, fonte, natureza, contagem, assunto
+# Índice do Acervo: id, fonte, natureza, contagem, assunto, configuração
 malote conversas --limite 30
 malote conversas --busca "relatorio" --fonte whatsapp --coletiva
+malote conversas --configuracao orlando        # so a Conversa daquela Configuracao
+malote conversas --configuracao orlando --fonte whatsapp  # desempata apelido repetido em Fontes diferentes
+malote conversas --fixada true --configuracao orlando  # so as fixadas NAQUELA Configuracao (marca, nao atribuicao)
+
+# Quais Configuracoes existem (apelido + fonte) — antes de filtrar por uma
+malote configuracao listar
 
 # Conteúdo de uma conversa, com janela e página
 malote mensagens --conversa <id> --limite 50
 malote mensagens --conversa <id> --desde 2026-09-01 --ate 2026-09-15
+malote mensagens --conversa <id> --favorito true --configuracao orlando  # so as favoritadas — SO EM MODO REDE (MALOTE_SERVIDOR setado)
 # Paginação: a resposta traz `proximo` quando há mais; devolva-o:
 malote mensagens --conversa <id> --antes "<cursor>"
 
 # Busca no conteúdo, com filtros
 malote buscar --texto "orçamento" --conversa <id> --desde 2026-09-01 --limite 50
+
+# Bytes de um Anexo (foto/documento) — SO EM MODO REDE (MALOTE_SERVIDOR setado).
+# Local, o Anexo já está em disco: leia o campo `caminho` de `mensagens --json`.
+malote midia <anexoId> --saida ./foto.jpg
 
 # Resolução de pessoa: texto entra, id sai (os outros comandos pedem o id)
 malote pessoas --texto "Bail Organa"
@@ -122,14 +133,27 @@ Use a CLI do malote, no modo rede. As variáveis `MALOTE_SERVIDOR` e
 escreva em arquivo, commit ou log, e nunca a passe adiante.
 
 Comandos (todos somente leitura):
-- `malote conversas [--busca T] [--fonte F] [--coletiva true|false] [--limite N]` —
-  índice; comece sempre aqui.
-- `malote mensagens --conversa <id> [--desde D] [--ate D] [--limite N]` — conteúdo.
+- `malote conversas [--busca T] [--fonte F] [--coletiva true|false] [--configuracao A] [--fixada true] [--limite N]` —
+  índice; comece sempre aqui. `--configuracao` sozinho filtra por apelido (`malote
+  configuracao listar` mostra o que existe) e só alcança Conversa DIRETA — coletiva
+  pertence ao Inquilino inteiro, não a uma Configuração, e nunca casa esse filtro. Com
+  `--fixada true`, `--configuracao` muda de sentido: passa a escopar a MARCA de fixada
+  daquela Configuração, não a atribuição — por isso coletiva fixada aparece.
+  `--fixada` exige `--configuracao` junto, e funciona local ou em modo rede.
+- `malote configuracao listar` — lista as Configurações do Inquilino (apelido + fonte).
+- `malote mensagens --conversa <id> [--desde D] [--ate D] [--limite N] [--favorito true --configuracao A]` —
+  conteúdo. `--favorito` só existe em modo rede (`MALOTE_SERVIDOR` setado) e exige
+  `--configuracao`; a Fonte é resolvida automaticamente pela própria Conversa, nunca
+  ambígua.
 - `malote buscar --texto T [--conversa <id>] [--desde D] [--ate D]` — busca no conteúdo.
 - `malote pessoas --texto T` — resolve nome/endereço para `id`; os outros comandos
   pedem o id, nunca o nome.
 - `malote participantes --conversa <id> [--em AAAA-MM-DD]` — quem estava na conversa.
 - `malote relatorio` — totais por fonte e natureza.
+- `malote midia <anexoId> --saida <arquivo>` — grava os bytes do Anexo (foto/documento)
+  no caminho local dado. Só existe em modo rede. **Não imprime** os bytes — não há
+  forma de "ler" mídia por esta CLI, só salvar em disco e abrir por fora. Anexo do
+  tipo vídeo é recusado (não suportado nesta rota).
 
 Regras:
 - Paginação: quando a resposta traz `proximo`, devolva-o em `--antes` na próxima
@@ -152,13 +176,32 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 
 | rota | parâmetros opcionais | resposta |
 |---|---|---|
-| `GET /conversas` | `fonte`, `coletiva`, `busca`, `pessoa`, `limite` | `{ conversas: [{ id, fonte, coletiva, assunto, mensagens }] }` |
-| `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `antes`, `ordem` | `{ mensagens: [...], proximo? }` |
+| `GET /conversas` | `fonte`, `coletiva`, `busca`, `pessoa`, `limite`, `configuracao`, `fixada` | `{ conversas: [{ id, fonte, coletiva, assunto, mensagens, configuracao }] }` |
+| `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `antes`, `ordem`, `favorito`, `configuracao` | `{ mensagens: [...], proximo? }` |
 | `GET /buscar?texto=` | `conversa`, `autor`, `desde`, `ate`, `limite` | `{ mensagens: [...] }` |
 | `GET /pessoas?texto=` | — | `{ pessoas: [{ id, nome, identificadores }] }` |
 | `GET /conversas/<id>/participantes` | `em` | `{ presenca: {...} }` |
 | `GET /relatorio` | — | `{ relatorio: { conversas, mensagens } }` |
 | `GET /chaves` | — | `{ chaves: [...] }` — as chaves do próprio Inquilino |
+| `GET /configuracoes` | — | `{ configuracoes: [{ apelido, fonte }] }` |
+| `GET /midia/<anexoId>` | — | o **arquivo** do Anexo, com `content-type` próprio — não é JSON |
+
+`GET /midia/<anexoId>` foge do padrão das demais: sucesso é `200` com os bytes crus
+(não `{ ... }`). `404` vazio cobre inexistente, de outro Inquilino e sem bytes
+disponíveis (`nunca-obtido`/`descartado`, ou arquivo que sumiu do disco) —
+indistinguíveis por desenho, mesma razão das demais rotas. **`415`** é o único sinal
+desta rota que não é o 404 genérico: corpo `{ erro }` nomeando o tipo, reservado a
+Anexo do tipo `video` — a posse já foi confirmada antes desse sinal disparar, então
+nomear o tipo não vaza nada que a posse já não tivesse revelado.
+
+`configuracao` em `/conversas` é o **apelido**, não o id interno — em caso de apelido
+repetido entre Fontes diferentes (ex.: `orlando` existindo em `whatsapp` e `instagram`),
+informe `fonte` junto ou a rota responde `400` nomeando a ambiguidade. `configuracao`
+no campo de saída é `null` para Conversa coletiva, sempre — ela não tem Configuração.
+Com `fixada=true`, `configuracao` escopa a Marca, não a atribuição — é o que permite
+achar coletiva fixada. `favorito` em `/conversas/<id>/mensagens` exige `configuracao`
+junto; a Fonte usada para resolver o apelido é a da própria Conversa (nunca ambígua),
+não uma que o chamador precise informar.
 
 Limites conhecidos: sem paginação fora de `/conversas/<id>/mensagens`; conversa vazia e
 inexistente respondem igual (`404`) — distinguir exigiria confirmar existência, e confirmar

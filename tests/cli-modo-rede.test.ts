@@ -118,3 +118,229 @@ test('mensagens por rede, ponta a ponta: subprocesso consulta o servidor real', 
     cena.limpar();
   }
 });
+
+test('malote configuracao listar em modo rede: subprocesso consulta o servidor real', async () => {
+  const { cenario } = await import('./ajuda/acervo.js');
+  const cena = cenario();
+  try {
+    const { id: inquilinoId } = cena.novoInquilino('Ahsoka');
+    const { resolverConfiguracao } = await import('../src/registro/configuracao-adaptador.js');
+    resolverConfiguracao(cena.registro, inquilinoId, 'whatsapp', 'orlando');
+
+    const { criarServidor } = await import('../src/rede/servidor.js');
+    const srv = criarServidor({ dados: cena.raiz, porta: 0 });
+    const http = srv.listen(0, '127.0.0.1');
+    await new Promise<void>((r) => http.once('listening', r));
+    const porta = (http.address() as { port: number }).port;
+
+    const k = rodarComEnv(cena.raiz, {}, ['operador', 'chave', 'criar']);
+    const chaveOp = /valor:\s*(\S+)/.exec(k.saida)?.[1] ?? '';
+    const criacao = rodarComEnv(cena.raiz, {}, [
+      'acesso', 'chave', 'emitir', '--chave', chaveOp, '--inquilino', inquilinoId,
+    ]);
+    const chaveAcesso = /valor:\s*(\S+)/.exec(criacao.saida)?.[1] ?? '';
+
+    const saida = await new Promise<{ codigo: number | null; stdout: string; stderr: string }>(
+      (resolver) => {
+        const filho = spawn(
+          process.execPath,
+          ['--import', 'tsx', join(import.meta.dirname, '..', 'src', 'cli', 'index.ts'),
+            'configuracao', 'listar'],
+          { env: { ...process.env,
+              MALOTE_HOME: cena.raiz,
+              MALOTE_SERVIDOR: `http://127.0.0.1:${porta}`,
+              MALOTE_CHAVE_DE_ACESSO: chaveAcesso } },
+        );
+        let stdout = '';
+        let stderr = '';
+        filho.stdout.on('data', (d) => (stdout += d));
+        filho.stderr.on('data', (d) => (stderr += d));
+        filho.on('close', (codigo) => resolver({ codigo: codigo ?? -1, stdout, stderr }));
+      },
+    );
+    assert.equal(saida.codigo, 0, `stdout=${saida.stdout}\nstderr=${saida.stderr}`);
+    const corpo = JSON.parse(saida.stdout) as { configuracoes: Array<{ apelido: string; fonte: string }> };
+    assert.deepEqual(corpo.configuracoes, [{ apelido: 'orlando', fonte: 'whatsapp' }]);
+    http.close();
+  } finally {
+    cena.limpar();
+  }
+});
+
+test('malote midia --saida em modo rede: subprocesso grava os bytes recebidos', async () => {
+  const { cenario } = await import('./ajuda/acervo.js');
+  const { mkdtempSync, readFileSync: lerArquivo } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const cena = cenario();
+  try {
+    const { id: inquilinoId, acervo } = cena.novoInquilino('Ahsoka');
+    const { registrarConversa, registrarMensagem, registrarAnexo } = await import('../src/nucleo/escrita.js');
+    const { gravarArquivoDeAnexo } = await import('../src/nucleo/arquivo-de-anexo.js');
+    const { configurarDestinoDeMidia } = await import('../src/registro/destino-midia.js');
+
+    const destinoMidia = mkdtempSync(join(tmpdir(), 'malote-midia-origem-'));
+    configurarDestinoDeMidia(cena.registro, inquilinoId, { natureza: 'local', endereco: destinoMidia });
+
+    const bytesOriginais = Buffer.from('bytes reais do anexo');
+    const conversaId = registrarConversa(acervo, {
+      fonte: 'whatsapp', idExterno: '222222@s.whatsapp.net', coletiva: false,
+      configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
+    });
+    const mensagemId = registrarMensagem(acervo, {
+      conversaId, fonte: 'whatsapp', idExterno: 'm-cli-midia',
+      ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
+    });
+    const anexoId = registrarAnexo(acervo, { mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
+    gravarArquivoDeAnexo(acervo, { anexoId, destino: destinoMidia, bytes: bytesOriginais });
+    acervo.fechar();
+
+    const { criarServidor } = await import('../src/rede/servidor.js');
+    const srv = criarServidor({ dados: cena.raiz, porta: 0 });
+    const http = srv.listen(0, '127.0.0.1');
+    await new Promise<void>((r) => http.once('listening', r));
+    const porta = (http.address() as { port: number }).port;
+
+    const k = rodarComEnv(cena.raiz, {}, ['operador', 'chave', 'criar']);
+    const chaveOp = /valor:\s*(\S+)/.exec(k.saida)?.[1] ?? '';
+    const criacao = rodarComEnv(cena.raiz, {}, [
+      'acesso', 'chave', 'emitir', '--chave', chaveOp, '--inquilino', inquilinoId,
+    ]);
+    const chaveAcesso = /valor:\s*(\S+)/.exec(criacao.saida)?.[1] ?? '';
+
+    const destinoSaida = mkdtempSync(join(tmpdir(), 'malote-midia-saida-'));
+    const arquivoDeSaida = join(destinoSaida, 'baixado.jpg');
+
+    const saida = await new Promise<{ codigo: number | null; stdout: string; stderr: string }>(
+      (resolver) => {
+        const filho = spawn(
+          process.execPath,
+          ['--import', 'tsx', join(import.meta.dirname, '..', 'src', 'cli', 'index.ts'),
+            'midia', anexoId, '--saida', arquivoDeSaida],
+          { env: { ...process.env,
+              MALOTE_HOME: cena.raiz,
+              MALOTE_SERVIDOR: `http://127.0.0.1:${porta}`,
+              MALOTE_CHAVE_DE_ACESSO: chaveAcesso } },
+        );
+        let stdout = '';
+        let stderr = '';
+        filho.stdout.on('data', (d) => (stdout += d));
+        filho.stderr.on('data', (d) => (stderr += d));
+        filho.on('close', (codigo) => resolver({ codigo: codigo ?? -1, stdout, stderr }));
+      },
+    );
+    assert.equal(saida.codigo, 0, `stdout=${saida.stdout}\nstderr=${saida.stderr}`);
+    assert.deepEqual(lerArquivo(arquivoDeSaida), bytesOriginais);
+    http.close();
+  } finally {
+    cena.limpar();
+  }
+});
+
+test('malote midia sem --saida falha com codigo 2', async () => {
+  const { cenario } = await import('./ajuda/acervo.js');
+  const cena = cenario();
+  try {
+    const { criarServidor } = await import('../src/rede/servidor.js');
+    const srv = criarServidor({ dados: cena.raiz, porta: 0 });
+    const http = srv.listen(0, '127.0.0.1');
+    await new Promise<void>((r) => http.once('listening', r));
+    const porta = (http.address() as { port: number }).port;
+
+    const saida = await new Promise<{ codigo: number | null; stdout: string; stderr: string }>(
+      (resolver) => {
+        const filho = spawn(
+          process.execPath,
+          ['--import', 'tsx', join(import.meta.dirname, '..', 'src', 'cli', 'index.ts'),
+            'midia', 'qualquer-id'],
+          { env: { ...process.env,
+              MALOTE_HOME: cena.raiz,
+              MALOTE_SERVIDOR: `http://127.0.0.1:${porta}`,
+              MALOTE_CHAVE_DE_ACESSO: 'chave-qualquer' } },
+        );
+        let stdout = '';
+        let stderr = '';
+        filho.stdout.on('data', (d) => (stdout += d));
+        filho.stderr.on('data', (d) => (stderr += d));
+        filho.on('close', (codigo) => resolver({ codigo: codigo ?? -1, stdout, stderr }));
+      },
+    );
+    assert.equal(saida.codigo, 2);
+    assert.match(saida.stdout, /--saida/);
+    http.close();
+  } finally {
+    cena.limpar();
+  }
+});
+
+test('malote midia sem MALOTE_SERVIDOR: comando desconhecido, nao handler local', () => {
+  const dados = mkdtempSync(join(tmpdir(), 'malote-modo-'));
+  try {
+    const r = rodarComEnv(dados, {}, ['midia', 'qualquer-id', '--saida', '/tmp/x']);
+    assert.equal(r.codigo, 2);
+    assert.match(r.saida, /[Cc]omando desconhecido/);
+  } finally {
+    rmSync(dados, { recursive: true, force: true });
+  }
+});
+
+test('malote conversas --fixada em modo rede: subprocesso encaminha fixada e configuracao', async () => {
+  const { cenario } = await import('./ajuda/acervo.js');
+  const cena = cenario();
+  try {
+    const { id: inquilinoId, acervo } = cena.novoInquilino('Ahsoka');
+    const { resolverConfiguracao } = await import('../src/registro/configuracao-adaptador.js');
+    const cfg = resolverConfiguracao(cena.registro, inquilinoId, 'whatsapp', 'orlando');
+    const { registrarConversa } = await import('../src/nucleo/escrita.js');
+    const { marcarConversa } = await import('../src/nucleo/marca-do-titular.js');
+    const marcadaId = registrarConversa(acervo, {
+      fonte: 'whatsapp', idExterno: '444@s.whatsapp.net', coletiva: false,
+      configuracao: { id: cfg.id, fonte: 'whatsapp' },
+    });
+    registrarConversa(acervo, {
+      fonte: 'whatsapp', idExterno: '555@s.whatsapp.net', coletiva: false,
+      configuracao: { id: cfg.id, fonte: 'whatsapp' },
+    });
+    marcarConversa(acervo, {
+      conversaId: marcadaId, marca: 'fixada', configuracaoId: cfg.id, observadaEm: Date.now(),
+    });
+    acervo.fechar();
+
+    const { criarServidor } = await import('../src/rede/servidor.js');
+    const srv = criarServidor({ dados: cena.raiz, porta: 0 });
+    const http = srv.listen(0, '127.0.0.1');
+    await new Promise<void>((r) => http.once('listening', r));
+    const porta = (http.address() as { port: number }).port;
+
+    const k = rodarComEnv(cena.raiz, {}, ['operador', 'chave', 'criar']);
+    const chaveOp = /valor:\s*(\S+)/.exec(k.saida)?.[1] ?? '';
+    const criacao = rodarComEnv(cena.raiz, {}, [
+      'acesso', 'chave', 'emitir', '--chave', chaveOp, '--inquilino', inquilinoId,
+    ]);
+    const chaveAcesso = /valor:\s*(\S+)/.exec(criacao.saida)?.[1] ?? '';
+
+    const saida = await new Promise<{ codigo: number | null; stdout: string; stderr: string }>(
+      (resolver) => {
+        const filho = spawn(
+          process.execPath,
+          ['--import', 'tsx', join(import.meta.dirname, '..', 'src', 'cli', 'index.ts'),
+            'conversas', '--fixada', 'true', '--configuracao', 'orlando', '--json'],
+          { env: { ...process.env,
+              MALOTE_HOME: cena.raiz,
+              MALOTE_SERVIDOR: `http://127.0.0.1:${porta}`,
+              MALOTE_CHAVE_DE_ACESSO: chaveAcesso } },
+        );
+        let stdout = '';
+        let stderr = '';
+        filho.stdout.on('data', (d) => (stdout += d));
+        filho.stderr.on('data', (d) => (stderr += d));
+        filho.on('close', (codigo) => resolver({ codigo: codigo ?? -1, stdout, stderr }));
+      },
+    );
+    assert.equal(saida.codigo, 0, `stdout=${saida.stdout}\nstderr=${saida.stderr}`);
+    const corpo = JSON.parse(saida.stdout) as { conversas: Array<{ id: string }> };
+    assert.deepEqual(corpo.conversas.map((c) => c.id), [marcadaId]);
+    http.close();
+  } finally {
+    cena.limpar();
+  }
+});

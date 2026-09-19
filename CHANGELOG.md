@@ -23,6 +23,35 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.19.0] — 2026-09-19
+
+### Adicionado
+
+- **Filtro `--configuracao`/`?configuracao=` nas rotas de leitura**, local e por
+  rede: `conversas` e `mensagens` filtram por apelido (`Fonte`+apelido, com
+  recusa nomeando a ambiguidade quando o mesmo apelido existe em Fontes
+  diferentes, ou quando não casa nenhuma). Conversa direta na saída de
+  `conversas` passa a carregar o apelido da Configuração de que veio; Conversa
+  coletiva nunca casa esse filtro (pertence ao Inquilino, não a uma
+  Configuração) e sai com `configuracao: null`.
+- **`GET /configuracoes`**, espelhando `malote configuracao listar` por rede —
+  `apelido`+`fonte` de cada Configuração do Inquilino, sem o `id` interno.
+- **Filtro `favorito` em `GET /conversas/<id>/mensagens`** (só modo rede) — Marca
+  do Titular em Mensagem, resolvendo a Fonte implicitamente pela própria
+  Conversa. Exige `configuracao` junto; sem casos, devolve `200` com lista
+  vazia quando a Conversa existe (só `404` quando ela não existe).
+- **Filtro `fixada` em `GET /conversas`/`malote conversas`**, local e rede —
+  Marca do Titular em Conversa. Com `fixada=true`, `configuracao` passa a
+  escopar a **Marca**, não a atribuição — é o que faz Conversa coletiva fixada
+  aparecer no resultado.
+- **`GET /midia/<anexoId>`**, com Chave de Acesso — devolve os bytes do Anexo
+  com `content-type` do tipo. Anexo do tipo `video` é recusado com sinal
+  dedicado (`415`, corpo nomeando o tipo); inexistente, de outro Inquilino ou
+  sem bytes disponíveis devolvem o mesmo `404` vazio das demais rotas.
+- **`malote midia <id> --saida <arquivo>`** — baixa os bytes de um Anexo. Só
+  existe em modo rede (`MALOTE_SERVIDOR` setado): quem opera local já tem o
+  arquivo em disco.
+
 ## [0.18.0] — 2026-09-16
 
 ### Adicionado
