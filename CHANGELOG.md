@@ -52,6 +52,19 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
   existe em modo rede (`MALOTE_SERVIDOR` setado): quem opera local já tem o
   arquivo em disco.
 
+## [0.18.1] — 2026-09-16
+
+### Corrigido
+
+- **`bin/malote` roda da fonte, sem depender de `dist/`.** `package.json.bin`
+  apontava para `dist/cli/index.js`, que só existe após build — e o produto
+  roda da fonte, sem build, em toda instalação real. `npm link` não chegava a
+  criar o symlink global, porque o alvo declarado não existia. `bin/malote`
+  agora resolve o próprio diretório por `import.meta.url` (nunca por CWD —
+  `node --import tsx` resolve o pacote `tsx` pelo CWD do processo, não pelo
+  caminho do script) e roda o filho com `cwd` fixado na raiz do repositório.
+  Guia do cliente ganhou o passo `npm link` que faltava.
+
 ## [0.18.0] — 2026-09-16
 
 ### Adicionado
