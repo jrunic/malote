@@ -23,6 +23,25 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.20.0] — 2026-09-22
+
+### Adicionado
+
+- **`malote configuracao criar`** — declara uma Configuração de Adaptador
+  (e, opcionalmente, a conta) sem exigir material de backup em mãos.
+  Reaproveita as mesmas portas que `importar` e `entrada declarar` já usam
+  (`resolverConfiguracao`, `definirContaDaConfiguracao`), é idempotente, e
+  desbloqueia o `ouvir` para quem quer parear o dispositivo e começar a
+  receber ao vivo antes de ter um export pronto — o `ouvir` continua sem
+  criar Configuração sozinho, comportamento intocado.
+
+### Corrigido
+
+- **`docs/tutoriais/instalar.md`** deixou de ensinar `entrada declarar
+  --fonte whatsapp` (recusado pela CLI desde que a varredura passou a ser
+  restrita a Fontes varríveis) no passo de configurar o ouvinte — o passo 6
+  agora apresenta dois caminhos, com material ou só para o ouvinte.
+
 ## [0.19.0] — 2026-09-19
 
 ### Adicionado
