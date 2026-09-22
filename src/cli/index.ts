@@ -248,6 +248,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote importar   --inquilino <id> --fonte instagram --material <caminho> --titular <nome> --configuracao <apelido>
   malote importar   --inquilino <id> --fonte contatos  --material <arquivo.vcf> [--configuracao <apelido>] [--reprocessar]
   malote configuracao listar    --inquilino <id>
+  malote configuracao criar     --inquilino <id> --fonte <nome> --configuracao <apelido> [--conta <nome>]
   malote entrada declarar       --inquilino <id> --fonte <nome> --configuracao <apelido> --pasta <caminho> --natureza completo|parcial [--titular-na-fonte <nome>]
   malote entrada listar         --inquilino <id>
   malote midia trazer           --inquilino <id> --material <caminho> [--conta pessoal|business]
