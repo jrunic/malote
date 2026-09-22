@@ -4,7 +4,7 @@ projeto: malote
 tipo: dominio
 descricao: "Modelo do arquivo pessoal de conversas — núcleo genérico multi-inquilino (Inquilino, Conversa, Mensagem, Pessoa, Identificador, Anexo) desacoplado das fontes por Adaptador"
 status: aprovado
-aprovado-em: 2026-09-13
+aprovado-em: 2026-09-22
 escopo: repo:malote
 plataforma: "*"
 dominios: [tecnologia]
@@ -679,4 +679,18 @@ Consequências que o modelo assume por causa disso:
 - **Entrada:** Configuração de Adaptador, dias
 - **Saída:** o intervalo gravado
 - **Regras:** é o que torna possível dizer que um Material está atrasado
+- **Não-funcionais:** Padrão
+
+### resolver-configuracao
+- **Ator:** humano, via `importar`, `entrada declarar` ou `configuracao criar`
+- **Entrada:** Inquilino, Fonte, apelido
+- **Saída:** a Configuração de Adaptador correspondente — criada se não existia, devolvida se já existia
+- **Regras:** idempotente por `(Inquilino, Fonte, apelido)`. Não cria conta nem grava nada além da própria Configuração; declarar a conta é operação separada (`definir-conta`).
+- **Não-funcionais:** Padrão
+
+### definir-conta
+- **Ator:** humano, via `importar` ou `configuracao criar`, quando `--conta` é informado
+- **Entrada:** a Configuração de Adaptador (por id), o nome da conta na Fonte
+- **Saída:** a Configuração atualizada com a conta declarada
+- **Regras:** opcional — uma Configuração pode existir sem conta declarada (`configuracao listar` mostra `(nao declarada)`). Sobrescreve o valor anterior, sem histórico.
 - **Não-funcionais:** Padrão
