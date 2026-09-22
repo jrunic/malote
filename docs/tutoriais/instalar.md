@@ -105,10 +105,12 @@ Se você declara `MALOTE_HOME`, **tudo** vive sob essa pasta. As variáveis `XDG
 `XDG_STATE_HOME` também são obedecidas. Detalhes no
 [guia de instalação e armazenamento](../guias/instalacao-e-armazenamento.md).
 
-## 6. Declarar uma Pasta de Entrada e importar
+## 6. Declarar a Configuração — com material ou só para o ouvinte
 
 O malote ingere material exportado das plataformas (WhatsApp, Instagram, catálogo de
-contatos) por uma pasta vigiada. Declaração mínima para importar um material pontual:
+contatos) por uma pasta vigiada. Há dois caminhos, dependendo do que você já tem em mãos.
+
+**Caminho A — já tenho um export e quero importar o histórico:**
 
 ```bash
 node --import tsx src/cli/index.ts entrada declarar \
@@ -128,6 +130,18 @@ node --import tsx src/cli/index.ts importar \
 **Se algo der errado:** `Informe --material.` significa que faltou o caminho do material no
 comando.
 
+**Caminho B — ainda não tenho o export e quero só parear o dispositivo e começar a
+receber ao vivo (passo 8):**
+
+```bash
+node --import tsx src/cli/index.ts configuracao criar \
+  --inquilino d8765d15-8c83-4b8f-bec6-d33cedfb31e7 \
+  --fonte whatsapp --configuracao pessoal --conta pessoal
+```
+
+Isso declara a Configuração sem exigir material — o histórico pode ser importado depois,
+pelo Caminho A, a qualquer momento.
+
 ## 7. A primeira consulta
 
 ```bash
@@ -142,8 +156,8 @@ O Acervo está aberto e é seu.
 ## 8. Receber ao vivo (opcional)
 
 O ouvinte conecta a uma conta de WhatsApp e recebe mensagens em tempo real. Ele exige que a
-Configuração de Adaptador já exista (criada pela importação do passo 6) — o ouvinte **não
-cria** Configuração, porque criar conta errada é pior que não subir:
+Configuração de Adaptador já exista (criada no passo 6, pelo Caminho A ou pelo Caminho B) —
+o ouvinte **não cria** Configuração, porque criar conta errada é pior que não subir:
 
 ```bash
 node --import tsx src/cli/index.ts ouvir \

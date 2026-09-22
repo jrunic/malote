@@ -17,6 +17,7 @@ import { drenar } from '../src/cli/ouvir.js';
 import { abrirAcervo, abrirAcervoSomenteLeitura } from '../src/nucleo/acervo.js';
 import { existsSync } from 'node:fs';
 import { resolverConfiguracao } from '../src/registro/configuracao-adaptador.js';
+import { executar } from '../src/cli/index.js';
 
 /**
  * Biblioteca falsa que sobe e imediatamente diz "deslogado".
@@ -98,6 +99,50 @@ test('a conta e obrigatoria — um processo, uma conta', async () => {
     });
     assert.equal(codigo, 2);
     assert.match(linhas.join('\n'), /--conta/);
+  } finally {
+    limpar();
+  }
+});
+
+test('configuracao criar via CLI desbloqueia o guard de Configuracao ausente do ouvir', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const registro = abrirRegistro(raiz);
+    const id = criarInquilino(registro, { titularNome: 'Hera' });
+    registro.fechar();
+
+    // Sem Configuracao: o guard "busca, nunca cria" recusa.
+    const linhasSemConfig: string[] = [];
+    const codigoSemConfig = await ouvir(
+      ['ouvir', '--inquilino', id, '--conta', 'nova', '--configuracao', 'teste'],
+      { dados: raiz, estado: raiz, escrever: (t: string) => linhasSemConfig.push(t) },
+    );
+    assert.equal(codigoSemConfig, 2);
+    assert.match(linhasSemConfig.join('\n'), /Configuracao "teste" nao existe/);
+
+    // configuracao criar declara a Configuracao, sem material.
+    const codigoCriar = executar(
+      ['configuracao', 'criar', '--inquilino', id, '--fonte', 'whatsapp', '--configuracao', 'teste'],
+      { dados: raiz, estado: raiz, escrever: () => undefined },
+    );
+    assert.equal(codigoCriar, 0);
+
+    // Com a Configuracao declarada, o guard de Configuracao ausente some — o
+    // proximo guard e --numero (mesmo caminho que o teste irmao 'conta nao
+    // pareada e sem numero para em vez de religar para sempre' ja prova).
+    const linhasComConfig: string[] = [];
+    const codigoComConfig = await ouvir(
+      ['ouvir', '--inquilino', id, '--conta', 'nova', '--configuracao', 'teste'],
+      {
+        dados: raiz,
+        estado: raiz,
+        escrever: (t: string) => linhasComConfig.push(t),
+        carregarBiblioteca: () => Promise.reject(new Error('nao deveria chegar aqui')),
+      },
+    );
+    assert.equal(codigoComConfig, 2);
+    assert.match(linhasComConfig.join('\n'), /--numero/);
+    assert.doesNotMatch(linhasComConfig.join('\n'), /Configuracao "teste" nao existe/);
   } finally {
     limpar();
   }

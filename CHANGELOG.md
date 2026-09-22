@@ -23,6 +23,25 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.20.0] — 2026-09-22
+
+### Adicionado
+
+- **`malote configuracao criar`** — declara uma Configuração de Adaptador
+  (e, opcionalmente, a conta) sem exigir material de backup em mãos.
+  Reaproveita as mesmas portas que `importar` e `entrada declarar` já usam
+  (`resolverConfiguracao`, `definirContaDaConfiguracao`), é idempotente, e
+  desbloqueia o `ouvir` para quem quer parear o dispositivo e começar a
+  receber ao vivo antes de ter um export pronto — o `ouvir` continua sem
+  criar Configuração sozinho, comportamento intocado.
+
+### Corrigido
+
+- **`docs/tutoriais/instalar.md`** deixou de ensinar `entrada declarar
+  --fonte whatsapp` (recusado pela CLI desde que a varredura passou a ser
+  restrita a Fontes varríveis) no passo de configurar o ouvinte — o passo 6
+  agora apresenta dois caminhos, com material ou só para o ouvinte.
+
 ## [0.19.0] — 2026-09-19
 
 ### Adicionado
@@ -51,6 +70,19 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 - **`malote midia <id> --saida <arquivo>`** — baixa os bytes de um Anexo. Só
   existe em modo rede (`MALOTE_SERVIDOR` setado): quem opera local já tem o
   arquivo em disco.
+
+## [0.18.1] — 2026-09-16
+
+### Corrigido
+
+- **`bin/malote` roda da fonte, sem depender de `dist/`.** `package.json.bin`
+  apontava para `dist/cli/index.js`, que só existe após build — e o produto
+  roda da fonte, sem build, em toda instalação real. `npm link` não chegava a
+  criar o symlink global, porque o alvo declarado não existia. `bin/malote`
+  agora resolve o próprio diretório por `import.meta.url` (nunca por CWD —
+  `node --import tsx` resolve o pacote `tsx` pelo CWD do processo, não pelo
+  caminho do script) e roda o filho com `cwd` fixado na raiz do repositório.
+  Guia do cliente ganhou o passo `npm link` que faltava.
 
 ## [0.18.0] — 2026-09-16
 

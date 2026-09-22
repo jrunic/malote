@@ -248,6 +248,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote importar   --inquilino <id> --fonte instagram --material <caminho> --titular <nome> --configuracao <apelido>
   malote importar   --inquilino <id> --fonte contatos  --material <arquivo.vcf> [--configuracao <apelido>] [--reprocessar]
   malote configuracao listar    --inquilino <id>
+  malote configuracao criar     --inquilino <id> --fonte <nome> --configuracao <apelido> [--conta <nome>]
   malote entrada declarar       --inquilino <id> --fonte <nome> --configuracao <apelido> --pasta <caminho> --natureza completo|parcial [--titular-na-fonte <nome>]
   malote entrada listar         --inquilino <id>
   malote midia trazer           --inquilino <id> --material <caminho> [--conta pessoal|business]
@@ -1009,6 +1010,24 @@ function executarComAtor(
       for (const c of listarConfiguracoes(registro, inquilino)) {
         escrever(`${c.fonte}/${c.apelido}  conta: ${c.conta ?? '(nao declarada)'}`);
       }
+      return 0;
+    }
+
+    if (grupo === 'configuracao' && sub === 'criar') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      const fonte = opcao(argumentos, 'fonte');
+      const apelido = opcao(argumentos, 'configuracao');
+      if (inquilino === undefined || fonte === undefined || apelido === undefined) {
+        escrever(
+          'Uso: malote configuracao criar --inquilino <id> --fonte <nome> ' +
+            '--configuracao <apelido> [--conta <nome>]',
+        );
+        return 2;
+      }
+      const cfg = resolverConfiguracao(registro, inquilino, fonte, apelido);
+      const conta = opcao(argumentos, 'conta');
+      if (conta !== undefined) definirContaDaConfiguracao(registro, cfg.id, conta);
+      escrever(`${fonte}/${apelido}  conta: ${conta ?? cfg.conta ?? '(nao declarada)'}`);
       return 0;
     }
 
