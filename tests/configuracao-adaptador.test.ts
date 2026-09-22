@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cenario } from './ajuda/acervo.js';
+import { instalacaoComInquilino, instalacaoTemporaria, rodar } from './ajuda/instalacao.js';
 import {
   APELIDO_PADRAO,
   configuracoesPorApelido,
@@ -157,5 +158,33 @@ test('resolverFiltroDeConfiguracao recusa apelido DESCONHECIDO', () => {
     assert.match(!r.ok ? r.erro : '', /desconhec/i);
   } finally {
     c.limpar();
+  }
+});
+
+test('configuracao criar cria a Configuracao e e idempotente', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const inquilinoId = instalacaoComInquilino(raiz);
+
+    const r1 = rodar(raiz, [
+      'configuracao', 'criar', '--inquilino', inquilinoId,
+      '--fonte', 'whatsapp', '--configuracao', 'pessoal',
+    ]);
+    assert.equal(r1.codigo, 0);
+    assert.match(r1.saida, /whatsapp\/pessoal/);
+
+    // segunda chamada, mesmos argumentos: idempotente, nao duplica.
+    const r2 = rodar(raiz, [
+      'configuracao', 'criar', '--inquilino', inquilinoId,
+      '--fonte', 'whatsapp', '--configuracao', 'pessoal',
+    ]);
+    assert.equal(r2.codigo, 0);
+
+    const rListar = rodar(raiz, ['configuracao', 'listar', '--inquilino', inquilinoId]);
+    assert.equal(rListar.codigo, 0);
+    const linhasDeConfig = rListar.saida.split('\n').filter((l) => l.startsWith('whatsapp/pessoal'));
+    assert.equal(linhasDeConfig.length, 1, 'a segunda chamada duplicou a Configuracao');
+  } finally {
+    limpar();
   }
 });

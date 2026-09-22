@@ -1012,6 +1012,24 @@ function executarComAtor(
       return 0;
     }
 
+    if (grupo === 'configuracao' && sub === 'criar') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      const fonte = opcao(argumentos, 'fonte');
+      const apelido = opcao(argumentos, 'configuracao');
+      if (inquilino === undefined || fonte === undefined || apelido === undefined) {
+        escrever(
+          'Uso: malote configuracao criar --inquilino <id> --fonte <nome> ' +
+            '--configuracao <apelido> [--conta <nome>]',
+        );
+        return 2;
+      }
+      const cfg = resolverConfiguracao(registro, inquilino, fonte, apelido);
+      const conta = opcao(argumentos, 'conta');
+      if (conta !== undefined) definirContaDaConfiguracao(registro, cfg.id, conta);
+      escrever(`${fonte}/${apelido}  conta: ${conta ?? cfg.conta ?? '(nao declarada)'}`);
+      return 0;
+    }
+
     if (grupo === 'entrada' && sub === 'declarar') {
       const inquilino = opcao(argumentos, 'inquilino');
       const fonte = opcao(argumentos, 'fonte');
