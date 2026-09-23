@@ -411,6 +411,54 @@ const MARCA_DO_TITULAR_V18: PassoDeMigracao = {
   aplicar: (db) => db.exec(MARCAS_V18),
 };
 
+/**
+ * Direcao da Mensagem — metade do WhatsApp.
+ *
+ * Nao precisa de ContextoDeMigracao: as duas formas de bruto do WhatsApp
+ * (material: ZISFROMME; ao vivo/conversao: key.fromMe) carregam o
+ * discriminante na propria Mensagem. Medido em 23/09/2026 contra o Acervo
+ * real de producao antes de escrever este passo: 1.574.659 Mensagens de
+ * WhatsApp, 1.349.726 na forma material + 224.933 na forma ao vivo, zero sem
+ * forma reconhecida, zero bruto invalido.
+ *
+ * `json_extract` — confirmado disponivel no better-sqlite3 desta arvore.
+ * Booleano JSON (`true`/`false`) vira `1`/`0` na comparacao. `json_valid`
+ * guarda contra bruto malformado: sem ela, uma linha com JSON invalido
+ * lancaria excecao e abortaria a migracao inteira — ela fica `direcao NULL`,
+ * contada pelo `acervo migrar`.
+ */
+const DIRECAO_WHATSAPP_V19: PassoDeMigracao = {
+  de: 18,
+  para: 19,
+  descricao: 'acrescenta a Direcao da Mensagem e preenche para WhatsApp',
+  aplicar: (db) => {
+    db.exec('ALTER TABLE mensagens ADD COLUMN direcao TEXT ' +
+      "CHECK (direcao IS NULL OR direcao IN ('enviada', 'recebida'));");
+
+    db.prepare(
+      `UPDATE mensagens
+          SET direcao = CASE WHEN json_extract(bruto, '$.ZISFROMME') = 1
+                              THEN 'enviada' ELSE 'recebida' END
+        WHERE fonte = 'whatsapp'
+          AND json_valid(bruto)
+          AND json_extract(bruto, '$.ZISFROMME') IS NOT NULL`,
+    ).run();
+
+    db.prepare(
+      `UPDATE mensagens
+          SET direcao = CASE WHEN json_extract(bruto, '$.key.fromMe') = 1
+                              THEN 'enviada' ELSE 'recebida' END
+        WHERE fonte = 'whatsapp'
+          AND direcao IS NULL
+          AND json_valid(bruto)
+          AND json_extract(bruto, '$.key.fromMe') IS NOT NULL`,
+    ).run();
+    // Mensagem de WhatsApp cujo bruto e invalido ou nao tem NENHUMA das duas
+    // formas fica direcao NULL — visivel, contada pelo `acervo migrar`,
+    // nunca adivinhada.
+  },
+};
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -420,6 +468,7 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   IDENTIDADE_POR_CONFIGURACAO_V16,
   AUTORIDADE_V17,
   MARCA_DO_TITULAR_V18,
+  DIRECAO_WHATSAPP_V19,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {

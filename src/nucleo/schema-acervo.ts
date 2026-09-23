@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3';
  * Politica completa das duas bases na ADR local
  * `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_ACERVO = 18;
+export const VERSAO_SCHEMA_ACERVO = 19;
 
 /**
  * Forma mais antiga que a maquina de migracao alcanca.
@@ -304,6 +304,12 @@ export function aplicarSchemaAcervo(db: Database): void {
       conteudo      TEXT,
       ocorrida_em   INTEGER NOT NULL,
       citada_id     TEXT,
+      -- Enviada pelo Titular ou recebida de outra Pessoa. NULL só é legítimo
+      -- em Mensagem migrada de um Acervo anterior a esta coluna, cujo
+      -- Conteudo Bruto nao permitiu calcular (ver passos 19 e 20 da
+      -- migracao). Escrita NOVA sempre declara -- o parametro correspondente
+      -- de registrarMensagem e obrigatorio.
+      direcao       TEXT CHECK (direcao IS NULL OR direcao IN ('enviada', 'recebida')),
       bruto         TEXT,
       UNIQUE (fonte, id_externo),
       FOREIGN KEY (conversa_id) REFERENCES conversas(id) ON DELETE CASCADE,
