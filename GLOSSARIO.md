@@ -4,7 +4,7 @@ projeto: malote
 tipo: referencia
 descricao: "Linguagem universal do malote — termos do arquivo multi-inquilino de conversas, com sinônimos a evitar"
 status: aprovado
-aprovado-em: 2026-09-13
+aprovado-em: 2026-09-23
 escopo: repo:malote
 plataforma: "*"
 tags: [glossario, malote, linguagem-universal, ddd]
@@ -76,6 +76,12 @@ Fio de Mensagens entre um conjunto de Pessoas.
 **Mensagem**:
 Unidade de conteúdo enviada por uma Pessoa dentro de uma Conversa, num instante conhecido.
 *Evitar*: msg, registro, evento.
+
+**Direção da Mensagem**:
+Se a Mensagem foi enviada pelo Titular ou recebida de outra Pessoa —
+independente do autor estar resolvido. Gravada por cada Adaptador no momento
+da escrita, nunca inferida depois pela ausência de autor.
+*Evitar*: fromMe, direction, sentido, isFromMe.
 
 **Participação**:
 A presença de uma Pessoa numa Conversa, com início e fim quando a Fonte os informa, e com o instante em que o malote a observou.

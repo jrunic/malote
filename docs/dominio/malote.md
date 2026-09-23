@@ -4,7 +4,7 @@ projeto: malote
 tipo: dominio
 descricao: "Modelo do arquivo pessoal de conversas — núcleo genérico multi-inquilino (Inquilino, Conversa, Mensagem, Pessoa, Identificador, Anexo) desacoplado das fontes por Adaptador"
 status: aprovado
-aprovado-em: 2026-09-22
+aprovado-em: 2026-09-23
 escopo: repo:malote
 plataforma: "*"
 dominios: [tecnologia]
@@ -174,6 +174,19 @@ Duas regras atravessam o modelo inteiro:
 - Toda Mensagem tem instante de ocorrência conhecido e plausível; instante ausente ou fora da faixa de existência da Fonte é rejeitado na entrada, não gravado. Não existe estado intermediário de data suspeita: o Acervo não comporta instante implausível.
 - O autor de uma Mensagem é um Identificador, nunca um texto livre de endereço.
 - Mensagem sem autor conhecido é válida — o autor pode ser resolvido depois.
+- **Toda Mensagem tem Direção — enviada pelo Titular ou recebida de outra
+  Pessoa —, independente de o autor estar resolvido.** É afirmação do
+  Adaptador no momento da escrita, nunca inferida depois pela ausência de
+  autor: os dois conceitos são independentes — WhatsApp grava Mensagem
+  enviada sem autor externo, e Instagram grava um autor mesmo quando é o
+  próprio Titular, e confundir "sem autor" com "enviada" acertaria numa
+  Fonte e erraria na outra.
+
+  Mensagem migrada de um Acervo anterior a este conceito (schema < 20) pode
+  ter Direção `NULL`, quando o Conteúdo Bruto preservado não trouxer o
+  discriminante conhecido, ou a Configuração de origem não tiver o Nome do
+  Titular na Fonte declarado — visível e contado pelo comando de migração,
+  nunca adivinhado.
 - Mensagem nunca é apagada por política de espaço.
 - **Favorito é afirmação do Titular, não propriedade da Mensagem.** É a única curadoria humana que o acervo recebe da Fonte — o sinal que diz *isto aqui importa*, na voz do dono. Entra como Marca do Titular e segue as regras dela.
 
