@@ -119,3 +119,29 @@ test('GET /mensagens sem ordem explicita vem por recencia, e o cursor pagina sem
     await c.parar();
   }
 });
+
+test('GET /conversas/<id>/mensagens tambem aceita direcao', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
+    try {
+      registrarMensagem(acervo, {
+        conversaId: c.conversaDeA,
+        fonte: 'whatsapp',
+        idExterno: 'msg-enviada-na-conversa',
+        ocorridaEm: Date.parse('2026-06-04T12:00:00Z'),
+        agora: Date.now(),
+        direcao: 'enviada',
+      });
+    } finally {
+      acervo.fechar();
+    }
+    const chave = c.emitir(c.inquilinoA);
+    const r = await c.pedir(`/conversas/${c.conversaDeA}/mensagens?direcao=recebida`, chave.valor);
+    const corpo = JSON.parse(r.corpo) as { mensagens: { id: string }[] };
+    // So a do povoamento padrao (recebida) — a nova (enviada) fica de fora.
+    assert.equal(corpo.mensagens.length, 1);
+  } finally {
+    await c.parar();
+  }
+});

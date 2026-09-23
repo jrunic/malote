@@ -226,6 +226,11 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const antes = q.get('antes');
     const favorito = q.get('favorito');
     const configuracaoApelido = q.get('configuracao');
+    const direcao = q.get('direcao');
+    if (direcao !== null && direcao !== 'enviada' && direcao !== 'recebida') {
+      json(res, 400, { erro: 'direcao invalida — use "enviada" ou "recebida"' });
+      return;
+    }
     let cursor: { ocorridaEm: number; id: string } | undefined;
     if (antes !== null) {
       cursor = decodificarCursor(antes);
@@ -283,6 +288,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       ...(filtroDe !== undefined ? { de: filtroDe } : {}),
       ...(filtroAte !== undefined ? { ate: filtroAte } : {}),
       ...(autor !== null ? { pessoaId: autor } : {}),
+      ...(direcao !== null ? { direcao: direcao as 'enviada' | 'recebida' } : {}),
       ...(limite !== null ? { limite: Number(limite) } : {}),
       ...(favorito === 'true' ? { favorito: true, configuracaoId: configuracaoId! } : {}),
       ...(cursor !== undefined
