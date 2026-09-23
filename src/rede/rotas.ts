@@ -11,6 +11,7 @@ import { listarConfiguracoes, resolverFiltroDeConfiguracao } from '../registro/c
 import { conversasMarcadas } from '../nucleo/marca-do-titular.js';
 import { lerDestinoDeMidia } from '../registro/destino-midia.js';
 import type { IdentidadeDeAcesso } from '../registro/chave-de-acesso.js';
+import { ehFonte } from '../nucleo/tipos.js';
 import type { ConversaId, Fonte } from '../nucleo/tipos.js';
 
 /**
@@ -141,6 +142,77 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     }
 
     json(res, 200, { conversas });
+    return;
+  }
+
+  if (partes.length === 1 && partes[0] === 'mensagens') {
+    const q = url.searchParams;
+    const limite = q.get('limite');
+    const desde = q.get('desde');
+    const ate = q.get('ate');
+    const autor = q.get('autor');
+    const fonte = q.get('fonte');
+    const direcao = q.get('direcao');
+    const antes = q.get('antes');
+
+    if (direcao !== null && direcao !== 'enviada' && direcao !== 'recebida') {
+      json(res, 400, { erro: 'direcao invalida — use "enviada" ou "recebida"' });
+      return;
+    }
+    if (fonte !== null && !ehFonte(fonte)) {
+      json(res, 400, { erro: `fonte invalida: ${fonte}` });
+      return;
+    }
+
+    let cursor: { ocorridaEm: number; id: string } | undefined;
+    if (antes !== null) {
+      cursor = decodificarCursor(antes);
+      if (cursor === undefined) {
+        json(res, 400, { erro: 'cursor invalido — devolva o token `proximo` tal como recebeu' });
+        return;
+      }
+    }
+    let filtroDe: number | undefined;
+    let filtroAte: number | undefined;
+    try {
+      if (desde !== null) filtroDe = expandirData(desde, 'inicio');
+      if (ate !== null) filtroAte = expandirData(ate, 'fim');
+    } catch (e) {
+      json(res, 400, { erro: (e as Error).message });
+      return;
+    }
+
+    // Default de ORDEM diverge da rota por Conversa DE PROPOSITO: esta rota
+    // existe para "ultimas mensagens", entao recencia e o default — a rota
+    // por Conversa continua cronologica por default, sem regressao.
+    const ordem = q.get('ordem') === 'cronologica' ? ('cronologica' as const) : ('recentes' as const);
+
+    const mensagens = lerMensagens(ctx.acervo, {
+      ...(filtroDe !== undefined ? { de: filtroDe } : {}),
+      ...(filtroAte !== undefined ? { ate: filtroAte } : {}),
+      ...(autor !== null ? { pessoaId: autor } : {}),
+      ...(fonte !== null ? { fonte } : {}), // já estreitado para Fonte pela guarda ehFonte acima
+      ...(direcao !== null ? { direcao: direcao as 'enviada' | 'recebida' } : {}),
+      ...(limite !== null ? { limite: Number(limite) } : {}),
+      ordem,
+      ...(cursor !== undefined ? { cursor } : {}),
+    });
+
+    // Sem a ambiguidade da rota por Conversa: aqui vazio e resultado
+    // legitimo (Inquilino sem Mensagem que bata o filtro), nunca 404 — nao
+    // ha existencia de recurso singular para confirmar ou negar.
+    const temMais = limite !== null && mensagens.length >= Number(limite);
+    json(res, 200, {
+      mensagens,
+      ...(temMais
+        ? {
+            proximo: codificarCursor({
+              ocorridaEm: mensagens[mensagens.length - 1]!.ocorridaEm,
+              id: mensagens[mensagens.length - 1]!.id,
+            }),
+          }
+        : {}),
+    });
     return;
   }
 
