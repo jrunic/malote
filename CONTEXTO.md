@@ -454,12 +454,14 @@ Repositório expõe services systemd. Convenções:
   migrado** nesse intervalo — qualquer leitura de Mensagem teria quebrado, porque o
   código novo faz `SELECT` incluindo `direcao`, coluna que só existe a partir do schema
   19. Não houve dano real (0 requisições no log do servidor nessa janela), mas foi
-  sorte de tráfego, não garantia. **Para a PRÓXIMA release que mude a forma do
-  Acervo:** ou o `trust` do malote no `upgrade-fleet.json` deixa de ser `immediate`
-  para essas releases (aprovação manual), ou a Ação Documentada de deploy precisa
-  rodar dentro da mesma janela de 30 min do merge — o que hoje é implícito e devia
-  ser explícito no checklist do `ops-10`. Sem tarefa aberta ainda; decidir se vira
-  ajuste no `upgrade-fleet.json` (infra-manager) ou disciplina de timing no `ops-10`.
+  sorte de tráfego, não garantia. **Formalizado no `ops-10-publica-release`
+  (passo 4a, 23/09/2026):** release que muda a forma do Acervo checa `trust` e o
+  timer do `upgrade-fleet` no host **antes** do merge — rebaixa o `trust` para essa
+  release, ou garante a Ação Documentada pronta e ensaiada antes do merge, para
+  caber na mesma janela do automático. Nenhum ajuste feito no `upgrade-fleet.json`
+  do malote ainda (segue `immediate`) — a mitigação escolhida foi a disciplina de
+  timing no `ops-10`, não a mudança de `trust`; reabrir esta decisão se uma
+  próxima corrida real acontecer.
 
 - **O `post_install` do malote RODA: toda release reinicia o ouvinte.** Medido em 12/09/2026
   na release v0.10.0, o `upgrade-now` executou `restart:malote-ouvinte@<conta>.service`. Duas
