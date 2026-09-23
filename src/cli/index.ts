@@ -122,6 +122,7 @@ import {
 import { lerUltimoRetrato } from './retrato.js';
 import { lerPulos } from './pulos.js';
 import { configuracaoPorApelido } from '../registro/configuracao-adaptador.js';
+import { lerPastaDeEntrada } from '../registro/pasta-de-entrada.js';
 import { receberEvento } from '../adaptadores/whatsapp/ao-vivo.js';
 import { lerCorrespondencia } from './vigilancia.js';
 
@@ -310,16 +311,42 @@ function acervoDoInquilino(registro: Registro, raiz: string, inquilinoId: string
   const existe = listarInquilinos(registro).some((i) => i.id === inquilinoId);
   if (!existe) throw new Error(`Inquilino desconhecido: ${inquilinoId}`);
   // O contexto de migracao sai DAQUI porque este e o unico ponto do produto que
-  // tem o Registro aberto ao lado do Acervo. O passo que precisa de Configuracao
-  // — o 13 -> 14 — so roda por este caminho; quem abre o Acervo sem o Registro,
-  // como o ouvinte, recebe recusa com a instrucao de rodar `acervo migrar`.
-  const contexto = {
-    configuracoes: listarConfiguracoes(registro, inquilinoId).map((c) => ({
+  // tem o Registro aberto ao lado do Acervo. Os passos que precisam de
+  // Configuracao — 13 -> 14 e 19 -> 20 — so rodam por este caminho; quem abre
+  // o Acervo sem o Registro, como o ouvinte, recebe recusa com a instrucao de
+  // rodar `acervo migrar`.
+  const contexto = contextoDeMigracaoDoInquilino(registro, inquilinoId);
+  return abrirAcervo(join(raiz, 'acervos'), inquilinoId, contexto);
+}
+
+/**
+ * Monta o contexto de migracao a partir do Registro — usado tanto por
+ * `acervoDoInquilino` quanto pela varredura, os dois pontos do produto que
+ * abrem Registro e Acervo juntos.
+ *
+ * `nomeDoTitularNaFonte`: o passo 19 -> 20 (Direcao do Instagram) precisa
+ * disto. Configuracao sem Pasta de Entrada declarada, ou sem o Nome do
+ * Titular na Fonte nela, simplesmente nao entra no mapa — o passo trata
+ * ausencia como comparador desconhecido, nunca como erro.
+ */
+function contextoDeMigracaoDoInquilino(registro: Registro, inquilinoId: string) {
+  const configuracoesDoInquilino = listarConfiguracoes(registro, inquilinoId);
+  return {
+    configuracoes: configuracoesDoInquilino.map((c) => ({
       id: c.id,
       fonte: c.fonte,
     })),
+    nomeDoTitularNaFonte: new Map(
+      configuracoesDoInquilino
+        .map((c) => {
+          const entrada = lerPastaDeEntrada(registro, c.id);
+          return entrada?.nomeDoTitularNaFonte != null
+            ? ([c.id, entrada.nomeDoTitularNaFonte] as const)
+            : undefined;
+        })
+        .filter((par): par is readonly [string, string] => par !== undefined),
+    ),
   };
-  return abrirAcervo(join(raiz, 'acervos'), inquilinoId, contexto);
 }
 
 /**
@@ -2066,6 +2093,17 @@ function executarComAtor(
         );
         for (const p of passosAplicados(acervo.db)) {
           escrever(`  ${p.de} -> ${p.para}  ${p.descricao}  [${p.conferencia}]`);
+        }
+        const semDirecao = (
+          acervo.preparar('SELECT COUNT(*) AS n FROM mensagens WHERE direcao IS NULL').get() as {
+            n: number;
+          }
+        ).n;
+        if (semDirecao > 0) {
+          escrever(
+            `${semDirecao} Mensagem(ns) sem Direcao calculavel — Conteudo Bruto sem o ` +
+              'discriminante conhecido, ou Configuracao sem o Nome do Titular na Fonte declarado.',
+          );
         }
       } finally {
         acervo.fechar();
