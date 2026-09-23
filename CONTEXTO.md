@@ -444,6 +444,18 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
+- **P0 — a próxima release exige `malote acervo migrar` ANTES do restart, não depois.**
+  A #1043 (Direção da Mensagem + consulta sem Conversa) levou `VERSAO_SCHEMA_ACERVO` de
+  18 para 20, e o passo 19→20 (Instagram) declara `exigeContexto: true` — o ouvinte
+  **recusa subir** sem que a migração tenha rodado explicitamente primeiro (só quem abre
+  Acervo e Registro juntos, `malote acervo migrar`, tem o contexto que o passo exige).
+  Ordem obrigatória no deploy: `git pull` → `malote acervo migrar --inquilino <id>` **por
+  Inquilino** (thinkpad tem mais de um) → só então reiniciar `malote-ouvinte@<conta>` e
+  `malote-servidor`. Invertida, o ouvinte não é "mais lento" nem "com aviso" — ele sai com
+  erro e não sobe, para todas as contas. Nada disto está em produção ainda: o `thinkpad`
+  segue na forma anterior a este trabalho (commit `8300a61`, schema 18) até a release
+  correr. Backup do Acervo antes de migrar, como sempre (ver pendência seguinte).
+
 - **O `post_install` do malote RODA: toda release reinicia o ouvinte.** Medido em 12/09/2026
   na release v0.10.0, o `upgrade-now` executou `restart:malote-ouvinte@<conta>.service`. Duas
   consequências que valem para **toda** release:
