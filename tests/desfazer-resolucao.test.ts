@@ -33,6 +33,7 @@ function montarCenarioCompleto(acervo: Acervo): void {
   const canon = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '999@canon' });
 
   registrarMensagem(acervo, {
+      direcao: 'recebida',
     conversaId: conversa,
     fonte: 'whatsapp',
     idExterno: 'm9',
@@ -68,6 +69,7 @@ function montarCenarioCompleto(acervo: Acervo): void {
   // Medido: o mutante `WHERE 1 = 1 OR ...` sobrevivia sem esta parte.
   const outro = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '888@outro' });
   registrarMensagem(acervo, {
+      direcao: 'recebida',
     conversaId: conversa,
     fonte: 'whatsapp',
     idExterno: 'm8',

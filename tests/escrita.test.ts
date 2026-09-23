@@ -179,6 +179,7 @@ test('registrar Mensagem exige instante plausível e rejeita o resto', () => {
     });
 
     const id = registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
       idExterno: 'm1',
@@ -191,6 +192,7 @@ test('registrar Mensagem exige instante plausível e rejeita o resto', () => {
     assert.throws(
       () =>
         registrarMensagem(acervo, {
+      direcao: 'recebida',
           conversaId: conversa,
           fonte: 'whatsapp',
           idExterno: 'm2',
@@ -221,6 +223,7 @@ test('o erro de instante implausível carrega o motivo, para o relatório contar
 
     try {
       registrarMensagem(acervo, {
+      direcao: 'recebida',
         conversaId: conversa,
         fonte: 'whatsapp',
         idExterno: 'm3',
@@ -254,6 +257,7 @@ test('registrar a mesma Mensagem duas vezes não duplica', () => {
       conteudo: 'oi',
       ocorridaEm: EM_USO,
       agora: AGORA,
+      direcao: 'recebida' as const,
     };
     const a = registrarMensagem(acervo, comum);
     const b = registrarMensagem(acervo, comum);
@@ -276,6 +280,7 @@ test('Mensagem sem autor conhecido é válida', () => {
       coletiva: false, configuracao: CFG_WHATSAPP,
     });
     const id = registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
       idExterno: 'sem-autor',
@@ -300,6 +305,7 @@ function conversaComMensagem(acervo: Parameters<typeof registrarAnexo>[0]): stri
     coletiva: false, configuracao: CFG_WHATSAPP,
   });
   return registrarMensagem(acervo, {
+      direcao: 'recebida',
     conversaId: conversa,
     fonte: 'whatsapp',
     idExterno: `msg-${randomUUID()}`,
@@ -394,6 +400,7 @@ test('vincular Pessoa não escreve em Mensagem nenhuma', () => {
       coletiva: false, configuracao: CFG_WHATSAPP,
     });
     registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
       idExterno: 'mensagem-do-vinculo',
@@ -434,6 +441,7 @@ test('a porta responde existência sem que o Adaptador conheça o schema', () =>
 
     assert.equal(mensagemJaExiste(acervo, 'whatsapp', 'm1'), false);
     const mensagemId = registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId,
       fonte: 'whatsapp',
       idExterno: 'm1',

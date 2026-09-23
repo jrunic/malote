@@ -25,6 +25,7 @@ function umAnexo(acervo: Acervo): string {
     coletiva: false, configuracao: CFG_WHATSAPP,
   });
   const mensagemId = registrarMensagem(acervo, {
+      direcao: 'recebida',
     conversaId,
     fonte: 'whatsapp',
     idExterno: 'm1',

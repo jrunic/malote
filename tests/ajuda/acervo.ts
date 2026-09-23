@@ -76,6 +76,7 @@ export function cenario(): Cenario {
       idExterno: `mensagem-${seq}`,
       ocorridaEm: entrada.ocorridaEm,
       agora: Date.now(),
+      direcao: 'recebida',
       ...(entrada.conteudo !== undefined ? { conteudo: entrada.conteudo } : {}),
     });
     // `tipo` SEMPRE explícito: o material falso do plano 2 usava `tipo ?? 0`, e

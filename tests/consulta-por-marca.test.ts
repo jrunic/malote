@@ -18,6 +18,7 @@ function povoar(acervo: Parameters<typeof lerMensagens>[0]) {
   });
   const ids = ['m1', 'm2', 'm3'].map((idExterno, i) =>
     registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
       idExterno,

@@ -37,6 +37,7 @@ function conversaCom(acervo: Acervo, marca: string, quantas: number): string {
   });
   for (let i = 0; i < quantas; i += 1) {
     registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
       idExterno: `${marca}-${i}`,
@@ -137,6 +138,7 @@ test('um endereço em duas Conversas soma a cobertura das duas', () => {
       observadaEm: new Date(AGORA).toISOString(),
     });
     registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId: outra,
       fonte: 'whatsapp',
       idExterno: 'outra-0',

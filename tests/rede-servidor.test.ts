@@ -239,10 +239,12 @@ test('GET /conversas/<id>/mensagens com favorito e configuracao filtra so as fav
         configuracao: { id: cfg.id, fonte: 'whatsapp' },
       });
       marcadaId = registrarMensagem(acervo, {
+      direcao: 'recebida',
         conversaId, fonte: 'whatsapp', idExterno: 'm1', conteudo: 'favoritada',
         ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
       });
       registrarMensagem(acervo, {
+      direcao: 'recebida',
         conversaId, fonte: 'whatsapp', idExterno: 'm2', conteudo: 'nao favoritada',
         ocorridaEm: Date.parse('2026-09-01T12:01:00Z'), agora: Date.now(),
       });
@@ -429,6 +431,7 @@ test('GET /midia/<id> devolve os bytes com o content-type do tipo', async () => 
         configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
       });
       const mensagemId = registrarMensagem(acervo, {
+      direcao: 'recebida',
         conversaId, fonte: 'whatsapp', idExterno: 'm-midia',
         ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
       });
@@ -462,6 +465,7 @@ test('GET /midia/<id> de Anexo tipo video devolve 415 nomeando o tipo', async ()
         configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
       });
       const mensagemId = registrarMensagem(acervo, {
+      direcao: 'recebida',
         conversaId, fonte: 'whatsapp', idExterno: 'm-video',
         ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
       });
@@ -504,6 +508,7 @@ test('GET /midia/<id> de Anexo de OUTRO Inquilino devolve o mesmo 404 vazio', as
         configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
       });
       const mensagemId = registrarMensagem(acervoB, {
+      direcao: 'recebida',
         conversaId, fonte: 'whatsapp', idExterno: 'm-de-b',
         ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
       });
@@ -533,6 +538,7 @@ test('GET /midia/<id> sem bytes (nunca-obtido) devolve 404 vazio', async () => {
         configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
       });
       const mensagemId = registrarMensagem(acervo, {
+      direcao: 'recebida',
         conversaId, fonte: 'whatsapp', idExterno: 'm-sem-bytes',
         ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
       });
@@ -564,6 +570,7 @@ test('GET /midia/<id> com presenca presente mas arquivo sumiu do disco devolve 4
         configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
       });
       const mensagemId = registrarMensagem(acervo, {
+      direcao: 'recebida',
         conversaId, fonte: 'whatsapp', idExterno: 'm-sumido',
         ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
       });

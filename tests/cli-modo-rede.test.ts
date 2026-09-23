@@ -78,6 +78,7 @@ test('mensagens por rede, ponta a ponta: subprocesso consulta o servidor real', 
       configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
     });
     registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId,
       fonte: 'whatsapp',
       idExterno: 'm1',
@@ -203,6 +204,7 @@ test('malote midia --saida em modo rede: subprocesso grava os bytes recebidos', 
       configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
     });
     const mensagemId = registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId, fonte: 'whatsapp', idExterno: 'm-cli-midia',
       ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
     });

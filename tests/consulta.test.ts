@@ -38,6 +38,7 @@ function povoar(acervo: Parameters<typeof listarConversas>[0]) {
   });
 
   registrarMensagem(acervo, {
+      direcao: 'recebida',
     conversaId: direta,
     fonte: 'whatsapp',
     idExterno: 'm1',
@@ -47,6 +48,7 @@ function povoar(acervo: Parameters<typeof listarConversas>[0]) {
     agora: AGORA,
   });
   registrarMensagem(acervo, {
+      direcao: 'recebida',
     conversaId: direta,
     fonte: 'whatsapp',
     idExterno: 'm2',
@@ -56,6 +58,7 @@ function povoar(acervo: Parameters<typeof listarConversas>[0]) {
     agora: AGORA,
   });
   const naColetiva = registrarMensagem(acervo, {
+      direcao: 'recebida',
     conversaId: coletiva,
     fonte: 'whatsapp',
     idExterno: 'm3',
@@ -139,6 +142,7 @@ test('filtrar por Pessoa alcança todos os Identificadores dela', () => {
       coletiva: false, configuracao: CFG_INSTAGRAM,
     });
     registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId: conversaInsta,
       fonte: 'instagram',
       idExterno: 'i1',

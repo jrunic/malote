@@ -78,6 +78,7 @@ export async function cenarioDeRede(): Promise<CenarioDeRede> {
         conteudo: `mensagem de ${nome}`,
         ocorridaEm: Date.parse('2026-06-01T12:00:00Z'),
         agora: Date.now(),
+        direcao: 'recebida',
       });
       return { inquilino, conversa };
     } finally {
