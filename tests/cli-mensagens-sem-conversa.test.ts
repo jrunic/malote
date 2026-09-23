@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { executar } from '../src/cli/index.js';
+import { executar, executarConsultaRede } from '../src/cli/index.js';
 import { cenario } from './ajuda/acervo.js';
+import { cenarioDeRede } from './ajuda/rede.js';
 import { registrarConversa, registrarMensagem } from '../src/nucleo/escrita.js';
 import { CFG_WHATSAPP } from './ajuda/configuracao.js';
 
@@ -98,5 +99,23 @@ test('malote mensagens --conversa continua exigindo a Conversa e ordenando crono
     assert.ok(saida[0]!.ocorridaEm < saida[1]!.ocorridaEm, 'cronologica: mais antiga primeiro, sem regressao');
   } finally {
     c.limpar();
+  }
+});
+
+test('malote mensagens sem --conversa, em modo rede, chega em /mensagens', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const linhas: string[] = [];
+    const codigo = await executarConsultaRede(['mensagens', '--json'], {
+      servidor: `http://${c.endereco}:${c.porta}`,
+      chave: chave.valor,
+      escrever: (t: string) => linhas.push(t),
+    });
+    assert.equal(codigo, 0);
+    const corpo = JSON.parse(linhas.join('\n')) as { mensagens: unknown[] };
+    assert.equal(corpo.mensagens.length, 1, 'a Mensagem do povoamento padrao de A');
+  } finally {
+    await c.parar();
   }
 });

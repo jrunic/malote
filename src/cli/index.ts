@@ -380,7 +380,8 @@ export async function executarConsultaRede(
   const grupo = argumentos[0];
   const q = new URLSearchParams();
   for (const nome of ['busca', 'fonte', 'coletiva', 'pessoa', 'limite', 'conversa',
-    'autor', 'desde', 'ate', 'antes', 'em', 'texto', 'configuracao', 'favorito', 'fixada']) {
+    'autor', 'desde', 'ate', 'antes', 'em', 'texto', 'configuracao', 'favorito', 'fixada',
+    'ordem', 'direcao']) {
     const valor = opcao(argumentos, nome);
     if (valor !== undefined) q.set(nome, valor);
   }
@@ -407,11 +408,7 @@ export async function executarConsultaRede(
   }
   else if (grupo === 'mensagens') {
     const conversa = opcao(argumentos, 'conversa');
-    if (conversa === undefined) {
-      rede.escrever('Informe --conversa <id>.');
-      return 2;
-    }
-    caminho = `/conversas/${conversa}/mensagens`;
+    caminho = conversa === undefined ? '/mensagens' : `/conversas/${conversa}/mensagens`;
   }
   else if (grupo === 'midia') {
     const anexoId = argumentos[1];
