@@ -267,6 +267,9 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
   malote servir     --porta <n> [--endereco <ip>] [--exposto]
   malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--json]
+  malote mensagens  --inquilino <id> [--conversa <id>] [--desde D] [--ate D] [--fonte <nome>] [--direcao enviada|recebida] [--limite <n>] [--json]
+                                        (sem --conversa: atravessa todas as Conversas e Fontes,
+                                         ordenado por recencia por default — ultimas mensagens)
   malote midia <id> --saida <arquivo>   (bytes do Anexo — SO em modo rede;
                                           local, leia 'caminho' de 'mensagens --json')
   malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--json]
@@ -1424,7 +1427,6 @@ function executarComAtor(
 
     if (grupo === 'mensagens') {
       const conversa = opcao(argumentos, 'conversa');
-      if (conversa === undefined) throw new Error('Informe --conversa <id>.');
       const inquilino = opcao(argumentos, 'inquilino');
       if (inquilino === undefined) throw new Error('Informe --inquilino.');
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
@@ -1432,15 +1434,38 @@ function executarComAtor(
         const desde = opcao(argumentos, 'desde');
         const ate = opcao(argumentos, 'ate');
         const autor = opcao(argumentos, 'autor');
+        const fonte = opcao(argumentos, 'fonte');
+        const direcaoOpcao = opcao(argumentos, 'direcao');
+        if (direcaoOpcao !== undefined && direcaoOpcao !== 'enviada' && direcaoOpcao !== 'recebida') {
+          escrever('--direcao aceita "enviada" ou "recebida".');
+          return 2;
+        }
         const limite = opcao(argumentos, 'limite');
         const antes = opcao(argumentos, 'antes');
+        const ordemOpcao = opcao(argumentos, 'ordem');
+        // Default diverge por PROPOSITO: com --conversa, cronologica (o
+        // comportamento de sempre, sem regressao); sem --conversa, recentes
+        // primeiro — e para isso que a consulta sem Conversa existe.
+        const ordemDefault = conversa === undefined ? 'recentes' : 'cronologica';
+        const ordem = ordemOpcao === 'cronologica' || ordemOpcao === 'recentes' ? ordemOpcao : ordemDefault;
         const mensagens = lerMensagens(acervo, {
-          conversaId: conversa,
+          ...(conversa !== undefined ? { conversaId: conversa } : {}),
           ...(desde === undefined ? {} : { de: expandirData(desde, 'inicio') }),
           ...(ate === undefined ? {} : { ate: expandirData(ate, 'fim') }),
           ...(autor === undefined ? {} : { pessoaId: autor }),
+          ...(fonte === undefined ? {} : { fonte: fonte as Fonte }),
+          ...(direcaoOpcao === undefined ? {} : { direcao: direcaoOpcao }),
           ...(limite === undefined ? {} : { limite: Number(limite) }),
-          ...(antes === undefined ? {} : { cursor: decodificarCursor(antes) ?? (() => { throw new Error('Cursor invalido — devolva o token proximo tal como recebeu.'); })(), ordem: 'cronologica' as const }),
+          ordem,
+          ...(antes === undefined
+            ? {}
+            : {
+                cursor:
+                  decodificarCursor(antes) ??
+                  (() => {
+                    throw new Error('Cursor invalido — devolva o token proximo tal como recebeu.');
+                  })(),
+              }),
         });
         if (temBandeira(argumentos, 'json')) {
           escrever(JSON.stringify(mensagens, null, 2));
