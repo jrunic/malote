@@ -145,3 +145,44 @@ test('GET /conversas/<id>/mensagens tambem aceita direcao', async () => {
     await c.parar();
   }
 });
+
+test('GET /conversas/<id>/mensagens?ordem=recentes SEM antes devolve a mais recente, nao a mais antiga', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
+    try {
+      // A do povoamento padrao (ajuda/rede.ts) e de 2026-06-01. Uma bem mais
+      // antiga e uma bem mais recente, para o oraculo nao depender de ordem
+      // de insercao nem de id.
+      registrarMensagem(acervo, {
+        conversaId: c.conversaDeA,
+        fonte: 'whatsapp',
+        idExterno: 'msg-antiga',
+        conteudo: 'a mais antiga',
+        ocorridaEm: Date.parse('2020-01-01T00:00:00Z'),
+        agora: Date.now(),
+        direcao: 'recebida',
+      });
+      registrarMensagem(acervo, {
+        conversaId: c.conversaDeA,
+        fonte: 'whatsapp',
+        idExterno: 'msg-recente',
+        conteudo: 'a mais recente',
+        ocorridaEm: Date.parse('2026-09-01T00:00:00Z'),
+        agora: Date.now(),
+        direcao: 'recebida',
+      });
+    } finally {
+      acervo.fechar();
+    }
+    const chave = c.emitir(c.inquilinoA);
+    // Primeira pagina — SEM --antes, exatamente o caso que a paginacao real
+    // usa na primeira chamada.
+    const r = await c.pedir(`/conversas/${c.conversaDeA}/mensagens?ordem=recentes&limite=1`, chave.valor);
+    const corpo = JSON.parse(r.corpo) as { mensagens: { conteudo: string | null }[] };
+    assert.equal(corpo.mensagens.length, 1);
+    assert.equal(corpo.mensagens[0]?.conteudo, 'a mais recente');
+  } finally {
+    await c.parar();
+  }
+});

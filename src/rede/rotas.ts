@@ -283,6 +283,19 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       // lista vazia por filtro de favorito e resposta legitima, 200 — nao 404.
     }
 
+    // Ordem: valor EXPLICITO no query sempre vence, com ou sem cursor — o bug
+    // era o ramo sem cursor so reconhecer 'cronologica' explicito e tratar
+    // 'recentes' explicito como ausente. Sem `ordem` nenhum no query, o
+    // default e assimetrico por DESENHO (nao regressao a corrigir): sem
+    // cursor, cronologica (primeira pagina desta rota sempre foi assim); com
+    // cursor, recentes (continuacao de paginacao ja assumia isso).
+    const ordemParam = q.get('ordem');
+    const ordemExplicita =
+      ordemParam === 'cronologica' ? ('cronologica' as const)
+        : ordemParam === 'recentes' ? ('recentes' as const)
+          : undefined;
+    const ordem = ordemExplicita ?? (cursor !== undefined ? 'recentes' : 'cronologica');
+
     const mensagens = lerMensagens(ctx.acervo, {
       conversaId,
       ...(filtroDe !== undefined ? { de: filtroDe } : {}),
@@ -291,11 +304,8 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       ...(direcao !== null ? { direcao: direcao as 'enviada' | 'recebida' } : {}),
       ...(limite !== null ? { limite: Number(limite) } : {}),
       ...(favorito === 'true' ? { favorito: true, configuracaoId: configuracaoId! } : {}),
-      ...(cursor !== undefined
-        ? { cursor, ordem: q.get('ordem') === 'cronologica' ? ('cronologica' as const) : ('recentes' as const) }
-        : q.get('ordem') === 'cronologica'
-          ? { ordem: 'cronologica' as const }
-          : {}),
+      ...(cursor !== undefined ? { cursor } : {}),
+      ordem,
     });
 
     if (mensagens.length === 0 && favorito !== 'true') {
