@@ -444,17 +444,24 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
-- **P0 — a próxima release exige `malote acervo migrar` ANTES do restart, não depois.**
-  A #1043 (Direção da Mensagem + consulta sem Conversa) levou `VERSAO_SCHEMA_ACERVO` de
-  18 para 20, e o passo 19→20 (Instagram) declara `exigeContexto: true` — o ouvinte
-  **recusa subir** sem que a migração tenha rodado explicitamente primeiro (só quem abre
-  Acervo e Registro juntos, `malote acervo migrar`, tem o contexto que o passo exige).
-  Ordem obrigatória no deploy: `git pull` → `malote acervo migrar --inquilino <id>` **por
-  Inquilino** (thinkpad tem mais de um) → só então reiniciar `malote-ouvinte@<conta>` e
-  `malote-servidor`. Invertida, o ouvinte não é "mais lento" nem "com aviso" — ele sai com
-  erro e não sobe, para todas as contas. Nada disto está em produção ainda: o `thinkpad`
-  segue na forma anterior a este trabalho (commit `8300a61`, schema 18) até a release
-  correr. Backup do Acervo antes de migrar, como sempre (ver pendência seguinte).
+- **RESOLVIDO em 23/09/2026, mas o mecanismo que quase doeu fica registrado: o
+  `upgrade-fleet` roda a cada 30 min no thinkpad (`*/30 * * * *`, `trust: "immediate"`
+  para o pacote `malote`), e aplicou a v0.21.0 sozinho — pull + restart — cerca de 7
+  minutos ANTES da Ação Documentada rodar `malote acervo migrar`.** O `malote-ouvinte`
+  se recusou a subir exatamente como desenhado (`o passo 19 para 20 precisa das
+  Configuracoes de Adaptador... Rode malote acervo migrar --inquilino <id>`) — zero
+  corrupção. O `malote-servidor`, porém, **ficou `active` servindo contra Acervo não
+  migrado** nesse intervalo — qualquer leitura de Mensagem teria quebrado, porque o
+  código novo faz `SELECT` incluindo `direcao`, coluna que só existe a partir do schema
+  19. Não houve dano real (0 requisições no log do servidor nessa janela), mas foi
+  sorte de tráfego, não garantia. **Formalizado no `ops-10-publica-release`
+  (passo 4a, 23/09/2026):** release que muda a forma do Acervo checa `trust` e o
+  timer do `upgrade-fleet` no host **antes** do merge — rebaixa o `trust` para essa
+  release, ou garante a Ação Documentada pronta e ensaiada antes do merge, para
+  caber na mesma janela do automático. Nenhum ajuste feito no `upgrade-fleet.json`
+  do malote ainda (segue `immediate`) — a mitigação escolhida foi a disciplina de
+  timing no `ops-10`, não a mudança de `trust`; reabrir esta decisão se uma
+  próxima corrida real acontecer.
 
 - **O `post_install` do malote RODA: toda release reinicia o ouvinte.** Medido em 12/09/2026
   na release v0.10.0, o `upgrade-now` executou `restart:malote-ouvinte@<conta>.service`. Duas
