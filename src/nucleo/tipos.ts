@@ -20,6 +20,18 @@ export const PRESENCAS = ['presente', 'nunca-obtido', 'descartado'] as const;
 export type Presenca = (typeof PRESENCAS)[number];
 
 /**
+ * Quem começou a Mensagem: o Titular (enviada) ou qualquer outra Pessoa
+ * (recebida). Independente do autor estar resolvido — ver Invariantes de
+ * Mensagem em docs/dominio/malote.md.
+ */
+export const DIRECOES = ['enviada', 'recebida'] as const;
+export type Direcao = (typeof DIRECOES)[number];
+
+export function ehDirecao(valor: string): valor is Direcao {
+  return (DIRECOES as readonly string[]).includes(valor);
+}
+
+/**
  * Quem afirmou o vinculo entre um Identificador e uma Pessoa.
  * A ordem e total e e o que impede execucao automatica de desfazer correcao
  * humana: `humano` vence `catalogo`, que vence `material`.
