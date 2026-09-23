@@ -23,6 +23,18 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.21.1] — 2026-09-23
+
+### Corrigido
+
+- **`GET /conversas/<id>/mensagens?ordem=recentes` sem cursor** (primeira página)
+  ignorava o pedido explícito de ordenação por recência e devolvia a ordem
+  cronológica em silêncio — achado consultando produção real: a rota devolveu
+  Mensagem de 2021 numa Conversa com Mensagem do mesmo dia. `ordem` agora é
+  computado uma única vez, com ou sem cursor; valor explícito no query sempre
+  vence. Default sem `ordem` nenhum continua assimétrico por desenho
+  (cronológica sem cursor, recentes com cursor).
+
 ## [0.21.0] — 2026-09-23
 
 ### Adicionado
