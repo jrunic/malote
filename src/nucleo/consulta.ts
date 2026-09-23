@@ -1,7 +1,7 @@
 import type { Acervo } from './acervo.js';
 import type { PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
 import { SQL_FAMILIA } from './familia.js';
-import type { ConversaId, Fonte, MensagemId, PessoaId, Presenca } from './tipos.js';
+import type { ConversaId, Direcao, Fonte, MensagemId, PessoaId, Presenca } from './tipos.js';
 import { nomeDoIdentificador } from './identidade.js';
 
 /**
@@ -183,6 +183,8 @@ export interface MensagemLida {
   autorId: string | null;
   conteudo: string | null;
   ocorridaEm: number;
+  /** Enviada pelo Titular ou recebida de outra Pessoa. NULL em Mensagem migrada sem discriminante. */
+  direcao: Direcao | null;
   anexos: AnexoLido[];
 }
 
@@ -203,6 +205,8 @@ export interface FiltroDeMensagem {
     */
   favorito?: boolean;
   configuracaoId?: string;
+  /** Enviada pelo Titular ou recebida de outra Pessoa. */
+  direcao?: Direcao;
   /** Quantidade maxima de Mensagens devolvidas. */
   limite?: number;
   /** 'cronologica' (default) ou 'recentes' — sempre por (ocorrida_em, id). */
@@ -220,6 +224,7 @@ function montarMensagens(acervo: Acervo, linhas: Array<Record<string, unknown>>)
       fonte: l['fonte'] as Fonte,
       autorId: (l['autor_id'] as string | null) ?? null,
       conteudo: (l['conteudo'] as string | null) ?? null,
+      direcao: (l['direcao'] as Direcao | null) ?? null,
       ocorridaEm: l['ocorrida_em'] as number,
       anexos: lerAnexos(acervo, id),
     };
@@ -273,6 +278,10 @@ export function lerMensagens(acervo: Acervo, filtro: FiltroDeMensagem): Mensagem
     condicoes.push('m.ocorrida_em <= ?');
     valores.push(filtro.ate);
   }
+  if (filtro.direcao !== undefined) {
+    condicoes.push('m.direcao = ?');
+    valores.push(filtro.direcao);
+  }
   // Cursor COMPOSTO e EXCLUSIVO: o instante sozinho nao pagina — duas
   // Mensagens podem ter o mesmo instante, e o limite caindo no meio desse
   // conjunto pularia ou repetiria (revisao do ciclo 21).
@@ -308,7 +317,7 @@ export function lerMensagens(acervo: Acervo, filtro: FiltroDeMensagem): Mensagem
   const onde = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
   const ordem = filtro.ordem === 'recentes' ? 'DESC' : 'ASC';
   const linhas = acervo.preparar(
-      `SELECT m.id, m.conversa_id, m.fonte, m.autor_id, m.conteudo, m.ocorrida_em
+      `SELECT m.id, m.conversa_id, m.fonte, m.autor_id, m.conteudo, m.direcao, m.ocorrida_em
          FROM mensagens m ${onde} ORDER BY m.ocorrida_em ${ordem}, m.id ${ordem}${limites.join('')}`,
     )
     .all(...valores) as Array<Record<string, unknown>>;
@@ -351,7 +360,7 @@ export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): Mensagem
   }
 
   const linhas = acervo.preparar(
-      `SELECT m.id, m.conversa_id, m.fonte, m.autor_id, m.conteudo, m.ocorrida_em
+      `SELECT m.id, m.conversa_id, m.fonte, m.autor_id, m.conteudo, m.direcao, m.ocorrida_em
          FROM mensagens_texto t
          JOIN mensagens m ON m.rowid = t.rowid
         WHERE ${condicoes.join(' AND ')}
