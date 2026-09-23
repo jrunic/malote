@@ -14,12 +14,19 @@ import {
   vincularIdentificador,
 } from '../src/nucleo/identidade.js';
 
-test('o schema do Acervo está na versão 19', () => {
-  // v19 em 23/09/2026: a DIRECAO DA MENSAGEM entra — enviada pelo Titular ou
-  // recebida de outra Pessoa. Coluna nova, preenchida para WhatsApp a partir
-  // do proprio bruto (ZISFROMME no material, key.fromMe ao vivo); Instagram
-  // fica para a v20, que precisa do Registro ao lado. Linha que nenhuma das
-  // duas formas alcancar fica NULL — nao adivinhado.
+test('o schema do Acervo está na versão 20', () => {
+  // v20 em 23/09/2026: a DIRECAO DA MENSAGEM completa para Instagram, pelo
+  // Nome do Titular na Fonte declarado em Pasta de Entrada (Registro) — por
+  // isso exige contexto, como o passo 13->14. Conversa direta resolve pela
+  // propria configuracao_id; coletiva usa a Configuracao unica do
+  // Inquilino, e fica NULL (nao erro) quando ha mais de uma — medido em
+  // producao real que travar a migracao inteira por 130 Mensagens
+  // ambiguas custaria a Direcao de 37.921.
+  //
+  // v19 em 23/09/2026: a DIRECAO DA MENSAGEM entra para WhatsApp — enviada
+  // pelo Titular ou recebida de outra Pessoa. Coluna nova, preenchida a
+  // partir do proprio bruto (ZISFROMME no material, key.fromMe ao vivo).
+  // Linha que nenhuma das duas formas alcancar fica NULL — nao adivinhado.
   //
   // v18 em 13/09/2026: a MARCA DO TITULAR entra em duas tabelas — favorito de
   // Mensagem e fixacao de Conversa. Duas e nao uma porque com coluna de tipo
@@ -97,7 +104,7 @@ test('o schema do Acervo está na versão 19', () => {
   // v9: Transicao de Participacao como registro proprio, e a atividade que a
   // Fonte declara no retrato. Acervo v8 nao tem nem uma nem outra, e a
   // consulta de presenca leria silencio como ausencia.
-  assert.equal(VERSAO_SCHEMA_ACERVO, 19);
+  assert.equal(VERSAO_SCHEMA_ACERVO, 20);
 });
 
 test('o nome pendura em Identificador, sem Pessoa nenhuma', () => {

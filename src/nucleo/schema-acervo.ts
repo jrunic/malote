@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3';
  * Politica completa das duas bases na ADR local
  * `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_ACERVO = 19;
+export const VERSAO_SCHEMA_ACERVO = 20;
 
 /**
  * Forma mais antiga que a maquina de migracao alcanca.

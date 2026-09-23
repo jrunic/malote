@@ -459,6 +459,121 @@ const DIRECAO_WHATSAPP_V19: PassoDeMigracao = {
   },
 };
 
+/**
+ * Copia CONGELADA da funcao desdeformar em
+ * src/adaptadores/instagram/material.ts.
+ *
+ * tests/fronteira-de-dependencia.test.ts proibe src/nucleo de importar
+ * src/adaptadores — mesma razao da fronteira que ja protege o resto do
+ * nucleo. E a mesma logica dos DDLs congelados desta maquina: o passo tem de
+ * continuar produzindo o resultado de 2026 para sempre, mesmo que o
+ * Adaptador mude a normalizacao depois. NAO IMPORTAR do adaptador aqui —
+ * copiar de novo se o dia vier.
+ */
+function desdeformarCongelado(texto: string): string {
+  return Buffer.from(texto, 'latin1').toString('utf8');
+}
+
+/**
+ * Direcao da Mensagem — metade do Instagram.
+ *
+ * Precisa de ContextoDeMigracao: o comparador (Nome do Titular na Fonte) vive
+ * em Pasta de Entrada, no Registro, fora do Acervo — mesma razao de
+ * exigeContexto do passo 13->14. Quem abre sem Registro ao lado (o ouvinte)
+ * recebe recusa nomeando acervo migrar.
+ *
+ * Conversa DIRETA de Instagram ja carrega configuracao_id desde o #825 — usa
+ * ele para achar o comparador certo, sem ambiguidade, mesmo quando o
+ * Inquilino tem mais de uma Configuracao de Instagram (medido em producao
+ * real em 23/09/2026: o Inquilino do Titular tem duas — orlando e freud).
+ * Conversa COLETIVA nao tem Configuracao (pertence ao Inquilino inteiro):
+ * usa a UNICA Configuracao de Instagram do Inquilino quando so existe uma;
+ * havendo mais de uma, NAO ha como saber de qual conta cada Mensagem
+ * coletiva e, e a Mensagem fica direcao NULL — nao lanca erro. Diferente do
+ * precedente CONVERSA_POR_CONFIGURACAO_V14 (onde configuracao_id e NOT NULL
+ * na Conversa, e uma atribuicao errada corromperia permanentemente): aqui
+ * NULL e valor legitimo do schema, e medido em producao real que lancar erro
+ * bloquearia a Direcao de TODAS as Mensagens de Instagram (inclusive as
+ * diretas, sem ambiguidade nenhuma) por causa de uma fracao pequena de
+ * Mensagens de coletiva ambigua — no Acervo medido, 130 de 37.921.
+ *
+ * Comparador AUSENTE (Configuracao sem Nome do Titular na Fonte declarado)
+ * ou bruto invalido/sem sender_name TAMBEM deixa a Mensagem com direcao
+ * NULL — nao e adivinhado. Medido no Acervo real antes deste passo ser
+ * escrito.
+ */
+const DIRECAO_INSTAGRAM_V20: PassoDeMigracao = {
+  de: 19,
+  para: 20,
+  descricao: 'preenche a Direcao da Mensagem para Instagram',
+  exigeContexto: true,
+  aplicar: (db, contexto) => {
+    const comparadorPorConfiguracao = contexto.nomeDoTitularNaFonte ?? new Map<string, string>();
+
+    const configuracoesInstagram = (contexto.configuracoes ?? []).filter(
+      (c) => c.fonte === 'instagram',
+    );
+    // Mais de uma Configuracao de Instagram: o comparador de coletiva fica
+    // undefined (ambiguo), e cada Mensagem de coletiva cai em NULL pela
+    // mesma guarda que ja trata comparador ausente — sem excecao, sem
+    // bloquear a Conversa direta, que resolve pela propria Configuracao.
+    const comparadorUnicoDeColetiva =
+      configuracoesInstagram.length === 1
+        ? comparadorPorConfiguracao.get(configuracoesInstagram[0]!.id)
+        : undefined;
+
+    function direcaoDoSenderName(
+      bruto: string | null,
+      comparador: string | undefined,
+    ): string | null {
+      if (comparador === undefined || bruto === null) return null;
+      let cru: { sender_name?: string };
+      try {
+        cru = JSON.parse(bruto) as { sender_name?: string };
+      } catch {
+        return null; // bruto invalido — nao adivinha
+      }
+      if (cru.sender_name === undefined) return null;
+      const autorExibicao = desdeformarCongelado(cru.sender_name);
+      return autorExibicao === comparador ? 'enviada' : 'recebida';
+    }
+
+    // Direta: pela Configuracao da propria Conversa.
+    const diretas = db
+      .prepare(
+        `SELECT m.id AS id, m.bruto AS bruto, c.configuracao_id AS configuracaoId
+           FROM mensagens m JOIN conversas c ON c.id = m.conversa_id
+          WHERE m.fonte = 'instagram' AND c.coletiva = 0 AND m.direcao IS NULL`,
+      )
+      .all() as { id: string; bruto: string | null; configuracaoId: string | null }[];
+
+    // Coletiva: pelo comparador unico do Inquilino, se houver.
+    const coletivas = db
+      .prepare(
+        `SELECT m.id AS id, m.bruto AS bruto
+           FROM mensagens m JOIN conversas c ON c.id = m.conversa_id
+          WHERE m.fonte = 'instagram' AND c.coletiva = 1 AND m.direcao IS NULL`,
+      )
+      .all() as { id: string; bruto: string | null }[];
+
+    const atualizar = db.prepare('UPDATE mensagens SET direcao = ? WHERE id = ?');
+
+    for (const linha of diretas) {
+      const comparador =
+        linha.configuracaoId === null
+          ? undefined
+          : comparadorPorConfiguracao.get(linha.configuracaoId);
+      const direcao = direcaoDoSenderName(linha.bruto, comparador);
+      if (direcao !== null) atualizar.run(direcao, linha.id);
+    }
+
+    for (const linha of coletivas) {
+      const direcao = direcaoDoSenderName(linha.bruto, comparadorUnicoDeColetiva);
+      if (direcao !== null) atualizar.run(direcao, linha.id);
+    }
+  },
+};
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -469,6 +584,7 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   AUTORIDADE_V17,
   MARCA_DO_TITULAR_V18,
   DIRECAO_WHATSAPP_V19,
+  DIRECAO_INSTAGRAM_V20,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {
