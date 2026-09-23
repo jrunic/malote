@@ -23,6 +23,46 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.21.0] — 2026-09-23
+
+### Adicionado
+
+- **Direção da Mensagem** (`enviada` pelo Titular ou `recebida` de outra
+  Pessoa) — conceito de domínio novo, gravado por cada Adaptador no momento
+  da escrita, independente do autor estar resolvido. Coluna `direcao` em
+  `mensagens`, `NULL` só em Mensagem migrada de um Acervo anterior a esta
+  coluna cujo Conteúdo Bruto não trouxe o discriminante.
+- **`GET /mensagens`** — últimas Mensagens através de todas as Conversas e
+  Fontes do Inquilino, sem exigir uma Conversa antes. `direcao` filtra por
+  quem começou a Mensagem; sem `ordem` explícito o default é `recentes`
+  (oposto do default de `/conversas/<id>/mensagens`, que continua
+  `cronologica`). Espelhado na CLI local (`malote mensagens` sem
+  `--conversa`) e no modo rede.
+- **`--direcao`** aceito em `malote mensagens` (com ou sem `--conversa`) e em
+  `GET /conversas/<id>/mensagens`.
+- **`--ordem`** exposto na CLI local, nos dois modos de `mensagens` — a rota
+  de rede já aceitava o parâmetro; faltava a CLI repassá-lo.
+
+### Nota de deploy — LEIA ANTES DE INSTALAR ESTA VERSÃO
+
+**Esta release muda a forma do Acervo (schema 18 → 20)**, com um passo de
+migração que **exige contexto do Registro** (Configurações do Inquilino) —
+o `malote ouvir` (ouvinte) **se recusa a subir** se a migração não tiver
+rodado antes, por Inquilino. A ordem de deploy é obrigatória, não
+opcional:
+
+1. Parar os serviços (`malote-ouvinte@<conta>`, `malote-servidor`).
+2. Fazer backup do Acervo de cada Inquilino.
+3. Rodar `malote acervo migrar --inquilino <id>` — **um comando por
+   Inquilino**, antes de qualquer restart.
+4. Só então reiniciar os serviços.
+
+Instalação com Instagram e mais de uma Configuração daquela Fonte por
+Inquilino: Mensagem de Conversa coletiva cujo autor não é determinável sem
+ambiguidade entre Configurações recebe `direcao NULL` (não é erro, não
+interrompe a migração) — Conversa direta resolve normalmente pela própria
+Configuração.
+
 ## [0.20.0] — 2026-09-22
 
 ### Adicionado

@@ -355,6 +355,7 @@ export function gravarMaterialLido(
         conversaId,
         fonte: 'whatsapp',
         idExterno: m.idExterno,
+        direcao: m.daPropriaPessoa ? 'enviada' : 'recebida',
         ...(autorId !== undefined ? { autorId } : {}),
         ...(m.texto !== null ? { conteudo: m.texto } : {}),
         ocorridaEm,

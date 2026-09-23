@@ -4,6 +4,7 @@ import { caminhoDeMidia } from './caminho-de-midia.js';
 import { motivoDaRejeicao } from './instante.js';
 import type {
   ConversaId,
+  Direcao,
   Fonte,
   MensagemId,
   NaturezaDeTransicao,
@@ -380,6 +381,8 @@ export interface EntradaMensagem {
   ocorridaEm: number;
   citadaId?: string;
   bruto?: string;
+  /** Enviada pelo Titular ou recebida — obrigatorio, sem inferencia. */
+  direcao: Direcao;
   /** Instante de referência para a checagem de plausibilidade. */
   agora: number;
 }
@@ -414,8 +417,8 @@ export function registrarMensagem(acervo: Acervo, entrada: EntradaMensagem): Men
   const id = randomUUID();
   acervo.preparar(
       `INSERT INTO mensagens
-         (id, conversa_id, fonte, id_externo, autor_id, conteudo, ocorrida_em, citada_id, bruto)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, conversa_id, fonte, id_externo, autor_id, conteudo, ocorrida_em, citada_id, direcao, bruto)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -426,6 +429,7 @@ export function registrarMensagem(acervo: Acervo, entrada: EntradaMensagem): Men
       entrada.conteudo ?? null,
       entrada.ocorridaEm,
       entrada.citadaId ?? null,
+      entrada.direcao,
       entrada.bruto ?? null,
     );
   return id;

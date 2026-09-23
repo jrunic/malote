@@ -22,6 +22,7 @@ function anexoDe(
   });
   const agora = Date.now();
   const mensagem = registrarMensagem(acervo, {
+      direcao: 'recebida',
     conversaId: conversa,
     fonte,
     idExterno: idExternoDaMensagem,
@@ -68,6 +69,7 @@ test('listarAnexosPendentes traz so `nunca-obtido` — a Presenca E o cursor', (
       ['msg-3', 'descartado'],
     ] as Array<[string, Presenca]>) {
       const m = registrarMensagem(acervo, {
+      direcao: 'recebida',
         conversaId: conversa,
         fonte: 'whatsapp',
         idExterno,

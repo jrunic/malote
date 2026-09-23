@@ -65,6 +65,7 @@ test('mensagem gravada na forma alternativa passa a responder pela canonica', ()
       coletiva: false, configuracao: CFG_WHATSAPP,
     });
     registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
       idExterno: 'm1',
@@ -183,6 +184,7 @@ test('par cujas duas formas pertencem a Pessoas diferentes e PULADO e proposto',
       coletiva: false, configuracao: CFG_WHATSAPP,
     });
     registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
       idExterno: 'm2',
@@ -227,6 +229,7 @@ test('quando so o alternativo tem Pessoa, o vinculo MIGRA com a mesma procedenci
       coletiva: false, configuracao: CFG_WHATSAPP,
     });
     registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
       idExterno: 'm3',
@@ -264,6 +267,7 @@ test('resolver duas vezes nao produz segunda linha em tabela de dado nenhuma', (
     const alt = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '555@alt' });
     const canon = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '555@canon' });
     registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
       idExterno: 'm5',
@@ -315,6 +319,7 @@ test('o comando ensaia por padrao e nao escreve nada', () => {
     });
     const alt = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '777@alt' });
     registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
       idExterno: 'm7',
@@ -362,6 +367,7 @@ test('o comando com efeito exige --confirmo e entao reconcilia', () => {
     });
     const alt = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '666@alt' });
     registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
       idExterno: 'm6',

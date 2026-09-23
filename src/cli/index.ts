@@ -122,6 +122,7 @@ import {
 import { lerUltimoRetrato } from './retrato.js';
 import { lerPulos } from './pulos.js';
 import { configuracaoPorApelido } from '../registro/configuracao-adaptador.js';
+import { lerPastaDeEntrada } from '../registro/pasta-de-entrada.js';
 import { receberEvento } from '../adaptadores/whatsapp/ao-vivo.js';
 import { lerCorrespondencia } from './vigilancia.js';
 
@@ -266,6 +267,9 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
   malote servir     --porta <n> [--endereco <ip>] [--exposto]
   malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--json]
+  malote mensagens  --inquilino <id> [--conversa <id>] [--desde D] [--ate D] [--fonte <nome>] [--direcao enviada|recebida] [--limite <n>] [--json]
+                                        (sem --conversa: atravessa todas as Conversas e Fontes,
+                                         ordenado por recencia por default — ultimas mensagens)
   malote midia <id> --saida <arquivo>   (bytes do Anexo — SO em modo rede;
                                           local, leia 'caminho' de 'mensagens --json')
   malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--json]
@@ -310,16 +314,42 @@ function acervoDoInquilino(registro: Registro, raiz: string, inquilinoId: string
   const existe = listarInquilinos(registro).some((i) => i.id === inquilinoId);
   if (!existe) throw new Error(`Inquilino desconhecido: ${inquilinoId}`);
   // O contexto de migracao sai DAQUI porque este e o unico ponto do produto que
-  // tem o Registro aberto ao lado do Acervo. O passo que precisa de Configuracao
-  // — o 13 -> 14 — so roda por este caminho; quem abre o Acervo sem o Registro,
-  // como o ouvinte, recebe recusa com a instrucao de rodar `acervo migrar`.
-  const contexto = {
-    configuracoes: listarConfiguracoes(registro, inquilinoId).map((c) => ({
+  // tem o Registro aberto ao lado do Acervo. Os passos que precisam de
+  // Configuracao — 13 -> 14 e 19 -> 20 — so rodam por este caminho; quem abre
+  // o Acervo sem o Registro, como o ouvinte, recebe recusa com a instrucao de
+  // rodar `acervo migrar`.
+  const contexto = contextoDeMigracaoDoInquilino(registro, inquilinoId);
+  return abrirAcervo(join(raiz, 'acervos'), inquilinoId, contexto);
+}
+
+/**
+ * Monta o contexto de migracao a partir do Registro — usado tanto por
+ * `acervoDoInquilino` quanto pela varredura, os dois pontos do produto que
+ * abrem Registro e Acervo juntos.
+ *
+ * `nomeDoTitularNaFonte`: o passo 19 -> 20 (Direcao do Instagram) precisa
+ * disto. Configuracao sem Pasta de Entrada declarada, ou sem o Nome do
+ * Titular na Fonte nela, simplesmente nao entra no mapa — o passo trata
+ * ausencia como comparador desconhecido, nunca como erro.
+ */
+function contextoDeMigracaoDoInquilino(registro: Registro, inquilinoId: string) {
+  const configuracoesDoInquilino = listarConfiguracoes(registro, inquilinoId);
+  return {
+    configuracoes: configuracoesDoInquilino.map((c) => ({
       id: c.id,
       fonte: c.fonte,
     })),
+    nomeDoTitularNaFonte: new Map(
+      configuracoesDoInquilino
+        .map((c) => {
+          const entrada = lerPastaDeEntrada(registro, c.id);
+          return entrada?.nomeDoTitularNaFonte != null
+            ? ([c.id, entrada.nomeDoTitularNaFonte] as const)
+            : undefined;
+        })
+        .filter((par): par is readonly [string, string] => par !== undefined),
+    ),
   };
-  return abrirAcervo(join(raiz, 'acervos'), inquilinoId, contexto);
 }
 
 /**
@@ -350,7 +380,8 @@ export async function executarConsultaRede(
   const grupo = argumentos[0];
   const q = new URLSearchParams();
   for (const nome of ['busca', 'fonte', 'coletiva', 'pessoa', 'limite', 'conversa',
-    'autor', 'desde', 'ate', 'antes', 'em', 'texto', 'configuracao', 'favorito', 'fixada']) {
+    'autor', 'desde', 'ate', 'antes', 'em', 'texto', 'configuracao', 'favorito', 'fixada',
+    'ordem', 'direcao']) {
     const valor = opcao(argumentos, nome);
     if (valor !== undefined) q.set(nome, valor);
   }
@@ -377,11 +408,7 @@ export async function executarConsultaRede(
   }
   else if (grupo === 'mensagens') {
     const conversa = opcao(argumentos, 'conversa');
-    if (conversa === undefined) {
-      rede.escrever('Informe --conversa <id>.');
-      return 2;
-    }
-    caminho = `/conversas/${conversa}/mensagens`;
+    caminho = conversa === undefined ? '/mensagens' : `/conversas/${conversa}/mensagens`;
   }
   else if (grupo === 'midia') {
     const anexoId = argumentos[1];
@@ -1397,7 +1424,6 @@ function executarComAtor(
 
     if (grupo === 'mensagens') {
       const conversa = opcao(argumentos, 'conversa');
-      if (conversa === undefined) throw new Error('Informe --conversa <id>.');
       const inquilino = opcao(argumentos, 'inquilino');
       if (inquilino === undefined) throw new Error('Informe --inquilino.');
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
@@ -1405,15 +1431,38 @@ function executarComAtor(
         const desde = opcao(argumentos, 'desde');
         const ate = opcao(argumentos, 'ate');
         const autor = opcao(argumentos, 'autor');
+        const fonte = opcao(argumentos, 'fonte');
+        const direcaoOpcao = opcao(argumentos, 'direcao');
+        if (direcaoOpcao !== undefined && direcaoOpcao !== 'enviada' && direcaoOpcao !== 'recebida') {
+          escrever('--direcao aceita "enviada" ou "recebida".');
+          return 2;
+        }
         const limite = opcao(argumentos, 'limite');
         const antes = opcao(argumentos, 'antes');
+        const ordemOpcao = opcao(argumentos, 'ordem');
+        // Default diverge por PROPOSITO: com --conversa, cronologica (o
+        // comportamento de sempre, sem regressao); sem --conversa, recentes
+        // primeiro — e para isso que a consulta sem Conversa existe.
+        const ordemDefault = conversa === undefined ? 'recentes' : 'cronologica';
+        const ordem = ordemOpcao === 'cronologica' || ordemOpcao === 'recentes' ? ordemOpcao : ordemDefault;
         const mensagens = lerMensagens(acervo, {
-          conversaId: conversa,
+          ...(conversa !== undefined ? { conversaId: conversa } : {}),
           ...(desde === undefined ? {} : { de: expandirData(desde, 'inicio') }),
           ...(ate === undefined ? {} : { ate: expandirData(ate, 'fim') }),
           ...(autor === undefined ? {} : { pessoaId: autor }),
+          ...(fonte === undefined ? {} : { fonte: fonte as Fonte }),
+          ...(direcaoOpcao === undefined ? {} : { direcao: direcaoOpcao }),
           ...(limite === undefined ? {} : { limite: Number(limite) }),
-          ...(antes === undefined ? {} : { cursor: decodificarCursor(antes) ?? (() => { throw new Error('Cursor invalido — devolva o token proximo tal como recebeu.'); })(), ordem: 'cronologica' as const }),
+          ordem,
+          ...(antes === undefined
+            ? {}
+            : {
+                cursor:
+                  decodificarCursor(antes) ??
+                  (() => {
+                    throw new Error('Cursor invalido — devolva o token proximo tal como recebeu.');
+                  })(),
+              }),
         });
         if (temBandeira(argumentos, 'json')) {
           escrever(JSON.stringify(mensagens, null, 2));
@@ -2066,6 +2115,17 @@ function executarComAtor(
         );
         for (const p of passosAplicados(acervo.db)) {
           escrever(`  ${p.de} -> ${p.para}  ${p.descricao}  [${p.conferencia}]`);
+        }
+        const semDirecao = (
+          acervo.preparar('SELECT COUNT(*) AS n FROM mensagens WHERE direcao IS NULL').get() as {
+            n: number;
+          }
+        ).n;
+        if (semDirecao > 0) {
+          escrever(
+            `${semDirecao} Mensagem(ns) sem Direcao calculavel — Conteudo Bruto sem o ` +
+              'discriminante conhecido, ou Configuracao sem o Nome do Titular na Fonte declarado.',
+          );
         }
       } finally {
         acervo.fechar();

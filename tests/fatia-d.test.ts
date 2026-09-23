@@ -44,6 +44,7 @@ function fixture() {
     codigoDaFonte: '15',
   });
   registrarMensagem(acervo, {
+      direcao: 'recebida',
     conversaId: c1,
     fonte: 'whatsapp',
     idExterno: 'm1',

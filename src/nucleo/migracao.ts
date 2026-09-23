@@ -25,6 +25,13 @@ import { emOperacao } from './trilha.js';
  */
 export interface ContextoDeMigracao {
   configuracoes?: readonly { id: string; fonte: string }[];
+  /**
+   * Nome do Titular na Fonte, por Configuracao — a mesma declaracao que vive
+   * em Pasta de Entrada (`entradas_de_adaptador.nome_do_titular_na_fonte`).
+   * So o passo 19 -> 20 (backfill de Direcao do Instagram) usa isto; os
+   * demais continuam olhando so `configuracoes`.
+   */
+  nomeDoTitularNaFonte?: ReadonlyMap<string, string>;
 }
 
 export interface PassoDeMigracao {

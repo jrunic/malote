@@ -87,6 +87,10 @@ malote mensagens --conversa <id> --favorito true --configuracao orlando  # so as
 # Paginação: a resposta traz `proximo` quando há mais; devolva-o:
 malote mensagens --conversa <id> --antes "<cursor>"
 
+# Últimas mensagens RECEBIDAS, através de todas as conversas
+malote mensagens --direcao recebida --limite 10
+malote mensagens --direcao recebida --fonte whatsapp --limite 10
+
 # Busca no conteúdo, com filtros
 malote buscar --texto "orçamento" --conversa <id> --desde 2026-09-01 --limite 50
 
@@ -141,10 +145,13 @@ Comandos (todos somente leitura):
   daquela Configuração, não a atribuição — por isso coletiva fixada aparece.
   `--fixada` exige `--configuracao` junto, e funciona local ou em modo rede.
 - `malote configuracao listar` — lista as Configurações do Inquilino (apelido + fonte).
-- `malote mensagens --conversa <id> [--desde D] [--ate D] [--limite N] [--favorito true --configuracao A]` —
-  conteúdo. `--favorito` só existe em modo rede (`MALOTE_SERVIDOR` setado) e exige
-  `--configuracao`; a Fonte é resolvida automaticamente pela própria Conversa, nunca
-  ambígua.
+- `malote mensagens [--conversa <id>] [--desde D] [--ate D] [--limite N] [--direcao enviada|recebida] [--favorito true --configuracao A]` —
+  conteúdo. Sem `--conversa`, atravessa todas as Conversas e Fontes do
+  Inquilino, ordenado por recência por default — é o comando para "últimas
+  mensagens recebidas". Com `--conversa`, ordena cronologicamente por
+  default, como sempre. `--favorito` só existe com `--conversa` (precisa da
+  Fonte da própria Conversa para resolver a Configuração sem ambiguidade) e
+  só em modo rede; exige `--configuracao`.
 - `malote buscar --texto T [--conversa <id>] [--desde D] [--ate D]` — busca no conteúdo.
 - `malote pessoas --texto T` — resolve nome/endereço para `id`; os outros comandos
   pedem o id, nunca o nome.
@@ -177,7 +184,8 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 | rota | parâmetros opcionais | resposta |
 |---|---|---|
 | `GET /conversas` | `fonte`, `coletiva`, `busca`, `pessoa`, `limite`, `configuracao`, `fixada` | `{ conversas: [{ id, fonte, coletiva, assunto, mensagens, configuracao }] }` |
-| `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `antes`, `ordem`, `favorito`, `configuracao` | `{ mensagens: [...], proximo? }` |
+| `GET /mensagens` | `limite`, `desde`, `ate`, `autor`, `fonte`, `direcao`, `antes`, `ordem` | `{ mensagens: [...], proximo? }` |
+| `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `antes`, `ordem`, `direcao`, `favorito`, `configuracao` | `{ mensagens: [...], proximo? }` |
 | `GET /buscar?texto=` | `conversa`, `autor`, `desde`, `ate`, `limite` | `{ mensagens: [...] }` |
 | `GET /pessoas?texto=` | — | `{ pessoas: [{ id, nome, identificadores }] }` |
 | `GET /conversas/<id>/participantes` | `em` | `{ presenca: {...} }` |
@@ -203,7 +211,16 @@ achar coletiva fixada. `favorito` em `/conversas/<id>/mensagens` exige `configur
 junto; a Fonte usada para resolver o apelido é a da própria Conversa (nunca ambígua),
 não uma que o chamador precise informar.
 
-Limites conhecidos: sem paginação fora de `/conversas/<id>/mensagens`; conversa vazia e
-inexistente respondem igual (`404`) — distinguir exigiria confirmar existência, e confirmar
+`GET /mensagens` atravessa todas as Conversas e Fontes do Inquilino — é a
+consulta para "últimas mensagens", sem escolher uma Conversa antes.
+`direcao` filtra por quem começou a Mensagem (`enviada` pelo Titular ou
+`recebida` de outra Pessoa). Sem `ordem` explícito, o default aqui é
+`recentes` — o oposto do default de `/conversas/<id>/mensagens`, que
+continua `cronologica` — porque o propósito desta rota é justamente
+recência. Vazio é resposta legítima (`200`, lista vazia), nunca `404`: não
+há um recurso singular cuja existência esteja em jogo.
+
+Limites conhecidos: conversa vazia e inexistente respondem igual (`404`) em
+`/conversas/<id>/mensagens` — distinguir exigiria confirmar existência, e confirmar
 existência é o que não pode vazar; `400` para parâmetro malformado é invocação errada, não
 "não existe".

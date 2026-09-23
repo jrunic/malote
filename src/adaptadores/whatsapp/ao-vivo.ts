@@ -486,6 +486,7 @@ function gravarUma(
     ocorridaEm: m.messageTimestamp * 1000,
     agora: opcoes.agora,
     bruto: JSON.stringify(m),
+    direcao: m.key.fromMe ? 'enviada' : 'recebida',
     ...(autorId !== undefined ? { autorId } : {}),
     ...(texto !== undefined ? { conteudo: texto } : {}),
   });

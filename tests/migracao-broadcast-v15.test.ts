@@ -28,6 +28,10 @@ const V13 = `
   CREATE TABLE mensagens (
     id          TEXT PRIMARY KEY,
     conversa_id TEXT NOT NULL,
+    -- fonte e bruto: a cadeia continua ate o passo 18 -> 19 (Direcao da
+    -- Mensagem, WhatsApp), que le as duas.
+    fonte       TEXT,
+    bruto       TEXT,
     FOREIGN KEY (conversa_id) REFERENCES conversas(id) ON DELETE CASCADE
   );
   -- As tabelas de identidade, na forma de ENTAO.

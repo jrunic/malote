@@ -27,6 +27,8 @@ export interface CenarioDeRede {
   conversaDeB: string;
   chaveDeOperador: string;
   endereco: string;
+  /** Porta efemera do servidor deste cenario — para montar a URL de fora. */
+  porta: number;
   /** Para testes que precisam criar Configuracao/Conversa fora do povoamento padrao. */
   registro: Registro;
   raiz: string;
@@ -78,6 +80,7 @@ export async function cenarioDeRede(): Promise<CenarioDeRede> {
         conteudo: `mensagem de ${nome}`,
         ocorridaEm: Date.parse('2026-06-01T12:00:00Z'),
         agora: Date.now(),
+        direcao: 'recebida',
       });
       return { inquilino, conversa };
     } finally {
@@ -104,6 +107,7 @@ export async function cenarioDeRede(): Promise<CenarioDeRede> {
     conversaDeB: b.conversa,
     chaveDeOperador,
     endereco: address,
+    porta: port,
     registro,
     raiz,
     emitir: (inquilinoId) => emitirChaveDeAcesso(registro, inquilinoId),

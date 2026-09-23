@@ -400,6 +400,21 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 22/09/2026 — **`malote configuracao criar` em produção: declarar a conta sem exigir
+  material.** Achado real de uso (mentorado Walter, bloqueado por dificuldade de gerar o
+  export do WhatsApp) — tarefa #1042, spec e plano com `dev-10` (0 `bloqueia` na spec, 2
+  `bloqueia` corrigidos no plano antes da execução). O comando reaproveita
+  `resolverConfiguracao`/`definirContaDaConfiguracao`, sem tocar no guard "busca, nunca
+  cria" de `ouvir`. `docs/dominio/malote.md` ganhou as entradas `resolver-configuracao`
+  e `definir-conta` (já existiam em código, nunca documentadas), gate recarimbado para
+  `2026-09-22`. Tutorial de instalação corrigido: o passo 6 ensinava um comando
+  (`entrada declarar --fonte whatsapp`) que a própria CLI recusa desde que a varredura
+  ficou restrita a Fontes varríveis — agora tem dois caminhos, com material ou só para
+  o ouvinte. **Release v0.20.0**, PR #4 (`main → production`), CI verde, merge `945549d`,
+  tag no commit publicado. `production` estava em v0.19.0 (`dbd6c66`). Suíte: 941 testes,
+  937 passam (3 falhas pré-existentes, sem relação, confirmadas por `git stash` antes da
+  mudança). **Deploy nos hosts da frota (`upgrade-fleet`) não foi feito nesta sessão** —
+  release publicada no GitHub, não distribuída; decisão do Titular quando/se propagar.
 - 16/09/2026 — **`bin/malote` corrigido: o alvo de `package.json.bin` agora roda da
   fonte, sem `dist/`.** Achado na instalação real da frota (tarefa #991): o `bin`
   apontava pra `dist/cli/index.js`, que só existe após build — e o produto roda **da
@@ -428,6 +443,18 @@ Repositório expõe services systemd. Convenções:
 - Modelo de domínio e glossário `aprovado` desde 2026-08-24; ciclo 1 aceito em 2026-08-26.
 
 ## Pendências
+
+- **P0 — a próxima release exige `malote acervo migrar` ANTES do restart, não depois.**
+  A #1043 (Direção da Mensagem + consulta sem Conversa) levou `VERSAO_SCHEMA_ACERVO` de
+  18 para 20, e o passo 19→20 (Instagram) declara `exigeContexto: true` — o ouvinte
+  **recusa subir** sem que a migração tenha rodado explicitamente primeiro (só quem abre
+  Acervo e Registro juntos, `malote acervo migrar`, tem o contexto que o passo exige).
+  Ordem obrigatória no deploy: `git pull` → `malote acervo migrar --inquilino <id>` **por
+  Inquilino** (thinkpad tem mais de um) → só então reiniciar `malote-ouvinte@<conta>` e
+  `malote-servidor`. Invertida, o ouvinte não é "mais lento" nem "com aviso" — ele sai com
+  erro e não sobe, para todas as contas. Nada disto está em produção ainda: o `thinkpad`
+  segue na forma anterior a este trabalho (commit `8300a61`, schema 18) até a release
+  correr. Backup do Acervo antes de migrar, como sempre (ver pendência seguinte).
 
 - **O `post_install` do malote RODA: toda release reinicia o ouvinte.** Medido em 12/09/2026
   na release v0.10.0, o `upgrade-now` executou `restart:malote-ouvinte@<conta>.service`. Duas

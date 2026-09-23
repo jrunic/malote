@@ -14,6 +14,7 @@ test('lerAnexoPorId devolve o Anexo pelo id', () => {
       configuracao: CFG_WHATSAPP,
     });
     const mensagemId = registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId, fonte: 'whatsapp', idExterno: 'm1',
       ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
     });

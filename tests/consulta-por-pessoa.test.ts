@@ -53,6 +53,7 @@ function acervoComDuasFontes(acervo: Acervo): { pessoa: string; conversas: strin
       observadaEm: new Date(AGORA).toISOString(),
     });
     registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId: conversa,
       fonte,
       idExterno: `msg-${marca}`,

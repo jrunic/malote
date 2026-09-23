@@ -54,6 +54,7 @@ function semearIgual(acervo: Acervo, marca: string) {
     coletiva: false, configuracao: CFG_WHATSAPP,
   });
   registrarMensagem(acervo, {
+      direcao: 'recebida',
     conversaId: conversa,
     fonte: 'whatsapp',
     idExterno: `mensagem-de-${marca}`,

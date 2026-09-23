@@ -101,17 +101,27 @@ export function varrer(
 
   const configuracoes = listarConfiguracoes(registro, opcoes.inquilinoId);
   const porId = new Map(configuracoes.map((c) => [c.id, c] as const));
-  const entradas = listarPastasDeEntrada(registro, opcoes.inquilinoId).filter((e) => {
+  const todasAsEntradas = listarPastasDeEntrada(registro, opcoes.inquilinoId);
+  const entradas = todasAsEntradas.filter((e) => {
     const cfg = porId.get(e.configuracaoId);
     if (cfg === undefined) return false;
     return opcoes.apenasConfiguracao === undefined || cfg.apelido === opcoes.apenasConfiguracao;
   });
 
-  // Mesmo contexto de `acervoDoInquilino`: o passo 13 -> 14 do Acervo EXIGE as
-  // Configuracoes, e `abrirAcervo` sem contexto recusa. Quem abre sem o
-  // Registro ao lado — o ouvinte — recebe a instrucao de rodar `acervo migrar`.
+  // Mesmo contexto de `acervoDoInquilino`: os passos 13 -> 14 e 19 -> 20 do
+  // Acervo EXIGEM Registro ao lado, e `abrirAcervo` sem contexto recusa.
+  // Quem abre sem o Registro ao lado — o ouvinte — recebe a instrucao de
+  // rodar `acervo migrar`. `nomeDoTitularNaFonte` vem de TODAS as entradas
+  // do Inquilino, nunca so das filtradas por `apenasConfiguracao` — a
+  // migracao precisa do comparador de toda Configuracao, nao so da que esta
+  // sendo varrida agora.
   const contexto = {
     configuracoes: configuracoes.map((c) => ({ id: c.id, fonte: c.fonte })),
+    nomeDoTitularNaFonte: new Map(
+      todasAsEntradas
+        .map((e) => (e.nomeDoTitularNaFonte != null ? ([e.configuracaoId, e.nomeDoTitularNaFonte] as const) : undefined))
+        .filter((par): par is readonly [string, string] => par !== undefined),
+    ),
   };
   const acervo = abrirAcervo(join(opcoes.dados, 'acervos'), opcoes.inquilinoId, contexto);
   try {

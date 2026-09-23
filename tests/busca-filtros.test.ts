@@ -22,6 +22,7 @@ function fixture() {
     configuracao: CFG,
   });
   registrarMensagem(acervo, {
+      direcao: 'recebida',
     conversaId: c1,
     fonte: 'whatsapp',
     idExterno: 'm1',
@@ -30,6 +31,7 @@ function fixture() {
     conteudo: 'envie o relatorio mensal',
   });
   registrarMensagem(acervo, {
+      direcao: 'recebida',
     conversaId: c2,
     fonte: 'whatsapp',
     idExterno: 'm2',

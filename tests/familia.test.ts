@@ -131,6 +131,7 @@ function mensagensDe(acervo: Acervo, pessoaId: string, marca: string, quantas: n
   });
   for (let i = 0; i < quantas; i += 1) {
     registrarMensagem(acervo, {
+      direcao: 'recebida',
       conversaId,
       fonte: 'whatsapp',
       idExterno: `msg-${marca}-${i}`,
