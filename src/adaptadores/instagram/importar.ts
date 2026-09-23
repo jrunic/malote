@@ -217,6 +217,7 @@ function importarMaterialDeInstagramInterno(
           idExterno,
           autorId,
           ocorridaEm: m.ocorridaEm,
+          direcao: daPropriaPessoa ? 'enviada' : 'recebida',
           ...(m.texto !== null ? { conteudo: m.texto } : {}),
           bruto: m.bruto,
           agora: opcoes.agora,
