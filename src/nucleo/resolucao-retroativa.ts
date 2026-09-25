@@ -3,6 +3,7 @@ import type { Fonte } from './tipos.js';
 import { emOperacao, type Operacao } from './trilha.js';
 import { registrarIdentificador } from './escrita.js';
 import { lerVinculo, vincularIdentificador } from './identidade.js';
+import { chaveDeNome } from './chave-de-nome.js';
 
 /**
  * Resolucao retroativa de endereco.
@@ -62,11 +63,21 @@ interface Par {
  * Tabelas cuja chave primaria e uma coluna so e em que o Identificador nao
  * entra em nenhuma restricao de unicidade: repontar e UPDATE direto, sem
  * chance de colisao.
+ *
+ * `atribuicoes_de_nome` NAO entra aqui, mesmo tendo chave primaria de uma
+ * coluna: ela tem QUATRO indices unicos parciais sobre
+ * (identificador_id, origem, nome[, configuracao_id]) — ver schema-acervo.ts.
+ * Tratada como CHAVE_SIMPLES ate a #1052, UPDATE direto colidia sempre que o
+ * alternativo e o canonico jah tinham, cada um por conta propria, a MESMA
+ * Atribuicao (mesma origem, mesmo nome) — cenario comum: a Fonte manda o
+ * pushName tanto pelo LID quanto pelo JID, antes de a correspondencia ser
+ * aprendida. Tem funcao propria, `repontarAtribuicoesDeNome`, abaixo.
  */
-const CHAVE_SIMPLES: ReadonlyArray<{ tabela: string; campo: string }> = [
+export const CHAVE_SIMPLES: ReadonlyArray<{ tabela: string; campo: string }> = [
   { tabela: 'mensagens', campo: 'autor_id' },
-  { tabela: 'atribuicoes_de_nome', campo: 'identificador_id' },
 ];
+
+const TABELA_ATRIBUICOES = { tabela: 'atribuicoes_de_nome', campo: 'identificador_id' } as const;
 
 /**
  * Tabelas em que repontar pode colidir, e como reconhecer a linha equivalente.
@@ -173,6 +184,7 @@ function referenciasDe(acervo: Acervo, identificadorId: string): Record<string, 
   const conta: Record<string, number> = {};
   const alvos = [
     ...CHAVE_SIMPLES,
+    TABELA_ATRIBUICOES,
     ...COM_COLISAO.map((t) => ({ tabela: t.tabela, campo: 'identificador_id' })),
   ];
   for (const { tabela, campo } of alvos) {
@@ -216,6 +228,71 @@ function repontarChaveSimples(
       op.valor({ tabela, chave: id, campo, antes: de, depois: para });
       conta[tabela] = (conta[tabela] ?? 0) + 1;
     }
+  }
+}
+
+/**
+ * Repoe Atribuicao de Nome do alternativo para o canonico — com colisao,
+ * porque a tabela tem indice unico parcial sobre
+ * (identificador_id, origem, nome[, configuracao_id]).
+ *
+ * Quando o canonico ja tem a MESMA Atribuicao (mesma origem, mesmo nome pela
+ * chave normalizada — a comparacao que ignora marca invisivel, igual
+ * `registrarNome` usa), a do alternativo e absorvida: a linha do canonico
+ * PREVALECE como esta, sem tentar subir Autoridade — mesmo principio ja
+ * declarado para as outras tabelas que colidem, "prevalece a linha do
+ * CANONICO — e a que o resto do Acervo ja alcanca" (ver `COM_COLISAO` acima).
+ * Subir Autoridade aqui exigiria relatar `antes: null` num campo que
+ * sobrevive (a Autoridade indeterminada e frequente em linha anterior ao
+ * ciclo 18), e o restaurador generico de `desfazer.ts` so sabe repor UPDATE
+ * com `antes` nao-nulo — avaliado e descartado por simplicidade: o ganho
+ * (Autoridade mais forte preservada) nao paga o risco de mexer no
+ * restaurador compartilhado por toda Operacao reversivel do produto.
+ *
+ * Sem colisao, e o mesmo UPDATE direto de `repontarChaveSimples`.
+ */
+function repontarAtribuicoesDeNome(
+  acervo: Acervo,
+  op: Operacao,
+  de: string,
+  para: string,
+  repontadas: Record<string, number>,
+  fundidas: Record<string, number>,
+): void {
+  const tabela = TABELA_ATRIBUICOES.tabela;
+  const linhas = acervo.preparar(`SELECT * FROM "${tabela}" WHERE identificador_id = ?`)
+    .all(de) as Array<Record<string, unknown>>;
+
+  for (const linha of linhas) {
+    const irmas = acervo.preparar(
+        `SELECT nome FROM "${tabela}"
+          WHERE identificador_id = ? AND origem = ? AND configuracao_id IS ?`,
+      )
+      .all(para, linha['origem'], linha['configuracao_id']) as Array<{ nome: string }>;
+    const chave = chaveDeNome(linha['nome'] as string);
+    const temGemea = irmas.some((i) => chaveDeNome(i.nome) === chave);
+
+    if (temGemea) {
+      // A linha do alternativo e absorvida: sai, com o efeito por coluna —
+      // mesmo padrao do ramo de fusao em `fundirOuRepontar`.
+      acervo.preparar(`DELETE FROM "${tabela}" WHERE id = ?`).run(linha['id']);
+      for (const [coluna, valor] of Object.entries(linha)) {
+        op.valor({ tabela, chave: linha['id'] as string, campo: coluna, antes: texto(valor), depois: null });
+      }
+      fundidas[tabela] = (fundidas[tabela] ?? 0) + 1;
+      continue;
+    }
+
+    acervo.preparar(`UPDATE "${tabela}" SET identificador_id = ? WHERE id = ?`)
+      .run(para, linha['id']);
+    op.valor({
+      tabela,
+      chave: linha['id'] as string,
+      campo: 'identificador_id',
+      antes: de,
+      depois: para,
+    });
+    repontadas[tabela] = (repontadas[tabela] ?? 0) + 1;
   }
 }
 
@@ -298,6 +375,7 @@ export function resolverRetroativamente(
           vinculosMigrados += 1;
         }
         repontarChaveSimples(acervo, op, altId, canonId, linhasRepontadas);
+        repontarAtribuicoesDeNome(acervo, op, altId, canonId, linhasRepontadas, linhasFundidas);
         fundirOuRepontar(acervo, op, altId, canonId, linhasRepontadas, linhasFundidas);
       })();
     }

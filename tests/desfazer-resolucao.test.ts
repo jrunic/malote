@@ -126,3 +126,58 @@ test('desfazer a resolucao devolve todas as referencias ao endereco alternativo'
     c.limpar();
   }
 });
+
+test('desfazer a fusao de Atribuicao de Nome colidente restaura a linha do alternativo, e a do canonico prevalece intocada', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Titular de Teste');
+    const alt = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '777@alt' });
+    const canon = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '777@canon' });
+
+    // Cenario real da tarefa #1052: a plataforma manda o pushName tanto pelo
+    // LID quanto pelo JID, ANTES de a correspondencia ser aprendida — os dois
+    // lados acumulam, cada um por conta propria, a MESMA Atribuicao.
+    registrarNome(acervo, {
+      identificadorId: alt.id,
+      origem: 'whatsapp',
+      nome: 'Orlando Ferreira',
+      autoridade: 'terceiro',
+    });
+    registrarNome(acervo, {
+      identificadorId: canon.id,
+      origem: 'whatsapp',
+      nome: 'Orlando Ferreira',
+      autoridade: 'terceiro',
+    });
+
+    aprenderCorrespondencia(acervo, {
+      fonte: 'whatsapp',
+      alternativo: '777@alt',
+      canonico: '777@canon',
+    });
+
+    const antes = acervo.db
+      .prepare('SELECT id, identificador_id, autoridade FROM atribuicoes_de_nome ORDER BY id')
+      .all();
+
+    const r = resolverRetroativamente(acervo, { comEfeito: true });
+    assert.equal(r.linhasFundidas['atribuicoes_de_nome'], 1);
+
+    // Confirma que a fusao realmente absorveu a linha do alternativo — sem
+    // isto, o teste nao prova que havia algo a desfazer.
+    const sobrouUmaSo = acervo.db
+      .prepare('SELECT COUNT(*) AS n FROM atribuicoes_de_nome WHERE identificador_id IN (?, ?)')
+      .get(alt.id, canon.id) as { n: number };
+    assert.equal(sobrouUmaSo.n, 1, 'a linha do alternativo foi absorvida');
+
+    const d = desfazerOperacao(acervo, r.operacaoId as string);
+    assert.equal(d.recusados.length, 0, `recusas: ${JSON.stringify(d.recusados)}`);
+
+    const depois = acervo.db
+      .prepare('SELECT id, identificador_id, autoridade FROM atribuicoes_de_nome ORDER BY id')
+      .all();
+    assert.deepEqual(depois, antes);
+  } finally {
+    c.limpar();
+  }
+});
