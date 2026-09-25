@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { contarTudo } from './ajuda/reconciliacao.js';
 import {
   TABELAS_QUE_APONTAM_PARA_IDENTIFICADOR,
+  CHAVE_SIMPLES,
   resolverRetroativamente,
 } from '../src/nucleo/resolucao-retroativa.js';
 import {
@@ -17,7 +18,7 @@ import {
   registrarParticipacao,
   registrarCartaoDeCatalogo,
 } from '../src/nucleo/escrita.js';
-import { criarPessoa, vincularIdentificador, lerVinculo } from '../src/nucleo/identidade.js';
+import { criarPessoa, vincularIdentificador, lerVinculo, registrarNome } from '../src/nucleo/identidade.js';
 import {
   conferirTransicoesEmDuasFormas,
   conferirTransicoesRepetidas,
@@ -48,6 +49,41 @@ test('o inventario de tabelas que apontam para Identificador esta completo', () 
       [...TABELAS_QUE_APONTAM_PARA_IDENTIFICADOR].sort(),
       'tabela nova aponta para identificadores e nao foi tratada na resolucao retroativa',
     );
+  } finally {
+    c.limpar();
+  }
+});
+
+test('nenhuma tabela de CHAVE_SIMPLES tem indice unico que colida no reponteiro', () => {
+  // A #1052 aconteceu porque `atribuicoes_de_nome` ficou classificada como
+  // CHAVE_SIMPLES ("Identificador nao entra em restricao de unicidade")
+  // depois que o ciclo 18 (#818) acrescentou 4 indices unicos parciais sobre
+  // ela — ninguem revisitou esta lista quando o schema mudou. Este teste
+  // pergunta ao BANCO, nao a um comentario: para qualquer tabela em
+  // CHAVE_SIMPLES, nenhum indice UNIQUE pode envolver a coluna do campo
+  // repontado JUNTO de outra coluna — sem isso o UPDATE direto de
+  // `repontarChaveSimples` pode colidir em silencio, do mesmo jeito.
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Titular de Teste');
+    for (const { tabela, campo } of CHAVE_SIMPLES) {
+      const indices = acervo.db.prepare(`PRAGMA index_list("${tabela}")`).all() as Array<{
+        name: string;
+        unique: number;
+      }>;
+      for (const idx of indices.filter((i) => i.unique === 1)) {
+        const colunas = acervo.db.prepare(`PRAGMA index_info("${idx.name}")`).all() as Array<{
+          name: string;
+        }>;
+        const envolveCampo = colunas.some((c2) => c2.name === campo);
+        const temOutraColuna = colunas.some((c2) => c2.name !== campo);
+        assert.ok(
+          !(envolveCampo && temOutraColuna),
+          `${tabela}.${campo}: indice unico "${idx.name}" combina esta coluna com outra — ` +
+            'UPDATE direto pode colidir; tirar da CHAVE_SIMPLES e tratar com colisao',
+        );
+      }
+    }
   } finally {
     c.limpar();
   }
@@ -95,6 +131,50 @@ test('mensagem gravada na forma alternativa passa a responder pela canonica', ()
       .prepare('SELECT COUNT(*) AS n FROM identificadores WHERE valor = ?')
       .get('111@alt') as { n: number };
     assert.equal(sobrou.n, 1);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('Atribuicao de Nome identica nos dois lados nao trava a resolucao retroativa', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Titular de Teste');
+    // O cenario real (tarefa #1052): a plataforma manda o pushName tanto por
+    // mensagens roteadas pelo LID quanto pelo JID, ANTES de a correspondencia
+    // ser aprendida — os dois lados acumulam, cada um por conta propria, a
+    // MESMA Atribuicao de Nome (mesma origem, mesmo nome).
+    const alt = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '222@alt' });
+    const canon = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '222@canon' });
+    registrarNome(acervo, {
+      identificadorId: alt.id,
+      origem: 'whatsapp',
+      nome: 'Orlando Ferreira',
+      autoridade: 'terceiro',
+    });
+    registrarNome(acervo, {
+      identificadorId: canon.id,
+      origem: 'whatsapp',
+      nome: 'Orlando Ferreira',
+      autoridade: 'terceiro',
+    });
+
+    aprenderCorrespondencia(acervo, {
+      fonte: 'whatsapp',
+      alternativo: '222@alt',
+      canonico: '222@canon',
+    });
+
+    // Nao deve lancar UNIQUE constraint failed.
+    const r = resolverRetroativamente(acervo, { comEfeito: true });
+    assert.equal(r.paresReconciliados, 1);
+
+    // A Atribuicao do canonico sobrevive UNICA — nao duplicada, nao perdida.
+    const linhas = acervo.db
+      .prepare('SELECT nome, origem FROM atribuicoes_de_nome WHERE identificador_id = ?')
+      .all(canon.id) as Array<{ nome: string; origem: string }>;
+    assert.equal(linhas.length, 1);
+    assert.equal(linhas[0]?.nome, 'Orlando Ferreira');
   } finally {
     c.limpar();
   }
