@@ -23,6 +23,22 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.21.2] — 2026-09-25
+
+### Corrigido
+
+- **`identidade resolver-enderecos` travava com `UNIQUE constraint failed` em
+  `atribuicoes_de_nome`** quando o endereço alternativo (LID) e o canônico
+  (JID) já tinham, cada um por conta própria, a mesma Atribuição de Nome —
+  cenário comum, porque a plataforma manda o nome de perfil pelos dois
+  endereços antes de a correspondência ser aprendida. Achado em produção
+  real (Acervo de uma mentorada): a operação travava depois de já ter
+  repontado `mensagens.autor_id` para 29 pares, deixando o Acervo em estado
+  parcial (recuperável por `operacao desfazer`, que funcionou). Havendo
+  colisão, a linha do endereço alternativo agora é absorvida e a do
+  canônico prevalece como está — reversível por `operacao desfazer` como
+  qualquer outra fusão.
+
 ## [0.21.1] — 2026-09-23
 
 ### Corrigido
