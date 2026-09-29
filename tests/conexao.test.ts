@@ -4,7 +4,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { conectar, type MidiaAoVivo } from '../src/adaptadores/whatsapp/conexao.js';
-import type { MensagemRecebida } from '../src/adaptadores/whatsapp/ao-vivo.js';
 
 /**
  * A #1068: o modulo de conexao e o UNICO autorizado a falar com a biblioteca,
