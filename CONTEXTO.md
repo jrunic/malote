@@ -383,6 +383,19 @@ Hard limits sempre relevantes durante a sessão.
 
 - **A identidade do Cartão deriva de telefones E e-mails, e mudá-la de novo é caro.** Com e-mail no conjunto, 1.839 dos 6.693 cartões reais mudam de identidade; alterar a regra depois de um import produz ausência e renascimento em massa.
 
+- **Baixar mídia ao vivo usa a mensagem CRUA, nunca a normalizada, e só o módulo de
+  conexão pode chamar `downloadMediaMessage`.** O round-trip de JSON que normaliza a
+  mensagem antes de `aoReceber` (necessário para o resto do adaptador) transforma
+  `mediaKey` — um `Uint8Array` de verdade — num objeto `{type:'Buffer',data:[...]}`
+  que o decrypt da biblioteca não consegue usar. `MidiaAoVivo.baixar(indice)` fecha
+  sobre o lote CRU, de propósito; guardado por mutação em `tests/conexao.test.ts`
+  (#1068). `receberEvento` devolve `anexosNuncaObtidos` com o índice no lote de
+  entrada — é o que liga o Anexo que `ao-vivo.ts` gravou ao índice que `conexao.ts`
+  sabe baixar, sem o adaptador puro conhecer a biblioteca.
+- **Sem Destino de Mídia, o ouvinte AVISA e segue — não recusa subir.** Diferente de
+  `malote midia trazer`, que recusa sem Destino: recusar a subida do ouvinte quebraria
+  toda instalação que nunca configurou um. O Anexo fica `nunca-obtido`, como sempre foi.
+
 ## Decisões Herdadas (explícitas)
 
 Repetidas aqui em vez de herdadas de configuração externa ao repositório — quem lê este arquivo tem o contrato inteiro:
@@ -408,6 +421,18 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 29/09/2026 — **Mídia recebida ao vivo agora é baixada de verdade (#1068), IMPLEMENTADO
+  EM `main`, AINDA NÃO LIBERADO.** Causa raiz: nenhum código chamava
+  `downloadMediaMessage` — Anexo ao vivo nascia `nunca-obtido` para sempre, medido no
+  Acervo real da Renata em 94-99,8% conforme o tipo. `conexao.ts` ganhou
+  `MidiaAoVivo.baixar(indice)`, usando a mensagem CRUA (ver Restrições); `ao-vivo.ts`
+  devolve `anexosNuncaObtidos` com o índice do lote; `ouvir.ts` lê o Destino de Mídia
+  do Inquilino antes de conectar e baixa em segundo plano, gravando pela porta do
+  núcleo que já existia (`gravarArquivoDeAnexo`). Falha de download, banco ocupado, ou
+  Destino ausente mantêm o Anexo `nunca-obtido`, sem derrubar o ouvinte. Suíte: 993 →
+  **1000 testes**, mesma baseline de 3 falhas pré-existentes. **Destrava a #1070
+  (transcrição) em uso real** — sem isto, áudio nunca chegava a `presente` para a fila
+  processar. Nenhuma release publicada ainda.
 - 28-29/09/2026 — **Transcrição de áudio via Whisper local, IMPLEMENTADA EM `main`, AINDA
   NÃO LIBERADA.** Tarefa #1070, ciclo `malote-midia-ao-vivo-e-transcricao` (plano 3 de 3),
   spec e plano revisados por `dev-10`+advisor (3 bloqueia na spec, 7 na plano — todos
@@ -478,12 +503,17 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
-- **#1070 implementada e verificada em campo, `dev-09-encerra-tarefa` NÃO rodou ainda.**
-  Próxima sessão: fechar a tarefa (apoio, `jd-tasks done`, PR para `production` — decisão
-  de release é ato do Titular, não deste fechamento). O ciclo 23 inteiro
-  (`malote-midia-ao-vivo-e-transcricao`) só aceita depois de **#1068** (download de mídia
-  ao vivo — pré-requisito real: sem ele quase nenhum áudio ao vivo fica `presente` para a
-  fila alcançar) e **#1069** (Status fantasma), ambas ainda não iniciadas, via `dev-05`.
+- **#1070 e #1068 fechadas (`dev-09` rodou nas duas); falta #1069 para o ciclo 23
+  (`malote-midia-ao-vivo-e-transcricao`) aceitar.** #1069 (Status fantasma) ainda não
+  iniciada, via `dev-05`. Nenhuma release publicada ainda — as três tarefas estão em
+  `main`, `production` continua na v0.21.0.
+- **Lote que cai no derrame (Acervo ocupado) perde a mídia que trouxer (#1068).** O
+  reprocessamento (`malote ouvinte reprocessar`) chama `receberEvento` de novo sobre o
+  lote gravado em `nao-gravados.jsonl`, mas não há socket vivo nem `MidiaAoVivo` naquele
+  caminho — e a referência de download pode já ter expirado. O Anexo fica
+  `nunca-obtido`, do mesmo jeito que ficava antes desta correção. Não é regressão; é
+  limite não resolvido. Se aparecer de novo (derrame é raro — só sob disputa de
+  escrita), é trabalho novo, não bug da #1068.
 - **RESOLVIDO em 23/09/2026, mas o mecanismo que quase doeu fica registrado: o
   `upgrade-fleet` roda a cada 30 min no thinkpad (`*/30 * * * *`, `trust: "immediate"`
   para o pacote `malote`), e aplicou a v0.21.0 sozinho — pull + restart — cerca de 7
