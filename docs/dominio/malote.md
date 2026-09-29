@@ -4,7 +4,7 @@ projeto: malote
 tipo: dominio
 descricao: "Modelo do arquivo pessoal de conversas — núcleo genérico multi-inquilino (Inquilino, Conversa, Mensagem, Pessoa, Identificador, Anexo) desacoplado das fontes por Adaptador"
 status: aprovado
-aprovado-em: 2026-09-23
+aprovado-em: 2026-09-28
 escopo: repo:malote
 plataforma: "*"
 dominios: [tecnologia]
@@ -247,6 +247,10 @@ Duas regras atravessam o modelo inteiro:
 - **Anexo** (raiz) — o arquivo que acompanha a Mensagem.
 - **Descritor** (objeto de valor) — tipo, tamanho, nome original, duração, impressão de conteúdo. É o que se sabe sobre o arquivo.
 - **Presença** (objeto de valor) — o estado do arquivo em disco: presente, nunca obtido ou descartado.
+- **Transcrição** (objeto de valor, opcional) — o texto extraído de um Anexo de tipo áudio por
+  reconhecimento de fala local, com estado (pendente, concluída, falhou, fora-de-escopo — este
+  último para o estoque já presente antes da Transcrição existir), o motor/modelo que a
+  produziu e o instante em que foi gerada. Só existe para Anexo de áudio.
 
 **Invariantes**
 
@@ -257,6 +261,12 @@ Duas regras atravessam o modelo inteiro:
 - Anexo descartado registra quando e por qual política — descarte é auditável.
 - O layout do arquivo sob o Destino é decidido pelo núcleo, não pelo Adaptador — uniforme entre Fontes e entre Destinos.
 - Nenhum caminho de arquivo do Acervo contém dado pessoal (nome, apelido de perfil, número).
+- **Transcrição é aproximação de modelo, nunca fato.** Busca por texto que casa na Transcrição
+  marca a proveniência, distinta de casar no conteúdo real da Mensagem — nenhuma consulta
+  apresenta as duas como indistinguíveis.
+- **Todo Anexo de áudio já presente antes da Transcrição existir nasce fora-de-escopo, nunca
+  pendente.** É o mecanismo que impede o worker de disparar, sozinho, o backfill do estoque
+  existente — só Anexo que fica presente depois entra na fila.
 
 **Ciclo de vida** — nasce junto com a Mensagem, mesmo antes de o arquivo existir em disco. Transita entre estados de Presença por operação explícita. Nunca é removido do Acervo.
 
@@ -576,7 +586,11 @@ Nenhuma. Contexto único.
 
 - **Enviar mensagem.** O malote lê, guarda e cruza. Não é cliente de mensageria.
 - **Alterar ou apagar conteúdo na Fonte de origem.**
-- **Interpretar conteúdo** — resumo, classificação, análise de sentimento. O malote entrega o material; quem interpreta é o agente que consulta.
+- **Interpretar conteúdo** — resumo, classificação, análise de sentimento. O malote entrega o material; quem interpreta é o agente que consulta. **Transcrição de áudio não é interpretação
+  nesse sentido** (decidido em 28/09/2026): ela não julga, não resume, não classifica — resgata
+  em texto o que já estava dito, mesma natureza do Conteúdo Bruto. O critério que separa as
+  duas: interpretação decide o que importa dentro do conteúdo; transcrição não decide nada, só
+  troca de forma.
 - **Autenticação e sessão das plataformas de origem** — é responsabilidade do Adaptador, não do núcleo.
 - **Backup do Acervo.** É operação de infraestrutura de quem instala.
 - **Gestão de usuários humanos** — cadastro, senha, sessão de navegador. O acesso por rede é por Chave, não por login.
@@ -647,6 +661,22 @@ Consequências que o modelo assume por causa disso:
 - **Saída:** quantos lotes entraram e quantas Mensagens foram gravadas; e o Derrame esvaziado, ou intacto
 - **Regras:** só descarta o arquivo depois de reprocessar **tudo** — descartar parcial perderia exatamente o que o Derrame existe para não perder. A Configuração é **exigida e nunca criada**: o evento derramado pertence à conta que o recebeu. **Recusa enquanto houver receptor no ar**, porque os dois escrevem no mesmo arquivo e o que for derramado entre a leitura e o descarte some sem ter sido gravado — recurso com estado exclusivo tem um dono por vez
 - **Não-funcionais:** existe apesar da drenagem automática, e não em vez dela: Derrame antigo, drenagem desligada ou dúvida do operador continuam pedindo o ato explícito
+
+### transcrever-anexo
+
+- **Ator:** o próprio produto, num worker de fundo dentro do processo servidor
+- **Entrada:** nenhuma — o worker consulta o Acervo por conta própria, periodicamente
+- **Saída:** a Transcrição gravada (concluída, com texto e motor/modelo) ou marcada falhou, com o motivo
+- **Regras:** só alcança Anexo de áudio, presente, elegível (sem linha em Transcrição, ou `pendente` órfã de execução anterior). Nunca migra o Acervo para alcançar um Inquilino — forma divergente é pulada e relatada. Sequencial: nunca duas transcrições ao mesmo tempo. Não é comando de decisão humana — não grava Operação na trilha, mesma classe de `receber-ao-vivo`, que também grava por evento automático sem abrir Operação por chamada.
+- **Não-funcionais:** o produto continua completo sem esta operação; o Anexo de áudio permanece consultável (só sem Transcrição) enquanto ela não roda.
+
+### reprocessar-transcricao
+
+- **Ator:** humano ou agente, por comando explícito
+- **Entrada:** Inquilino
+- **Saída:** quantas Transcrições falhas voltaram a `pendente`
+- **Regras:** mesmo espírito de `reprocessar-derrame` — o estado de falha é terminal até este ato; nunca retentado sozinho. É comando de decisão: grava uma Operação, com uma Linha de Efeito por Anexo reenfileirado.
+- **Não-funcionais:** idempotente — sem falha pendente, devolve zero e não grava Operação.
 
 ### listar-operacoes
 - **Ator:** humano ou agente

@@ -4,7 +4,7 @@ projeto: malote
 tipo: referencia
 descricao: "Linguagem universal do malote — termos do arquivo multi-inquilino de conversas, com sinônimos a evitar"
 status: aprovado
-aprovado-em: 2026-09-23
+aprovado-em: 2026-09-28
 escopo: repo:malote
 plataforma: "*"
 tags: [glossario, malote, linguagem-universal, ddd]
@@ -168,6 +168,12 @@ O que se sabe sobre um Anexo — tipo, tamanho, nome original, duração, impres
 **Presença**:
 O estado de um Anexo em disco: presente, nunca obtido ou descartado.
 *Evitar*: status, disponibilidade, existe.
+
+**Transcrição**:
+O texto que o malote extrai de um Anexo de áudio, por reconhecimento de fala local. Não julga
+o conteúdo — resgata em texto o que foi dito, sem decidir o que importa. Aproximação de
+modelo, nunca fac-símile: o Anexo continua sendo a fonte de verdade.
+*Evitar*: transcript, legenda, subtítulo, resumo (resumo julga; transcrição não).
 
 **Metadados de Coletiva**:
 Assunto, descrição e imagem de uma Conversa coletiva, com quem alterou e quando.
