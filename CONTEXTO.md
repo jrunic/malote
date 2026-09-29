@@ -543,9 +543,20 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
-- **#1070, #1068 e #1069 fechadas — o ciclo 23 (`malote-midia-ao-vivo-e-transcricao`)
-  está pronto para `neg-05-aceita-ciclo`.** Nenhuma release publicada ainda — as três
-  tarefas estão em `main`, `production` continua na v0.21.0.
+- **#1070, #1068 e #1069 fechadas, release v0.22.0 publicada e distribuída no
+  thinkpad, verificada por efeito — o ciclo 23 (`malote-midia-ao-vivo-e-transcricao`)
+  está pronto para `neg-05-aceita-ciclo`.**
+- **Sem comando de retry para mídia ao vivo que falhou ao baixar (#1068) — tarefa
+  #1084 aberta.** Medido em produção logo após o deploy: 2 falhas reais (`document`
+  com `ETIMEDOUT`, `video` com `bad decrypt`), as duas ficaram `nunca-obtido` sem
+  derrubar o ouvinte, exatamente como desenhado — mas não há como reprocessá-las.
+  `malote midia` só tem `trazer` (backup local), nada que reuse a referência já
+  gravada em `bruto`. O `document` (falha de rede) é candidato razoável a recuperar;
+  o `video` chegou atrasado (reentrega offline do WhatsApp, horas depois do instante
+  original) e a suspeita é referência já expirada — não medido, hipótese. **Não
+  cobre o estoque histórico de antes desta correção** (94-99,8% dos Anexos ao vivo)
+  — essas referências quase certamente expiraram; o único caminho para elas é
+  `malote midia trazer` a partir de um backup do aparelho.
 - **As 809 Conversas fantasma de Status já gravadas no Acervo da Renata (#1069) NÃO
   foram limpas — decisão explícita, não esquecimento.** O importador corrigido impede
   crescer o problema; ele não desfaz o que já está gravado. Três razões para deixar
