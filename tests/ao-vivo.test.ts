@@ -226,3 +226,47 @@ test('mensagem enviada pelo Titular nao inventa autor externo', () => {
     c.limpar();
   }
 });
+
+// --- Anexo ao vivo nasce nunca-obtido, e o relato aponta ONDE baixar (#1068) ---
+
+test('mensagem com midia registra Anexo nunca-obtido e aponta o indice no lote', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Padme');
+    const r = receberEvento(acervo, [mensagemComMidia('KKKK1111LLLL2222MMMM', QUANDO)], OPCOES);
+    const anexo = acervo.db
+      .prepare('SELECT presenca, tipo FROM anexos')
+      .get() as { presenca: string; tipo: string };
+    assert.equal(anexo.presenca, 'nunca-obtido');
+    assert.equal(anexo.tipo, 'image');
+    // O indice e a posicao no LOTE DE ENTRADA — e por ele que quem chama (o
+    // modulo de conexao, unico que fala com a biblioteca) sabe qual mensagem
+    // CRUA baixar. So existe uma mensagem no lote, entao o indice e 0.
+    assert.deepEqual(
+      r.anexosNuncaObtidos.map((a) => ({ indice: a.indice, tipo: a.tipo })),
+      [{ indice: 0, tipo: 'image' }],
+    );
+    assert.equal(typeof r.anexosNuncaObtidos[0]?.anexoId, 'string');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('lote com duas mensagens de midia aponta o indice de cada uma', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Anakin');
+    const r = receberEvento(
+      acervo,
+      [
+        mensagemDireta('NNNN1111OOOO2222PPPP', QUANDO),
+        mensagemComMidia('QQQQ1111RRRR2222SSSS', QUANDO),
+      ],
+      OPCOES,
+    );
+    assert.equal(r.anexosNuncaObtidos.length, 1, 'so a segunda mensagem tem midia');
+    assert.equal(r.anexosNuncaObtidos[0]?.indice, 1);
+  } finally {
+    c.limpar();
+  }
+});
