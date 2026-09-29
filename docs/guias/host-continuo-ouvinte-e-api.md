@@ -89,6 +89,16 @@ ouvinte não cria Configuração, de propósito.
 
 ## 3. O ouvinte, como serviço
 
+### 3.0 Destino de Mídia, para baixar o que chega ao vivo
+
+Sem Destino de Mídia configurado, o Anexo recebido ao vivo (foto, áudio, vídeo,
+documento) fica `nunca-obtido` para sempre — o ouvinte avisa uma vez na partida e segue
+sem baixar. Configure antes de parear:
+
+```bash
+$CLI inquilino destino --chave <valor> --inquilino <id> --endereco <caminho>
+```
+
 ### 3.1 Pasta de estado é pré-condição
 
 O ouvinte **não cria pasta** na partida (criação de diretório no caminho de subida é o que
