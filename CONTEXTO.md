@@ -142,6 +142,14 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
 
 ## Restrições
 
+- **Processo de fundo dentro de `malote servir` (o worker de transcrição, e qualquer futuro
+  análogo) NUNCA abre o Acervo para escrita sem checar a versão gravada primeiro.**
+  `abrirAcervo` migra a base — e um processo que atende requisição de fora não pode ter esse
+  poder, pelo mesmo motivo que a leitura por rede abre somente-leitura. Sem a checagem
+  (`versaoDoAcervoEmDisco` antes de `abrirAcervo`), o primeiro boot pós-deploy migraria a
+  base sozinho, antes de qualquer Ação Documentada — repetindo o quase-incidente da v0.21.0
+  por desenho, não por acidente. Acervo em forma divergente é pulado e relatado, nunca
+  migrado pelo worker; quem migra continua sendo `malote acervo migrar`/o ouvinte.
 - **O modo REDE é fail-closed e a guarda morre ANTES de qualquer I/O.** Só os comandos de
   leitura declarados em `COMANDOS_DE_REDE` consultam por HTTP; comando de escrita com
   `--servidor` recusa **antes de abrir Registro ou Acervo** — invocação errada não nasce
@@ -400,6 +408,32 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 28-29/09/2026 — **Transcrição de áudio via Whisper local, IMPLEMENTADA EM `main`, AINDA
+  NÃO LIBERADA.** Tarefa #1070, ciclo `malote-midia-ao-vivo-e-transcricao` (plano 3 de 3),
+  spec e plano revisados por `dev-10`+advisor (3 bloqueia na spec, 7 na plano — todos
+  corrigidos antes da execução; achados incluem `transcrever()` bloqueando o event loop se
+  fosse síncrono, `proximoElegivel` não alcançando `pendente` órfão, e o worker migrando o
+  Acervo sem checar versão). 12 tasks TDD, 13ª é verificação de campo. Schema **v21**:
+  tabela `transcricoes` pendurada no Anexo (só `tipo=audio`), com FTS
+  `transcricoes_texto`; passo de migração marca todo Anexo de áudio já `presente` como
+  `fora-de-escopo` — mecanismo, não intenção, contra o worker disparar sozinho o backfill
+  do estoque existente. Motor: `whisper.cpp` + `ffmpeg`, dois binários de sistema
+  declarados por variável de ambiente (`MALOTE_WHISPER_BINARIO`, `MALOTE_WHISPER_MODELO`,
+  `MALOTE_FFMPEG_BINARIO`), nunca instalados pelo malote — ADR
+  `docs/decisoes/20260928-dependencia-nativa-do-whisper-cpp-para-transcricao-de-audio.md`.
+  Fronteira nova: só `src/cli/motor-de-transcricao.ts` referencia essas variáveis, guardado
+  por `tests/fronteira-de-dependencia.test.ts`, poder confirmado por mutação. Busca
+  (`buscarMensagens`) passou a casar também na Transcrição, com proveniência marcada
+  (`origemDaCorrespondencia`) — a Transcrição é aproximação de modelo, nunca fato.
+  **Verificação de campo feita contra binário real no thinkpad** (`whisper.cpp`/`ffmpeg`
+  já instalados de uma medição anterior): motor real transcreveu um Anexo de áudio real de
+  produção (referenciado por caminho, nunca copiado) com texto plausível e coerente,
+  exposto por `GET /mensagens`, falha real (arquivo ausente) gravou motivo sem travar o
+  worker, `transcricao reprocessar` funcionou. Produção confirmada intocada antes/depois
+  (20.199 Anexos de áudio, contagem idêntica). Suíte: **993 testes**, 3 falhas
+  pré-existentes sem relação. **Não há release nem deploy** — `dev-09-encerra-tarefa` ainda
+  não rodou para a #1070; o aceite do ciclo 23 inteiro depende também de #1068 e #1069
+  (`dev-05`, ainda não iniciadas).
 - 22/09/2026 — **`malote configuracao criar` em produção: declarar a conta sem exigir
   material.** Achado real de uso (mentorado Walter, bloqueado por dificuldade de gerar o
   export do WhatsApp) — tarefa #1042, spec e plano com `dev-10` (0 `bloqueia` na spec, 2
@@ -444,6 +478,12 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
+- **#1070 implementada e verificada em campo, `dev-09-encerra-tarefa` NÃO rodou ainda.**
+  Próxima sessão: fechar a tarefa (apoio, `jd-tasks done`, PR para `production` — decisão
+  de release é ato do Titular, não deste fechamento). O ciclo 23 inteiro
+  (`malote-midia-ao-vivo-e-transcricao`) só aceita depois de **#1068** (download de mídia
+  ao vivo — pré-requisito real: sem ele quase nenhum áudio ao vivo fica `presente` para a
+  fila alcançar) e **#1069** (Status fantasma), ambas ainda não iniciadas, via `dev-05`.
 - **RESOLVIDO em 23/09/2026, mas o mecanismo que quase doeu fica registrado: o
   `upgrade-fleet` roda a cada 30 min no thinkpad (`*/30 * * * *`, `trust: "immediate"`
   para o pacote `malote`), e aplicou a v0.21.0 sozinho — pull + restart — cerca de 7
