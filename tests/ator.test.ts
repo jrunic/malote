@@ -247,7 +247,7 @@ test('o ouvinte embrulha a recepcao na fronteira SINCRONA, e nao o laco', () => 
   const semComentario = fonte.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   assert.match(
     semComentario,
-    /aoReceber:\s*\(mensagens\)\s*=>\s*comAtor\(\s*atorDeServico\(/,
+    /aoReceber:\s*\(mensagens,\s*midia\)\s*=>\s*comAtor\(\s*atorDeServico\(/,
     'o escopo do Ator tem de abrir DENTRO do aoReceber',
   );
   // E a guarda precisa achar o alvo de verdade: sem isto ela passaria por
