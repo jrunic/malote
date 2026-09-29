@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3';
  * Politica completa das duas bases na ADR local
  * `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_ACERVO = 20;
+export const VERSAO_SCHEMA_ACERVO = 21;
 
 /**
  * Forma mais antiga que a maquina de migracao alcanca.
@@ -603,6 +603,53 @@ export function aplicarSchemaAcervo(db: Database): void {
       PRIMARY KEY (mensagem_id, marca, configuracao_id),
       FOREIGN KEY (mensagem_id) REFERENCES mensagens(id) ON DELETE CASCADE
     );
+
+    -- TRANSCRICAO: objeto de valor pendurado no Anexo, so existe para
+    -- tipo='audio'. Nao julga o conteudo, resgata em texto o que foi dito —
+    -- por isso nao e "interpretacao de conteudo" (ver docs/dominio/malote.md,
+    -- Fora do dominio). O estado fora-de-escopo e a marca de elegibilidade:
+    -- todo Anexo de audio ja presente ANTES desta tabela existir recebe essa
+    -- marca no passo de migracao, e e ela que impede o backfill acidental —
+    -- so Anexo que fica presente DEPOIS entra na fila do worker.
+    --
+    -- Sem crase neste comentario, de proposito: ele vive dentro de um
+    -- template literal de TypeScript, e crase aqui FECHA A STRING.
+    CREATE TABLE IF NOT EXISTS transcricoes (
+      anexo_id     TEXT PRIMARY KEY,
+      estado       TEXT NOT NULL
+        CHECK (estado IN ('pendente', 'concluida', 'falhou', 'fora-de-escopo')),
+      texto        TEXT,
+      motivo_falha TEXT,
+      motor        TEXT,
+      modelo       TEXT,
+      gerada_em    TEXT,
+      CHECK (estado != 'concluida' OR texto IS NOT NULL),
+      FOREIGN KEY (anexo_id) REFERENCES anexos(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_transcricoes_estado ON transcricoes(estado);
+
+    -- Espelha transcricoes.texto, mesmo padrao de mensagens_texto — mas com
+    -- gatilho de UPDATE tambem: mensagem e imutavel, Transcricao nao e (nasce
+    -- pendente, sem texto, e ganha texto ao concluir; reprocessar reabre).
+    CREATE VIRTUAL TABLE IF NOT EXISTS transcricoes_texto USING fts5(
+      texto,
+      content = 'transcricoes',
+      content_rowid = 'rowid'
+    );
+
+    CREATE TRIGGER IF NOT EXISTS transcricoes_texto_ins AFTER INSERT ON transcricoes BEGIN
+      INSERT INTO transcricoes_texto(rowid, texto) VALUES (new.rowid, new.texto);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS transcricoes_texto_upd AFTER UPDATE ON transcricoes BEGIN
+      INSERT INTO transcricoes_texto(transcricoes_texto, rowid, texto) VALUES ('delete', old.rowid, old.texto);
+      INSERT INTO transcricoes_texto(rowid, texto) VALUES (new.rowid, new.texto);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS transcricoes_texto_del AFTER DELETE ON transcricoes BEGIN
+      INSERT INTO transcricoes_texto(transcricoes_texto, rowid, texto) VALUES ('delete', old.rowid, old.texto);
+    END;
 
   `);
 

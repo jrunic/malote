@@ -6,6 +6,8 @@ import { cenario } from './ajuda/acervo.js';
 import { criarAcervoNoPiso } from './ajuda/acervo-no-piso.js';
 import { abrirAcervo } from '../src/nucleo/acervo.js';
 import { CFG_WHATSAPP } from './ajuda/configuracao.js';
+import { migrar } from '../src/nucleo/migracao.js';
+import { PASSOS_DO_ACERVO, PLANO_DO_ACERVO } from '../src/nucleo/passos-do-acervo.js';
 
 test('passo 18->19 preenche Direcao do WhatsApp a partir do bruto — material e ao vivo', () => {
   const c = cenario();
@@ -122,28 +124,48 @@ test('passo 19->20 deixa Direcao NULL quando a Configuracao nao declara o Nome d
   }
 });
 
-// Nao parte do piso: CONVERSA_POR_CONFIGURACAO_V14 (passo 13->14) recusa
-// subir quando uma Fonte tem mais de uma Configuracao E alguma Conversa
-// direta pre-existente daquela Fonte — ele nao sabe, retroativamente, a
-// qual Configuracao cada Conversa antiga pertence. Em producao isso nunca
-// dispara porque a segunda Configuracao de Instagram so passou a existir
-// DEPOIS de o passo 13->14 ja ter rodado uma vez — toda Conversa direta
-// criada depois disso ja nasce com configuracao_id explicito, pela
-// importacao, sem depender desta migracao de novo. Reproduz esse mesmo
-// caminho: cria um Acervo fresco (ja na forma corrente, com configuracao_id
-// e direcao estruturalmente presentes), insere as Conversas com
-// configuracao_id ja resolvido como a importacao real faria, e FORCA a
-// linha de versao de volta para 19 — simulando "esta base ainda nao rodou
-// o passo do Instagram" sem reconstruir a cadeia inteira do piso. Reabrir
-// entao dispara exclusivamente o passo pendente 19->20.
+// Nao insere dado ANTES do passo 13->14: CONVERSA_POR_CONFIGURACAO_V14
+// recusa subir quando uma Fonte tem mais de uma Configuracao E alguma
+// Conversa direta pre-existente daquela Fonte — ele nao sabe,
+// retroativamente, a qual Configuracao cada Conversa antiga pertence. Em
+// producao isso nunca dispara porque a segunda Configuracao de Instagram so
+// passou a existir DEPOIS de o passo 13->14 ja ter rodado uma vez — toda
+// Conversa direta criada depois disso ja nasce com configuracao_id
+// explicito, pela importacao, sem depender desta migracao de novo. Reproduz
+// esse mesmo caminho: parte do piso, migra por um plano TRUNCADO ate a forma
+// 19 (13->14 roda sobre tabela vazia, sem recusa), so ENTAO insere as
+// Conversas com configuracao_id ja resolvido como a importacao real faria,
+// e reabre pela porta normal — que dispara so o passo pendente 19->20. Nao
+// usa mais "fresco + FORCA a versao pra tras": uma base fresca ja nasce com
+// as tabelas da forma corrente, e um passo que CRIA tabela (como o 20->21 da
+// Transcricao) falharia com "table already exists" contra ela.
 test('passo 19->20 deixa NULL a Mensagem de coletiva ambigua, e resolve a direta normalmente', () => {
   const c = cenario();
   try {
     const cfgIdDireta = 'cfg-a';
-    const { id, acervo } = c.novoInquilino('Padme'); // fresco, ja na forma corrente
-    const dbDireto = new Database(join(c.raiz, 'acervos', `${id}.db`));
+    const { id, acervo } = c.novoInquilino('Padme');
+    acervo.fechar();
+    criarAcervoNoPiso(c.raiz, id); // piso = forma 10
+
+    const caminho = join(c.raiz, 'acervos', `${id}.db`);
+    const dbDireto = new Database(caminho);
+    // Leva a base ATE 19 — um passo antes do que este teste mede — com um
+    // plano truncado, para nao repetir aqui o "fresco + rewind de
+    // versao_schema" que quebrou quando a v21 acrescentou tabela nova
+    // (uma base fresca ja NASCE com a tabela, e o passo que a cria falha
+    // com "table already exists" contra ela).
+    const planoAte19 = {
+      ...PLANO_DO_ACERVO,
+      corrente: 19,
+      passos: PASSOS_DO_ACERVO.filter((p) => p.para <= 19),
+    };
+    migrar(dbDireto, caminho, planoAte19, {
+      configuracoes: [
+        { id: cfgIdDireta, fonte: 'instagram' },
+        { id: 'cfg-b', fonte: 'instagram' },
+      ],
+    });
     dbDireto.exec(`
-      UPDATE versao_schema SET versao = 19;
       INSERT INTO conversas (id, fonte, id_externo, coletiva, configuracao_id, criada_em)
       VALUES ('conversa-ig-coletiva', 'instagram', 'grupo-externo', 1, NULL, '2026-01-01T00:00:00.000Z');
       INSERT INTO conversas (id, fonte, id_externo, coletiva, configuracao_id, criada_em)
@@ -154,7 +176,6 @@ test('passo 19->20 deixa NULL a Mensagem de coletiva ambigua, e resolve a direta
         ('m-direta', 'conversa-ig-direta', 'instagram', 'ext-2', 1700000001000, '{"sender_name":"Bail Organa"}');
     `);
     dbDireto.close();
-    acervo.fechar();
 
     const migrado = abrirAcervo(join(c.raiz, 'acervos'), id, {
       configuracoes: [

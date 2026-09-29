@@ -40,6 +40,25 @@ const V13 = `
     bruto       TEXT,
     FOREIGN KEY (conversa_id) REFERENCES conversas(id) ON DELETE CASCADE
   );
+  -- Nao usada por este teste, e existe pela mesma razao das tabelas de
+  -- identidade abaixo: a CADEIA continua, e o passo 20->21 (Transcricao)
+  -- CRIA esta tabela — sem ela aqui, a migracao completa falharia com
+  -- "no such table: anexos" ao marcar o estoque existente fora-de-escopo.
+  CREATE TABLE anexos (
+    id            TEXT PRIMARY KEY,
+    mensagem_id   TEXT NOT NULL,
+    tipo          TEXT NOT NULL,
+    tamanho       INTEGER,
+    nome_original TEXT,
+    duracao       INTEGER,
+    impressao     TEXT,
+    presenca      TEXT NOT NULL,
+    caminho       TEXT,
+    descartado_em TEXT,
+    descartado_por TEXT,
+    bruto         TEXT,
+    FOREIGN KEY (mensagem_id) REFERENCES mensagens(id) ON DELETE CASCADE
+  );
   -- As tabelas de identidade, na forma de ENTAO.
   --
   -- Nao sao usadas por este teste, e existem porque a CADEIA continua depois do

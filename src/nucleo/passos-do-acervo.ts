@@ -574,6 +574,78 @@ const DIRECAO_INSTAGRAM_V20: PassoDeMigracao = {
   },
 };
 
+/**
+ * DDL CONGELADO da forma 21. Duplicado do schema fresco de proposito — mesma
+ * regra dos passos anteriores.
+ */
+const TRANSCRICAO_V21 = `
+  CREATE TABLE transcricoes (
+    anexo_id     TEXT PRIMARY KEY,
+    estado       TEXT NOT NULL
+      CHECK (estado IN ('pendente', 'concluida', 'falhou', 'fora-de-escopo')),
+    texto        TEXT,
+    motivo_falha TEXT,
+    motor        TEXT,
+    modelo       TEXT,
+    gerada_em    TEXT,
+    CHECK (estado != 'concluida' OR texto IS NOT NULL),
+    FOREIGN KEY (anexo_id) REFERENCES anexos(id) ON DELETE CASCADE
+  );
+  CREATE INDEX idx_transcricoes_estado ON transcricoes(estado);
+  CREATE VIRTUAL TABLE transcricoes_texto USING fts5(
+    texto,
+    content = 'transcricoes',
+    content_rowid = 'rowid'
+  );
+  CREATE TRIGGER transcricoes_texto_ins AFTER INSERT ON transcricoes BEGIN
+    INSERT INTO transcricoes_texto(rowid, texto) VALUES (new.rowid, new.texto);
+  END;
+  CREATE TRIGGER transcricoes_texto_upd AFTER UPDATE ON transcricoes BEGIN
+    INSERT INTO transcricoes_texto(transcricoes_texto, rowid, texto) VALUES ('delete', old.rowid, old.texto);
+    INSERT INTO transcricoes_texto(rowid, texto) VALUES (new.rowid, new.texto);
+  END;
+  CREATE TRIGGER transcricoes_texto_del AFTER DELETE ON transcricoes BEGIN
+    INSERT INTO transcricoes_texto(transcricoes_texto, rowid, texto) VALUES ('delete', old.rowid, old.texto);
+  END;
+`;
+
+/**
+ * A Transcricao entra, e o estoque existente fica FORA DE ESCOPO.
+ *
+ * Todo Anexo de audio ja `presente` ANTES deste passo recebe a marca
+ * `fora-de-escopo` — nunca `pendente`. E o mecanismo, nao so a intencao, que
+ * impede o primeiro boot pos-deploy de varrer os audios ja existentes em
+ * producao e disparar, sem ninguem pedir, o backfill que a spec exclui.
+ * So Anexo que fica `presente` DEPOIS deste passo (sem linha em transcricoes)
+ * e elegivel para o worker.
+ *
+ * As seis tabelas em tabelasNovas sao as SEIS que o FTS5 cria de verdade —
+ * medido criando a mesma tabela virtual num banco de escracha antes de
+ * escrever este passo: transcricoes_texto, _config, _data, _docsize, _idx,
+ * mais a transcricoes base. Sem as cinco sombra declaradas, a conferencia
+ * reprova com "tabela apareceu sem ser declarada".
+ */
+const TRANSCRICAO_ELEGIBILIDADE_V21: PassoDeMigracao = {
+  de: 20,
+  para: 21,
+  descricao: 'cria a Transcricao do Anexo e marca o estoque existente fora de escopo',
+  tabelasNovas: [
+    'transcricoes',
+    'transcricoes_texto',
+    'transcricoes_texto_config',
+    'transcricoes_texto_data',
+    'transcricoes_texto_docsize',
+    'transcricoes_texto_idx',
+  ],
+  aplicar: (db) => {
+    db.exec(TRANSCRICAO_V21);
+    db.prepare(
+      `INSERT INTO transcricoes (anexo_id, estado)
+       SELECT id, 'fora-de-escopo' FROM anexos WHERE tipo = 'audio' AND presenca = 'presente'`,
+    ).run();
+  },
+};
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -585,6 +657,7 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   MARCA_DO_TITULAR_V18,
   DIRECAO_WHATSAPP_V19,
   DIRECAO_INSTAGRAM_V20,
+  TRANSCRICAO_ELEGIBILIDADE_V21,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {
