@@ -220,7 +220,10 @@ continua `cronologica` — porque o propósito desta rota é justamente
 recência. Vazio é resposta legítima (`200`, lista vazia), nunca `404`: não
 há um recurso singular cuja existência esteja em jogo.
 
-Limites conhecidos: conversa vazia e inexistente respondem igual (`404`) em
-`/conversas/<id>/mensagens` — distinguir exigiria confirmar existência, e confirmar
-existência é o que não pode vazar; `400` para parâmetro malformado é invocação errada, não
-"não existe".
+Em `/conversas/<id>/mensagens`, a Conversa existir é a única coisa que decide
+`404` — confirmado uma vez, antes de qualquer filtro. Lista vazia por filtro
+que não bate em nada, ou porque a Conversa nunca teve Mensagem, é resposta
+legítima (`200`, lista vazia), nunca `404`. Confirmar a existência da própria
+Conversa que o chamador já nomeou não vaza nada de outro Inquilino — a
+consulta já é escopada ao Acervo da credencial. `400` para parâmetro
+malformado continua sendo invocação errada, não "não existe".

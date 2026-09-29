@@ -322,6 +322,75 @@ test('favorito=true numa Conversa que nao existe: 404 vazio, igual a hoje', asyn
   }
 });
 
+test('desde no futuro com zero casos e a Conversa existe: 200 com lista vazia, nao 404 (#1090)', async () => {
+  // A conversaDeA do cenario tem exatamente uma Mensagem, em 2026-06-01. Um
+  // filtro que nao bate em nenhuma nao pode se confundir com Conversa
+  // inexistente — mesmo defeito que o favorito ja corrigiu, aqui generalizado.
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const r = await c.pedir(`/conversas/${c.conversaDeA}/mensagens?desde=2030-01-01`, chave.valor);
+    assert.equal(r.status, 200);
+    const corpo = JSON.parse(r.corpo) as { mensagens: unknown[] };
+    assert.deepEqual(corpo.mensagens, []);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('ate numa data anterior a toda Mensagem e a Conversa existe: 200 com lista vazia (#1090)', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const r = await c.pedir(`/conversas/${c.conversaDeA}/mensagens?ate=2020-01-01`, chave.valor);
+    assert.equal(r.status, 200);
+    const corpo = JSON.parse(r.corpo) as { mensagens: unknown[] };
+    assert.deepEqual(corpo.mensagens, []);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('autor que nao escreveu na Conversa e a Conversa existe: 200 com lista vazia (#1090)', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const r = await c.pedir(`/conversas/${c.conversaDeA}/mensagens?autor=nao-existe`, chave.valor);
+    assert.equal(r.status, 200);
+    const corpo = JSON.parse(r.corpo) as { mensagens: unknown[] };
+    assert.deepEqual(corpo.mensagens, []);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('direcao sem Mensagem daquela direcao e a Conversa existe: 200 com lista vazia (#1090)', async () => {
+  // A unica Mensagem da conversaDeA e 'recebida' — filtrar por 'enviada' nao
+  // acha nada, e a Conversa continua existindo.
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const r = await c.pedir(`/conversas/${c.conversaDeA}/mensagens?direcao=enviada`, chave.valor);
+    assert.equal(r.status, 200);
+    const corpo = JSON.parse(r.corpo) as { mensagens: unknown[] };
+    assert.deepEqual(corpo.mensagens, []);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('SEM filtro nenhum, Conversa que nao existe continua 404 vazio (#1090 nao pode regredir isto)', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const r = await c.pedir('/conversas/nao-existe/mensagens?desde=2020-01-01', chave.valor);
+    assert.equal(r.status, 404);
+    assert.equal(r.corpo, '');
+  } finally {
+    await c.parar();
+  }
+});
+
 test('favorito=true com apelido desconhecido devolve 400', async () => {
   const c = await cenarioDeRede();
   try {
