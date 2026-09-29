@@ -1,7 +1,7 @@
 import type { Acervo } from './acervo.js';
 import type { PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
 import { SQL_FAMILIA } from './familia.js';
-import type { ConversaId, Direcao, Fonte, MensagemId, PessoaId, Presenca } from './tipos.js';
+import type { ConversaId, Direcao, EstadoDeTranscricao, Fonte, MensagemId, PessoaId, Presenca } from './tipos.js';
 import { nomeDoIdentificador } from './identidade.js';
 
 /**
@@ -11,6 +11,15 @@ import { nomeDoIdentificador } from './identidade.js';
  * que aceite dois, e é por isso que "não atravessa Inquilino" não é disciplina
  * a lembrar: é o que o tipo permite escrever.
  */
+
+export interface TranscricaoLida {
+  estado: EstadoDeTranscricao;
+  texto: string | null;
+  motivoFalha: string | null;
+  motor: string | null;
+  modelo: string | null;
+  geradaEm: string | null;
+}
 
 export interface AnexoLido {
   id: string;
@@ -23,14 +32,38 @@ export interface AnexoLido {
   caminho: string | null;
   descartadoEm: string | null;
   descartadoPor: string | null;
+  /** null quando o Anexo nao e audio, ou e audio sem linha em transcricoes ainda. */
+  transcricao: TranscricaoLida | null;
 }
 
+function montarTranscricao(l: Record<string, unknown>): TranscricaoLida | null {
+  if (l['transcricao_estado'] === null || l['transcricao_estado'] === undefined) return null;
+  return {
+    estado: l['transcricao_estado'] as EstadoDeTranscricao,
+    texto: (l['transcricao_texto'] as string | null) ?? null,
+    motivoFalha: (l['transcricao_motivo_falha'] as string | null) ?? null,
+    motor: (l['transcricao_motor'] as string | null) ?? null,
+    modelo: (l['transcricao_modelo'] as string | null) ?? null,
+    geradaEm: (l['transcricao_gerada_em'] as string | null) ?? null,
+  };
+}
+
+const SELECT_ANEXO = `
+  SELECT a.id, a.tipo, a.tamanho, a.nome_original, a.duracao, a.impressao, a.presenca, a.caminho,
+         a.descartado_em, a.descartado_por,
+         t.estado       AS transcricao_estado,
+         t.texto        AS transcricao_texto,
+         t.motivo_falha AS transcricao_motivo_falha,
+         t.motor        AS transcricao_motor,
+         t.modelo       AS transcricao_modelo,
+         t.gerada_em    AS transcricao_gerada_em
+    FROM anexos a
+    LEFT JOIN transcricoes t ON t.anexo_id = a.id
+`;
+
 export function lerAnexos(acervo: Acervo, mensagemId: MensagemId): AnexoLido[] {
-  const linhas = acervo.preparar(
-      `SELECT id, tipo, tamanho, nome_original, duracao, impressao, presenca, caminho,
-              descartado_em, descartado_por
-         FROM anexos WHERE mensagem_id = ? ORDER BY id`,
-    )
+  const linhas = acervo
+    .preparar(`${SELECT_ANEXO} WHERE a.mensagem_id = ? ORDER BY a.id`)
     .all(mensagemId) as Array<Record<string, unknown>>;
 
   return linhas.map((l) => ({
@@ -44,17 +77,15 @@ export function lerAnexos(acervo: Acervo, mensagemId: MensagemId): AnexoLido[] {
     caminho: (l['caminho'] as string | null) ?? null,
     descartadoEm: (l['descartado_em'] as string | null) ?? null,
     descartadoPor: (l['descartado_por'] as string | null) ?? null,
+    transcricao: montarTranscricao(l),
   }));
 }
 
 /** Um Anexo pelo próprio id, ou `undefined` se não existe. */
 export function lerAnexoPorId(acervo: Acervo, anexoId: string): AnexoLido | undefined {
-  const linha = acervo.preparar(
-      `SELECT id, tipo, tamanho, nome_original, duracao, impressao, presenca, caminho,
-              descartado_em, descartado_por
-         FROM anexos WHERE id = ?`,
-    )
-    .get(anexoId) as Record<string, unknown> | undefined;
+  const linha = acervo.preparar(`${SELECT_ANEXO} WHERE a.id = ?`).get(anexoId) as
+    | Record<string, unknown>
+    | undefined;
   if (linha === undefined) return undefined;
   return {
     id: linha['id'] as string,
@@ -67,6 +98,7 @@ export function lerAnexoPorId(acervo: Acervo, anexoId: string): AnexoLido | unde
     caminho: (linha['caminho'] as string | null) ?? null,
     descartadoEm: (linha['descartado_em'] as string | null) ?? null,
     descartadoPor: (linha['descartado_por'] as string | null) ?? null,
+    transcricao: montarTranscricao(linha),
   };
 }
 
