@@ -368,40 +368,106 @@ export interface FiltroDeBusca {
   ate?: number;
 }
 
-export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): MensagemLida[] {
-  const condicoes = ['mensagens_texto MATCH ?'];
-  const valores: unknown[] = [filtro.texto];
-  if (filtro.pessoaId !== undefined) {
-    // Alcança TODOS os Identificadores da Pessoa, em todas as Fontes.
-    condicoes.push(
-      `m.autor_id IN (SELECT id FROM identificadores WHERE pessoa_id IN (${SQL_FAMILIA}))`,
-    );
-    valores.push(filtro.pessoaId, filtro.pessoaId);
-  }
-  if (filtro.conversaId !== undefined) {
-    condicoes.push('m.conversa_id = ?');
-    valores.push(filtro.conversaId);
-  }
-  if (filtro.de !== undefined) {
-    condicoes.push('m.ocorrida_em >= ?');
-    valores.push(filtro.de);
-  }
-  if (filtro.ate !== undefined) {
-    condicoes.push('m.ocorrida_em <= ?');
-    valores.push(filtro.ate);
-  }
+/**
+ * Uma MensagemLida que casou numa busca por texto, com a proveniencia
+ * marcada — tipo proprio, e nao campo opcional em MensagemLida, porque o
+ * campo e obrigatorio aqui e nunca existe fora de `buscarMensagens`.
+ */
+export interface MensagemEncontrada extends MensagemLida {
+  /**
+   * Se o termo casou no CONTEUDO da Mensagem ou na TRANSCRICAO de um dos
+   * Anexos dela — a Transcricao e aproximacao de modelo, nunca fato, e quem
+   * le a busca precisa saber a diferenca.
+   */
+  origemDaCorrespondencia: 'conteudo' | 'transcricao';
+}
 
-  const linhas = acervo.preparar(
-      `SELECT m.id, m.conversa_id, m.fonte, m.autor_id, m.conteudo, m.direcao, m.ocorrida_em
-         FROM mensagens_texto t
-         JOIN mensagens m ON m.rowid = t.rowid
-        WHERE ${condicoes.join(' AND ')}
-        ORDER BY m.ocorrida_em
-        LIMIT ?`,
+export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): MensagemEncontrada[] {
+  const limite = filtro.limite ?? 100;
+  const condicoesBase = (alias: string): { condicoes: string[]; valores: unknown[] } => {
+    const condicoes: string[] = [];
+    const valores: unknown[] = [];
+    if (filtro.pessoaId !== undefined) {
+      // Alcança TODOS os Identificadores da Pessoa, em todas as Fontes.
+      condicoes.push(
+        `${alias}.autor_id IN (SELECT id FROM identificadores WHERE pessoa_id IN (${SQL_FAMILIA}))`,
+      );
+      valores.push(filtro.pessoaId, filtro.pessoaId);
+    }
+    if (filtro.conversaId !== undefined) {
+      condicoes.push(`${alias}.conversa_id = ?`);
+      valores.push(filtro.conversaId);
+    }
+    if (filtro.de !== undefined) {
+      condicoes.push(`${alias}.ocorrida_em >= ?`);
+      valores.push(filtro.de);
+    }
+    if (filtro.ate !== undefined) {
+      condicoes.push(`${alias}.ocorrida_em <= ?`);
+      valores.push(filtro.ate);
+    }
+    return { condicoes, valores };
+  };
+
+  // LIMIT em CADA consulta, nao so no resultado final: sem ele, um termo
+  // comum contra um Acervo grande traria todas as linhas para memoria antes
+  // de cortar — era limitado no SQL antes desta mudanca, e um caminho quente
+  // de rede nao pode ficar sem teto. Os `limite` mais antigos de CADA lado
+  // cobrem o `limite` mais antigo da uniao — a ordenacao final ainda corta
+  // para o tamanho certo.
+  const porConteudo = condicoesBase('m');
+  const linhasPorConteudo = acervo
+    .preparar(
+      `SELECT m.id, m.ocorrida_em
+         FROM mensagens_texto tx
+         JOIN mensagens m ON m.rowid = tx.rowid
+        WHERE mensagens_texto MATCH ? ${porConteudo.condicoes.map((c) => `AND ${c}`).join(' ')}
+        ORDER BY m.ocorrida_em LIMIT ?`,
     )
-    .all(...valores, filtro.limite ?? 100) as Array<Record<string, unknown>>;
+    .all(filtro.texto, ...porConteudo.valores, limite) as Array<{ id: string; ocorrida_em: number }>;
 
-  return montarMensagens(acervo, linhas);
+  const porTranscricao = condicoesBase('m');
+  const linhasPorTranscricao = acervo
+    .preparar(
+      `SELECT DISTINCT m.id, m.ocorrida_em
+         FROM transcricoes_texto tx
+         JOIN transcricoes t ON t.rowid = tx.rowid
+         JOIN anexos a ON a.id = t.anexo_id
+         JOIN mensagens m ON m.id = a.mensagem_id
+        WHERE transcricoes_texto MATCH ? ${porTranscricao.condicoes.map((c) => `AND ${c}`).join(' ')}
+        ORDER BY m.ocorrida_em LIMIT ?`,
+    )
+    .all(filtro.texto, ...porTranscricao.valores, limite) as Array<{ id: string; ocorrida_em: number }>;
+
+  // Conteudo tem precedencia sobre transcricao quando os dois casam a mesma
+  // Mensagem — a Mensagem tem texto de verdade; nao ha porque marca-la como
+  // aproximada so porque o audio ao lado TAMBEM contem o termo.
+  const origemPorId = new Map<string, 'conteudo' | 'transcricao'>();
+  for (const l of linhasPorTranscricao) origemPorId.set(l.id, 'transcricao');
+  for (const l of linhasPorConteudo) origemPorId.set(l.id, 'conteudo');
+
+  const idsOrdenados = [...linhasPorConteudo, ...linhasPorTranscricao]
+    .sort((a, b) => a.ocorrida_em - b.ocorrida_em)
+    .map((l) => l.id)
+    .filter((id, i, todos) => todos.indexOf(id) === i)
+    .slice(0, limite);
+
+  if (idsOrdenados.length === 0) return [];
+
+  const marcador = idsOrdenados.map(() => '?').join(',');
+  const linhas = acervo
+    .preparar(
+      `SELECT m.id, m.conversa_id, m.fonte, m.autor_id, m.conteudo, m.direcao, m.ocorrida_em
+         FROM mensagens m WHERE m.id IN (${marcador})`,
+    )
+    .all(...idsOrdenados) as Array<Record<string, unknown>>;
+
+  const mensagens = montarMensagens(acervo, linhas);
+  const porId = new Map(mensagens.map((m) => [m.id, m]));
+  return idsOrdenados
+    .map((id) => porId.get(id))
+    .filter((m): m is MensagemLida => m !== undefined)
+    .map((m) => ({ ...m, origemDaCorrespondencia: origemPorId.get(m.id) as 'conteudo' | 'transcricao' }));
 }
 
 export interface ContagemDoAcervo {
