@@ -107,7 +107,7 @@ test('a importacao aprende o par que o material declara, e nao duplica a pessoa'
           { idExterno: ALTERNATIVA, nome: 'Alguem', coletiva: false, participantesConhecidos: [], bruto: '{}' },
         ],
         mensagens: [],
-        descartes: { mensagens: {}, eventos: {} },
+        descartes: { mensagens: {}, eventos: {}, conversas: {} },
     linhasRepetidasNoMaterial: 0,
         fechar: () => {},
         eventos: [],

@@ -201,12 +201,23 @@ export interface CorrespondenciaDoMaterial {
  * caso real e `ZCHATSESSION` NULO, entao nao ha sequer identificador a repassar
  * sem fazer o tipo mentir.
  *
- * Mensagens e eventos ficam SEPARADOS: sao populacoes diferentes do material, e
- * somar os dois esconderia qual esta com defeito.
+ * Mensagens, eventos e conversas ficam SEPARADOS: sao populacoes diferentes do
+ * material, e somar os dois esconderia qual esta com defeito.
  */
 export interface DescartesDoMaterial {
   mensagens: Record<string, number>;
   eventos: Record<string, number>;
+  /**
+   * A #1069: `ZWACHATSESSION` guarda cinco naturezas sob `ZSESSIONTYPE`
+   * (0=direta, 1=grupo, 2=lista-de-transmissao, 3=status, 4=comunidade —
+   * medido em 21/09/2026 para o adaptador macOS do charla, mesmo formato de
+   * backup). Status NAO E CONVERSA: e o feed de acompanhamento de stories de
+   * um contato, sem mensagem de chat de verdade — medido no Acervo real da
+   * Renata, 809 dessas entradas com ZERO Mensagem, poluindo a lista de
+   * coletivas com o nome do contato como se fosse assunto de grupo. Entram
+   * aqui, contadas por `'status'`, e nunca chegam a `conversas`.
+   */
+  conversas: Record<string, number>;
 }
 
 export interface Material {
@@ -327,7 +338,7 @@ export function lerMaterial(
     // O que o material contradiz. Declarado aqui, ANTES dos lacos, porque o
     // gerador de Mensagens fecha sobre ele e continua escrevendo depois de
     // `lerMaterial` ter retornado.
-    const descartes: DescartesDoMaterial = { mensagens: {}, eventos: {} };
+    const descartes: DescartesDoMaterial = { mensagens: {}, eventos: {}, conversas: {} };
     const contagem = db
       .prepare(
         `SELECT COUNT(*) AS linhas, COUNT(DISTINCT ZSTANZAID) AS distintos
@@ -407,13 +418,28 @@ export function lerMaterial(
       rosterPorConversa.set(m.ZCHATSESSION, atual);
     }
 
-    const conversas: ConversaDoMaterial[] = conversasBrutas.map((c) => ({
-      idExterno: c.ZCONTACTJID,
-      nome: c.ZPARTNERNAME,
-      coletiva: (c.ZSESSIONTYPE ?? 0) !== 0,
-      participantesConhecidos: rosterPorConversa.get(c.Z_PK) ?? [],
-      bruto: serializarLinha(c),
-    }));
+    // ZSESSIONTYPE=3 e o feed de Status/Stories, NUNCA um grupo — a #1069.
+    // `!= 0` sozinho confundia isso com grupo (1), lista de transmissao (2) e
+    // comunidade (4), que SAO coletivas de verdade e continuam sendo (a #825
+    // ja decidiu isso para a recepcao ao vivo; mudar aqui para `=== 1`
+    // demoveria lista de transmissao a direta e reabriria aquele conflito).
+    // Status nao chega a ter linha de Conversa: nao ha o que decidir sobre
+    // ele a jusante, so ha o que contar.
+    const ZSESSIONTYPE_STATUS = 3;
+    const conversas: ConversaDoMaterial[] = [];
+    for (const c of conversasBrutas) {
+      if (c.ZSESSIONTYPE === ZSESSIONTYPE_STATUS) {
+        contar(descartes.conversas, 'status');
+        continue;
+      }
+      conversas.push({
+        idExterno: c.ZCONTACTJID,
+        nome: c.ZPARTNERNAME,
+        coletiva: (c.ZSESSIONTYPE ?? 0) !== 0,
+        participantesConhecidos: rosterPorConversa.get(c.Z_PK) ?? [],
+        bruto: serializarLinha(c),
+      });
+    }
 
     // O item de midia entra por consulta PROPRIA, e nao por `mi.*` no JOIN: as
     // duas tabelas compartilham Z_PK, Z_ENT e Z_OPT, e o driver devolve so a
