@@ -23,6 +23,32 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.22.0] — 2026-09-29
+
+### Adicionado
+
+- **Transcrição de áudio via Whisper local, opcional.** `malote servir` roda um
+  worker de fundo que transcreve Anexo de áudio recebido ao vivo usando
+  `whisper.cpp` (modelo `small`) e `ffmpeg` — binários de sistema, declarados
+  por variável de ambiente, nunca instalados pelo produto. Busca por texto
+  alcança a Transcrição, com proveniência marcada (`conteudo` ou
+  `transcricao`). Comandos novos: `malote transcricao reprocessar` e
+  `malote transcricao estado`. Schema do Acervo **20 → 21**; a migração marca
+  todo Anexo de áudio já `presente` como `fora-de-escopo`, então não há
+  backfill automático do estoque existente.
+
+### Corrigido
+
+- **Mídia recebida ao vivo pelo ouvinte nunca era baixada** — Anexo (áudio,
+  imagem, vídeo, documento) ficava `nunca-obtido` para sempre em 94–99,8% dos
+  casos, conforme o tipo. O ouvinte agora baixa em segundo plano, usando a
+  referência de download que a própria mensagem já trazia.
+- **Entrada de Status do WhatsApp virava Conversa coletiva fantasma** na
+  importação de backup do iOS — o feed de acompanhamento de stories de um
+  contato (`ZSESSIONTYPE=3`) não é um chat de verdade e nunca deveria ter
+  criado Conversa. Grupo, lista de transmissão e comunidade continuam
+  coletiva, como sempre.
+
 ## [0.21.2] — 2026-09-25
 
 ### Corrigido
