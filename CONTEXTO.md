@@ -430,18 +430,26 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
-- 29/09/2026 — **RELEASE v0.22.0 PUBLICADA** (#1068, #1069, #1070 — as três entradas
-  abaixo, cada uma "AINDA NÃO LIBERADO"/"Nenhuma release publicada ainda" está
-  desatualizada por esta linha). PR #8 (`main → production`, CI verde) mergeado em
-  `94728ee`; PR #9 completou bump+CHANGELOG (mergeado em `58feb03`, corrigindo a ordem —
-  o bump devia ter ido no mesmo PR, saiu depois por urgência de corrida contra o
-  `upgrade-fleet`); tag `v0.22.0` no commit publicado. **Ciclo 23 ainda NÃO ACEITO**
-  (`neg-05`) — decisão do Titular foi publicar e aguardar tráfego real antes de aceitar a
-  cláusula do #1068 (mídia ao vivo, que só tem prova de teste com biblioteca falsa até
-  agora). Distribuição para a frota (`upgrade-now`/Ação Documentada de migração
-  20→21 no thinkpad) tratada separadamente, com risco de corrida documentado no passo
-  4a do `ops-10` (o `upgrade-fleet` do thinkpad tem `trust: immediate` e roda a cada
-  30 min).
+- 29/09/2026 — **RELEASE v0.22.0 PUBLICADA E DISTRIBUÍDA NO THINKPAD, VERIFICADA POR
+  EFEITO** (#1068, #1069, #1070 — as três entradas abaixo, cada uma "AINDA NÃO
+  LIBERADO"/"Nenhuma release publicada ainda" está desatualizada por esta linha). PR #8
+  (`main → production`, CI verde) mergeado em `94728ee`; PR #9 completou bump+CHANGELOG
+  (mergeado em `58feb03`); tag `v0.22.0` no commit publicado.
+  **A corrida contra o `upgrade-fleet` aconteceu de fato**: o timer (`trust: immediate`,
+  a cada 30 min) puxou e auto-migrou o Acervo sozinho — via `abrirAcervo` no restart do
+  `malote-ouvinte`, sem `exigeContexto` no passo 20→21 — ANTES da Ação Documentada
+  manual rodar. Sem dano: v20→v21 não precisa do Registro, então o ouvinte subiu normal
+  (diferente do quase-incidente da v0.21.0, onde o passo `exigeContexto` teria recusado
+  subir). A Ação Documentada, escrita com o commit-alvo (`94728ee`) já defasado em
+  relação ao que tinha acabado de virar `production` (`58feb03`, só bump), RETROCEDEU
+  um commit ao rodar — corrigido por uma segunda Ação Documentada (código, sem tocar
+  Acervo). **Estado final confirmado por consulta direta no host**: `malote --versao`
+  → `0.22.0`; `versao_schema` → `21`; tabela `transcricoes` com 20.199 linhas
+  `fora-de-escopo` (a elegibilidade funcionou); 20.206 Anexos de áudio `presente`
+  (crescendo ao vivo, já sob o #1068). **Ciclo 23 ainda NÃO ACEITO** (`neg-05`) —
+  decisão do Titular foi publicar e aguardar tráfego real antes de aceitar a cláusula
+  do #1068 (mídia ao vivo, que só tinha prova de teste com biblioteca falsa) — agora
+  há sinal real para observar (produção rodando o código, contagem de áudio subindo).
 - 29/09/2026 — **Status do WhatsApp deixou de virar Conversa fantasma (#1069),
   IMPLEMENTADO EM `main`, AINDA NÃO LIBERADO.** Causa raiz: `material.ts` classificava
   coletiva por `ZSESSIONTYPE != 0`, colapsando grupo/lista-de-transmissão/status/
