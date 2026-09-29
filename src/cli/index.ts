@@ -113,6 +113,8 @@ import { conferirSeDesfazivel, desfazerOperacao } from '../nucleo/desfazer.js';
 import { caminhosDaConta, ouvir } from './ouvir.js';
 import { enderecoRecusado, servir } from './servir.js';
 import { lerUltimoEvento } from './ultimo-evento.js';
+import { reenfileirarFalhas, contarTranscricoesPorEstado } from '../nucleo/transcricao.js';
+import { configuracaoDoMotor } from './motor-de-transcricao.js';
 import {
   contarDerrame,
   contarEventosDerramados,
@@ -265,6 +267,8 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvir      --inquilino <id> --conta <nome> [--numero <so digitos>]
   malote ouvinte estado --conta <nome> [--json]
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
+  malote transcricao reprocessar --inquilino <id>              (volta falhas para pendente)
+  malote transcricao estado      --inquilino <id> [--json]     (contagem por estado; se o motor esta configurado)
   malote servir     --porta <n> [--endereco <ip>] [--exposto]
   malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--json]
   malote mensagens  --inquilino <id> [--conversa <id>] [--desde D] [--ate D] [--fonte <nome>] [--direcao enviada|recebida] [--limite <n>] [--json]
@@ -713,6 +717,49 @@ function executarComAtor(
           'O derrame FICA — rode de novo depois de resolver a causa.',
       );
       return 1;
+    }
+
+    if (grupo === 'transcricao' && sub === 'reprocessar') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) {
+        escrever('Uso: malote transcricao reprocessar --inquilino <id>');
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const n = reenfileirarFalhas(acervo);
+        if (argumentos.includes('--json')) {
+          escrever(JSON.stringify({ reenfileiradas: n }));
+        } else {
+          escrever(`${n} Transcricao(oes) que tinham falhado voltaram para pendente.`);
+        }
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
+    if (grupo === 'transcricao' && sub === 'estado') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) {
+        escrever('Uso: malote transcricao estado --inquilino <id> [--json]');
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const contagens = contarTranscricoesPorEstado(acervo);
+        const motorConfigurado = configuracaoDoMotor(process.env) !== undefined;
+        const porEstado = Object.fromEntries(contagens.map((c) => [c.estado, c.n]));
+        if (argumentos.includes('--json')) {
+          escrever(JSON.stringify({ motorConfigurado, porEstado }));
+        } else {
+          escrever(`Motor: ${motorConfigurado ? 'configurado' : 'NAO configurado'}`);
+          for (const c of contagens) escrever(`  ${c.estado}: ${c.n}`);
+        }
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
     }
 
     if (grupo === 'operador' && sub === 'chave' && acao === 'criar') {

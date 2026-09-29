@@ -431,6 +431,13 @@ export function gravarMaterialLido(
     const rotulo = `${motivo} (evento)`;
     relatorio.descartesDoLeitor[rotulo] = (relatorio.descartesDoLeitor[rotulo] ?? 0) + quantas;
   }
+  // A #1069: Status nunca chega a virar Conversa (ver `DescartesDoMaterial`),
+  // e o relatorio precisa dizer isso — senao quem le nao sabe se o material
+  // tinha zero Status ou se o leitor os descartou em silencio.
+  for (const [motivo, quantas] of Object.entries(material.descartes.conversas)) {
+    const rotulo = `${motivo} (conversa)`;
+    relatorio.descartesDoLeitor[rotulo] = (relatorio.descartesDoLeitor[rotulo] ?? 0) + quantas;
+  }
 
   return relatorio;
 }

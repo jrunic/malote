@@ -112,6 +112,18 @@ export interface RelatoDeRecepcao {
    * frota. Mesma fronteira do timer da varredura e do watchdog de silencio.
    */
   correspondencia: ContagemDeCorrespondencia;
+  /**
+   * Anexos que nasceram `nunca-obtido` NESTA passada, com o INDICE da
+   * Mensagem de origem no lote de entrada (`mensagens`, no parametro desta
+   * funcao) — nao um id externo.
+   *
+   * A #1068: quem baixa os bytes e o modulo de conexao, unico autorizado a
+   * falar com a biblioteca — e ele so tem o lote CRU, por posicao, porque o
+   * round-trip de JSON que normaliza a mensagem destroi o `mediaKey` binario
+   * que o decrypt exige. O indice e o que liga as duas pontas sem o adaptador
+   * conhecer a biblioteca.
+   */
+  anexosNuncaObtidos: { indice: number; anexoId: string; tipo: string }[];
 }
 
 export interface ContagemDeCorrespondencia {
@@ -265,6 +277,7 @@ export function receberEvento(
       diretaOpaca: 0,
       diretaComPar: 0,
     },
+    anexosNuncaObtidos: [],
   };
 
   // Conta ANTES de qualquer escrita, e sobre o lote INTEIRO: o que se mede aqui
@@ -346,7 +359,7 @@ export function receberEvento(
     );
   }
 
-  for (const m of mensagens) {
+  for (const [indice, m] of mensagens.entries()) {
     // Cifrada nao vira Mensagem: gravar o envelope vazio travaria o
     // identificador contra quem souber preencher depois. `registrarMensagem` e
     // primeiro escritor vence — o backup que trouxesse a MESMA mensagem
@@ -377,7 +390,7 @@ export function receberEvento(
       emOperacao(
         acervo,
         { natureza: 'receber-ao-vivo', reversibilidade: 'irreversivel', registraEfeito: false },
-        () => gravarUma(acervo, m, opcoes, relato),
+        () => gravarUma(acervo, m, indice, opcoes, relato),
       );
     } catch (erro) {
       // O catch e POR EVENTO, e sem ele o adaptador PERDE mensagem.
@@ -409,6 +422,7 @@ export function receberEvento(
 function gravarUma(
   acervo: Acervo,
   m: MensagemRecebida,
+  indice: number,
   opcoes: OpcoesDeRecepcao,
   relato: RelatoDeRecepcao,
 ): void {
@@ -498,12 +512,16 @@ function gravarUma(
   for (const tipo of COM_ANEXO) {
     const conteudo = m.message?.[tipo];
     if (conteudo === undefined || conteudo === null) continue;
-    registrarAnexo(acervo, {
+    const tipoDoAnexo = tipo.replace('Message', '');
+    const anexoId = registrarAnexo(acervo, {
       mensagemId,
-      tipo: tipo.replace('Message', ''),
+      tipo: tipoDoAnexo,
       presenca: 'nunca-obtido',
       bruto: JSON.stringify(conteudo),
     });
+    // A #1068: quem baixa os bytes precisa saber ONDE, no lote CRU, esta esta
+    // mensagem — ver o comentario de `anexosNuncaObtidos`.
+    relato.anexosNuncaObtidos.push({ indice, anexoId, tipo: tipoDoAnexo });
   }
 
   // 6. A Transicao de Participacao, quando a Fonte declara o evento.

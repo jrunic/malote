@@ -32,6 +32,21 @@ export function ehDirecao(valor: string): valor is Direcao {
 }
 
 /**
+ * Estado da Transcricao de um Anexo de audio.
+ *
+ * `fora-de-escopo` existe so para o Anexo que ja era `presente` ANTES da
+ * migracao que introduziu a Transcricao — e a marca que impede o primeiro
+ * boot pos-deploy de disparar, sem querer, o backfill do estoque existente.
+ * Nunca e gravado por escrita nova; so pelo passo de migracao.
+ */
+export const ESTADOS_DE_TRANSCRICAO = ['pendente', 'concluida', 'falhou', 'fora-de-escopo'] as const;
+export type EstadoDeTranscricao = (typeof ESTADOS_DE_TRANSCRICAO)[number];
+
+export function ehEstadoDeTranscricao(valor: string): valor is EstadoDeTranscricao {
+  return (ESTADOS_DE_TRANSCRICAO as readonly string[]).includes(valor);
+}
+
+/**
  * Quem afirmou o vinculo entre um Identificador e uma Pessoa.
  * A ordem e total e e o que impede execucao automatica de desfazer correcao
  * humana: `humano` vence `catalogo`, que vence `material`.

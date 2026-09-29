@@ -23,12 +23,35 @@ interface ConexaoAtualizada {
 interface Socket {
   ev: { on: (fluxo: string, ouvinte: (dado: never) => void) => void };
   requestPairingCode: (numero: string) => Promise<string>;
+  /** Pede URL nova para midia cuja referencia expirou. Usado so no reupload. */
+  updateMediaMessage: (mensagem: unknown) => Promise<unknown>;
 }
 
 interface Biblioteca {
   default: (config: { auth: unknown }) => Socket;
   useMultiFileAuthState: (pasta: string) => Promise<{ state: unknown; saveCreds: () => void }>;
   DisconnectReason: { loggedOut: number };
+  /**
+   * Baixa e decifra o Anexo de UMA mensagem. Recebe a mensagem CRUA — com
+   * `mediaKey` como `Uint8Array` de verdade — nunca a normalizada por
+   * round-trip de JSON, que o `aoReceber` entrega: ver `MidiaAoVivo`.
+   */
+  downloadMediaMessage: (
+    mensagem: unknown,
+    tipo: 'buffer',
+    opcoes: Record<string, never>,
+  ) => Promise<Buffer>;
+}
+
+/**
+ * Baixa os bytes de um Anexo cujo indice, no LOTE CRU que gerou o evento
+ * `aoReceber`, e este — ver `RelatoDeRecepcao.anexosNuncaObtidos` em
+ * `ao-vivo.ts`. A #1068: o adaptador puro nao pode chamar a biblioteca, e o
+ * modulo de conexao e o unico que pode — entao ele expoe o poder de baixar
+ * sem expor a biblioteca em si.
+ */
+export interface MidiaAoVivo {
+  baixar: (indice: number) => Promise<Buffer>;
 }
 
 export interface OpcoesDeConexao {
@@ -36,7 +59,7 @@ export interface OpcoesDeConexao {
   pastaDoVinculo: string;
   /** So digitos, com codigo do pais. Necessario apenas no primeiro pareamento. */
   numero?: string | undefined;
-  aoReceber: (mensagens: MensagemRecebida[]) => void;
+  aoReceber: (mensagens: MensagemRecebida[], midia: MidiaAoVivo) => void;
   registrar: (linha: string) => void;
   /**
    * Chamado quando a conexao termina para NAO voltar — hoje, so no caso de
@@ -167,8 +190,23 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
       // NaN, e o Conteudo Bruto sairia com outra cara. Passar pela mesma forma
       // contra a qual a convergencia foi medida e o que faz a medicao valer
       // para o que roda de verdade.
-      const normalizadas = JSON.parse(JSON.stringify(dado.messages ?? [])) as MensagemRecebida[];
-      if (normalizadas.length > 0) opcoes.aoReceber(normalizadas);
+      const brutas = dado.messages ?? [];
+      const normalizadas = JSON.parse(JSON.stringify(brutas)) as MensagemRecebida[];
+      if (normalizadas.length === 0) return;
+      const midia: MidiaAoVivo = {
+        // A mensagem CRUA, nunca `normalizadas[indice]`: o round-trip acima
+        // troca `mediaKey` (Uint8Array) por `{type:'Buffer',data:[...]}`, e o
+        // decrypt da biblioteca exige o binario de verdade. `tests/conexao.test.ts`
+        // guarda essa fronteira.
+        baixar: (indice: number): Promise<Buffer> => {
+          const mensagemCrua = brutas[indice];
+          if (mensagemCrua === undefined) {
+            return Promise.reject(new Error(`indice de mensagem invalido: ${indice}`));
+          }
+          return lib.downloadMediaMessage(mensagemCrua, 'buffer', {});
+        },
+      };
+      opcoes.aoReceber(normalizadas, midia);
     }) as (dado: never) => void);
 
     if (!jaVinculado && !codigoPedido && opcoes.numero !== undefined) {

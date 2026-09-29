@@ -18,6 +18,7 @@ import { abrirAcervo, abrirAcervoSomenteLeitura } from '../src/nucleo/acervo.js'
 import { existsSync } from 'node:fs';
 import { resolverConfiguracao } from '../src/registro/configuracao-adaptador.js';
 import { executar } from '../src/cli/index.js';
+import { configurarDestinoDeMidia } from '../src/registro/destino-midia.js';
 
 /**
  * Biblioteca falsa que sobe e imediatamente diz "deslogado".
@@ -614,6 +615,192 @@ test('ouvir anota favoritosSemMensagem quando a Mensagem nao existe', async () =
     assert.equal(codigo, 1);
     const { lerPulos } = await import('../src/cli/pulos.js');
     assert.equal(lerPulos(caminhosDaConta(raiz, 'fav').pulos).favoritosSemMensagem, 1);
+  } finally {
+    limpar();
+  }
+});
+
+// --- midia ao vivo baixada de verdade (#1068) ---
+
+/**
+ * Biblioteca falsa que entrega UMA mensagem com midia, oferece
+ * `downloadMediaMessage` (com o resultado/erro que o teste decide) e desloga
+ * no fim — mesmo molde de `bibliotecaQueEntrega`, com o download acrescentado.
+ */
+function bibliotecaQueEntregaMidia(opcoes: {
+  baixar: () => Promise<Buffer>;
+}): { disparar: () => void } {
+  const ouvintes = new Map<string, (dado: unknown) => void>();
+  return {
+    default: () => ({
+      ev: { on: (fluxo: string, f: (dado: unknown) => void) => ouvintes.set(fluxo, f) },
+      requestPairingCode: () => Promise.resolve('12345678'),
+      updateMediaMessage: (m: unknown) => Promise.resolve(m),
+    }),
+    useMultiFileAuthState: () => Promise.resolve({ state: {}, saveCreds: () => undefined }),
+    DisconnectReason: { loggedOut: 401 },
+    downloadMediaMessage: () => opcoes.baixar(),
+    disparar: (): void => {
+      setImmediate(() => {
+        ouvintes.get('messages.upsert')?.({
+          type: 'notify',
+          messages: [
+            {
+              key: { remoteJid: '5511000000010@s.whatsapp.net', id: 'MIDIA-VIVA', fromMe: false },
+              messageTimestamp: Math.floor(Date.now() / 1000),
+              message: {
+                imageMessage: {
+                  mimetype: 'image/jpeg',
+                  mediaKey: new Uint8Array([9, 9, 9]),
+                  directPath: '/v/t62.0-24/sintetico',
+                },
+              },
+            },
+          ],
+        });
+        setImmediate(() =>
+          ouvintes.get('connection.update')?.({
+            connection: 'close',
+            lastDisconnect: { error: { output: { statusCode: 401 } } },
+          }),
+        );
+      });
+    },
+  } as unknown as { disparar: () => void };
+}
+
+test('com Destino de Midia configurado, o Anexo ao vivo e baixado e fica presente', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const registro = abrirRegistro(raiz);
+    const id = criarInquilino(registro, { titularNome: 'Padme' });
+    configurarDestinoDeMidia(registro, id, { natureza: 'local', endereco: join(raiz, 'midia-padme') });
+    registro.fechar();
+    comConfiguracao(raiz, 'teste');
+    comVinculo(raiz, 'viva');
+
+    const biblioteca = bibliotecaQueEntregaMidia({
+      baixar: () => Promise.resolve(Buffer.from('bytes-da-imagem')),
+    });
+    const linhas: string[] = [];
+    const codigo = await ouvir(
+      ['ouvir', '--inquilino', id, '--conta', 'viva', '--configuracao', 'teste'],
+      {
+        dados: raiz,
+        estado: raiz,
+        escrever: (t: string) => linhas.push(t),
+        carregarBiblioteca: () => {
+          setImmediate(() => biblioteca.disparar());
+          return Promise.resolve(biblioteca);
+        },
+      },
+    );
+    assert.equal(codigo, 1, `nao chegou ao logout — o ouvinte disse: ${linhas.join(' | ')}`);
+
+    // O download e ASSINCRONO (fire-and-forget) — espera a fila de
+    // microtasks/macrotasks assentar antes de olhar o Acervo.
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+
+    const acervo = abrirAcervoSomenteLeitura(join(raiz, 'acervos'), id);
+    try {
+      const anexo = acervo.db
+        .prepare('SELECT presenca, caminho, tamanho FROM anexos')
+        .get() as { presenca: string; caminho: string | null; tamanho: number | null };
+      assert.equal(anexo.presenca, 'presente', `o Anexo nao ficou presente. log: ${linhas.join(' | ')}`);
+      assert.ok(anexo.caminho !== null);
+      const { existsSync: existe } = await import('node:fs');
+      assert.ok(
+        existe(join(raiz, 'midia-padme', anexo.caminho as string)),
+        'o arquivo baixado nao esta no Destino de Midia',
+      );
+    } finally {
+      acervo.fechar();
+    }
+  } finally {
+    limpar();
+  }
+});
+
+test('download que falha mantem o Anexo nunca-obtido e nao derruba o ouvinte', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const registro = abrirRegistro(raiz);
+    const id = criarInquilino(registro, { titularNome: 'Obi-Wan' });
+    configurarDestinoDeMidia(registro, id, { natureza: 'local', endereco: join(raiz, 'midia-obiwan') });
+    registro.fechar();
+    comConfiguracao(raiz, 'teste');
+    comVinculo(raiz, 'falha');
+
+    const biblioteca = bibliotecaQueEntregaMidia({
+      baixar: () => Promise.reject(new Error('referencia expirada')),
+    });
+    const linhas: string[] = [];
+    const codigo = await ouvir(
+      ['ouvir', '--inquilino', id, '--conta', 'falha', '--configuracao', 'teste'],
+      {
+        dados: raiz,
+        estado: raiz,
+        escrever: (t: string) => linhas.push(t),
+        carregarBiblioteca: () => {
+          setImmediate(() => biblioteca.disparar());
+          return Promise.resolve(biblioteca);
+        },
+      },
+    );
+    assert.equal(codigo, 1);
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+
+    const acervo = abrirAcervoSomenteLeitura(join(raiz, 'acervos'), id);
+    try {
+      const anexo = acervo.db.prepare('SELECT presenca FROM anexos').get() as { presenca: string };
+      assert.equal(anexo.presenca, 'nunca-obtido');
+    } finally {
+      acervo.fechar();
+    }
+    assert.match(linhas.join('\n'), /falhou ao baixar/i);
+  } finally {
+    limpar();
+  }
+});
+
+test('sem Destino de Midia configurado, o Anexo ao vivo permanece nunca-obtido', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const registro = abrirRegistro(raiz);
+    const id = criarInquilino(registro, { titularNome: 'Yoda' });
+    registro.fechar();
+    comConfiguracao(raiz, 'teste');
+    comVinculo(raiz, 'sem-destino');
+
+    const biblioteca = bibliotecaQueEntregaMidia({
+      baixar: () => Promise.resolve(Buffer.from('nunca deveria ser chamado')),
+    });
+    const linhas: string[] = [];
+    const codigo = await ouvir(
+      ['ouvir', '--inquilino', id, '--conta', 'sem-destino', '--configuracao', 'teste'],
+      {
+        dados: raiz,
+        estado: raiz,
+        escrever: (t: string) => linhas.push(t),
+        carregarBiblioteca: () => {
+          setImmediate(() => biblioteca.disparar());
+          return Promise.resolve(biblioteca);
+        },
+      },
+    );
+    assert.equal(codigo, 1);
+    await new Promise((r) => setImmediate(r));
+
+    const acervo = abrirAcervoSomenteLeitura(join(raiz, 'acervos'), id);
+    try {
+      const anexo = acervo.db.prepare('SELECT presenca FROM anexos').get() as { presenca: string };
+      assert.equal(anexo.presenca, 'nunca-obtido');
+    } finally {
+      acervo.fechar();
+    }
+    assert.match(linhas.join('\n'), /AVISO: Destino de Midia nao configurado/);
   } finally {
     limpar();
   }

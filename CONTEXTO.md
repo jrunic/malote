@@ -142,6 +142,14 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
 
 ## Restrições
 
+- **Processo de fundo dentro de `malote servir` (o worker de transcrição, e qualquer futuro
+  análogo) NUNCA abre o Acervo para escrita sem checar a versão gravada primeiro.**
+  `abrirAcervo` migra a base — e um processo que atende requisição de fora não pode ter esse
+  poder, pelo mesmo motivo que a leitura por rede abre somente-leitura. Sem a checagem
+  (`versaoDoAcervoEmDisco` antes de `abrirAcervo`), o primeiro boot pós-deploy migraria a
+  base sozinho, antes de qualquer Ação Documentada — repetindo o quase-incidente da v0.21.0
+  por desenho, não por acidente. Acervo em forma divergente é pulado e relatado, nunca
+  migrado pelo worker; quem migra continua sendo `malote acervo migrar`/o ouvinte.
 - **O modo REDE é fail-closed e a guarda morre ANTES de qualquer I/O.** Só os comandos de
   leitura declarados em `COMANDOS_DE_REDE` consultam por HTTP; comando de escrita com
   `--servidor` recusa **antes de abrir Registro ou Acervo** — invocação errada não nasce
@@ -375,6 +383,28 @@ Hard limits sempre relevantes durante a sessão.
 
 - **A identidade do Cartão deriva de telefones E e-mails, e mudá-la de novo é caro.** Com e-mail no conjunto, 1.839 dos 6.693 cartões reais mudam de identidade; alterar a regra depois de um import produz ausência e renascimento em massa.
 
+- **Baixar mídia ao vivo usa a mensagem CRUA, nunca a normalizada, e só o módulo de
+  conexão pode chamar `downloadMediaMessage`.** O round-trip de JSON que normaliza a
+  mensagem antes de `aoReceber` (necessário para o resto do adaptador) transforma
+  `mediaKey` — um `Uint8Array` de verdade — num objeto `{type:'Buffer',data:[...]}`
+  que o decrypt da biblioteca não consegue usar. `MidiaAoVivo.baixar(indice)` fecha
+  sobre o lote CRU, de propósito; guardado por mutação em `tests/conexao.test.ts`
+  (#1068). `receberEvento` devolve `anexosNuncaObtidos` com o índice no lote de
+  entrada — é o que liga o Anexo que `ao-vivo.ts` gravou ao índice que `conexao.ts`
+  sabe baixar, sem o adaptador puro conhecer a biblioteca.
+- **Sem Destino de Mídia, o ouvinte AVISA e segue — não recusa subir.** Diferente de
+  `malote midia trazer`, que recusa sem Destino: recusar a subida do ouvinte quebraria
+  toda instalação que nunca configurou um. O Anexo fica `nunca-obtido`, como sempre foi.
+
+- **`ZSESSIONTYPE` do backup de iOS tem CINCO naturezas, não duas.** 0=direta,
+  1=grupo, 2=lista-de-transmissão, 3=status, 4=comunidade — medido em 21/09/2026 para
+  o adaptador macOS do charla, contra o **mesmo formato de backup**, decisão confirmada
+  pelo Titular. `!= 0` (coletiva) continua certo para 1/2/4; **status (3) nunca vira
+  Conversa nenhuma** — não é chat de verdade, é o feed de acompanhamento de stories de
+  um contato. `=== 1` seria o fix errado: demoveria lista de transmissão e comunidade a
+  Conversa direta, contradizendo a #825/#826 (broadcast tem Mensagem real, 29.035
+  medidas, e fica coletiva). Ver `DescartesDoMaterial.conversas['status']` (#1069).
+
 ## Decisões Herdadas (explícitas)
 
 Repetidas aqui em vez de herdadas de configuração externa ao repositório — quem lê este arquivo tem o contrato inteiro:
@@ -400,6 +430,55 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 29/09/2026 — **Status do WhatsApp deixou de virar Conversa fantasma (#1069),
+  IMPLEMENTADO EM `main`, AINDA NÃO LIBERADO.** Causa raiz: `material.ts` classificava
+  coletiva por `ZSESSIONTYPE != 0`, colapsando grupo/lista-de-transmissão/status/
+  comunidade numa só categoria. Status (tipo 3) não é chat de verdade — filtrado antes
+  de criar Conversa, contado em `descartes.conversas['status']`, surfacado no
+  relatório da importação. **A correção NÃO foi a sugerida na tarefa** (`=== 1`) —
+  medição contra o adaptador macOS do charla (mesmo formato de backup, decisão do
+  Titular em 21/09/2026) mapeou os 5 valores reais e provou por mutação que `=== 1`
+  demoveria lista de transmissão e comunidade a Conversa direta, contradizendo a
+  #825/#826. Suíte: 1000 → **1003 testes**, mesma baseline de 3 falhas
+  pré-existentes. Nenhuma release publicada ainda.
+- 29/09/2026 — **Mídia recebida ao vivo agora é baixada de verdade (#1068), IMPLEMENTADO
+  EM `main`, AINDA NÃO LIBERADO.** Causa raiz: nenhum código chamava
+  `downloadMediaMessage` — Anexo ao vivo nascia `nunca-obtido` para sempre, medido no
+  Acervo real da Renata em 94-99,8% conforme o tipo. `conexao.ts` ganhou
+  `MidiaAoVivo.baixar(indice)`, usando a mensagem CRUA (ver Restrições); `ao-vivo.ts`
+  devolve `anexosNuncaObtidos` com o índice do lote; `ouvir.ts` lê o Destino de Mídia
+  do Inquilino antes de conectar e baixa em segundo plano, gravando pela porta do
+  núcleo que já existia (`gravarArquivoDeAnexo`). Falha de download, banco ocupado, ou
+  Destino ausente mantêm o Anexo `nunca-obtido`, sem derrubar o ouvinte. Suíte: 993 →
+  **1000 testes**, mesma baseline de 3 falhas pré-existentes. **Destrava a #1070
+  (transcrição) em uso real** — sem isto, áudio nunca chegava a `presente` para a fila
+  processar. Nenhuma release publicada ainda.
+- 28-29/09/2026 — **Transcrição de áudio via Whisper local, IMPLEMENTADA EM `main`, AINDA
+  NÃO LIBERADA.** Tarefa #1070, ciclo `malote-midia-ao-vivo-e-transcricao` (plano 3 de 3),
+  spec e plano revisados por `dev-10`+advisor (3 bloqueia na spec, 7 na plano — todos
+  corrigidos antes da execução; achados incluem `transcrever()` bloqueando o event loop se
+  fosse síncrono, `proximoElegivel` não alcançando `pendente` órfão, e o worker migrando o
+  Acervo sem checar versão). 12 tasks TDD, 13ª é verificação de campo. Schema **v21**:
+  tabela `transcricoes` pendurada no Anexo (só `tipo=audio`), com FTS
+  `transcricoes_texto`; passo de migração marca todo Anexo de áudio já `presente` como
+  `fora-de-escopo` — mecanismo, não intenção, contra o worker disparar sozinho o backfill
+  do estoque existente. Motor: `whisper.cpp` + `ffmpeg`, dois binários de sistema
+  declarados por variável de ambiente (`MALOTE_WHISPER_BINARIO`, `MALOTE_WHISPER_MODELO`,
+  `MALOTE_FFMPEG_BINARIO`), nunca instalados pelo malote — ADR
+  `docs/decisoes/20260928-dependencia-nativa-do-whisper-cpp-para-transcricao-de-audio.md`.
+  Fronteira nova: só `src/cli/motor-de-transcricao.ts` referencia essas variáveis, guardado
+  por `tests/fronteira-de-dependencia.test.ts`, poder confirmado por mutação. Busca
+  (`buscarMensagens`) passou a casar também na Transcrição, com proveniência marcada
+  (`origemDaCorrespondencia`) — a Transcrição é aproximação de modelo, nunca fato.
+  **Verificação de campo feita contra binário real no thinkpad** (`whisper.cpp`/`ffmpeg`
+  já instalados de uma medição anterior): motor real transcreveu um Anexo de áudio real de
+  produção (referenciado por caminho, nunca copiado) com texto plausível e coerente,
+  exposto por `GET /mensagens`, falha real (arquivo ausente) gravou motivo sem travar o
+  worker, `transcricao reprocessar` funcionou. Produção confirmada intocada antes/depois
+  (20.199 Anexos de áudio, contagem idêntica). Suíte: **993 testes**, 3 falhas
+  pré-existentes sem relação. **Não há release nem deploy** — `dev-09-encerra-tarefa` ainda
+  não rodou para a #1070; o aceite do ciclo 23 inteiro depende também de #1068 e #1069
+  (`dev-05`, ainda não iniciadas).
 - 22/09/2026 — **`malote configuracao criar` em produção: declarar a conta sem exigir
   material.** Achado real de uso (mentorado Walter, bloqueado por dificuldade de gerar o
   export do WhatsApp) — tarefa #1042, spec e plano com `dev-10` (0 `bloqueia` na spec, 2
@@ -444,6 +523,30 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
+- **#1070, #1068 e #1069 fechadas — o ciclo 23 (`malote-midia-ao-vivo-e-transcricao`)
+  está pronto para `neg-05-aceita-ciclo`.** Nenhuma release publicada ainda — as três
+  tarefas estão em `main`, `production` continua na v0.21.0.
+- **As 809 Conversas fantasma de Status já gravadas no Acervo da Renata (#1069) NÃO
+  foram limpas — decisão explícita, não esquecimento.** O importador corrigido impede
+  crescer o problema; ele não desfaz o que já está gravado. Três razões para deixar
+  como está por ora: (1) migração que **remove** linha de `conversas` exigiria checar
+  se a máquina de conferência de contagens (`PlanoDeMigracao`) tolera declarar `-N`
+  linhas — hoje ela só reprova divergência não-declarada, nunca foi usada para
+  encolher uma tabela; isso é pergunta de spec, não de `dev-05`. (2) o Acervo da
+  Renata vive no bosgame, fora do `upgrade-fleet` por desenho — a mesma situação já
+  registrada para a #1052 em 25/09/2026: código publicado não chega lá sozinho, e
+  levar até lá não é escopo deste agente. (3) medido: 809 Conversas, **zero
+  Mensagem** — não há dado real em risco, só poluição de lista. Se limpar for
+  decidido, é ato do Titular: migração versionada (todo instalação) ou comando
+  explícito (`malote conversas` algo, por ora inexistente) — decisão dele, não
+  execução direta.
+- **Lote que cai no derrame (Acervo ocupado) perde a mídia que trouxer (#1068).** O
+  reprocessamento (`malote ouvinte reprocessar`) chama `receberEvento` de novo sobre o
+  lote gravado em `nao-gravados.jsonl`, mas não há socket vivo nem `MidiaAoVivo` naquele
+  caminho — e a referência de download pode já ter expirado. O Anexo fica
+  `nunca-obtido`, do mesmo jeito que ficava antes desta correção. Não é regressão; é
+  limite não resolvido. Se aparecer de novo (derrame é raro — só sob disputa de
+  escrita), é trabalho novo, não bug da #1068.
 - **RESOLVIDO em 23/09/2026, mas o mecanismo que quase doeu fica registrado: o
   `upgrade-fleet` roda a cada 30 min no thinkpad (`*/30 * * * *`, `trust: "immediate"`
   para o pacote `malote`), e aplicou a v0.21.0 sozinho — pull + restart — cerca de 7

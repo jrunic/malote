@@ -1,9 +1,13 @@
 import { once } from 'node:events';
 import { criarServidor } from '../rede/servidor.js';
+import { iniciarWorkerDeTranscricao } from './transcricao.js';
+import { configuracaoDoMotor } from './motor-de-transcricao.js';
 import type { Ambiente } from './index.js';
 
 /** Os unicos enderecos que nao exigem ato explicito. */
 const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost']);
+
+const INTERVALO_DEFAULT_MS = 30_000;
 
 export function enderecoRecusado(endereco: string, exposto: boolean): string | null {
   if (exposto || LOOPBACK.has(endereco)) return null;
@@ -22,6 +26,8 @@ export function enderecoRecusado(endereco: string, exposto: boolean): string | n
 export interface AmbienteDeServico extends Ambiente {
   /** Injetavel para teste: por padrao, o servidor de verdade. */
   criar?: typeof criarServidor;
+  /** Injetavel para teste: por padrao, o worker de verdade. */
+  iniciarWorker?: typeof iniciarWorkerDeTranscricao;
 }
 
 function opcao(argumentos: string[], nome: string): string | undefined {
@@ -52,9 +58,25 @@ export async function servir(argumentos: string[], ambiente: AmbienteDeServico):
   escrever(`Servindo em http://${alcance.address}:${alcance.port}`);
   escrever('Somente leitura, e so com Chave de Acesso. Chave de Operador nao le acervo.');
 
+  // Log na subida do que o worker vai fazer — parte do "sinal proprio" do
+  // criterio 4: quem opera sabe, sem precisar de --json, se a transcricao
+  // vai rodar ou ficar parada.
+  const motorConfigurado = configuracaoDoMotor(process.env) !== undefined;
+  escrever(
+    motorConfigurado
+      ? '[transcricao] motor configurado; fila ativa.'
+      : '[transcricao] motor NAO configurado (variaveis de ambiente do motor ausentes); fila parada.',
+  );
+  const intervaloMs = Number(process.env['MALOTE_TRANSCRICAO_INTERVALO_MS'] ?? String(INTERVALO_DEFAULT_MS));
+  const pararWorker = (ambiente.iniciarWorker ?? iniciarWorkerDeTranscricao)(
+    { dados: ambiente.dados, env: process.env, escrever },
+    Number.isInteger(intervaloMs) && intervaloMs > 0 ? intervaloMs : INTERVALO_DEFAULT_MS,
+  );
+
   return await new Promise<number>((resolver) => {
     const parar = (sinal: string): void => {
       escrever(`[servir] ${sinal} recebido; parando.`);
+      pararWorker();
       servidor.close();
       resolver(0);
     };

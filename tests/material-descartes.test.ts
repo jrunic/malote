@@ -230,3 +230,91 @@ test('material sem repeticao conta zero — e zero e afirmacao, nao ausencia', (
     b.limpar();
   }
 });
+
+// --- Status (ZSESSIONTYPE=3) nunca vira Conversa (#1069) ---
+//
+// ZWACHATSESSION guarda cinco naturezas sob ZSESSIONTYPE — 0=direta,
+// 1=grupo, 2=lista-de-transmissao, 3=status, 4=comunidade —, medidas em
+// 21/09/2026 para o adaptador macOS do charla contra o MESMO formato de
+// backup. `!= 0` sozinho tratava as quatro nao-diretas como uma coisa so, e
+// isso incluia Status: o feed de acompanhamento de stories de um contato,
+// sem chat de verdade, que a importacao gravava como Conversa coletiva com o
+// NOME DO CONTATO como se fosse assunto de grupo. Medido no Acervo real da
+// Renata: 809 dessas entradas, todas com ZERO Mensagem.
+
+test('entrada de Status (tipo 3) nao vira Conversa, e e contada', () => {
+  const b = backupFalso({
+    conversas: [
+      { pk: 1, endereco: '5511900000001@s.whatsapp.net', nome: 'Direta', tipoDeSessao: 0 },
+      { pk: 2, endereco: '120363000000000000@g.us', nome: 'Grupo', tipoDeSessao: 1 },
+      { pk: 3, endereco: '5511900000002@status', nome: 'Fulano', tipoDeSessao: 3 },
+    ],
+    mensagens: [],
+  });
+  try {
+    const material = lerMaterial(b.raiz);
+    assert.equal(material.conversas.length, 2, 'a de Status nao entra');
+    assert.ok(
+      !material.conversas.some((c) => c.idExterno === '5511900000002@status'),
+      'o endereco de Status nao aparece em conversas',
+    );
+    assert.equal(material.descartes.conversas['status'], 1);
+    material.fechar();
+  } finally {
+    b.limpar();
+  }
+});
+
+test('lista de transmissao (tipo 2) e comunidade (tipo 4) continuam COLETIVA', () => {
+  // Este e o teste que mata o mutante `ZSESSIONTYPE === 1`: aquela regra
+  // demoveria lista de transmissao e comunidade a Conversa DIRETA, e isso
+  // reabriria o conflito que a #825/#826 ja resolveu (broadcast tem Mensagem
+  // de verdade — 29.035 medidas no Acervo real — e tem de ficar coletiva).
+  const b = backupFalso({
+    conversas: [
+      { pk: 1, endereco: '1681043162@broadcast', nome: 'Lista', tipoDeSessao: 2 },
+      { pk: 2, endereco: '120363000000000099@g.us', nome: 'Comunidade', tipoDeSessao: 4 },
+    ],
+    mensagens: [],
+  });
+  try {
+    const material = lerMaterial(b.raiz);
+    assert.equal(material.conversas.length, 2);
+    assert.ok(material.conversas.every((c) => c.coletiva === true));
+    assert.deepEqual(material.descartes.conversas, {}, 'nenhuma das duas e Status');
+    material.fechar();
+  } finally {
+    b.limpar();
+  }
+});
+
+test('o relatorio da importacao CARREGA o descarte de Status, rotulado como conversa', () => {
+  const c = cenario();
+  const b = backupFalso({
+    conversas: [
+      { pk: 1, endereco: '5511900000001@s.whatsapp.net', nome: 'Direta', tipoDeSessao: 0 },
+      { pk: 2, endereco: '5511900000002@status', nome: 'Fulano', tipoDeSessao: 3 },
+    ],
+    mensagens: [],
+  });
+  try {
+    const { acervo } = c.novoInquilino('Padme');
+    const material = lerMaterial(b.raiz);
+    const r = gravarMaterialLido(acervo, material, {
+      agora: Date.parse('2026-09-29T12:00:00Z'),
+      configuracao: CFG_WHATSAPP,
+    });
+    material.fechar();
+
+    assert.equal(r.descartesDoLeitor['status (conversa)'], 1);
+    assert.equal(r.conversasCriadas, 1, 'so a direta e criada');
+
+    const linha = acervo.db
+      .prepare('SELECT COUNT(*) AS n FROM conversas WHERE id_externo = ?')
+      .get('5511900000002@status') as { n: number };
+    assert.equal(linha.n, 0, 'nenhuma Conversa nasceu para o endereco de Status');
+  } finally {
+    b.limpar();
+    c.limpar();
+  }
+});

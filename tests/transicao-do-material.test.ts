@@ -18,7 +18,7 @@ function material(m: Partial<Material>): Material {
     mensagens: [],
     eventos: [],
     correspondencias: [],
-    descartes: { mensagens: {}, eventos: {} },
+    descartes: { mensagens: {}, eventos: {}, conversas: {} },
     linhasRepetidasNoMaterial: 0,
     fechar: () => {},
     ...m,

@@ -211,3 +211,35 @@ test('o detector de adaptador ACHA os imports que existem de verdade', () => {
   assert.equal(alcancaAdaptadores('../adaptadores/whatsapp/importar.js'), true);
   assert.equal(alcancaAdaptadores('src/adaptadores'), true);
 });
+
+/**
+ * ffmpeg e whisper.cpp nao sao pacote npm — nao ha import para guardar.
+ * O que acopla o produto a eles e a REFERENCIA as variaveis de ambiente que
+ * apontam pros binarios, e essa referencia precisa viver num lugar so.
+ */
+const VARIAVEIS_DO_MOTOR = [
+  'MALOTE_WHISPER_BINARIO',
+  'MALOTE_WHISPER_MODELO',
+  'MALOTE_FFMPEG_BINARIO',
+  'MALOTE_TRANSCRICAO_THREADS',
+  'MALOTE_TRANSCRICAO_IDIOMA',
+];
+const PORTAO_DO_MOTOR = join('src', 'cli', 'motor-de-transcricao.ts');
+
+test('so motor-de-transcricao.ts referencia as variaveis do motor de transcricao', () => {
+  const violacoes: string[] = [];
+  for (const arquivo of [
+    ...arquivosDe('src/nucleo'),
+    ...arquivosDe('src/registro'),
+    ...arquivosDe('src/adaptadores'),
+    ...arquivosDe('src/rede'),
+    ...arquivosDe('src/cli'),
+  ]) {
+    if (arquivo === PORTAO_DO_MOTOR) continue;
+    const fonte = readFileSync(arquivo, 'utf8');
+    for (const variavel of VARIAVEIS_DO_MOTOR) {
+      if (fonte.includes(variavel)) violacoes.push(`${arquivo} referencia ${variavel}`);
+    }
+  }
+  assert.deepEqual(violacoes, [], violacoes.join('; '));
+});

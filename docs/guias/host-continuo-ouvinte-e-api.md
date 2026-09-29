@@ -89,6 +89,16 @@ ouvinte não cria Configuração, de propósito.
 
 ## 3. O ouvinte, como serviço
 
+### 3.0 Destino de Mídia, para baixar o que chega ao vivo
+
+Sem Destino de Mídia configurado, o Anexo recebido ao vivo (foto, áudio, vídeo,
+documento) fica `nunca-obtido` para sempre — o ouvinte avisa uma vez na partida e segue
+sem baixar. Configure antes de parear:
+
+```bash
+$CLI inquilino destino --chave <valor> --inquilino <id> --endereco <caminho>
+```
+
 ### 3.1 Pasta de estado é pré-condição
 
 O ouvinte **não cria pasta** na partida (criação de diretório no caminho de subida é o que
@@ -220,7 +230,46 @@ vazio.
   da instalação; não inclua em rotação automática sem saber o que faz.
 - O resto de `~/.local/state/malote/` se refaz sozinho.
 
-## 7. Ingestão contínua (opcional)
+## 7. Transcrição de áudio (opcional)
+
+O `malote servir` transcreve, sozinho, todo Anexo de áudio que fica presente — usando
+`whisper.cpp` e `ffmpeg`, dois binários de sistema que o malote **não instala nem baixa**. Sem
+eles declarados, o produto sobe e funciona por inteiro; só a fila de transcrição fica parada
+(o log da subida diz qual dos dois casos é o seu).
+
+Declare, antes de subir o serviço:
+
+```bash
+export MALOTE_WHISPER_BINARIO=/caminho/para/whisper-cli
+export MALOTE_WHISPER_MODELO=/caminho/para/ggml-small.bin
+# Opcionais — os defaults abaixo cobrem a maioria dos casos:
+export MALOTE_FFMPEG_BINARIO=ffmpeg               # default: resolvido pelo PATH
+export MALOTE_TRANSCRICAO_THREADS=4               # default: 4 núcleos, nunca todos
+export MALOTE_TRANSCRICAO_IDIOMA=pt               # default: pt
+export MALOTE_TRANSCRICAO_INTERVALO_MS=30000      # default: 30s entre passadas do worker
+```
+
+São **por instalação**, não por Inquilino — os binários são recurso da máquina, não do
+Acervo. O `.wav` intermediário da conversão nunca entra no Destino de Mídia; vive em pasta
+temporária do sistema.
+
+**Risco:** binários de sistema, fora do `npm` — sem suporte do malote se a compilação, a
+versão ou o modelo derem problema. Ver a ADR
+`docs/decisoes/20260928-dependencia-nativa-do-whisper-cpp-para-transcricao-de-audio.md` para
+o risco completo e as alternativas descartadas.
+
+Falha de transcrição (áudio corrompido, binário incompatível) fica registrada com o motivo,
+sem travar as próximas da fila. Para tentar de novo:
+
+```bash
+$CLI transcricao reprocessar --inquilino <id>
+$CLI transcricao estado      --inquilino <id> --json   # contagem por estado + motor configurado
+```
+
+O backfill do estoque de áudio já presente antes de instalar esta versão **não acontece
+sozinho** — só o áudio que chega depois entra na fila.
+
+## 8. Ingestão contínua (opcional)
 
 Material que chega recorrentemente (exports de plataforma) entra por **Pastas de Entrada**
 declaradas e um `material varrer` agendado. Declare cada uma:
@@ -234,7 +283,7 @@ O disparo da varredura é **seu** (cron, timer): o produto não agenda nada sozi
 pastas gravam caminho absoluto no Registro — mover a instalação exige atualizar essas
 linhas (ver o guia de armazenamento).
 
-## 8. Operações que voltam com frequência
+## 9. Operações que voltam com frequência
 
 | situação | o que fazer |
 |---|---|

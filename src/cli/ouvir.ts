@@ -6,6 +6,8 @@ import { abrirAcervo, type Acervo } from '../nucleo/acervo.js';
 import { receberEvento, type MensagemRecebida } from '../adaptadores/whatsapp/ao-vivo.js';
 import { processarEstadoDeConversa } from '../adaptadores/whatsapp/estado-ao-vivo.js';
 import { conectar } from '../adaptadores/whatsapp/conexao.js';
+import { lerDestinoDeMidia } from '../registro/destino-midia.js';
+import { gravarArquivoDeAnexo } from '../nucleo/arquivo-de-anexo.js';
 import { lerUltimoEvento, marcarUltimoEvento } from './ultimo-evento.js';
 import {
   caminhoDoEnvenenado,
@@ -187,6 +189,10 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
     abrirRegistro(ambiente.dados),
   );
   let configuracao: { id: string; fonte: 'whatsapp' };
+  // Sem Destino, o Anexo ao vivo fica `nunca-obtido` (como hoje): recusar a
+  // subida so por isso quebraria instalacao que nunca configurou um — a
+  // mesma razao pela qual `midia trazer` RECUSA e o ouvinte so AVISA.
+  let destinoDeMidia: string | undefined;
   try {
     if (!listarInquilinos(registro).some((i) => i.id === inquilinoId)) {
       escrever(`Inquilino desconhecido: ${inquilinoId}`);
@@ -203,8 +209,14 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
       return 2;
     }
     configuracao = { id: cfg.id, fonte: 'whatsapp' };
+    destinoDeMidia = lerDestinoDeMidia(registro, inquilinoId)?.endereco;
   } finally {
     registro.fechar();
+  }
+  if (destinoDeMidia === undefined) {
+    escrever('AVISO: Destino de Midia nao configurado — midia recebida ao vivo permanece');
+    escrever('nunca-obtido. Configure com: malote inquilino destino --chave <valor> --inquilino');
+    escrever(`<id> --endereco <caminho>`);
   }
 
   const caminhos = caminhosDaConta(ambiente.estado, conta);
@@ -308,7 +320,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
       ...(ambiente.carregarBiblioteca !== undefined
         ? { carregarBiblioteca: ambiente.carregarBiblioteca }
         : {}),
-      aoReceber: (mensagens) =>
+      aoReceber: (mensagens, midia) =>
         // O escopo do Ator abre AQUI, e nao ao redor do laco de recepcao.
         // `receberEvento` e sincrono, entao o Ator vale por construcao — sem
         // depender de o contexto atravessar o encanamento assincrono da
@@ -362,6 +374,47 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
           // efeito que so avanca com escrita nova o declararia morto.
           marcarUltimoEvento(caminhos.ultimoEvento, agora());
           if (r.recusados.length > 0) escrever(`[ouvinte] recusados: ${r.recusados.length}`);
+          // A #1068: cada Anexo que nasceu `nunca-obtido` NESTE lote baixa em
+          // segundo plano — fire-and-forget de proposito, porque `aoReceber` e
+          // sincrono por construcao (o Ator acima depende disso) e esperar o
+          // download aqui bloquearia a proxima mensagem da biblioteca.
+          //
+          // O Ator abre DE NOVO dentro do `.then`: o comentario no topo desta
+          // funcao ja diz por que — o escopo nao atravessa o `await` da
+          // biblioteca, e o mesmo vale para o `await` do download.
+          for (const anexo of r.anexosNuncaObtidos) {
+            const destino = destinoDeMidia;
+            if (destino === undefined) continue;
+            void midia
+              .baixar(anexo.indice)
+              .then((bytes) =>
+                comAtor(atorDeServico('ouvinte-whatsapp'), () => {
+                  try {
+                    gravarArquivoDeAnexo(acervo, { anexoId: anexo.anexoId, destino, bytes });
+                  } catch (erroDeEscrita) {
+                    // Mesma politica do resto deste arquivo: banco ocupado
+                    // NAO E FALHA, e um catch largo aqui esconderia defeito
+                    // real do produto atras de "midia nao chegou".
+                    if (ehBancoOcupado(erroDeEscrita)) {
+                      escrever(`[ouvinte] midia do Anexo ${anexo.anexoId} adiada: Acervo ocupado.`);
+                      return;
+                    }
+                    escrever(
+                      `[ouvinte] midia do Anexo ${anexo.anexoId} falhou ao gravar: ` +
+                        `${String(erroDeEscrita)}`,
+                    );
+                  }
+                }),
+              )
+              .catch((erroDeDownload) => {
+                // Rejeicao sem `.catch` mata o processo — o Anexo continua
+                // `nunca-obtido`, exatamente como antes desta correcao.
+                escrever(
+                  `[ouvinte] midia do Anexo ${anexo.anexoId} falhou ao baixar: ` +
+                    `${String(erroDeDownload)}`,
+                );
+              });
+          }
           // A serie de vigilancia da #775. Anotada DEPOIS de a recepcao ter
           // sucedido, porque so aqui o relato existe — no caminho do derrame a
           // excecao sobe antes, e aquele lote e contado quando drenar.

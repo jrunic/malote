@@ -14,7 +14,15 @@ import {
   vincularIdentificador,
 } from '../src/nucleo/identidade.js';
 
-test('o schema do Acervo está na versão 20', () => {
+test('o schema do Acervo está na versão 21', () => {
+  // v21 em 28/09/2026: a TRANSCRICAO entra pendurada no Anexo, so para
+  // tipo='audio'. Nao e "interpretacao de conteudo" (ver docs/dominio,
+  // Fora do dominio) — resgata em texto o que foi dito, sem julgar. Todo
+  // Anexo de audio ja presente ANTES deste passo recebe o estado
+  // fora-de-escopo, nunca pendente — e o mecanismo que impede o primeiro
+  // boot pos-deploy do worker de disparar, sem ninguem pedir, o backfill
+  // do estoque existente.
+  //
   // v20 em 23/09/2026: a DIRECAO DA MENSAGEM completa para Instagram, pelo
   // Nome do Titular na Fonte declarado em Pasta de Entrada (Registro) — por
   // isso exige contexto, como o passo 13->14. Conversa direta resolve pela
@@ -104,7 +112,7 @@ test('o schema do Acervo está na versão 20', () => {
   // v9: Transicao de Participacao como registro proprio, e a atividade que a
   // Fonte declara no retrato. Acervo v8 nao tem nem uma nem outra, e a
   // consulta de presenca leria silencio como ausencia.
-  assert.equal(VERSAO_SCHEMA_ACERVO, 20);
+  assert.equal(VERSAO_SCHEMA_ACERVO, 21);
 });
 
 test('o nome pendura em Identificador, sem Pessoa nenhuma', () => {
