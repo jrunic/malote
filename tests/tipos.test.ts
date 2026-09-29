@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DIRECOES, FONTES, PRESENCAS, ehDirecao, ehFonte } from '../src/nucleo/tipos.js';
+import { DIRECOES, ESTADOS_DE_TRANSCRICAO, FONTES, PRESENCAS, ehDirecao, ehEstadoDeTranscricao, ehFonte } from '../src/nucleo/tipos.js';
 
 test('as Fontes conhecidas são declaradas em um só lugar', () => {
   assert.deepEqual([...FONTES], ['whatsapp', 'instagram', 'contatos']);
@@ -24,4 +24,11 @@ test('ehDirecao reconhece os dois valores e recusa o resto', () => {
   assert.equal(ehDirecao('enviada'), true);
   assert.equal(ehDirecao('recebida'), true);
   assert.equal(ehDirecao('desconhecida'), false);
+});
+
+test('ehEstadoDeTranscricao aceita os quatro estados e recusa o resto', () => {
+  for (const estado of ESTADOS_DE_TRANSCRICAO) {
+    assert.ok(ehEstadoDeTranscricao(estado));
+  }
+  assert.ok(!ehEstadoDeTranscricao('em-andamento'));
 });
