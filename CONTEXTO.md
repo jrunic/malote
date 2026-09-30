@@ -444,6 +444,16 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 29/09/2026 — **Investigado e NÃO REPRODUZIDO: JSON truncado em respostas grandes
+  (#1091, relato da mentorada Renata).** O relatório do agente dela (`David`) mostrava
+  `json.decoder.JSONDecodeError: Unterminated string` ao consumir `malote conversas`/
+  `mensagens` de conversa longa. Reproduzido nos dois caminhos que o malote controla,
+  contra Acervo real (thinkpad): CLI local (1,4 MB de saída, JSON válido, fecha limpo)
+  e caminho de rede real via `fetch`+`node:http` (1,55 MB, JSON válido). **Se o relato
+  se repetir, o primeiro lugar a olhar não é o malote — é o lado do consumidor**
+  (harness do agente truncando saída de comando antes de fazer parse; mesma classe de
+  suspeita já registrada na investigação da #1054, em 25/09/2026). Nenhuma mudança de
+  código feita por causa disso.
 - 29/09/2026 — **RELEASE v0.22.0 PUBLICADA E DISTRIBUÍDA NO THINKPAD, VERIFICADA POR
   EFEITO** (#1068, #1069, #1070 — as três entradas abaixo, cada uma "AINDA NÃO
   LIBERADO"/"Nenhuma release publicada ainda" está desatualizada por esta linha). PR #8
