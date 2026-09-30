@@ -7,6 +7,8 @@ import { executar } from '../src/cli/index.js';
 import { abrirAcervo } from '../src/nucleo/acervo.js';
 import { registrarIdentificador } from '../src/nucleo/escrita.js';
 import { registrarNome } from '../src/nucleo/identidade.js';
+import { procurarPessoas } from '../src/nucleo/consulta.js';
+import { listarOperacoesCruas } from '../src/nucleo/trilha.js';
 
 function rodar(raiz: string, argumentos: string[]): { codigo: number; saida: string } {
   const linhas: string[] = [];
@@ -454,6 +456,72 @@ test('promover-identificadores-nomeados em ensaio nao escreve nada', () => {
 
     const depois = rodar(raiz, ['pessoa', 'listar', '--inquilino', inquilino]);
     assert.doesNotMatch(depois.saida, /Han/, 'ensaio nao cria Pessoa');
+  } finally {
+    limpar();
+  }
+});
+
+test('promover-identificadores-nomeados aplicado: a Pessoa aparece na busca por texto', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino, noWhats } = cenarioDeCli(raiz);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    registrarNome(acervo, { identificadorId: noWhats, origem: 'whatsapp', nome: 'Han Solo', autoridade: 'terceiro' });
+    acervo.fechar();
+
+    const aplicado = rodar(raiz, [
+      'pessoa', 'promover-identificadores-nomeados',
+      '--inquilino', inquilino, '--com-efeito', '--confirmo',
+    ]);
+    assert.equal(aplicado.codigo, 0);
+    assert.match(aplicado.saida, /1 Pessoa\(s\) criada/);
+
+    const busca = rodar(raiz, ['pessoa', 'listar', '--inquilino', inquilino]);
+    assert.match(busca.saida, /Han Solo/);
+  } finally {
+    limpar();
+  }
+});
+
+test('criterio 4: procurarPessoas (o mecanismo de busca em si, nao so a saida da CLI) encontra depois de promovido', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino, noWhats } = cenarioDeCli(raiz);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    registrarNome(acervo, { identificadorId: noWhats, origem: 'whatsapp', nome: 'Han Solo', autoridade: 'terceiro' });
+
+    assert.equal(procurarPessoas(acervo, { texto: 'Han Solo' }).length, 0, 'antes de promover, nao encontra');
+    acervo.fechar();
+
+    rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino, '--com-efeito', '--confirmo']);
+
+    const acervo2 = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    assert.equal(procurarPessoas(acervo2, { texto: 'Han Solo' }).length, 1, 'depois de promover, encontra');
+    acervo2.fechar();
+  } finally {
+    limpar();
+  }
+});
+
+test('rodar duas vezes seguidas: a segunda nao cria Pessoa nova, nem Operacao nova', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino, noWhats } = cenarioDeCli(raiz);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    registrarNome(acervo, { identificadorId: noWhats, origem: 'whatsapp', nome: 'Han', autoridade: 'terceiro' });
+    acervo.fechar();
+
+    rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino, '--com-efeito', '--confirmo']);
+    const acervoEntre = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    const operacoesAntes = listarOperacoesCruas(acervoEntre).length;
+    acervoEntre.fechar();
+
+    const segunda = rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino, '--com-efeito', '--confirmo']);
+
+    assert.match(segunda.saida, /0 Pessoa\(s\) criada/);
+    const acervoDepois = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    assert.equal(listarOperacoesCruas(acervoDepois).length, operacoesAntes, 'segunda rodada vazia nao abre Operacao');
+    acervoDepois.fechar();
   } finally {
     limpar();
   }
