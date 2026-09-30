@@ -14,6 +14,7 @@ import {
 } from '../src/nucleo/identidade.js';
 import { listarOperacoesCruas } from '../src/nucleo/trilha.js';
 import { desfazerOperacao } from '../src/nucleo/desfazer.js';
+import { aplicarConjunto } from '../src/nucleo/aplicacao.js';
 
 test('sem Atribuição nenhuma, não é elegível', () => {
   const c = cenario();
@@ -153,6 +154,50 @@ test('desfazer a Operacao de uma promocao desvincula; a Pessoa e recusada e perm
     assert.equal(desfeito.recusados.length, 1);
     assert.ok(lerPessoa(acervo, pessoaId, { porOrigem: {}, catalogoPreferido: null }));
     assert.equal(nomesDoIdentificador(acervo, a.id).length, 1, 'a Atribuicao do endereco continua la');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('catalogo que aponta pro mesmo endereco ja promovido vincula, sem criar Pessoa nova', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia Organa');
+    const doWhats = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '5565900000020' });
+    registrarNome(acervo, { identificadorId: doWhats.id, origem: 'whatsapp', nome: 'Han', autoridade: 'terceiro' });
+    const r = promoverIdentificadores(acervo, [doWhats.id]);
+    const pessoaMaterial = r.pessoasCriadas[0];
+
+    const doCatalogo = registrarIdentificador(acervo, { fonte: 'contatos', valor: 'han@example.com' });
+
+    const resultado = aplicarConjunto(acervo, [doWhats.id, doCatalogo.id]);
+
+    assert.equal(resultado.pessoasCriadas.length, 0, 'nao cria Pessoa nova');
+    assert.equal(resultado.vinculos.length, 1, 'so o de catalogo precisa de vinculo novo');
+    const vinculoCatalogo = lerVinculo(acervo, doCatalogo.id);
+    assert.equal(vinculoCatalogo?.pessoaId, pessoaMaterial);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('dois Identificadores promovidos separadamente se fundem quando um catalogo liga os dois', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia Organa');
+    const a = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '5565900000021' });
+    const b = registrarIdentificador(acervo, { fonte: 'instagram', valor: 'conversa:99' });
+    registrarNome(acervo, { identificadorId: a.id, origem: 'whatsapp', nome: 'Han', autoridade: 'terceiro' });
+    registrarNome(acervo, { identificadorId: b.id, origem: 'instagram', nome: 'Han Solo', autoridade: 'terceiro' });
+    const rA = promoverIdentificadores(acervo, [a.id]);
+    const rB = promoverIdentificadores(acervo, [b.id]);
+    assert.notEqual(rA.pessoasCriadas[0], rB.pessoasCriadas[0], 'duas Pessoas material distintas');
+
+    const doCatalogo = registrarIdentificador(acervo, { fonte: 'contatos', valor: 'han@example.com' });
+    const resultado = aplicarConjunto(acervo, [a.id, b.id, doCatalogo.id]);
+
+    assert.equal(resultado.mesclagens.length, 1, 'as duas Pessoas material se fundem');
+    assert.equal(resultado.mesclagens[0]?.regra, 'ordem-de-chamada', 'nenhum dos dois tem catalogo ainda');
   } finally {
     c.limpar();
   }
