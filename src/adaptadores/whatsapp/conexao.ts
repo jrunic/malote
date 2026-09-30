@@ -322,3 +322,34 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
     },
   };
 }
+
+export interface OpcoesDeRetryDeMidia {
+  /** Injetavel para teste. Por padrao, o import dinamico da biblioteca. */
+  carregarBiblioteca?: () => Promise<unknown>;
+}
+
+/**
+ * Baixa os bytes de uma Mensagem RECONSTITUIDA (por `reconstituirMensagemParaRetry`,
+ * em `retry-de-midia.ts`, com `mediaKey` ja em `Buffer` de verdade) — o retry
+ * de mídia ao vivo que falhou (#1084).
+ *
+ * NAO abre socket nenhum: medido em 29/09/2026, contra dois Anexos reais de
+ * producao que tinham falhado no dia anterior, que `downloadMediaMessage` da
+ * biblioteca baixa e decifra so com a mensagem e a referencia CDN (`url`/
+ * `directPath`) que ela carrega — sem depender de conexao viva com a
+ * plataforma. A referencia expira em cerca de 30 dias (medido decodificando
+ * o parametro `oe` da URL, epoch em hex), entao o retry tem uma janela larga,
+ * nao uma corrida contra minutos.
+ *
+ * Import DINAMICO, como em `conectar`: este caminho roda como comando de CLI
+ * avulso (`malote midia reprocessar`), fora do processo do ouvinte, e importar
+ * a biblioteca estaticamente carregaria a arvore inteira em todo comando.
+ */
+export async function baixarMidiaReconstituida(
+  mensagem: unknown,
+  opcoes: OpcoesDeRetryDeMidia = {},
+): Promise<Buffer> {
+  const carregar = opcoes.carregarBiblioteca ?? ((): Promise<unknown> => import('baileys'));
+  const lib = (await carregar()) as Biblioteca;
+  return lib.downloadMediaMessage(mensagem, 'buffer', {});
+}

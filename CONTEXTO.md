@@ -395,6 +395,20 @@ Hard limits sempre relevantes durante a sessão.
 - **Sem Destino de Mídia, o ouvinte AVISA e segue — não recusa subir.** Diferente de
   `malote midia trazer`, que recusa sem Destino: recusar a subida do ouvinte quebraria
   toda instalação que nunca configurou um. O Anexo fica `nunca-obtido`, como sempre foi.
+- **A referência de mídia do WhatsApp expira em ~30 dias, não minutos — e `mediaKey`
+  chega em DUAS formas no `bruto` gravado.** Medido em 29-30/09/2026 (#1084), contra
+  dois Anexos reais de produção que tinham falhado no dia anterior: a URL carrega o
+  próprio prazo (parâmetro `oe=`, epoch em hex) — decodificado, ~30 dias a partir do
+  recebimento. `downloadMediaMessage` da biblioteca funciona **sem socket vivo**, só
+  com a mensagem reconstruída (confirmado baixando de verdade, 1,89 MB, ~1 dia depois
+  da falha original). `mediaKey` aparece como **string base64 pura** (os dois casos
+  reais) ou como `{type:'Buffer',data:[...]}` (o que o round-trip de JSON do
+  `aoReceber` produz — ver item acima) — as duas formas acontecem, nenhuma é "a"
+  certa; `reconstituirMensagemParaRetry` (`retry-de-midia.ts`) trata as duas.
+  **A causa original da falha (ETIMEDOUT, bad decrypt) NÃO prevê se o retry funciona**
+  — nos dois casos medidos o resultado esperado se inverteu (o "fácil" falhou de
+  novo, o "difícil" recuperou) — por isso `malote midia reprocessar` tenta TODOS os
+  elegíveis, sem filtrar por motivo anterior.
 
 - **`ZSESSIONTYPE` do backup de iOS tem CINCO naturezas, não duas.** 0=direta,
   1=grupo, 2=lista-de-transmissão, 3=status, 4=comunidade — medido em 21/09/2026 para

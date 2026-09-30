@@ -679,3 +679,41 @@ export function contarPorFonte(acervo: Acervo): ContagemPorFonte {
   }
   return { conversas, mensagens };
 }
+
+export interface AnexoNuncaObtidoComBruto {
+  anexoId: string;
+  tipo: string;
+  /** O bruto da MENSAGEM (nunca o do Anexo) — e onde mediaKey/directPath vivem. */
+  mensagemBruto: string | null;
+}
+
+/**
+ * Anexo `nunca-obtido`, com o bruto da Mensagem que o carrega — materia-prima
+ * do retry de midia (#1084). Nucleo devolve o bruto CRU; decidir se ele tem
+ * forma de recepcao ao vivo e reconstitui-lo e trabalho do Adaptador, que e
+ * quem conhece a Fonte — nucleo nao interpreta o conteudo, so entrega.
+ */
+export function listarAnexosNuncaObtidosComBruto(
+  acervo: Acervo,
+  filtro: { fonte?: Fonte } = {},
+): AnexoNuncaObtidoComBruto[] {
+  const condicoes = ["a.presenca = 'nunca-obtido'"];
+  const valores: unknown[] = [];
+  if (filtro.fonte !== undefined) {
+    condicoes.push('m.fonte = ?');
+    valores.push(filtro.fonte);
+  }
+  const linhas = acervo.preparar(
+      `SELECT a.id AS anexo_id, a.tipo, m.bruto AS mensagem_bruto
+         FROM anexos a
+         JOIN mensagens m ON m.id = a.mensagem_id
+        WHERE ${condicoes.join(' AND ')}`,
+    )
+    .all(...valores) as Array<Record<string, unknown>>;
+
+  return linhas.map((l) => ({
+    anexoId: l['anexo_id'] as string,
+    tipo: l['tipo'] as string,
+    mensagemBruto: (l['mensagem_bruto'] as string | null) ?? null,
+  }));
+}

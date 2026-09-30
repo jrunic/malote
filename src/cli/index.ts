@@ -40,6 +40,7 @@ import {
   lerDestinoDeMidia,
 } from '../registro/destino-midia.js';
 import { trazerArquivos } from '../adaptadores/whatsapp/trazer.js';
+import { reprocessarMidiaNuncaObtida } from '../adaptadores/whatsapp/reprocessar-midia.js';
 import { conferirDisco, relatarAcervo } from '../nucleo/relatorio-de-acervo.js';
 import { aplicarRetencao, projetarRetencao } from '../nucleo/retencao.js';
 import {
@@ -255,6 +256,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote entrada declarar       --inquilino <id> --fonte <nome> --configuracao <apelido> --pasta <caminho> --natureza completo|parcial [--titular-na-fonte <nome>]
   malote entrada listar         --inquilino <id>
   malote midia trazer           --inquilino <id> --material <caminho> [--conta pessoal|business]
+  malote midia reprocessar      --inquilino <id>  (tenta de novo Anexo ao vivo que falhou)
   malote acervo relatar         --inquilino <id>
   malote retencao definir       --inquilino <id> [--mais-velho-que-dias <n>] [--maior-que-mb <n>] [--tipos video,audio]
   malote retencao ver           --inquilino <id>
@@ -447,6 +449,59 @@ export async function executarConsultaRede(
     rede.escrever((e as Error).message);
     return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
   }
+}
+
+/**
+ * `malote midia reprocessar` — a #1084: o UNICO comando local (fora de
+ * `ouvir`/`servir`/rede) que precisa de verdade ser assincrono, porque baixar
+ * midia e I/O de rede. Mesmo motivo do `ouvir`: `executar()` fica sincrona
+ * para todo o resto, e este comando e despachado ANTES dela, no ponto de
+ * entrada — nao dentro de `executarComAtor`, que nao pode `await`.
+ *
+ * Replica o mesmo setup de Registro/Ator de `executar()` (abrir Registro sob
+ * `LOCAL`, resolver `--chave` DEPOIS de aberto, rodar o trabalho sob o Ator
+ * resultante) — o Ator sobrevive aos `await` internos porque `comAtor` roda
+ * o `AsyncLocalStorage` em volta da funcao assincrona INTEIRA, nao so da
+ * parte sincrona dela.
+ */
+export async function executarMidiaReprocessar(
+  argumentos: string[],
+  ambiente: Ambiente,
+): Promise<number> {
+  const { escrever } = ambiente;
+  const chave = opcao(argumentos, 'chave');
+  const registro = comAtor(LOCAL, () => abrirRegistro(ambiente.dados));
+  const identidade = chave === undefined ? null : verificarChaveDeOperador(registro, chave);
+
+  return comAtor(identidade === null ? LOCAL : atorDeOperador(identidade), async () => {
+    try {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) {
+        escrever('Uso: malote midia reprocessar --inquilino <id>');
+        return 2;
+      }
+      const destino = lerDestinoDeMidia(registro, inquilino);
+      if (destino === undefined) {
+        escrever(
+          'Destino de Midia nao configurado para este Inquilino. Rode: ' +
+            'malote inquilino destino --chave <valor> --inquilino <id> --endereco <caminho>',
+        );
+        return 1;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const r = await reprocessarMidiaNuncaObtida(acervo, destino.endereco);
+        escrever(`${r.recuperados} recuperado(s) (${r.bytesRecuperados} bytes).`);
+        if (r.falhas > 0) escrever(`${r.falhas} falharam.`);
+        if (r.naoElegiveis > 0) escrever(`${r.naoElegiveis} nao elegivel(is) (nao veio de recepcao ao vivo).`);
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    } finally {
+      registro.fechar();
+    }
+  });
 }
 
 /**
@@ -2395,6 +2450,10 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
     void ouvir(argumentos, ambiente).then((codigo) => process.exit(codigo));
   } else if (argumentos[0] === 'servir') {
     void servir(argumentos, ambiente).then((codigo) => process.exit(codigo));
+  } else if (argumentos[0] === 'midia' && argumentos[1] === 'reprocessar') {
+    // #1084: baixar midia de novo e I/O de rede — mesmo motivo do ouvir,
+    // despachado ANTES de `executar()` para poder `await`.
+    void executarMidiaReprocessar(argumentos, ambiente).then((codigo) => process.exit(codigo));
   } else if (COMANDOS_DE_REDE.has(argumentos[0] ?? '') && ambiente.servidor !== undefined) {
     // Modo REDE: a consulta e async (HTTP), e o executar e sincrono — mesmo
     // padrao do ouvir. A chave e a identidade; sem ela, recusa com o contrato

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { conectar, type MidiaAoVivo } from '../src/adaptadores/whatsapp/conexao.js';
+import { conectar, baixarMidiaReconstituida, type MidiaAoVivo } from '../src/adaptadores/whatsapp/conexao.js';
 
 /**
  * A #1068: o modulo de conexao e o UNICO autorizado a falar com a biblioteca,
@@ -130,4 +130,36 @@ test('midia.baixar com indice invalido rejeita, sem tocar a biblioteca', async (
   } finally {
     rmSync(pasta, { recursive: true, force: true });
   }
+});
+
+test('baixarMidiaReconstituida (#1084) chama downloadMediaMessage SEM precisar de socket vivo', async () => {
+  let mensagemRecebida: unknown;
+  const mensagemReconstruida = {
+    key: { remoteJid: '5511000000001@s.whatsapp.net', id: 'M1', fromMe: false },
+    message: { videoMessage: { mediaKey: Buffer.from([1, 2, 3]), directPath: '/x' } },
+  };
+  const biblioteca = {
+    downloadMediaMessage: (mensagem: unknown) => {
+      mensagemRecebida = mensagem;
+      return Promise.resolve(Buffer.from('bytes-recuperados'));
+    },
+  };
+
+  const bytes = await baixarMidiaReconstituida(mensagemReconstruida, {
+    carregarBiblioteca: () => Promise.resolve(biblioteca),
+  });
+
+  assert.equal(bytes.toString(), 'bytes-recuperados');
+  assert.equal(mensagemRecebida, mensagemReconstruida, 'a MESMA mensagem chega a biblioteca, sem copia');
+});
+
+test('baixarMidiaReconstituida propaga a falha da biblioteca, sem mascarar', async () => {
+  const biblioteca = {
+    downloadMediaMessage: () => Promise.reject(new Error('bad decrypt')),
+  };
+
+  await assert.rejects(
+    () => baixarMidiaReconstituida({}, { carregarBiblioteca: () => Promise.resolve(biblioteca) }),
+    /bad decrypt/,
+  );
 });
