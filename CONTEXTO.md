@@ -571,20 +571,22 @@ Repositório expõe services systemd. Convenções:
   cobre o estoque histórico de antes desta correção** (94-99,8% dos Anexos ao vivo)
   — essas referências quase certamente expiraram; o único caminho para elas é
   `malote midia trazer` a partir de um backup do aparelho.
-- **As 809 Conversas fantasma de Status já gravadas no Acervo da Renata (#1069) NÃO
-  foram limpas — decisão explícita, não esquecimento.** O importador corrigido impede
-  crescer o problema; ele não desfaz o que já está gravado. Três razões para deixar
-  como está por ora: (1) migração que **remove** linha de `conversas` exigiria checar
-  se a máquina de conferência de contagens (`PlanoDeMigracao`) tolera declarar `-N`
-  linhas — hoje ela só reprova divergência não-declarada, nunca foi usada para
-  encolher uma tabela; isso é pergunta de spec, não de `dev-05`. (2) o Acervo da
-  Renata vive no bosgame, fora do `upgrade-fleet` por desenho — a mesma situação já
-  registrada para a #1052 em 25/09/2026: código publicado não chega lá sozinho, e
-  levar até lá não é escopo deste agente. (3) medido: 809 Conversas, **zero
-  Mensagem** — não há dado real em risco, só poluição de lista. Se limpar for
-  decidido, é ato do Titular: migração versionada (todo instalação) ou comando
-  explícito (`malote conversas` algo, por ora inexistente) — decisão dele, não
-  execução direta.
+- **RESOLVIDO em 29/09/2026 (#1088): as Conversas fantasma de Status já gravadas
+  agora são limpas por migração — passo `REMOVE_STATUS_FANTASMA_V22` (Acervo
+  v21→v22).** Critério final, medido contra o thinkpad e mais completo que a
+  suspeita original de sufixo de string: `json_extract(bruto, '$.ZSESSIONTYPE')
+  = 3`, que cobre as duas formas de endereço (`@status` e `@lid.status`) —
+  1060 candidatas em produção, das quais 696 com zero Mensagem (removidas) e
+  364 com "mensagem" (conteúdo de Status/Stories do backup, não chat; ficam,
+  de propósito — nunca perder dado por engano). A máquina de migração **foi**
+  provada para delta negativo — `divergenciasEsperadas` como GETTER (closure
+  que `aplicar()` preenche, lido depois de rodar), primeiro uso real desse
+  caminho, porque o número de linhas removidas varia por instalação e não dá
+  para declarar um `-N` fixo. `participacoes`/`metadados_de_coletiva` cascadeiam
+  (`ON DELETE CASCADE`) e entram na mesma declaração. **Isto só limpa
+  instalações que rodarem a migração** — o Acervo da Renata (bosgame) continua
+  fora do `upgrade-fleet` por desenho (mesma situação da #1052), então levar
+  o fix até lá é ato separado, fora do escopo deste agente.
 - **Lote que cai no derrame (Acervo ocupado) perde a mídia que trouxer (#1068).** O
   reprocessamento (`malote ouvinte reprocessar`) chama `receberEvento` de novo sobre o
   lote gravado em `nao-gravados.jsonl`, mas não há socket vivo nem `MidiaAoVivo` naquele
