@@ -229,8 +229,7 @@ function textoDe(message: Record<string, unknown> | undefined | null): string | 
 }
 
 /**
- * Se o endereco e de Conversa COLETIVA — grupo, lista de transmissao ou feed
- * de status.
+ * Se o endereco e de Conversa COLETIVA — grupo ou lista de transmissao.
  *
  * A REGRA NASCEU DE UMA DIVERGENCIA MEDIDA, e nao de gosto. Ate 08/09/2026 a
  * recepcao ao vivo decidia so por `@g.us`, e a importacao de material por
@@ -245,18 +244,30 @@ function textoDe(message: Record<string, unknown> | undefined | null): string | 
  * por natureza, o mesmo endereco vira DUAS Conversas — e a guarda que impede
  * isso passou a BLOQUEAR a importacao da segunda conta. Foi assim que apareceu.
  *
- * Feed de status e lista de transmissao nao sao conversa entre duas pessoas, e
- * o criterio 11a da spec do #825 ja decidiu que status e coletiva
- * compartilhada entre as contas do Inquilino. `.status` entra porque o acervo
- * real tem a forma `<lid>@lid.status`, que `@status` sozinho nao casa.
+ * SUPERADO em 29/09/2026 (#1094), so para o feed de status: o criterio 11a da
+ * spec do #825 dizia que ele cai do lado compartilhado (coletiva). Decisao do
+ * Titular: "status nao faz sentido em malote" — o mesmo feed que a #1069 ja
+ * passou a descartar por completo no caminho de importacao. `enderecoEhColetivo`
+ * NAO VE MAIS status — quem descarta o evento inteiro, antes de chegar aqui, e
+ * `enderecoEhFeedDeStatus` no laco principal de `receberEvento`. Lista de
+ * transmissao (`@broadcast`) nao e tocada pela reversao: tem Mensagem real
+ * (29.035 medidas em #825/#826) e continua coletiva.
  */
 export function enderecoEhColetivo(endereco: string): boolean {
-  return (
-    endereco.endsWith('@g.us') ||
-    endereco.endsWith('@broadcast') ||
-    endereco.endsWith('@status') ||
-    endereco.endsWith('.status')
-  );
+  return endereco.endsWith('@g.us') || endereco.endsWith('@broadcast');
+}
+
+/**
+ * O feed de Status/Stories de um contato — nunca chat de verdade.
+ *
+ * Duas formas conhecidas: `<numero>@status` (a que a importacao ja traz) e
+ * `<lid>@lid.status` (a variante em LID, que `@status` sozinho nao casa). A
+ * #1069 ja descarta esse feed na importacao (`material.ts`); esta funcao e o
+ * espelho no caminho ao vivo — decisao do Titular em 29/09/2026, revertendo o
+ * criterio 11a do #825.
+ */
+export function enderecoEhFeedDeStatus(endereco: string): boolean {
+  return endereco.endsWith('@status') || endereco.endsWith('.status');
 }
 
 export function receberEvento(
@@ -367,6 +378,15 @@ export function receberEvento(
     // dos 4.167 eventos de 11h23 de captura.
     if (ehCifrada(m.messageStubType)) {
       relato.ignorados['cifrada'] = (relato.ignorados['cifrada'] ?? 0) + 1;
+      continue;
+    }
+
+    // Feed de Status/Stories nao e chat de verdade — #1094, espelhando a
+    // #1069 que ja descarta o mesmo feed na importacao. Descartado ANTES de
+    // resolver endereco ou abrir Operacao: nenhuma Conversa, nenhuma
+    // Mensagem, para nenhuma das duas formas conhecidas.
+    if (enderecoEhFeedDeStatus(m.key.remoteJid)) {
+      relato.ignorados['status'] = (relato.ignorados['status'] ?? 0) + 1;
       continue;
     }
 

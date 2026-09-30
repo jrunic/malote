@@ -404,6 +404,20 @@ Hard limits sempre relevantes durante a sessão.
   um contato. `=== 1` seria o fix errado: demoveria lista de transmissão e comunidade a
   Conversa direta, contradizendo a #825/#826 (broadcast tem Mensagem real, 29.035
   medidas, e fica coletiva). Ver `DescartesDoMaterial.conversas['status']` (#1069).
+- **A decisão acima vale para os DOIS caminhos que podem criar Conversa — e só
+  cobria um.** O #1069 corrigiu a IMPORTAÇÃO (`material.ts`); a RECEPÇÃO AO VIVO
+  (`ao-vivo.ts`) tinha uma decisão própria e mais antiga (critério 11a do #825:
+  "os feeds de status caem do lado compartilhado"), que classificava
+  `<numero>@status`/`<lid>@lid.status` como coletiva e deixava a Conversa **e**
+  a Mensagem serem gravadas normalmente — com evidência de que isso já aconteceu
+  em produção (11 Conversas diretas de broadcast/status nascidas ao vivo, antes
+  do fix de `@g.us`). **Revertido em 29/09/2026 (#1094)**, decisão direta do
+  Titular: "status não faz sentido em malote; o critério da 11a está errado".
+  `enderecoEhFeedDeStatus` descarta o evento inteiro no laço principal de
+  `receberEvento`, antes de resolver endereço ou abrir Operação — nenhuma
+  Conversa, nenhuma Mensagem, para nenhuma das duas formas. **`@broadcast`
+  (lista de transmissão e o feed agregado `status@broadcast`) não foi tocado** —
+  critério 11a nunca cobriu essa forma, e ela continua tendo Mensagem real.
 
 ## Decisões Herdadas (explícitas)
 
