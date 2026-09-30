@@ -9,6 +9,7 @@ import { registrarIdentificador } from '../src/nucleo/escrita.js';
 import { registrarNome } from '../src/nucleo/identidade.js';
 import { procurarPessoas } from '../src/nucleo/consulta.js';
 import { listarOperacoesCruas } from '../src/nucleo/trilha.js';
+import { aprenderCorrespondencia } from '../src/nucleo/correspondencia.js';
 
 function rodar(raiz: string, argumentos: string[]): { codigo: number; saida: string } {
   const linhas: string[] = [];
@@ -577,6 +578,28 @@ test('nome que repete o proprio endereco pelo nono digito nao e promovido', () =
     const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
     const { id } = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '556592290832@s.whatsapp.net' });
     registrarNome(acervo, { identificadorId: id, origem: 'whatsapp', nome: '+55 65 99229-0832', autoridade: 'titular' });
+    acervo.fechar();
+
+    const r = rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino]);
+
+    assert.match(r.saida, /0 Identificador/);
+  } finally {
+    limpar();
+  }
+});
+
+test('Identificador em forma alternativa (@lid) nunca e elegivel, mesmo com correspondencia aprendida', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const chave = /valor:\s*(\S+)/.exec(rodar(raiz, ['operador', 'chave', 'criar']).saida)?.[1];
+    assert.ok(chave);
+    const criacao = rodar(raiz, ['inquilino', 'criar', '--chave', chave, '--titular', 'Leia Organa']);
+    const inquilino = /id:\s*(\S+)/.exec(criacao.saida)?.[1];
+    assert.ok(inquilino);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    const { id } = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '111@lid' });
+    registrarNome(acervo, { identificadorId: id, origem: 'whatsapp', nome: 'Han', autoridade: 'terceiro' });
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: '111@lid', canonico: '5565911110001@s.whatsapp.net' });
     acervo.fechar();
 
     const r = rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino]);

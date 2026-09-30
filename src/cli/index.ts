@@ -2032,6 +2032,7 @@ function executarComAtor(
         const candidatos = listarElegiveisParaPromocao(acervo);
         const elegiveis: Array<{ identificadorId: string; fonte: Fonte; valor: string; nome: string }> = [];
         for (const c of candidatos) {
+          if (c.fonte === 'whatsapp' && c.valor.endsWith('@lid')) continue;
           let usaveis = nomesDoIdentificador(acervo, c.identificadorId);
           if (c.fonte === 'whatsapp') {
             usaveis = usaveis.filter(
