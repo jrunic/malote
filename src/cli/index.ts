@@ -69,6 +69,8 @@ import {
   resolverFiltroDeConfiguracao,
 } from '../registro/configuracao-adaptador.js';
 import { CONTA_PADRAO } from '../adaptadores/whatsapp/material.js';
+import { pareceValorSentinela } from '../adaptadores/whatsapp/nome-sentinela-de-contato.js';
+import { nomeRepeteONumeroBrasileiro } from '../adaptadores/whatsapp/nome-repete-numero-br.js';
 import { importarCatalogo } from '../adaptadores/contatos/importar.js';
 import { FONTES_VARRIVEIS, varrer } from './varredura.js';
 import { definirCatalogoPreferido } from '../registro/precedencia-de-nome.js';
@@ -2030,7 +2032,12 @@ function executarComAtor(
         const candidatos = listarElegiveisParaPromocao(acervo);
         const elegiveis: Array<{ identificadorId: string; fonte: Fonte; valor: string; nome: string }> = [];
         for (const c of candidatos) {
-          const usaveis = nomesDoIdentificador(acervo, c.identificadorId);
+          let usaveis = nomesDoIdentificador(acervo, c.identificadorId);
+          if (c.fonte === 'whatsapp') {
+            usaveis = usaveis.filter(
+              (n) => !pareceValorSentinela(n.nome) && !nomeRepeteONumeroBrasileiro(n.nome, c.valor),
+            );
+          }
           if (usaveis.length === 0) continue;
           const titular = usaveis.find((n) => n.autoridade === 'titular');
           const terceiro = usaveis.find((n) => n.autoridade === 'terceiro');

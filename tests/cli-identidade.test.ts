@@ -526,3 +526,63 @@ test('rodar duas vezes seguidas: a segunda nao cria Pessoa nova, nem Operacao no
     limpar();
   }
 });
+
+test('Identificador cujo unico nome e o valor-sentinela do baileys nao e promovido', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino, noWhats } = cenarioDeCli(raiz);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    registrarNome(acervo, { identificadorId: noWhats, origem: 'whatsapp', nome: '+EAA=', autoridade: 'titular' });
+    acervo.fechar();
+
+    const r = rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino]);
+
+    assert.match(r.saida, /0 Identificador/);
+  } finally {
+    limpar();
+  }
+});
+
+test('sentinela no titular nao esconde nome bom do terceiro — a Pessoa NASCE, e a busca ACHA', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino, noWhats } = cenarioDeCli(raiz);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    registrarNome(acervo, { identificadorId: noWhats, origem: 'whatsapp', nome: '+EAA=', autoridade: 'titular' });
+    registrarNome(acervo, { identificadorId: noWhats, origem: 'whatsapp', nome: 'Guilherme', autoridade: 'terceiro' });
+    acervo.fechar();
+
+    const r = rodar(raiz, [
+      'pessoa', 'promover-identificadores-nomeados',
+      '--inquilino', inquilino, '--com-efeito', '--confirmo',
+    ]);
+    assert.match(r.saida, /1 Pessoa\(s\) criada/);
+
+    const acervo2 = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    assert.equal(procurarPessoas(acervo2, { texto: 'Guilherme' }).length, 1, 'a busca acha pelo nome bom');
+    acervo2.fechar();
+  } finally {
+    limpar();
+  }
+});
+
+test('nome que repete o proprio endereco pelo nono digito nao e promovido', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const chave = /valor:\s*(\S+)/.exec(rodar(raiz, ['operador', 'chave', 'criar']).saida)?.[1];
+    assert.ok(chave);
+    const criacao = rodar(raiz, ['inquilino', 'criar', '--chave', chave, '--titular', 'Leia Organa']);
+    const inquilino = /id:\s*(\S+)/.exec(criacao.saida)?.[1];
+    assert.ok(inquilino);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    const { id } = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '556592290832@s.whatsapp.net' });
+    registrarNome(acervo, { identificadorId: id, origem: 'whatsapp', nome: '+55 65 99229-0832', autoridade: 'titular' });
+    acervo.fechar();
+
+    const r = rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino]);
+
+    assert.match(r.saida, /0 Identificador/);
+  } finally {
+    limpar();
+  }
+});
