@@ -1010,3 +1010,45 @@ export function listarElegiveisParaPromocao(acervo: Acervo): CandidatoAPromocao[
     .all() as Array<{ id: string; fonte: Fonte; valor: string }>;
   return linhas.map((l) => ({ identificadorId: l.id, fonte: l.fonte, valor: l.valor }));
 }
+
+export interface ResultadoDePromocao {
+  pessoasCriadas: PessoaId[];
+  vinculos: Array<{ identificadorId: string; pessoaId: PessoaId }>;
+}
+
+/**
+ * Promove cada Identificador da lista a Pessoa propria, vinculada por
+ * Procedencia 'material' — a Fonte e quem afirma o vinculo, nao um
+ * catalogo nem um humano. UMA Operacao para a invocacao inteira: sem este
+ * envoltorio, promover milhares de enderecos gravaria milhares de
+ * Operacoes, e desfazer o lote exigiria desfazer cada uma — mesmo padrao
+ * medido em `aplicarLote` (922 Propostas: 3.102 Operacoes -> 1).
+ *
+ * Nao resolve correspondencia nenhuma: cada Identificador vira sua propria
+ * Pessoa, sozinho. Elegibilidade real (incluindo filtro de nome invalido
+ * especifico de Fonte) e decisao de quem chama.
+ */
+export function promoverIdentificadores(
+  acervo: Acervo,
+  identificadorIds: string[],
+): ResultadoDePromocao {
+  // Lista vazia nao abre Operacao nenhuma — mesmo motivo de
+  // removerNomesInvalidos e aplicarConjunto: Operacao vazia na trilha faria
+  // um agente concluir que houve ato onde nao houve. A segunda rodada de um
+  // lote ja promovido cai exatamente neste caso.
+  if (identificadorIds.length === 0) return { pessoasCriadas: [], vinculos: [] };
+  return emOperacao(
+    acervo,
+    { natureza: 'promover-identificadores-nomeados', reversibilidade: 'por-efeito' },
+    () => {
+      const resultado: ResultadoDePromocao = { pessoasCriadas: [], vinculos: [] };
+      for (const identificadorId of identificadorIds) {
+        const pessoaId = criarPessoa(acervo);
+        vincularIdentificador(acervo, { identificadorId, pessoaId, procedencia: 'material' });
+        resultado.pessoasCriadas.push(pessoaId);
+        resultado.vinculos.push({ identificadorId, pessoaId });
+      }
+      return resultado;
+    },
+  );
+}

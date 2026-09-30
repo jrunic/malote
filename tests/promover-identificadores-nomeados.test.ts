@@ -4,10 +4,16 @@ import { cenario } from './ajuda/acervo.js';
 import { registrarIdentificador } from '../src/nucleo/escrita.js';
 import {
   criarPessoa,
+  lerPessoa,
+  lerVinculo,
   listarElegiveisParaPromocao,
+  nomesDoIdentificador,
+  promoverIdentificadores,
   registrarNome,
   vincularIdentificador,
 } from '../src/nucleo/identidade.js';
+import { listarOperacoesCruas } from '../src/nucleo/trilha.js';
+import { desfazerOperacao } from '../src/nucleo/desfazer.js';
 
 test('sem Atribuição nenhuma, não é elegível', () => {
   const c = cenario();
@@ -63,6 +69,90 @@ test('com Atribuição pendurada na Pessoa, não se aplica — já tem Pessoa', 
     registrarNome(acervo, { pessoaId: pessoa, origem: 'manual', nome: 'Han Solo', autoridade: 'titular' });
 
     assert.equal(listarElegiveisParaPromocao(acervo).length, 0);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('promove cria uma Pessoa por Identificador, com Procedencia material', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia Organa');
+    const a = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '5565900000010' });
+    const b = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '5565900000011' });
+    registrarNome(acervo, { identificadorId: a.id, origem: 'whatsapp', nome: 'Han', autoridade: 'terceiro' });
+    registrarNome(acervo, { identificadorId: b.id, origem: 'whatsapp', nome: 'Leia', autoridade: 'titular' });
+
+    const r = promoverIdentificadores(acervo, [a.id, b.id]);
+
+    assert.equal(r.pessoasCriadas.length, 2);
+    assert.equal(r.vinculos.length, 2);
+    const vinculoA = lerVinculo(acervo, a.id);
+    assert.equal(vinculoA?.procedencia, 'material');
+    assert.ok(vinculoA?.pessoaId);
+    const vinculoB = lerVinculo(acervo, b.id);
+    assert.equal(vinculoB?.procedencia, 'material');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('a invocacao inteira grava UMA Operacao so, nao uma por vinculo', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia Organa');
+    const a = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '5565900000012' });
+    const b = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '5565900000013' });
+    registrarNome(acervo, { identificadorId: a.id, origem: 'whatsapp', nome: 'Han', autoridade: 'terceiro' });
+    registrarNome(acervo, { identificadorId: b.id, origem: 'whatsapp', nome: 'Leia', autoridade: 'titular' });
+
+    promoverIdentificadores(acervo, [a.id, b.id]);
+
+    const operacoes = listarOperacoesCruas(acervo);
+    const doPromover = operacoes.filter((o) => o.natureza === 'promover-identificadores-nomeados');
+    assert.equal(doPromover.length, 1);
+    const internas = operacoes.filter(
+      (o) => o.natureza === 'criar-pessoa' || o.natureza === 'vincular',
+    );
+    assert.equal(internas.length, 0, 'as chamadas internas se juntam a Operacao de fora');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('promoverIdentificadores com lista vazia nao grava Operacao nenhuma', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia Organa');
+    const antes = listarOperacoesCruas(acervo).length;
+
+    const r = promoverIdentificadores(acervo, []);
+
+    assert.deepEqual(r, { pessoasCriadas: [], vinculos: [] });
+    assert.equal(listarOperacoesCruas(acervo).length, antes);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('desfazer a Operacao de uma promocao desvincula; a Pessoa e recusada e permanece', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia Organa');
+    const a = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '5565900000014' });
+    registrarNome(acervo, { identificadorId: a.id, origem: 'whatsapp', nome: 'Han', autoridade: 'terceiro' });
+    const r = promoverIdentificadores(acervo, [a.id]);
+    const pessoaId = r.pessoasCriadas[0];
+    assert.ok(pessoaId);
+    const operacaoId = listarOperacoesCruas(acervo)[0]?.id;
+    assert.ok(operacaoId);
+
+    const desfeito = desfazerOperacao(acervo, operacaoId);
+
+    assert.equal(lerVinculo(acervo, a.id), null, 'Identificador volta a orfao');
+    assert.equal(desfeito.recusados.length, 1);
+    assert.ok(lerPessoa(acervo, pessoaId, { porOrigem: {}, catalogoPreferido: null }));
+    assert.equal(nomesDoIdentificador(acervo, a.id).length, 1, 'a Atribuicao do endereco continua la');
   } finally {
     c.limpar();
   }
