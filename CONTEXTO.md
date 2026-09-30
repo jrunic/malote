@@ -481,6 +481,36 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 30/09/2026 — **#1089 implementada via `dev-02`→`dev-10`→`dev-03`→`dev-10`→
+  `dev-04`: Pessoa nasce de nome que a Fonte declara, sem depender de
+  catálogo.** Comando novo `pessoa promover-identificadores-nomeados`
+  (ensaio por padrão) promove Identificador sem Pessoa que já tem
+  Atribuição de Nome a Pessoa própria, vinculada por Procedência
+  `material` — que já existia na hierarquia do domínio desde o início e
+  nunca teve produtor até agora. Duas primitivas novas no núcleo
+  (`listarElegiveisParaPromocao`, `promoverIdentificadores`), Fonte-
+  agnósticas; o filtro de nome inválido conhecido do WhatsApp (sentinela
+  do #1101, nono dígito) e a exclusão permanente de endereço em forma
+  alternativa (`@lid`) ficam na CLI, que já é o lugar autorizado a compor
+  mais de um Adaptador — o núcleo continua sem vocabulário de Fonte. Uma
+  Operação por invocação inteira (reentrância sobre `criar-pessoa` e
+  `vincular`, mesmo padrão já medido em `aplicarLote`), desfazer pelo
+  mecanismo genérico da trilha (a linha do vínculo é desfeita; a linha da
+  Pessoa é recusada por desenho — Pessoa nunca é apagada). `docs/dominio/
+  malote.md` ganhou a operação nova e a terceira via de nascimento de
+  Pessoa (gate recarimbado). **Duas rodadas de revisão independente
+  (`dev-10` via advisor)** — spec e plano — cada uma achou furo real antes
+  de seguir: na spec, o desenho original de "promover a forma alternativa
+  depois de resolvida" foi trocado por exclusão permanente, por risco de
+  colisão de `pessoa_id` da família do #1052; no plano, um teste afirmava
+  que o nome exibido da Pessoa seria o "nome bom" quando na verdade
+  `nomeDaPessoa` não filtra sentinela e continuaria exibindo o lixo — o
+  teste foi corrigido para afirmar o que é verdade (a Pessoa nasce, a
+  busca por texto encontra), e a limitação de exibição ficou documentada
+  em vez de escondida. Suíte **1049 → 1067 testes** (medido contra
+  `origin/main` via `git worktree`), mesmas 3 falhas pré-existentes.
+  **Ciclo 25 do roadmap — tarefa fechada, ciclo ainda não aceito**
+  (`neg-05` é o próximo passo). Só em `main` — não publicado.
 - 30/09/2026 — **#1101 corrigida via `dev-05`: dois defeitos independentes de
   atribuição de nome no adaptador WhatsApp, achados investigando a #1089
   (contato nomeado só dentro do WhatsApp).** (1) `contacts.upsert` grava um
@@ -623,6 +653,25 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
+- **#1089 (`pessoa promover-identificadores-nomeados`) não teve a medição de
+  campo rodada ainda — falta saber quantos Identificadores o Acervo real
+  promoveria hoje.** Adiada de propósito no `dev-04`: o checkout de
+  produção (thinkpad) está na branch `production`, que ainda não tem este
+  código (só `main` tem, até a release sair). Rodar em modo ensaio (sem
+  `--com-efeito`) depois do release, e conferir se o número fica bem abaixo
+  dos 11.043 brutos citados na spec original — a maioria era lixo do #1101,
+  e o filtro desta tarefa já recusa promover isso.
+- **A promoção pode criar Pessoa cujo nome EXIBIDO é lixo, mesmo com o
+  filtro de elegibilidade ativo — limitação conhecida, não bug.** Se um
+  Identificador tem Atribuição `titular` = valor-sentinela E `terceiro` =
+  nome real, a Pessoa nasce (a elegibilidade não bloqueia por causa de UMA
+  Atribuição ruim) e é buscável pelo nome bom (`procurarPessoas` casa em
+  qualquer Atribuição pendurada) — mas `nomeDaPessoa`/`melhorNome` não
+  filtra sentinela, então o nome CORRENTE exibido pode continuar sendo o
+  lixo (autoridade `titular` vence `terceiro` por rank, mesmo peso de
+  Fonte). Resolver isso de vez depende da limpeza retroativa do #1101
+  (também pendente, ver entrada abaixo) alcançar essas Atribuições — não é
+  escopo da #1089.
 - **#1101 corrigiu a ESCRITA, não o ESTOQUE — o Acervo real do Titular ainda tem
   o lixo que as duas causas já produziram.** Antes de assumir que "nome ruim"
   sumiu de qualquer Acervo existente: (a) `removerNomesInvalidos`
