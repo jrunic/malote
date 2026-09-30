@@ -986,3 +986,27 @@ export function removerNomesInvalidos(
   );
   return contagem;
 }
+
+export interface CandidatoAPromocao {
+  identificadorId: string;
+  fonte: Fonte;
+  valor: string;
+}
+
+/**
+ * Identificador sem Pessoa que ja tem alguma Atribuicao de Nome pendurada
+ * nele — candidato a virar Pessoa propria. Fonte-agnostico: nao julga se o
+ * nome e confiavel, so se ha algum. Quem decide o que e nome invalido
+ * especifico de uma Fonte (e por isso nao sobe ao nucleo) e quem chama.
+ */
+export function listarElegiveisParaPromocao(acervo: Acervo): CandidatoAPromocao[] {
+  const linhas = acervo.preparar(
+      `SELECT DISTINCT i.id, i.fonte, i.valor
+         FROM identificadores i
+        WHERE i.pessoa_id IS NULL
+          AND EXISTS (SELECT 1 FROM atribuicoes_de_nome a WHERE a.identificador_id = i.id)
+        ORDER BY i.fonte, i.valor`,
+    )
+    .all() as Array<{ id: string; fonte: Fonte; valor: string }>;
+  return linhas.map((l) => ({ identificadorId: l.id, fonte: l.fonte, valor: l.valor }));
+}
