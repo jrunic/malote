@@ -77,10 +77,21 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const limite = q.get('limite') ?? undefined;
     const configuracaoApelido = q.get('configuracao');
     const fixada = q.get('fixada') ?? undefined;
+    const desdeParam = q.get('desde');
 
     if (fixada === 'true' && configuracaoApelido === null) {
       json(res, 400, { erro: 'fixada exige configuracao' });
       return;
+    }
+
+    let filtroDesde: number | undefined;
+    if (desdeParam !== null) {
+      try {
+        filtroDesde = expandirData(desdeParam, 'inicio');
+      } catch (e) {
+        json(res, 400, { erro: (e as Error).message });
+        return;
+      }
     }
 
     const registro = abrirRegistro(ctx.dados);
@@ -127,6 +138,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       // que o pedido mesmo havendo marcadas suficientes.
       ...(marcadas === undefined && limite !== undefined ? { limite: Number(limite) } : {}),
       ...(marcadas === undefined && configuracaoId !== undefined ? { configuracaoId } : {}),
+      ...(filtroDesde !== undefined ? { desde: filtroDesde } : {}),
     }).map((c) => ({
       id: c.id,
       fonte: c.fonte,

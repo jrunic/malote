@@ -75,6 +75,35 @@ test('as mensagens de uma Conversa vem, e so as do Inquilino da Chave', async ()
   }
 });
 
+test('GET /conversas?desde filtra por ultima Mensagem e o parametro chega por rede (#1092)', async () => {
+  // conversaDeA do cenario tem exatamente uma Mensagem, em 2026-06-01.
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const antes = await c.pedir('/conversas?desde=2026-06-02', chave.valor);
+    assert.equal(antes.status, 200);
+    assert.deepEqual((JSON.parse(antes.corpo) as { conversas: unknown[] }).conversas, []);
+
+    const depois = await c.pedir('/conversas?desde=2026-05-01', chave.valor);
+    assert.equal(depois.status, 200);
+    const corpo = JSON.parse(depois.corpo) as { conversas: { id: string }[] };
+    assert.ok(corpo.conversas.some((x) => x.id === c.conversaDeA));
+  } finally {
+    await c.parar();
+  }
+});
+
+test('GET /conversas?desde com data invalida devolve 400', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chave = c.emitir(c.inquilinoA);
+    const r = await c.pedir('/conversas?desde=nao-e-uma-data', chave.valor);
+    assert.equal(r.status, 400);
+  } finally {
+    await c.parar();
+  }
+});
+
 test('a busca responde, e o texto e obrigatorio', async () => {
   const c = await cenarioDeRede();
   try {

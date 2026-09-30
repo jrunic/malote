@@ -1539,6 +1539,7 @@ function executarComAtor(
         const limite = opcao(argumentos, 'limite');
         const configuracaoApelido = opcao(argumentos, 'configuracao');
         const fixada = opcao(argumentos, 'fixada');
+        const desde = opcao(argumentos, 'desde');
 
         if (fixada === 'true' && configuracaoApelido === undefined) {
           escrever('--fixada exige --configuracao (a Marca e por Configuracao).');
@@ -1574,6 +1575,7 @@ function executarComAtor(
           ...(coletiva === undefined ? {} : { coletiva: coletiva === 'true' }),
           ...(marcadas === undefined && limite !== undefined ? { limite: Number(limite) } : {}),
           ...(marcadas === undefined && configuracaoId !== undefined ? { configuracaoId } : {}),
+          ...(desde === undefined ? {} : { desde: expandirData(desde, 'inicio') }),
         }).map((c) => ({
           id: c.id,
           fonte: c.fonte,

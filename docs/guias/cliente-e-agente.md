@@ -137,12 +137,17 @@ Use a CLI do malote, no modo rede. As variáveis `MALOTE_SERVIDOR` e
 escreva em arquivo, commit ou log, e nunca a passe adiante.
 
 Comandos (todos somente leitura):
-- `malote conversas [--busca T] [--fonte F] [--coletiva true|false] [--configuracao A] [--fixada true] [--limite N]` —
+- `malote conversas [--busca T] [--fonte F] [--coletiva true|false] [--configuracao A] [--fixada true] [--desde D] [--limite N]` —
   índice; comece sempre aqui. `--configuracao` sozinho filtra por apelido (`malote
   configuracao listar` mostra o que existe) e só alcança Conversa DIRETA — coletiva
   pertence ao Inquilino inteiro, não a uma Configuração, e nunca casa esse filtro. Com
   `--fixada true`, `--configuracao` muda de sentido: passa a escopar a MARCA de fixada
   daquela Configuração, não a atribuição — por isso coletiva fixada aparece.
+  `--desde D` filtra pela Conversa cuja Mensagem MAIS RECENTE ocorreu em ou depois de
+  `D`, e ordena o resultado por essa recência (mais recente primeiro) — é o caminho
+  para "o que teve atividade desde tal data", sem gambiarra de busca por termo comum.
+  Sem `--desde`, a ordem continua sendo a de criação da Conversa (limitação conhecida,
+  não corrigida por este parâmetro).
   `--fixada` exige `--configuracao` junto, e funciona local ou em modo rede.
 - `malote configuracao listar` — lista as Configurações do Inquilino (apelido + fonte).
 - `malote mensagens [--conversa <id>] [--desde D] [--ate D] [--limite N] [--direcao enviada|recebida] [--favorito true --configuracao A]` —
@@ -183,7 +188,7 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 
 | rota | parâmetros opcionais | resposta |
 |---|---|---|
-| `GET /conversas` | `fonte`, `coletiva`, `busca`, `pessoa`, `limite`, `configuracao`, `fixada` | `{ conversas: [{ id, fonte, coletiva, assunto, mensagens, configuracao }] }` |
+| `GET /conversas` | `fonte`, `coletiva`, `busca`, `pessoa`, `limite`, `configuracao`, `fixada`, `desde` | `{ conversas: [{ id, fonte, coletiva, assunto, mensagens, configuracao }] }` |
 | `GET /mensagens` | `limite`, `desde`, `ate`, `autor`, `fonte`, `direcao`, `antes`, `ordem` | `{ mensagens: [...], proximo? }` |
 | `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `antes`, `ordem`, `direcao`, `favorito`, `configuracao` | `{ mensagens: [...], proximo? }` |
 | `GET /buscar?texto=` | `conversa`, `autor`, `desde`, `ate`, `limite` | `{ mensagens: [...] }` |

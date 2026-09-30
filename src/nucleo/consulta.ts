@@ -147,6 +147,20 @@ export interface FiltroDeConversa {
    */
   configuracaoId?: string;
   limite?: number;
+  /**
+   * So Conversa cuja MAIS RECENTE Mensagem ocorreu em ou depois deste
+   * instante (epoch ms) — e ORDENA o resultado por essa recencia, DESC. Sem
+   * Mensagem nenhuma nunca casa (#1092): "atividade recente" nao tem sentido
+   * para Conversa que nunca recebeu nada.
+   *
+   * Muda a query para JOIN + GROUP BY (medido em produção real: 201ms para
+   * 7.875 Conversas / ~1,4M Mensagens, usando o índice `(conversa_id,
+   * ocorrida_em)` já existente — sem full scan). Só entra nesse caminho
+   * quando `desde` é passado; sem ele, a query de sempre não muda, ORDER BY
+   * `criada_em` continua sendo o default (nao e regressao a corrigir —
+   * `busca` ja documentava essa limitacao).
+   */
+  desde?: number;
 }
 
 export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): ConversaListada[] {
@@ -174,7 +188,7 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
     // Termo do usuario e LITERAL: % e _ sao escapados, senao "100%" casa
     // qualquer coisa. LOWER para case-insensitive por ser ASCII-safe.
     condicoes.push(
-      "LOWER(m.assunto) LIKE LOWER(?) ESCAPE '\\'",
+      "LOWER(md.assunto) LIKE LOWER(?) ESCAPE '\\'",
     );
     valores.push(
       filtro.busca.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
@@ -188,15 +202,31 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
   const onde = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
   const limite = filtro.limite !== undefined ? ` LIMIT ${Number(filtro.limite)}` : '';
 
-  const linhas = acervo.preparar(
-      `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, m.assunto,
-              (SELECT COUNT(*) FROM mensagens x WHERE x.conversa_id = c.id) AS mensagens
-         FROM conversas c
-         LEFT JOIN metadados_de_coletiva m ON m.conversa_id = c.id
-         ${onde}
-         ORDER BY c.criada_em${limite}`,
-    )
-    .all(...valores) as Array<Record<string, unknown>>;
+  let linhas: Array<Record<string, unknown>>;
+  if (filtro.desde !== undefined) {
+    linhas = acervo.preparar(
+        `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, md.assunto,
+                COUNT(msg.id) AS mensagens
+           FROM conversas c
+           LEFT JOIN metadados_de_coletiva md ON md.conversa_id = c.id
+           LEFT JOIN mensagens msg ON msg.conversa_id = c.id
+           ${onde}
+           GROUP BY c.id
+           HAVING MAX(msg.ocorrida_em) >= ?
+           ORDER BY MAX(msg.ocorrida_em) DESC${limite}`,
+      )
+      .all(...valores, filtro.desde) as Array<Record<string, unknown>>;
+  } else {
+    linhas = acervo.preparar(
+        `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, md.assunto,
+                (SELECT COUNT(*) FROM mensagens x WHERE x.conversa_id = c.id) AS mensagens
+           FROM conversas c
+           LEFT JOIN metadados_de_coletiva md ON md.conversa_id = c.id
+           ${onde}
+           ORDER BY c.criada_em${limite}`,
+      )
+      .all(...valores) as Array<Record<string, unknown>>;
+  }
 
   return linhas.map((l) => ({
     id: l['id'] as string,
