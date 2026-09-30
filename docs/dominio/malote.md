@@ -4,7 +4,7 @@ projeto: malote
 tipo: dominio
 descricao: "Modelo do arquivo pessoal de conversas — núcleo genérico multi-inquilino (Inquilino, Conversa, Mensagem, Pessoa, Identificador, Anexo) desacoplado das fontes por Adaptador"
 status: aprovado
-aprovado-em: 2026-09-28
+aprovado-em: 2026-09-30
 escopo: repo:malote
 plataforma: "*"
 dominios: [tecnologia]
@@ -238,7 +238,7 @@ Duas regras atravessam o modelo inteiro:
 - O núcleo nunca constrói o endereço de uma Fonte a partir do dado de outra. Traduzir telefone em endereço de plataforma é responsabilidade do Adaptador daquela plataforma.
 - **Quando a Fonte não fornece endereço algum, o Adaptador usa o sinal mais durável que o material tiver, e declara qual é.** Registrado em 26/08/2026, ao entrar o segundo Adaptador: há material que dá o nome de exibição de um participante e nenhum endereço. O valor do Identificador passa a ser esse nome, e a consequência é dita em vez de escondida — homônimos colidem e troca de nome cria Identificador novo. O núcleo não muda: ele guarda o par (Fonte, valor) e a unicidade dele, e não interpreta o valor. Unir o que se descobrir depois ser a mesma Pessoa é operação explícita e reversível, nunca inferência do Adaptador.
 
-**Ciclo de vida** — nasce da importação (Identificador solto) ou da vinculação feita por um adaptador de identidade; permanece. Fusão de duas Pessoas é operação explícita e **reversível por construção**: mesclar escreve um apontamento, e desfazer o remove. Nenhuma Pessoa é apagada em nenhum momento — a absorvida continua existindo, com tudo que tinha.
+**Ciclo de vida** — nasce da importação (Identificador solto), da vinculação feita por um adaptador de identidade, ou da promoção de um Identificador que já tem Atribuição de Nome mas nenhum catálogo o alcançou; permanece. Fusão de duas Pessoas é operação explícita e **reversível por construção**: mesclar escreve um apontamento, e desfazer o remove. Nenhuma Pessoa é apagada em nenhum momento — a absorvida continua existindo, com tudo que tinha.
 
 ### Anexo
 
@@ -446,6 +446,14 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Saída:** Identificadores vinculados a Pessoas
 - **Regras:** vincular Identificador a Pessoa nunca reescreve Mensagem. Vínculo é reversível. Todo vínculo declara a **Procedência do Vínculo**, e execução automática nunca desfaz o que o humano afirmou. Conflito — dois adaptadores propondo Pessoas diferentes para o mesmo Identificador — é registrado e apresentado, nunca resolvido em silêncio.
 - **Não-funcionais:** Padrão.
+
+### promover-identificadores-nomeados
+
+- **Ator:** humano ou agente
+- **Entrada:** Inquilino, lista de Identificadores elegíveis (sem Pessoa, com Atribuição de Nome)
+- **Saída:** uma Pessoa nova por Identificador, vinculada por Procedência `material`
+- **Regras:** não resolve correspondência entre Identificadores — cada um vira sua própria Pessoa, sozinho. Nunca sobrescreve vínculo de Procedência maior (`catálogo` ou `humano`) já existente. Nunca roda embutida em importação nem em recepção ao vivo — é decisão explícita sobre identidade, separada de "material chegou". Toda a invocação grava uma única Operação, reentrante sobre `criar-pessoa` e `vincular`.
+- **Não-funcionais:** idempotente por construção — Identificador já vinculado nunca é elegível de novo, então repetir a operação sobre o mesmo Acervo não cria Pessoa duplicada.
 
 ### vincular-identificador
 
