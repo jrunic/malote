@@ -6,6 +6,7 @@ import { instalacaoTemporaria } from './ajuda/instalacao.js';
 import { executar } from '../src/cli/index.js';
 import { abrirAcervo } from '../src/nucleo/acervo.js';
 import { registrarIdentificador } from '../src/nucleo/escrita.js';
+import { registrarNome } from '../src/nucleo/identidade.js';
 
 function rodar(raiz: string, argumentos: string[]): { codigo: number; saida: string } {
   const linhas: string[] = [];
@@ -432,6 +433,27 @@ test('emitir Chave de Acesso exige Chave de Operador', () => {
     // Chave de Operador. Assercao que casa com a ajuda nao mede autorizacao.
     assert.match(linhas.join('\n'), /Recusado: Chave de Operador ausente/);
     assert.doesNotMatch(linhas.join('\n'), /Comando desconhecido/);
+  } finally {
+    limpar();
+  }
+});
+
+test('promover-identificadores-nomeados em ensaio nao escreve nada', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino, noWhats } = cenarioDeCli(raiz);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    registrarNome(acervo, { identificadorId: noWhats, origem: 'whatsapp', nome: 'Han', autoridade: 'terceiro' });
+    acervo.fechar();
+
+    const r = rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino]);
+
+    assert.equal(r.codigo, 0);
+    assert.match(r.saida, /1 Identificador/);
+    assert.match(r.saida, /Nada foi escrito/);
+
+    const depois = rodar(raiz, ['pessoa', 'listar', '--inquilino', inquilino]);
+    assert.doesNotMatch(depois.saida, /Han/, 'ensaio nao cria Pessoa');
   } finally {
     limpar();
   }

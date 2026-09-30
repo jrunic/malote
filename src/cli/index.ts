@@ -93,9 +93,12 @@ import {
   desvinculosDaPessoa,
   IdentificadorDeOutraPessoaError,
   lerPessoa,
+  listarElegiveisParaPromocao,
   listarPessoas,
   desfazerMesclagem,
   mesclarPessoas,
+  nomesDoIdentificador,
+  promoverIdentificadores,
   registrarNome,
   removerNomesInvalidos,
   vincularIdentificador,
@@ -2011,6 +2014,55 @@ function executarComAtor(
       } finally {
         acervo.fechar();
       }
+    }
+
+    if (grupo === 'pessoa' && sub === 'promover-identificadores-nomeados') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
+      const comEfeito = temBandeira(argumentos, 'com-efeito');
+      if (comEfeito && !temBandeira(argumentos, 'confirmo')) {
+        throw new Error('Repita o comando com --confirmo para executar.');
+      }
+      const limite = Number(opcao(argumentos, 'limite') ?? 50);
+
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const candidatos = listarElegiveisParaPromocao(acervo);
+        const elegiveis: Array<{ identificadorId: string; fonte: Fonte; valor: string; nome: string }> = [];
+        for (const c of candidatos) {
+          const usaveis = nomesDoIdentificador(acervo, c.identificadorId);
+          if (usaveis.length === 0) continue;
+          const titular = usaveis.find((n) => n.autoridade === 'titular');
+          const terceiro = usaveis.find((n) => n.autoridade === 'terceiro');
+          const melhor = titular ?? terceiro ?? usaveis[0];
+          if (melhor === undefined) continue;
+          elegiveis.push({
+            identificadorId: c.identificadorId,
+            fonte: c.fonte,
+            valor: c.valor,
+            nome: melhor.nome,
+          });
+        }
+
+        if (!comEfeito) {
+          escrever(`Ensaio: ${elegiveis.length} Identificador(es) seriam promovidos a Pessoa.`);
+          for (const e of elegiveis.slice(0, limite)) {
+            escrever(`  [${e.fonte}] ${e.valor}  ->  ${e.nome}`);
+          }
+          if (elegiveis.length > limite) {
+            escrever(`  ... e mais ${elegiveis.length - limite}. Use --limite <n> para ver.`);
+          }
+          escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
+          return 0;
+        }
+
+        const r = promoverIdentificadores(acervo, elegiveis.map((e) => e.identificadorId));
+        escrever(`${r.pessoasCriadas.length} Pessoa(s) criada(s), ${r.vinculos.length} vinculo(s).`);
+        if (temBandeira(argumentos, 'json')) escrever(JSON.stringify(r, null, 2));
+      } finally {
+        acervo.fechar();
+      }
+      return 0;
     }
 
     if (grupo === 'pessoa' && sub === 'conferir') {
