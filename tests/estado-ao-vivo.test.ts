@@ -349,6 +349,40 @@ test('upsert grava nome titular no Identificador CANONICO', () => {
   }
 });
 
+test('valor-sentinela do contactAction (contato nunca nomeado) nao vira Atribuicao', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Ahsoka');
+    // '+EAA=' e o valor REAL medido em producao (tarefa #1101): o que
+    // 'action.contactAction.fullName' traz quando o contato nunca foi
+    // nomeado de verdade. O segundo item, com nome de verdade, prova que a
+    // recusa nao e em bloco.
+    const lote = [
+      { id: '111@lid', jid: '5565911110001@s.whatsapp.net', lid: '111@lid', name: '+EAA=' },
+      { id: '222@lid', jid: '5565911110002@s.whatsapp.net', lid: '222@lid', name: 'Bea Nunes' },
+    ];
+    processarEstadoDeConversa(acervo, {
+      fluxo: 'contacts.upsert',
+      dado: lote,
+      configuracaoId: CFG_WHATSAPP.id,
+      observadaEm: QUANDO,
+    });
+    const semNome = registrarIdentificador(acervo, {
+      fonte: 'whatsapp',
+      valor: '5565911110001@s.whatsapp.net',
+    });
+    assert.equal(nomesDoIdentificador(acervo, semNome.id).length, 0, 'sentinela nao vira nome');
+
+    const comNome = registrarIdentificador(acervo, {
+      fonte: 'whatsapp',
+      valor: '5565911110002@s.whatsapp.net',
+    });
+    assert.equal(nomesDoIdentificador(acervo, comNome.id)[0]?.nome, 'Bea Nunes');
+  } finally {
+    c.limpar();
+  }
+});
+
 test('segunda passagem nao abre segunda Operacao de aprender endereco', () => {
   const c = cenario();
   try {

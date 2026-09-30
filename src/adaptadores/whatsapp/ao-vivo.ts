@@ -14,7 +14,7 @@ import {
   registrarParticipacao,
   registrarTransicao,
 } from '../../nucleo/escrita.js';
-import { nomeRepeteOEndereco } from '../../nucleo/nome-do-endereco.js';
+import { nomeRepeteONumeroBrasileiro } from './nome-repete-numero-br.js';
 import { registrarNome } from '../../nucleo/identidade.js';
 import { ehCifrada, naturezaDoStub, textoDoStub } from './stubs-ao-vivo.js';
 
@@ -495,7 +495,7 @@ function gravarUma(
     // O nome que a Fonte declara. A tarefa #734 mediu 715.946 linhas com este
     // campo no material exportado; ao vivo ele vem no mesmo lugar.
     if (m.pushName !== undefined && m.pushName !== '') {
-      if (nomeRepeteOEndereco(m.pushName, enderecoDoAutor)) {
+      if (nomeRepeteONumeroBrasileiro(m.pushName, enderecoDoAutor)) {
         relato.nomesQueRepetemOEndereco += 1;
       } else {
         // `terceiro`: e o nome que o REMETENTE escolheu para si, nao o que o

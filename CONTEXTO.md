@@ -263,8 +263,9 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   mesmo assim é correto — o que sobe é o conhecimento, não a confiança. Tem teste
   próprio para ninguém "consertar" isso como defeito depois.
 - **Duas regras de nome, duas casas, e confundi-las trava a execução.** A recusa de
-  **nome que repete o próprio endereço** fica no **Adaptador** — os dois valores
-  estão na mão no instante da chamada, sem consulta. A **normalização de marca
+  **nome que repete o próprio endereço** (comparação mecânica de dígitos) fica no
+  **núcleo** (`nome-do-endereco.ts`) — nasceu no Adaptador de WhatsApp e subiu quando
+  a porta de remoção passou a precisar dela também. A **normalização de marca
   invisível** fica na **porta do núcleo** — reconhecer que a segunda escrita é o
   mesmo nome exige consultar o que já está gravado, e a unicidade do banco é por
   texto exato: marcado e desmarcado são strings diferentes, então a linha gêmea
@@ -273,6 +274,28 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   sendo o que a Fonte entregou. O par de testes é o desenho: um prova que a segunda
   escrita não cria linha, o outro **lê de volta** e prova que as marcas ficaram. Sem
   o segundo, normalizar na escrita passaria no primeiro.
+- **"Comparar dígitos serve a qualquer Fonte" tem limite, e o nono dígito brasileiro
+  mora do lado de fora dele.** `nome-do-endereco.ts` (núcleo) já dizia, desde que
+  nasceu: "traduzir a forma escrita do número na forma do endereço é vocabulário de
+  Fonte" e não deveria subir. Medido em 30/09/2026 (#1101): 1.110 de 1.110 nomes
+  `+55...` que a comparação de sufixo/prefixo do núcleo deixava passar tinham o nono
+  dígito móvel (2012) inserido no MEIO do número — nem sufixo nem prefixo alcançam
+  isso. A correção fica no ADAPTADOR (`nome-repete-numero-br.ts`, WhatsApp), que
+  ENVOLVE a função do núcleo sem alterá-la. Duplica em parte o que
+  `contatos/telefone.ts` já resolve para o catálogo — deliberado: adaptador não
+  importa adaptador (só `src/cli` compõe mais de uma Fonte), e o caso aqui (comparar
+  dois valores já conhecidos) não precisa da máquina de gerar variante para busca,
+  que existe lá só para não casar com o número de OUTRA pessoa.
+- **Nome vindo de biblioteca de terceiro não é nome só por não ser vazio.** O
+  WhatsApp dispara `contactAction` de app-state também para contato nunca nomeado, e
+  `fullName` vem com um valor-placeholder em vez de ausente — medido em 30/09/2026
+  (#1101): 58% de TODAS as Atribuições `titular`/`whatsapp` do Acervo real são essa
+  forma (`+EAA=` sozinho é 81% do lixo em identificadores sem Pessoa), com assinatura
+  de sentinela fixo (mesmo texto repetido em massa, comprimento sempre ≡1 mod 4 —
+  prefixo `+` mais um bloco base64 válido), não corrupção de parsing. `estado-ao-vivo.ts`
+  recusa pela FORMA (`pareceValorSentinela`) antes de gravar — 14 Pessoas já exibiam
+  esse lixo como nome corrente antes da correção, e a limpeza do que já está gravado
+  ainda não existe (ver Pendências).
 - **Trabalho de disco no caminho de SUBIDA do ouvinte pode travar a subida — e
   travou.** Medido no Linux em 13/09/2026: `mkdirSync(dir, { recursive: true })`
   sobre um caminho patológico do sistema de arquivos virtual **não lança e não
@@ -458,6 +481,25 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 30/09/2026 — **#1101 corrigida via `dev-05`: dois defeitos independentes de
+  atribuição de nome no adaptador WhatsApp, achados investigando a #1089
+  (contato nomeado só dentro do WhatsApp).** (1) `contacts.upsert` grava um
+  valor-sentinela do próprio WhatsApp (`+EAA=` e variantes — 58% de TODAS as
+  Atribuições `titular`/`whatsapp` do Acervo real do Titular, ~99% entre
+  identificadores sem Pessoa) como se fosse nome; `pareceValorSentinela`
+  (`src/adaptadores/whatsapp/nome-sentinela-de-contato.ts`) reconhece a forma
+  (prefixo `+`, alfabeto base64, padding) e recusa antes de gravar. (2)
+  `nomeRepeteOEndereco` (núcleo) só comparava sufixo/prefixo de dígitos e não
+  reconhecia o nono dígito móvel brasileiro, inserido no MEIO do número —
+  medido 1.110 de 1.110 nomes `+55...` que ele deixava passar tinham
+  exatamente essa forma. `nomeRepeteONumeroBrasileiro`
+  (`src/adaptadores/whatsapp/nome-repete-numero-br.ts`) envolve a função do
+  núcleo sem subir a ela — vocabulário de Fonte fica no adaptador, pelo
+  cabeçalho já escrito em `nome-do-endereco.ts` — e é usado nos 4 pontos de
+  escrita do adaptador (`estado-ao-vivo.ts`, `ao-vivo.ts`, `importar.ts`×2).
+  Suíte **1037 → 1049 testes**, mesmas 3 falhas pré-existentes de
+  `cli-entrada.test.ts` (confirmadas idênticas em `main` sem esta mudança,
+  via `git stash`). **Só em `main` — não publicado, não distribuído.**
 - 29/09/2026 — **Investigado e NÃO REPRODUZIDO: JSON truncado em respostas grandes
   (#1091, relato da mentorada Renata).** O relatório do agente dela (`David`) mostrava
   `json.decoder.JSONDecodeError: Unterminated string` ao consumir `malote conversas`/
@@ -581,6 +623,19 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
+- **#1101 corrigiu a ESCRITA, não o ESTOQUE — o Acervo real do Titular ainda tem
+  o lixo que as duas causas já produziram.** Antes de assumir que "nome ruim"
+  sumiu de qualquer Acervo existente: (a) `removerNomesInvalidos`
+  (`src/nucleo/identidade.ts:924`, o motor de `pessoa remover-nomes-invalidos`)
+  cobre só duas classes (endereço-repetido, marca-duplicata) — o padrão-sentinela
+  e o nono-dígito são uma TERCEIRA e QUARTA classe, e não podem subir para lá
+  como estão: o núcleo não pode conhecer vocabulário de Fonte (nono dígito
+  brasileiro) nem artefato de biblioteca (`+EAA=` do baileys). Precisa de
+  comando de limpeza equivalente, do lado do adaptador, antes de rodar contra
+  produção. (b) Medido em 30/09/2026 contra o Acervo do Titular: 14 Pessoas
+  JÁ exibem o valor-sentinela como nome corrente (`melhorNome` pegou a
+  atribuição-lixo mais recente). Nenhuma limpeza rodou ainda — a tarefa #1101
+  só impede que o problema cresça a partir de agora.
 - **#1070, #1068 e #1069 fechadas, release v0.22.0 publicada e distribuída no
   thinkpad, verificada por efeito — o ciclo 23 (`malote-midia-ao-vivo-e-transcricao`)
   está pronto para `neg-05-aceita-ciclo`.**
