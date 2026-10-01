@@ -52,6 +52,22 @@ test('configuracao criar em modo rede recusa como operacao LOCAL, sem abrir base
   }
 });
 
+test('transcricao solicitar em modo rede recusa como operação LOCAL, sem abrir base', () => {
+  const dados = mkdtempSync(join(tmpdir(), 'malote-modo-solicitar-'));
+  try {
+    const r = rodarComEnv(
+      dados,
+      { MALOTE_SERVIDOR: 'http://x', MALOTE_CHAVE_DE_ACESSO: 'k' },
+      ['transcricao', 'solicitar', '--anexo', 'qualquer', '--inquilino', 'qualquer'],
+    );
+    assert.equal(r.codigo, 2);
+    assert.match(r.saida, /LOCAL/);
+    assert.equal(existsSync(join(dados, 'registro.db')), false, 'a invocação abriu base em modo rede');
+  } finally {
+    rmSync(dados, { recursive: true, force: true });
+  }
+});
+
 test('sem servidor declarado, o modo e local — byte a byte como hoje', () => {
   const dados = mkdtempSync(join(tmpdir(), 'malote-modo-'));
   try {

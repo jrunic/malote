@@ -120,7 +120,12 @@ import { conferirSeDesfazivel, desfazerOperacao } from '../nucleo/desfazer.js';
 import { caminhosDaConta, ouvir } from './ouvir.js';
 import { enderecoRecusado, servir } from './servir.js';
 import { lerUltimoEvento } from './ultimo-evento.js';
-import { reenfileirarFalhas, incluirEstoqueEmTranscricao, contarTranscricoesPorEstado } from '../nucleo/transcricao.js';
+import {
+  reenfileirarFalhas,
+  incluirEstoqueEmTranscricao,
+  solicitarTranscricao,
+  contarTranscricoesPorEstado,
+} from '../nucleo/transcricao.js';
 import { configuracaoDoMotor } from './motor-de-transcricao.js';
 import {
   contarDerrame,
@@ -277,6 +282,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
   malote transcricao reprocessar --inquilino <id>              (volta falhas para pendente)
   malote transcricao incluir-estoque --inquilino <id> --limite <n> [--json]  (promove estoque fora-de-escopo, em lote)
+  malote transcricao solicitar --anexo <id> --inquilino <id>           (prioriza UM Anexo na fila)
   malote transcricao estado      --inquilino <id> [--json]     (contagem por estado; se o motor esta configurado)
   malote midia extrair-duracao --inquilino <id> [--json]        (extrai duração do Conteúdo Bruto já gravado)
   malote servir     --porta <n> [--endereco <ip>] [--exposto]
@@ -822,6 +828,27 @@ function executarComAtor(
         } else {
           escrever(`${r.promovidos} Anexo(s) de audio promovido(s) do estoque para a fila de Transcricao.`);
         }
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
+    if (grupo === 'transcricao' && sub === 'solicitar') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      const anexo = opcao(argumentos, 'anexo');
+      if (inquilino === undefined || anexo === undefined) {
+        escrever('Uso: malote transcricao solicitar --anexo <id> --inquilino <id>');
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const r = solicitarTranscricao(acervo, anexo);
+        if (!r.aceita) {
+          escrever(`Recusado: ${r.motivoDeRecusa}`);
+          return 1;
+        }
+        escrever(`Anexo ${anexo} solicitado — na frente da fila de Transcricao.`);
         return 0;
       } finally {
         acervo.fechar();

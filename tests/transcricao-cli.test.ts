@@ -111,6 +111,33 @@ test('malote transcricao incluir-estoque exige --inquilino e --limite', () => {
   }
 });
 
+test('malote transcricao solicitar aceita e recusa, com o motivo', () => {
+  const { raiz, id, limpar } = instalacaoComAnexoDeAudio('pendente');
+  try {
+    const acervo = abrirAcervo(`${raiz}/acervos`, id);
+    const anexo = (acervo.preparar('SELECT anexo_id FROM transcricoes').get() as { anexo_id: string }).anexo_id;
+    acervo.fechar();
+
+    const linhas1: string[] = [];
+    const codigo1 = executar(
+      ['transcricao', 'solicitar', '--anexo', anexo, '--inquilino', id],
+      { dados: raiz, estado: raiz, escrever: (t: string) => linhas1.push(t) },
+    );
+    assert.equal(codigo1, 0, linhas1.join('\n'));
+    assert.match(linhas1.join('\n'), /solicitado/);
+
+    const linhas2: string[] = [];
+    const codigo2 = executar(
+      ['transcricao', 'solicitar', '--anexo', 'id-inexistente', '--inquilino', id],
+      { dados: raiz, estado: raiz, escrever: (t: string) => linhas2.push(t) },
+    );
+    assert.equal(codigo2, 1);
+    assert.match(linhas2.join('\n'), /anexo-inexistente/);
+  } finally {
+    limpar();
+  }
+});
+
 test('malote transcricao estado mostra a contagem por estado e se o motor esta configurado', () => {
   const { raiz, id, limpar } = instalacaoComAnexoDeAudio('concluida');
   try {
