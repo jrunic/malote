@@ -40,6 +40,7 @@ import {
   lerDestinoDeMidia,
 } from '../registro/destino-midia.js';
 import { trazerArquivos } from '../adaptadores/whatsapp/trazer.js';
+import { extrairDuracoesDoBruto } from '../adaptadores/whatsapp/duracao-do-anexo.js';
 import { reprocessarMidiaNuncaObtida } from '../adaptadores/whatsapp/reprocessar-midia.js';
 import { conferirDisco, relatarAcervo } from '../nucleo/relatorio-de-acervo.js';
 import { aplicarRetencao, projetarRetencao } from '../nucleo/retencao.js';
@@ -276,6 +277,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
   malote transcricao reprocessar --inquilino <id>              (volta falhas para pendente)
   malote transcricao estado      --inquilino <id> [--json]     (contagem por estado; se o motor esta configurado)
+  malote midia extrair-duracao --inquilino <id> [--json]        (extrai duração do Conteúdo Bruto já gravado)
   malote servir     --porta <n> [--endereco <ip>] [--exposto]
   malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--json]
   malote mensagens  --inquilino <id> [--conversa <id>] [--desde D] [--ate D] [--fonte <nome>] [--direcao enviada|recebida] [--limite <n>] [--json]
@@ -1134,6 +1136,29 @@ function executarComAtor(
         acervo.fechar();
       }
       return 0;
+    }
+
+    if (grupo === 'midia' && sub === 'extrair-duracao') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) {
+        escrever('Uso: malote midia extrair-duracao --inquilino <id> [--json]');
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const r = extrairDuracoesDoBruto(acervo);
+        if (argumentos.includes('--json')) {
+          escrever(JSON.stringify(r));
+        } else {
+          escrever(`${r.extraidas} Anexo(s) com duração extraída do Conteúdo Bruto.`);
+          if (r.semChaveConhecida > 0) {
+            escrever(`  ${r.semChaveConhecida} sem chave de duração conhecida no bruto (ignorados).`);
+          }
+        }
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
     }
 
     if (grupo === 'configuracao' && sub === 'listar') {
