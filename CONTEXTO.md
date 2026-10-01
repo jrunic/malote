@@ -491,9 +491,18 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
-- 01/10/2026 — **Tarefa #1106 corrigida via `dev-05`: worker de transcrição
-  passava caminho relativo pro motor sem resolver contra o Destino de Mídia —
-  EM `main`, AINDA NÃO PUBLICADA.** Causa raiz confirmada lendo o código e
+- 01/10/2026 — **RELEASE v0.24.1 PUBLICADA E DISTRIBUÍDA NOS TRÊS PACOTES,
+  VERIFICADA POR EFEITO.** PR #12 (`main → production`, CI verde), merge
+  `6874c58`, tag `v0.24.1`. Via `upgrade-now`: `malote` (thinkpad, os dois
+  serviços reiniciados), `malote-cliente` (contabo), `malote-cliente-macbook`
+  (localhost) — os três confirmados em `6874c58`/`0.24.1`. Verificado contra
+  o host real, não só o processo: `malote --versao` responde `0.24.1` nos
+  três, os serviços do thinkpad `active` desde o restart, e o código do fix
+  (`lerDestinoDeMidia`, guarda de "Destino nao configurado") presente no
+  checkout que `malote servir` de fato executa (roda da fonte, sem build).
+  **Tarefa #1106 corrigida via `dev-05`: worker de transcrição
+  passava caminho relativo pro motor sem resolver contra o Destino de Mídia.**
+  Causa raiz confirmada lendo o código e
   reproduzida com ciclo de retorno (teste com fake ffmpeg que valida a
   entrada, igual o real): `processarUmaVez` lia `elegivel.caminho` direto da
   coluna `anexos.caminho`, que é relativo ao Destino de Mídia por desenho, e
@@ -743,7 +752,8 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
-- **#1106 corrigida via `dev-05` em `main` — AINDA NÃO PUBLICADA.** O worker de
+- **#1106 corrigida via `dev-05` — RELEASE v0.24.1 PUBLICADA E DISTRIBUÍDA** (ver
+  Estado Atual). O worker de
   transcrição (`src/cli/transcricao.ts`, `processarUmaVez`) passava `elegivel.caminho`
   (sempre RELATIVO ao Destino de Mídia) direto pro motor, sem juntar com
   `lerDestinoDeMidia` antes — toda Transcrição falhava com "No such file or directory"
