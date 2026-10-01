@@ -113,3 +113,62 @@ export function reenfileirarFalhas(acervo: Acervo): number {
   });
   return falhas.length;
 }
+
+export interface ResultadoDeInclusaoDeEstoque {
+  promovidos: number;
+}
+
+/**
+ * Promove até `limite` Anexos `fora-de-escopo` para `pendente` — a mesma
+ * fila normal, sem prioridade (ver `solicitarTranscricao`, parte 3 da spec
+ * #1103, para prioridade individual). Só promove quem já bate a MESMA
+ * condição de elegibilidade de `proximoElegivel` (`presenca='presente' AND
+ * caminho IS NOT NULL`) — sem isso, um Anexo cujo arquivo a Política de
+ * Retenção descartou depois da migração do ciclo 23 viraria `pendente` para
+ * sempre: o worker nunca o escolhe (não bate a condição dele), nunca falha
+ * (nunca chega a tentar). Achado na revisão desta spec (`dev-10`, 01/10/2026).
+ *
+ * Ordem por `anexo_id`: mesmo critério de desempate de `proximoElegivel`,
+ * para que chamadas sucessivas avancem pelo estoque de forma previsível.
+ *
+ * Comando de decisão do operador — uma Operação por chamada, com efeito;
+ * chamada sem nada a promover não abre Operação (mesmo cuidado de
+ * `reenfileirarFalhas`, que só abre quando `falhas.length > 0`).
+ */
+export function incluirEstoqueEmTranscricao(
+  acervo: Acervo,
+  limite: number,
+): ResultadoDeInclusaoDeEstoque {
+  const candidatos = acervo.preparar(
+      `SELECT t.anexo_id AS anexoId
+         FROM transcricoes t
+         JOIN anexos a ON a.id = t.anexo_id
+        WHERE t.estado = 'fora-de-escopo' AND a.presenca = 'presente' AND a.caminho IS NOT NULL
+        ORDER BY t.anexo_id
+        LIMIT ?`,
+    )
+    .all(limite) as Array<{ anexoId: string }>;
+
+  if (candidatos.length === 0) return { promovidos: 0 };
+
+  emOperacao(
+    acervo,
+    { natureza: 'incluir-estoque-em-transcricao', reversibilidade: 'por-efeito' },
+    (op) => {
+      for (const c of candidatos) {
+        acervo
+          .preparar(`UPDATE transcricoes SET estado = 'pendente' WHERE anexo_id = ?`)
+          .run(c.anexoId);
+        op.valor({
+          tabela: 'transcricoes',
+          chave: c.anexoId,
+          campo: 'estado',
+          antes: 'fora-de-escopo',
+          depois: 'pendente',
+        });
+      }
+    },
+  );
+
+  return { promovidos: candidatos.length };
+}

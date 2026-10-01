@@ -8,6 +8,7 @@ import {
   marcarFalhou,
   listarFalhas,
   reenfileirarFalhas,
+  incluirEstoqueEmTranscricao,
   contarTranscricoesPorEstado,
 } from '../src/nucleo/transcricao.js';
 import { cenario } from './ajuda/acervo.js';
@@ -169,6 +170,76 @@ test('listarFalhas e reenfileirarFalhas, com Operacao gravada na trilha', () => 
     assert.deepEqual(efeitos, [{ tabela: 'transcricoes', chave: anexoId, antes: 'falhou', depois: 'pendente' }]);
 
     assert.equal(reenfileirarFalhas(acervo), 0); // nada a reenfileirar na segunda chamada
+  } finally {
+    c.limpar();
+  }
+});
+
+test('incluirEstoqueEmTranscricao promove só o elegível, respeita o limite, e é idempotente', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+
+    // mensagemDeTeste(acervo) é chamado de novo para cada Anexo abaixo —
+    // idempotente de propósito (idExterno fixo em 'm1'/'111@s.whatsapp.net'):
+    // as cinco chamadas devolvem a MESMA Mensagem, e só os Anexos distintos
+    // importam para este teste.
+    // Três fora-de-escopo elegíveis (presente, com caminho).
+    const elegivel1 = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a1.opus',
+    });
+    acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(elegivel1);
+    const elegivel2 = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a2.opus',
+    });
+    acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(elegivel2);
+    const elegivel3 = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a3.opus',
+    });
+    acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(elegivel3);
+
+    // Fora-de-escopo SEM arquivo presente — não pode ser promovido (critério 6 da spec).
+    // `caminho` é omitido de propósito: EntradaAnexo.caminho é opcional
+    // (string | undefined), nunca aceita null — 'nunca-obtido' é o caso
+    // natural de "sem arquivo" (mesmo padrão de tests/escrita.test.ts).
+    const semArquivo = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'nunca-obtido',
+    });
+    acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(semArquivo);
+
+    // Já pendente — não é fora-de-escopo, não entra na contagem.
+    const jaPendente = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a5.opus',
+    });
+    acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'pendente')`).run(jaPendente);
+
+    const estado = (id: string) =>
+      (acervo.preparar('SELECT estado FROM transcricoes WHERE anexo_id = ?').get(id) as { estado: string })
+        .estado;
+
+    // Limite 2: promove só 2 dos 3 elegíveis, na ordem de id.
+    const primeiraChamada = incluirEstoqueEmTranscricao(acervo, 2);
+    assert.equal(primeiraChamada.promovidos, 2);
+    assert.equal(estado(semArquivo), 'fora-de-escopo', 'sem arquivo presente, nunca promovido');
+    assert.equal(estado(jaPendente), 'pendente', 'não mexe em quem já não é fora-de-escopo');
+
+    // Segunda chamada: promove o terceiro elegível que sobrou.
+    const segundaChamada = incluirEstoqueEmTranscricao(acervo, 10);
+    assert.equal(segundaChamada.promovidos, 1);
+    assert.equal(estado(elegivel1), 'pendente');
+    assert.equal(estado(elegivel2), 'pendente');
+    assert.equal(estado(elegivel3), 'pendente');
+
+    // Terceira chamada: nada mais a promover — idempotente.
+    const terceiraChamada = incluirEstoqueEmTranscricao(acervo, 10);
+    assert.equal(terceiraChamada.promovidos, 0);
+    assert.equal(estado(semArquivo), 'fora-de-escopo', 'continua intocado');
+
+    // Duas Operações gravadas (uma por chamada com efeito) — não uma por Anexo.
+    const operacoes = acervo.db
+      .prepare(`SELECT natureza FROM operacoes WHERE natureza = 'incluir-estoque-em-transcricao'`)
+      .all() as { natureza: string }[];
+    assert.equal(operacoes.length, 2, 'a terceira chamada, sem efeito, não abre Operação nova');
   } finally {
     c.limpar();
   }
