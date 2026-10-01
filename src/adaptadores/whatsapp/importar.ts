@@ -409,6 +409,7 @@ export function gravarMaterialLido(
           tipo: m.anexo.tipo,
           presenca: 'nunca-obtido',
           ...(m.anexo.tamanhoDeclarado !== undefined ? { tamanho: m.anexo.tamanhoDeclarado } : {}),
+          ...(m.anexo.duracaoDeclarada !== undefined ? { duracao: m.anexo.duracaoDeclarada } : {}),
           ...(m.anexo.bruto !== undefined ? { bruto: m.anexo.bruto } : {}),
         });
         relatorio.anexosCriados += 1;

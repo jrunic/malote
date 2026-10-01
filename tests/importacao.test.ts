@@ -268,3 +268,30 @@ test('a importação grava o tamanho e o caminho que o material declara, sem toc
     c.limpar();
   }
 });
+
+test('a importação grava a duração que o material declara, em segundos', () => {
+  const c = cenario();
+  const b = backupFalso({
+    conversas: [{ pk: 1, endereco: 'a@s.whatsapp.net', nome: 'Ana', tipoDeSessao: 0 }],
+    mensagens: [
+      {
+        stanzaId: 'a1',
+        chatSessionPk: 1,
+        texto: null,
+        dataCoreData: paraCoreData('2026-01-10T12:00:00.000Z'),
+        caminhoDeMidia: 'Message/audio/a1.opus',
+        tamanhoDeMidia: 34_565,
+        duracaoDeMidia: 8,
+      },
+    ],
+  });
+  try {
+    const { acervo } = c.novoInquilino('Leia Organa');
+    importarMaterial(acervo, b.raiz, { agora: Date.now(), configuracao: CFG_WHATSAPP, reprocessar: true });
+    const anexo = acervo.db.prepare('SELECT duracao FROM anexos').get() as { duracao: number | null };
+    assert.equal(anexo.duracao, 8, 'a duração declarada pelo material entra no Descritor');
+  } finally {
+    b.limpar();
+    c.limpar();
+  }
+});

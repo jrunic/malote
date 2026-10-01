@@ -158,6 +158,14 @@ export interface AnexoDoMaterial {
    * nulo em todo Anexo ate alguem trazer o arquivo.
    */
   tamanhoDeclarado?: number;
+  /**
+   * Duração que o MATERIAL declara, em segundos — o ZMOVIEDURATION real.
+   * Medido em 01/10/2026 contra o Acervo real do Titular: 20.199 de 20.199
+   * Anexos de áudio então `fora-de-escopo` tinham o campo no bruto, e uma
+   * amostra de 15 comparada contra o arquivo real (ffprobe) bateu com
+   * diferença de truncamento, nunca de 1 segundo inteiro.
+   */
+  duracaoDeclarada?: number;
   /** O registro original de ZWAMEDIAITEM. Carrega LATITUDE/LONGITUDE e vCard. */
   bruto?: string;
 }
@@ -581,10 +589,13 @@ export function lerMaterial(
             r.ZMEDIAITEM === null
               ? undefined
               : (midiaPorChave.get(r.ZMEDIAITEM) as LinhaCrua | undefined);
+          const duracaoDeclarada =
+            typeof daMidia?.['ZMOVIEDURATION'] === 'number' ? daMidia['ZMOVIEDURATION'] : undefined;
           mensagem.anexo = {
             tipo,
             caminhoNaOrigem: r.ZMEDIALOCALPATH,
             ...(r.ZFILESIZE !== null && r.ZFILESIZE > 0 ? { tamanhoDeclarado: r.ZFILESIZE } : {}),
+            ...(duracaoDeclarada !== undefined ? { duracaoDeclarada } : {}),
             ...(daMidia === undefined ? {} : { bruto: serializarLinha(daMidia) }),
           };
         }
