@@ -25,6 +25,29 @@ const V13 = `
     bruto       TEXT,
     UNIQUE (fonte, id_externo)
   );
+  -- Nao usadas por este teste, e existem pela mesma razao de anexos abaixo: a
+  -- CADEIA continua, e o passo 21 -> 22 (remove Status fantasma) deleta de
+  -- conversas com FK em cascata para estas duas — sem elas aqui, a migracao
+  -- completa falharia com "no such table".
+  CREATE TABLE metadados_de_coletiva (
+    conversa_id  TEXT PRIMARY KEY,
+    assunto      TEXT,
+    descricao    TEXT,
+    imagem       TEXT,
+    alterado_por TEXT,
+    alterado_em  TEXT,
+    FOREIGN KEY (conversa_id) REFERENCES conversas(id) ON DELETE CASCADE
+  );
+  CREATE TABLE participacoes (
+    conversa_id      TEXT NOT NULL,
+    identificador_id TEXT NOT NULL,
+    comecou_em       TEXT,
+    terminou_em      TEXT,
+    observada_em     TEXT NOT NULL,
+    ativa_na_fonte   INTEGER,
+    bruto            TEXT,
+    PRIMARY KEY (conversa_id, identificador_id)
+  );
   CREATE TABLE mensagens (
     id          TEXT PRIMARY KEY,
     conversa_id TEXT NOT NULL,

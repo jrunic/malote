@@ -192,6 +192,10 @@ test('trazer sem Destino configurado recusa, e a mensagem diz o que fazer', () =
   }
 });
 
+// midia reprocessar e assincrono (#1084) — testado em cli-midia-reprocessar.test.ts,
+// chamando executarMidiaReprocessar() direto (mesmo molde de servir.test.ts),
+// porque rodar() so exercita o executar() SINCRONO.
+
 test('operador espaco lista Inquilino sem Acervo como zero, sem estourar', () => {
   const { raiz, limpar } = instalacaoTemporaria();
   const b = backupFalso({

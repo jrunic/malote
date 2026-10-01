@@ -12,7 +12,7 @@ import {
   registrarParticipacao,
   registrarTransicao,
 } from '../../nucleo/escrita.js';
-import { nomeRepeteOEndereco } from '../../nucleo/nome-do-endereco.js';
+import { nomeRepeteONumeroBrasileiro } from './nome-repete-numero-br.js';
 import { registrarNome } from '../../nucleo/identidade.js';
 import { marcarMensagem } from '../../nucleo/marca-do-titular.js';
 import {
@@ -246,7 +246,7 @@ export function gravarMaterialLido(
       // enderecos sem par. A mesma recusa da contraparte vale aqui: nome que
       // repete o proprio endereco nao nomeia ninguem.
       if (nomeDoMembro !== undefined) {
-        if (nomeRepeteOEndereco(nomeDoMembro, endereco)) {
+        if (nomeRepeteONumeroBrasileiro(nomeDoMembro, endereco)) {
           relatorio.nomesQueRepetemOEndereco += 1;
         } else {
           registrarNome(acervo, {
@@ -275,7 +275,7 @@ export function gravarMaterialLido(
 // A plataforma preenche este campo com o PROPRIO numero quando nao ha
         // contato cadastrado, e isso nao nomeia ninguem. Recusa CONTADA: sem o
         // contador, 'ninguem tem nome' e 'o produto descartou' ficam iguais.
-        if (nomeRepeteOEndereco(c.nome, endereco)) {
+        if (nomeRepeteONumeroBrasileiro(c.nome, endereco)) {
           relatorio.nomesQueRepetemOEndereco += 1;
         } else {
           // `titular`: vem de ZPARTNERNAME, que e a agenda do DONO DA CONTA, e

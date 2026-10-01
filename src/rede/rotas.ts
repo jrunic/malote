@@ -77,10 +77,21 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const limite = q.get('limite') ?? undefined;
     const configuracaoApelido = q.get('configuracao');
     const fixada = q.get('fixada') ?? undefined;
+    const desdeParam = q.get('desde');
 
     if (fixada === 'true' && configuracaoApelido === null) {
       json(res, 400, { erro: 'fixada exige configuracao' });
       return;
+    }
+
+    let filtroDesde: number | undefined;
+    if (desdeParam !== null) {
+      try {
+        filtroDesde = expandirData(desdeParam, 'inicio');
+      } catch (e) {
+        json(res, 400, { erro: (e as Error).message });
+        return;
+      }
     }
 
     const registro = abrirRegistro(ctx.dados);
@@ -127,6 +138,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       // que o pedido mesmo havendo marcadas suficientes.
       ...(marcadas === undefined && limite !== undefined ? { limite: Number(limite) } : {}),
       ...(marcadas === undefined && configuracaoId !== undefined ? { configuracaoId } : {}),
+      ...(filtroDesde !== undefined ? { desde: filtroDesde } : {}),
     }).map((c) => ({
       id: c.id,
       fonte: c.fonte,
@@ -251,18 +263,22 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       return;
     }
 
+    // A Conversa existir e a UNICA coisa que decide 404 nesta rota — checado
+    // UMA VEZ, antes de qualquer filtro, e nunca mais depois. Lista vazia por
+    // filtro que nao bate em nada, ou por a Conversa nunca ter tido Mensagem,
+    // e resposta LEGITIMA (200): confundir isso com "nao existe" e o que a
+    // #1090 corrige. Fonte IMPLICITA da propria Conversa — esta rota nunca e
+    // ambigua, porque Conversa tem uma Fonte so.
+    const fonteDaConversaAtual = fonteDaConversa(ctx.acervo, conversaId);
+    if (fonteDaConversaAtual === undefined) {
+      naoEncontrado(res);
+      return;
+    }
+
     let configuracaoId: string | undefined;
     if (favorito === 'true') {
       if (configuracaoApelido === null) {
         json(res, 400, { erro: 'favorito exige configuracao' });
-        return;
-      }
-      // Fonte IMPLICITA da propria Conversa — esta rota nunca e ambigua,
-      // porque Conversa tem uma Fonte so. Se a Conversa nao existe, a
-      // resposta e o mesmo 404 vazio de sempre, sem distinguir.
-      const fonteDaConversaAtual = fonteDaConversa(ctx.acervo, conversaId);
-      if (fonteDaConversaAtual === undefined) {
-        naoEncontrado(res);
         return;
       }
       const registro = abrirRegistro(ctx.dados);
@@ -279,8 +295,6 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
         return;
       }
       configuracaoId = resolucao.configuracao.id;
-      // A partir daqui, sabemos que a Conversa EXISTE (fonteDaConversa achou):
-      // lista vazia por filtro de favorito e resposta legitima, 200 — nao 404.
     }
 
     // Ordem: valor EXPLICITO no query sempre vence, com ou sem cursor — o bug
@@ -308,14 +322,9 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       ordem,
     });
 
-    if (mensagens.length === 0 && favorito !== 'true') {
-      // Conversa vazia e Conversa inexistente respondem igual — LIMITACAO
-      // HERDADA, mantida para os filtros pre-existentes (desde/ate/autor).
-      // Com favorito='true', a existencia ja foi confirmada acima
-      // (fonteDaConversa achou) — lista vazia ali e 200, nunca cai aqui.
-      naoEncontrado(res);
-      return;
-    }
+    // A Conversa ja provou que existe, acima — lista vazia aqui e sempre
+    // resposta legitima (200), qualquer que seja o motivo (filtro, ou a
+    // Conversa nunca ter tido Mensagem).
     // O cursor `proximo` so existe quando ha mais paginas: o consumidor nunca
     // monta cursor, devolve o que recebeu.
     const temMais = limite !== null && mensagens.length >= Number(limite);

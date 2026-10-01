@@ -137,12 +137,17 @@ Use a CLI do malote, no modo rede. As variáveis `MALOTE_SERVIDOR` e
 escreva em arquivo, commit ou log, e nunca a passe adiante.
 
 Comandos (todos somente leitura):
-- `malote conversas [--busca T] [--fonte F] [--coletiva true|false] [--configuracao A] [--fixada true] [--limite N]` —
+- `malote conversas [--busca T] [--fonte F] [--coletiva true|false] [--configuracao A] [--fixada true] [--desde D] [--limite N]` —
   índice; comece sempre aqui. `--configuracao` sozinho filtra por apelido (`malote
   configuracao listar` mostra o que existe) e só alcança Conversa DIRETA — coletiva
   pertence ao Inquilino inteiro, não a uma Configuração, e nunca casa esse filtro. Com
   `--fixada true`, `--configuracao` muda de sentido: passa a escopar a MARCA de fixada
   daquela Configuração, não a atribuição — por isso coletiva fixada aparece.
+  `--desde D` filtra pela Conversa cuja Mensagem MAIS RECENTE ocorreu em ou depois de
+  `D`, e ordena o resultado por essa recência (mais recente primeiro) — é o caminho
+  para "o que teve atividade desde tal data", sem gambiarra de busca por termo comum.
+  Sem `--desde`, a ordem continua sendo a de criação da Conversa (limitação conhecida,
+  não corrigida por este parâmetro).
   `--fixada` exige `--configuracao` junto, e funciona local ou em modo rede.
 - `malote configuracao listar` — lista as Configurações do Inquilino (apelido + fonte).
 - `malote mensagens [--conversa <id>] [--desde D] [--ate D] [--limite N] [--direcao enviada|recebida] [--favorito true --configuracao A]` —
@@ -183,7 +188,7 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 
 | rota | parâmetros opcionais | resposta |
 |---|---|---|
-| `GET /conversas` | `fonte`, `coletiva`, `busca`, `pessoa`, `limite`, `configuracao`, `fixada` | `{ conversas: [{ id, fonte, coletiva, assunto, mensagens, configuracao }] }` |
+| `GET /conversas` | `fonte`, `coletiva`, `busca`, `pessoa`, `limite`, `configuracao`, `fixada`, `desde` | `{ conversas: [{ id, fonte, coletiva, assunto, mensagens, configuracao }] }` |
 | `GET /mensagens` | `limite`, `desde`, `ate`, `autor`, `fonte`, `direcao`, `antes`, `ordem` | `{ mensagens: [...], proximo? }` |
 | `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `antes`, `ordem`, `direcao`, `favorito`, `configuracao` | `{ mensagens: [...], proximo? }` |
 | `GET /buscar?texto=` | `conversa`, `autor`, `desde`, `ate`, `limite` | `{ mensagens: [...] }` |
@@ -220,7 +225,10 @@ continua `cronologica` — porque o propósito desta rota é justamente
 recência. Vazio é resposta legítima (`200`, lista vazia), nunca `404`: não
 há um recurso singular cuja existência esteja em jogo.
 
-Limites conhecidos: conversa vazia e inexistente respondem igual (`404`) em
-`/conversas/<id>/mensagens` — distinguir exigiria confirmar existência, e confirmar
-existência é o que não pode vazar; `400` para parâmetro malformado é invocação errada, não
-"não existe".
+Em `/conversas/<id>/mensagens`, a Conversa existir é a única coisa que decide
+`404` — confirmado uma vez, antes de qualquer filtro. Lista vazia por filtro
+que não bate em nada, ou porque a Conversa nunca teve Mensagem, é resposta
+legítima (`200`, lista vazia), nunca `404`. Confirmar a existência da própria
+Conversa que o chamador já nomeou não vaza nada de outro Inquilino — a
+consulta já é escopada ao Acervo da credencial. `400` para parâmetro
+malformado continua sendo invocação errada, não "não existe".

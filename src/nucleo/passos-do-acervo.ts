@@ -646,6 +646,103 @@ const TRANSCRICAO_ELEGIBILIDADE_V21: PassoDeMigracao = {
   },
 };
 
+/**
+ * Remove as Conversas fantasma de Status ja gravadas — a #1069/#1094, nesta
+ * mesma sessao, ja impedem CRIAR novas (import e ao vivo); este passo limpa o
+ * que ja existia antes das duas correcoes.
+ *
+ * Criterio medido em 29/09/2026 contra o Acervo real do thinkpad:
+ * `json_extract(bruto, '$.ZSESSIONTYPE') = 3` bate EXATAMENTE com as duas
+ * formas de endereco conhecidas (`@status` e `@lid.status`) — 1060 Conversas,
+ * zero falso-positivo, zero perda contra o criterio ingenuo por sufixo de
+ * string sozinho (que perderia as 65 na forma `@lid.status`). Ler `bruto` com
+ * campo especifico do backup de iOS, dentro do nucleo, tem precedente real:
+ * `DIRECAO_WHATSAPP_V19` acima faz o mesmo com `ZISFROMME`.
+ *
+ * SO remove quando a Conversa tem ZERO Mensagem — 364 das 1060 medidas TEM
+ * "mensagem" (conteudo de Status/Stories capturado do backup: `ZGROUPEVENTTYPE`,
+ * `ZMEDIAITEM`, sem texto de conversa; nao e chat real) e ficam, de proposito.
+ * Perder uma Mensagem real por engano custaria mais que deixar lixo do mesmo
+ * tipo intocado.
+ *
+ * O numero de linhas removidas VARIA por instalacao — nao ha como declarar um
+ * delta fixo em `divergenciasEsperadas`. A interface aceita um GETTER no lugar
+ * do array estatico (TypeScript nao distingue os dois na conformidade
+ * estrutural de um literal de objeto): `aplicar` conta e deleta, gravando nas
+ * variaveis fechadas por closure; o getter as devolve DEPOIS de `aplicar` ja
+ * ter rodado — `migrar()` so le `divergenciasEsperadas` apos o laco que chama
+ * `aplicar` de todos os passos pendentes. Primeiro uso real deste caminho da
+ * maquina de migracao — antes so existia em teste.
+ *
+ * `metadados_de_coletiva` e `participacoes` tem FK `ON DELETE CASCADE` para
+ * `conversas.id` (toda candidata e coletiva, pela CHECK da tabela — tem
+ * SEMPRE uma linha em metadados_de_coletiva, e pode ter roster em
+ * participacoes). O cascade nao devolve contagem, por isso as duas contagens
+ * SAO TIRADAS ANTES do DELETE. TEMP TABLE em vez de `WHERE id IN (?, ?, ...)`
+ * evita o limite de parametros do SQLite numa instalacao com muitas
+ * candidatas — ela vive so na conexao, nunca aparece em `sqlite_master`
+ * (schema principal), e por isso nao precisa entrar em `tabelasNovas`.
+ */
+function passoRemoveStatusFantasma(): PassoDeMigracao {
+  let deltaConversas = 0;
+  let deltaParticipacoes = 0;
+  let deltaMetadados = 0;
+
+  return {
+    de: 21,
+    para: 22,
+    descricao: 'remove Conversas fantasma de Status (ZSESSIONTYPE=3) sem Mensagem',
+    aplicar: (db) => {
+      db.exec(`
+        CREATE TEMP TABLE _status_fantasma_v22 AS
+        SELECT c.id AS conversa_id
+        FROM conversas c
+        LEFT JOIN mensagens m ON m.conversa_id = c.id
+        WHERE c.fonte = 'whatsapp'
+          AND json_valid(c.bruto)
+          AND json_extract(c.bruto, '$.ZSESSIONTYPE') = 3
+        GROUP BY c.id
+        HAVING COUNT(m.id) = 0
+      `);
+
+      deltaConversas = -(
+        db.prepare('SELECT COUNT(*) AS n FROM _status_fantasma_v22').get() as { n: number }
+      ).n;
+      deltaParticipacoes = -(
+        db
+          .prepare(
+            `SELECT COUNT(*) AS n FROM participacoes
+              WHERE conversa_id IN (SELECT conversa_id FROM _status_fantasma_v22)`,
+          )
+          .get() as { n: number }
+      ).n;
+      deltaMetadados = -(
+        db
+          .prepare(
+            `SELECT COUNT(*) AS n FROM metadados_de_coletiva
+              WHERE conversa_id IN (SELECT conversa_id FROM _status_fantasma_v22)`,
+          )
+          .get() as { n: number }
+      ).n;
+
+      db.prepare(
+        'DELETE FROM conversas WHERE id IN (SELECT conversa_id FROM _status_fantasma_v22)',
+      ).run();
+
+      db.exec('DROP TABLE _status_fantasma_v22');
+    },
+    get divergenciasEsperadas() {
+      return [
+        { tabela: 'conversas', delta: deltaConversas },
+        { tabela: 'participacoes', delta: deltaParticipacoes },
+        { tabela: 'metadados_de_coletiva', delta: deltaMetadados },
+      ];
+    },
+  };
+}
+
+const REMOVE_STATUS_FANTASMA_V22: PassoDeMigracao = passoRemoveStatusFantasma();
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -658,6 +755,7 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   DIRECAO_WHATSAPP_V19,
   DIRECAO_INSTAGRAM_V20,
   TRANSCRICAO_ELEGIBILIDADE_V21,
+  REMOVE_STATUS_FANTASMA_V22,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {

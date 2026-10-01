@@ -986,3 +986,69 @@ export function removerNomesInvalidos(
   );
   return contagem;
 }
+
+export interface CandidatoAPromocao {
+  identificadorId: string;
+  fonte: Fonte;
+  valor: string;
+}
+
+/**
+ * Identificador sem Pessoa que ja tem alguma Atribuicao de Nome pendurada
+ * nele — candidato a virar Pessoa propria. Fonte-agnostico: nao julga se o
+ * nome e confiavel, so se ha algum. Quem decide o que e nome invalido
+ * especifico de uma Fonte (e por isso nao sobe ao nucleo) e quem chama.
+ */
+export function listarElegiveisParaPromocao(acervo: Acervo): CandidatoAPromocao[] {
+  const linhas = acervo.preparar(
+      `SELECT DISTINCT i.id, i.fonte, i.valor
+         FROM identificadores i
+        WHERE i.pessoa_id IS NULL
+          AND EXISTS (SELECT 1 FROM atribuicoes_de_nome a WHERE a.identificador_id = i.id)
+        ORDER BY i.fonte, i.valor`,
+    )
+    .all() as Array<{ id: string; fonte: Fonte; valor: string }>;
+  return linhas.map((l) => ({ identificadorId: l.id, fonte: l.fonte, valor: l.valor }));
+}
+
+export interface ResultadoDePromocao {
+  pessoasCriadas: PessoaId[];
+  vinculos: Array<{ identificadorId: string; pessoaId: PessoaId }>;
+}
+
+/**
+ * Promove cada Identificador da lista a Pessoa propria, vinculada por
+ * Procedencia 'material' — a Fonte e quem afirma o vinculo, nao um
+ * catalogo nem um humano. UMA Operacao para a invocacao inteira: sem este
+ * envoltorio, promover milhares de enderecos gravaria milhares de
+ * Operacoes, e desfazer o lote exigiria desfazer cada uma — mesmo padrao
+ * medido em `aplicarLote` (922 Propostas: 3.102 Operacoes -> 1).
+ *
+ * Nao resolve correspondencia nenhuma: cada Identificador vira sua propria
+ * Pessoa, sozinho. Elegibilidade real (incluindo filtro de nome invalido
+ * especifico de Fonte) e decisao de quem chama.
+ */
+export function promoverIdentificadores(
+  acervo: Acervo,
+  identificadorIds: string[],
+): ResultadoDePromocao {
+  // Lista vazia nao abre Operacao nenhuma — mesmo motivo de
+  // removerNomesInvalidos e aplicarConjunto: Operacao vazia na trilha faria
+  // um agente concluir que houve ato onde nao houve. A segunda rodada de um
+  // lote ja promovido cai exatamente neste caso.
+  if (identificadorIds.length === 0) return { pessoasCriadas: [], vinculos: [] };
+  return emOperacao(
+    acervo,
+    { natureza: 'promover-identificadores-nomeados', reversibilidade: 'por-efeito' },
+    () => {
+      const resultado: ResultadoDePromocao = { pessoasCriadas: [], vinculos: [] };
+      for (const identificadorId of identificadorIds) {
+        const pessoaId = criarPessoa(acervo);
+        vincularIdentificador(acervo, { identificadorId, pessoaId, procedencia: 'material' });
+        resultado.pessoasCriadas.push(pessoaId);
+        resultado.vinculos.push({ identificadorId, pessoaId });
+      }
+      return resultado;
+    },
+  );
+}

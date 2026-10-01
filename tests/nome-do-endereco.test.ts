@@ -14,7 +14,16 @@ import {
   vincularIdentificador,
 } from '../src/nucleo/identidade.js';
 
-test('o schema do Acervo está na versão 21', () => {
+test('o schema do Acervo está na versão 22', () => {
+  // v22 em 29/09/2026: remove as Conversas fantasma de Status
+  // (ZSESSIONTYPE=3, formas @status e @lid.status) que ja tinham ZERO
+  // Mensagem — a #1069/#1094 ja impedem CRIAR novas; este passo limpa o
+  // que ja existia. So remove com zero Mensagem: 364 das 1060 medidas em
+  // producao real TEM "mensagem" (conteudo de Status/Stories do proprio
+  // backup, nao chat), e ficam de proposito. Delta VARIA por instalacao —
+  // primeiro uso real de divergenciasEsperadas como getter, calculado
+  // depois de aplicar() contar o que de fato foi removido.
+  //
   // v21 em 28/09/2026: a TRANSCRICAO entra pendurada no Anexo, so para
   // tipo='audio'. Nao e "interpretacao de conteudo" (ver docs/dominio,
   // Fora do dominio) — resgata em texto o que foi dito, sem julgar. Todo
@@ -112,7 +121,7 @@ test('o schema do Acervo está na versão 21', () => {
   // v9: Transicao de Participacao como registro proprio, e a atividade que a
   // Fonte declara no retrato. Acervo v8 nao tem nem uma nem outra, e a
   // consulta de presenca leria silencio como ausencia.
-  assert.equal(VERSAO_SCHEMA_ACERVO, 21);
+  assert.equal(VERSAO_SCHEMA_ACERVO, 22);
 });
 
 test('o nome pendura em Identificador, sem Pessoa nenhuma', () => {

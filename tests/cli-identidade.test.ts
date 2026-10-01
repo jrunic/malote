@@ -6,6 +6,10 @@ import { instalacaoTemporaria } from './ajuda/instalacao.js';
 import { executar } from '../src/cli/index.js';
 import { abrirAcervo } from '../src/nucleo/acervo.js';
 import { registrarIdentificador } from '../src/nucleo/escrita.js';
+import { registrarNome } from '../src/nucleo/identidade.js';
+import { procurarPessoas } from '../src/nucleo/consulta.js';
+import { listarOperacoesCruas } from '../src/nucleo/trilha.js';
+import { aprenderCorrespondencia } from '../src/nucleo/correspondencia.js';
 
 function rodar(raiz: string, argumentos: string[]): { codigo: number; saida: string } {
   const linhas: string[] = [];
@@ -432,6 +436,175 @@ test('emitir Chave de Acesso exige Chave de Operador', () => {
     // Chave de Operador. Assercao que casa com a ajuda nao mede autorizacao.
     assert.match(linhas.join('\n'), /Recusado: Chave de Operador ausente/);
     assert.doesNotMatch(linhas.join('\n'), /Comando desconhecido/);
+  } finally {
+    limpar();
+  }
+});
+
+test('promover-identificadores-nomeados em ensaio nao escreve nada', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino, noWhats } = cenarioDeCli(raiz);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    registrarNome(acervo, { identificadorId: noWhats, origem: 'whatsapp', nome: 'Han', autoridade: 'terceiro' });
+    acervo.fechar();
+
+    const r = rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino]);
+
+    assert.equal(r.codigo, 0);
+    assert.match(r.saida, /1 Identificador/);
+    assert.match(r.saida, /Nada foi escrito/);
+
+    const depois = rodar(raiz, ['pessoa', 'listar', '--inquilino', inquilino]);
+    assert.doesNotMatch(depois.saida, /Han/, 'ensaio nao cria Pessoa');
+  } finally {
+    limpar();
+  }
+});
+
+test('promover-identificadores-nomeados aplicado: a Pessoa aparece na busca por texto', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino, noWhats } = cenarioDeCli(raiz);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    registrarNome(acervo, { identificadorId: noWhats, origem: 'whatsapp', nome: 'Han Solo', autoridade: 'terceiro' });
+    acervo.fechar();
+
+    const aplicado = rodar(raiz, [
+      'pessoa', 'promover-identificadores-nomeados',
+      '--inquilino', inquilino, '--com-efeito', '--confirmo',
+    ]);
+    assert.equal(aplicado.codigo, 0);
+    assert.match(aplicado.saida, /1 Pessoa\(s\) criada/);
+
+    const busca = rodar(raiz, ['pessoa', 'listar', '--inquilino', inquilino]);
+    assert.match(busca.saida, /Han Solo/);
+  } finally {
+    limpar();
+  }
+});
+
+test('criterio 4: procurarPessoas (o mecanismo de busca em si, nao so a saida da CLI) encontra depois de promovido', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino, noWhats } = cenarioDeCli(raiz);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    registrarNome(acervo, { identificadorId: noWhats, origem: 'whatsapp', nome: 'Han Solo', autoridade: 'terceiro' });
+
+    assert.equal(procurarPessoas(acervo, { texto: 'Han Solo' }).length, 0, 'antes de promover, nao encontra');
+    acervo.fechar();
+
+    rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino, '--com-efeito', '--confirmo']);
+
+    const acervo2 = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    assert.equal(procurarPessoas(acervo2, { texto: 'Han Solo' }).length, 1, 'depois de promover, encontra');
+    acervo2.fechar();
+  } finally {
+    limpar();
+  }
+});
+
+test('rodar duas vezes seguidas: a segunda nao cria Pessoa nova, nem Operacao nova', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino, noWhats } = cenarioDeCli(raiz);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    registrarNome(acervo, { identificadorId: noWhats, origem: 'whatsapp', nome: 'Han', autoridade: 'terceiro' });
+    acervo.fechar();
+
+    rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino, '--com-efeito', '--confirmo']);
+    const acervoEntre = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    const operacoesAntes = listarOperacoesCruas(acervoEntre).length;
+    acervoEntre.fechar();
+
+    const segunda = rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino, '--com-efeito', '--confirmo']);
+
+    assert.match(segunda.saida, /0 Pessoa\(s\) criada/);
+    const acervoDepois = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    assert.equal(listarOperacoesCruas(acervoDepois).length, operacoesAntes, 'segunda rodada vazia nao abre Operacao');
+    acervoDepois.fechar();
+  } finally {
+    limpar();
+  }
+});
+
+test('Identificador cujo unico nome e o valor-sentinela do baileys nao e promovido', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino, noWhats } = cenarioDeCli(raiz);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    registrarNome(acervo, { identificadorId: noWhats, origem: 'whatsapp', nome: '+EAA=', autoridade: 'titular' });
+    acervo.fechar();
+
+    const r = rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino]);
+
+    assert.match(r.saida, /0 Identificador/);
+  } finally {
+    limpar();
+  }
+});
+
+test('sentinela no titular nao esconde nome bom do terceiro — a Pessoa NASCE, e a busca ACHA', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilino, noWhats } = cenarioDeCli(raiz);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    registrarNome(acervo, { identificadorId: noWhats, origem: 'whatsapp', nome: '+EAA=', autoridade: 'titular' });
+    registrarNome(acervo, { identificadorId: noWhats, origem: 'whatsapp', nome: 'Guilherme', autoridade: 'terceiro' });
+    acervo.fechar();
+
+    const r = rodar(raiz, [
+      'pessoa', 'promover-identificadores-nomeados',
+      '--inquilino', inquilino, '--com-efeito', '--confirmo',
+    ]);
+    assert.match(r.saida, /1 Pessoa\(s\) criada/);
+
+    const acervo2 = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    assert.equal(procurarPessoas(acervo2, { texto: 'Guilherme' }).length, 1, 'a busca acha pelo nome bom');
+    acervo2.fechar();
+  } finally {
+    limpar();
+  }
+});
+
+test('nome que repete o proprio endereco pelo nono digito nao e promovido', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const chave = /valor:\s*(\S+)/.exec(rodar(raiz, ['operador', 'chave', 'criar']).saida)?.[1];
+    assert.ok(chave);
+    const criacao = rodar(raiz, ['inquilino', 'criar', '--chave', chave, '--titular', 'Leia Organa']);
+    const inquilino = /id:\s*(\S+)/.exec(criacao.saida)?.[1];
+    assert.ok(inquilino);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    const { id } = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '556592290832@s.whatsapp.net' });
+    registrarNome(acervo, { identificadorId: id, origem: 'whatsapp', nome: '+55 65 99229-0832', autoridade: 'titular' });
+    acervo.fechar();
+
+    const r = rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino]);
+
+    assert.match(r.saida, /0 Identificador/);
+  } finally {
+    limpar();
+  }
+});
+
+test('Identificador em forma alternativa (@lid) nunca e elegivel, mesmo com correspondencia aprendida', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const chave = /valor:\s*(\S+)/.exec(rodar(raiz, ['operador', 'chave', 'criar']).saida)?.[1];
+    assert.ok(chave);
+    const criacao = rodar(raiz, ['inquilino', 'criar', '--chave', chave, '--titular', 'Leia Organa']);
+    const inquilino = /id:\s*(\S+)/.exec(criacao.saida)?.[1];
+    assert.ok(inquilino);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    const { id } = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '111@lid' });
+    registrarNome(acervo, { identificadorId: id, origem: 'whatsapp', nome: 'Han', autoridade: 'terceiro' });
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: '111@lid', canonico: '5565911110001@s.whatsapp.net' });
+    acervo.fechar();
+
+    const r = rodar(raiz, ['pessoa', 'promover-identificadores-nomeados', '--inquilino', inquilino]);
+
+    assert.match(r.saida, /0 Identificador/);
   } finally {
     limpar();
   }

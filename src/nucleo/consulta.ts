@@ -147,6 +147,20 @@ export interface FiltroDeConversa {
    */
   configuracaoId?: string;
   limite?: number;
+  /**
+   * So Conversa cuja MAIS RECENTE Mensagem ocorreu em ou depois deste
+   * instante (epoch ms) — e ORDENA o resultado por essa recencia, DESC. Sem
+   * Mensagem nenhuma nunca casa (#1092): "atividade recente" nao tem sentido
+   * para Conversa que nunca recebeu nada.
+   *
+   * Muda a query para JOIN + GROUP BY (medido em produção real: 201ms para
+   * 7.875 Conversas / ~1,4M Mensagens, usando o índice `(conversa_id,
+   * ocorrida_em)` já existente — sem full scan). Só entra nesse caminho
+   * quando `desde` é passado; sem ele, a query de sempre não muda, ORDER BY
+   * `criada_em` continua sendo o default (nao e regressao a corrigir —
+   * `busca` ja documentava essa limitacao).
+   */
+  desde?: number;
 }
 
 export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): ConversaListada[] {
@@ -174,7 +188,7 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
     // Termo do usuario e LITERAL: % e _ sao escapados, senao "100%" casa
     // qualquer coisa. LOWER para case-insensitive por ser ASCII-safe.
     condicoes.push(
-      "LOWER(m.assunto) LIKE LOWER(?) ESCAPE '\\'",
+      "LOWER(md.assunto) LIKE LOWER(?) ESCAPE '\\'",
     );
     valores.push(
       filtro.busca.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
@@ -188,15 +202,31 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
   const onde = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
   const limite = filtro.limite !== undefined ? ` LIMIT ${Number(filtro.limite)}` : '';
 
-  const linhas = acervo.preparar(
-      `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, m.assunto,
-              (SELECT COUNT(*) FROM mensagens x WHERE x.conversa_id = c.id) AS mensagens
-         FROM conversas c
-         LEFT JOIN metadados_de_coletiva m ON m.conversa_id = c.id
-         ${onde}
-         ORDER BY c.criada_em${limite}`,
-    )
-    .all(...valores) as Array<Record<string, unknown>>;
+  let linhas: Array<Record<string, unknown>>;
+  if (filtro.desde !== undefined) {
+    linhas = acervo.preparar(
+        `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, md.assunto,
+                COUNT(msg.id) AS mensagens
+           FROM conversas c
+           LEFT JOIN metadados_de_coletiva md ON md.conversa_id = c.id
+           LEFT JOIN mensagens msg ON msg.conversa_id = c.id
+           ${onde}
+           GROUP BY c.id
+           HAVING MAX(msg.ocorrida_em) >= ?
+           ORDER BY MAX(msg.ocorrida_em) DESC${limite}`,
+      )
+      .all(...valores, filtro.desde) as Array<Record<string, unknown>>;
+  } else {
+    linhas = acervo.preparar(
+        `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, md.assunto,
+                (SELECT COUNT(*) FROM mensagens x WHERE x.conversa_id = c.id) AS mensagens
+           FROM conversas c
+           LEFT JOIN metadados_de_coletiva md ON md.conversa_id = c.id
+           ${onde}
+           ORDER BY c.criada_em${limite}`,
+      )
+      .all(...valores) as Array<Record<string, unknown>>;
+  }
 
   return linhas.map((l) => ({
     id: l['id'] as string,
@@ -648,4 +678,42 @@ export function contarPorFonte(acervo: Acervo): ContagemPorFonte {
     mensagens.total += l['n'] as number;
   }
   return { conversas, mensagens };
+}
+
+export interface AnexoNuncaObtidoComBruto {
+  anexoId: string;
+  tipo: string;
+  /** O bruto da MENSAGEM (nunca o do Anexo) — e onde mediaKey/directPath vivem. */
+  mensagemBruto: string | null;
+}
+
+/**
+ * Anexo `nunca-obtido`, com o bruto da Mensagem que o carrega — materia-prima
+ * do retry de midia (#1084). Nucleo devolve o bruto CRU; decidir se ele tem
+ * forma de recepcao ao vivo e reconstitui-lo e trabalho do Adaptador, que e
+ * quem conhece a Fonte — nucleo nao interpreta o conteudo, so entrega.
+ */
+export function listarAnexosNuncaObtidosComBruto(
+  acervo: Acervo,
+  filtro: { fonte?: Fonte } = {},
+): AnexoNuncaObtidoComBruto[] {
+  const condicoes = ["a.presenca = 'nunca-obtido'"];
+  const valores: unknown[] = [];
+  if (filtro.fonte !== undefined) {
+    condicoes.push('m.fonte = ?');
+    valores.push(filtro.fonte);
+  }
+  const linhas = acervo.preparar(
+      `SELECT a.id AS anexo_id, a.tipo, m.bruto AS mensagem_bruto
+         FROM anexos a
+         JOIN mensagens m ON m.id = a.mensagem_id
+        WHERE ${condicoes.join(' AND ')}`,
+    )
+    .all(...valores) as Array<Record<string, unknown>>;
+
+  return linhas.map((l) => ({
+    anexoId: l['anexo_id'] as string,
+    tipo: l['tipo'] as string,
+    mensagemBruto: (l['mensagem_bruto'] as string | null) ?? null,
+  }));
 }

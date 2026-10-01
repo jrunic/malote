@@ -11,7 +11,8 @@ import {
   registrarIdentificador,
 } from '../../nucleo/escrita.js';
 import { registrarNome } from '../../nucleo/identidade.js';
-import { nomeRepeteOEndereco } from '../../nucleo/nome-do-endereco.js';
+import { nomeRepeteONumeroBrasileiro } from './nome-repete-numero-br.js';
+import { pareceValorSentinela } from './nome-sentinela-de-contato.js';
 import { emOperacao } from '../../nucleo/trilha.js';
 import {
   desmarcarConversa,
@@ -177,12 +178,13 @@ function processarContatos(
     const r = cru as Record<string, unknown>;
     const name = r['name'];
     if (typeof name !== 'string' || name.length === 0) continue;
+    if (pareceValorSentinela(name)) continue;
     const jid = r['jid'];
     const id = r['id'];
     const bruto = typeof jid === 'string' && jid.length > 0 ? jid : typeof id === 'string' ? id : '';
     if (bruto.length === 0) continue;
     const canonico = resolverEndereco(acervo, 'whatsapp', bruto);
-    if (nomeRepeteOEndereco(name, canonico)) continue;
+    if (nomeRepeteONumeroBrasileiro(name, canonico)) continue;
     const { id: identificadorId } = registrarIdentificador(acervo, {
       fonte: 'whatsapp',
       valor: canonico,

@@ -263,8 +263,9 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   mesmo assim é correto — o que sobe é o conhecimento, não a confiança. Tem teste
   próprio para ninguém "consertar" isso como defeito depois.
 - **Duas regras de nome, duas casas, e confundi-las trava a execução.** A recusa de
-  **nome que repete o próprio endereço** fica no **Adaptador** — os dois valores
-  estão na mão no instante da chamada, sem consulta. A **normalização de marca
+  **nome que repete o próprio endereço** (comparação mecânica de dígitos) fica no
+  **núcleo** (`nome-do-endereco.ts`) — nasceu no Adaptador de WhatsApp e subiu quando
+  a porta de remoção passou a precisar dela também. A **normalização de marca
   invisível** fica na **porta do núcleo** — reconhecer que a segunda escrita é o
   mesmo nome exige consultar o que já está gravado, e a unicidade do banco é por
   texto exato: marcado e desmarcado são strings diferentes, então a linha gêmea
@@ -273,6 +274,28 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   sendo o que a Fonte entregou. O par de testes é o desenho: um prova que a segunda
   escrita não cria linha, o outro **lê de volta** e prova que as marcas ficaram. Sem
   o segundo, normalizar na escrita passaria no primeiro.
+- **"Comparar dígitos serve a qualquer Fonte" tem limite, e o nono dígito brasileiro
+  mora do lado de fora dele.** `nome-do-endereco.ts` (núcleo) já dizia, desde que
+  nasceu: "traduzir a forma escrita do número na forma do endereço é vocabulário de
+  Fonte" e não deveria subir. Medido em 30/09/2026 (#1101): 1.110 de 1.110 nomes
+  `+55...` que a comparação de sufixo/prefixo do núcleo deixava passar tinham o nono
+  dígito móvel (2012) inserido no MEIO do número — nem sufixo nem prefixo alcançam
+  isso. A correção fica no ADAPTADOR (`nome-repete-numero-br.ts`, WhatsApp), que
+  ENVOLVE a função do núcleo sem alterá-la. Duplica em parte o que
+  `contatos/telefone.ts` já resolve para o catálogo — deliberado: adaptador não
+  importa adaptador (só `src/cli` compõe mais de uma Fonte), e o caso aqui (comparar
+  dois valores já conhecidos) não precisa da máquina de gerar variante para busca,
+  que existe lá só para não casar com o número de OUTRA pessoa.
+- **Nome vindo de biblioteca de terceiro não é nome só por não ser vazio.** O
+  WhatsApp dispara `contactAction` de app-state também para contato nunca nomeado, e
+  `fullName` vem com um valor-placeholder em vez de ausente — medido em 30/09/2026
+  (#1101): 58% de TODAS as Atribuições `titular`/`whatsapp` do Acervo real são essa
+  forma (`+EAA=` sozinho é 81% do lixo em identificadores sem Pessoa), com assinatura
+  de sentinela fixo (mesmo texto repetido em massa, comprimento sempre ≡1 mod 4 —
+  prefixo `+` mais um bloco base64 válido), não corrupção de parsing. `estado-ao-vivo.ts`
+  recusa pela FORMA (`pareceValorSentinela`) antes de gravar — 14 Pessoas já exibiam
+  esse lixo como nome corrente antes da correção, e a limpeza do que já está gravado
+  ainda não existe (ver Pendências).
 - **Trabalho de disco no caminho de SUBIDA do ouvinte pode travar a subida — e
   travou.** Medido no Linux em 13/09/2026: `mkdirSync(dir, { recursive: true })`
   sobre um caminho patológico do sistema de arquivos virtual **não lança e não
@@ -395,6 +418,20 @@ Hard limits sempre relevantes durante a sessão.
 - **Sem Destino de Mídia, o ouvinte AVISA e segue — não recusa subir.** Diferente de
   `malote midia trazer`, que recusa sem Destino: recusar a subida do ouvinte quebraria
   toda instalação que nunca configurou um. O Anexo fica `nunca-obtido`, como sempre foi.
+- **A referência de mídia do WhatsApp expira em ~30 dias, não minutos — e `mediaKey`
+  chega em DUAS formas no `bruto` gravado.** Medido em 29-30/09/2026 (#1084), contra
+  dois Anexos reais de produção que tinham falhado no dia anterior: a URL carrega o
+  próprio prazo (parâmetro `oe=`, epoch em hex) — decodificado, ~30 dias a partir do
+  recebimento. `downloadMediaMessage` da biblioteca funciona **sem socket vivo**, só
+  com a mensagem reconstruída (confirmado baixando de verdade, 1,89 MB, ~1 dia depois
+  da falha original). `mediaKey` aparece como **string base64 pura** (os dois casos
+  reais) ou como `{type:'Buffer',data:[...]}` (o que o round-trip de JSON do
+  `aoReceber` produz — ver item acima) — as duas formas acontecem, nenhuma é "a"
+  certa; `reconstituirMensagemParaRetry` (`retry-de-midia.ts`) trata as duas.
+  **A causa original da falha (ETIMEDOUT, bad decrypt) NÃO prevê se o retry funciona**
+  — nos dois casos medidos o resultado esperado se inverteu (o "fácil" falhou de
+  novo, o "difícil" recuperou) — por isso `malote midia reprocessar` tenta TODOS os
+  elegíveis, sem filtrar por motivo anterior.
 
 - **`ZSESSIONTYPE` do backup de iOS tem CINCO naturezas, não duas.** 0=direta,
   1=grupo, 2=lista-de-transmissão, 3=status, 4=comunidade — medido em 21/09/2026 para
@@ -404,6 +441,20 @@ Hard limits sempre relevantes durante a sessão.
   um contato. `=== 1` seria o fix errado: demoveria lista de transmissão e comunidade a
   Conversa direta, contradizendo a #825/#826 (broadcast tem Mensagem real, 29.035
   medidas, e fica coletiva). Ver `DescartesDoMaterial.conversas['status']` (#1069).
+- **A decisão acima vale para os DOIS caminhos que podem criar Conversa — e só
+  cobria um.** O #1069 corrigiu a IMPORTAÇÃO (`material.ts`); a RECEPÇÃO AO VIVO
+  (`ao-vivo.ts`) tinha uma decisão própria e mais antiga (critério 11a do #825:
+  "os feeds de status caem do lado compartilhado"), que classificava
+  `<numero>@status`/`<lid>@lid.status` como coletiva e deixava a Conversa **e**
+  a Mensagem serem gravadas normalmente — com evidência de que isso já aconteceu
+  em produção (11 Conversas diretas de broadcast/status nascidas ao vivo, antes
+  do fix de `@g.us`). **Revertido em 29/09/2026 (#1094)**, decisão direta do
+  Titular: "status não faz sentido em malote; o critério da 11a está errado".
+  `enderecoEhFeedDeStatus` descarta o evento inteiro no laço principal de
+  `receberEvento`, antes de resolver endereço ou abrir Operação — nenhuma
+  Conversa, nenhuma Mensagem, para nenhuma das duas formas. **`@broadcast`
+  (lista de transmissão e o feed agregado `status@broadcast`) não foi tocado** —
+  critério 11a nunca cobriu essa forma, e ela continua tendo Mensagem real.
 
 ## Decisões Herdadas (explícitas)
 
@@ -430,6 +481,85 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 30/09/2026 — **#1089 implementada via `dev-02`→`dev-10`→`dev-03`→`dev-10`→
+  `dev-04`: Pessoa nasce de nome que a Fonte declara, sem depender de
+  catálogo.** Comando novo `pessoa promover-identificadores-nomeados`
+  (ensaio por padrão) promove Identificador sem Pessoa que já tem
+  Atribuição de Nome a Pessoa própria, vinculada por Procedência
+  `material` — que já existia na hierarquia do domínio desde o início e
+  nunca teve produtor até agora. Duas primitivas novas no núcleo
+  (`listarElegiveisParaPromocao`, `promoverIdentificadores`), Fonte-
+  agnósticas; o filtro de nome inválido conhecido do WhatsApp (sentinela
+  do #1101, nono dígito) e a exclusão permanente de endereço em forma
+  alternativa (`@lid`) ficam na CLI, que já é o lugar autorizado a compor
+  mais de um Adaptador — o núcleo continua sem vocabulário de Fonte. Uma
+  Operação por invocação inteira (reentrância sobre `criar-pessoa` e
+  `vincular`, mesmo padrão já medido em `aplicarLote`), desfazer pelo
+  mecanismo genérico da trilha (a linha do vínculo é desfeita; a linha da
+  Pessoa é recusada por desenho — Pessoa nunca é apagada). `docs/dominio/
+  malote.md` ganhou a operação nova e a terceira via de nascimento de
+  Pessoa (gate recarimbado). **Duas rodadas de revisão independente
+  (`dev-10` via advisor)** — spec e plano — cada uma achou furo real antes
+  de seguir: na spec, o desenho original de "promover a forma alternativa
+  depois de resolvida" foi trocado por exclusão permanente, por risco de
+  colisão de `pessoa_id` da família do #1052; no plano, um teste afirmava
+  que o nome exibido da Pessoa seria o "nome bom" quando na verdade
+  `nomeDaPessoa` não filtra sentinela e continuaria exibindo o lixo — o
+  teste foi corrigido para afirmar o que é verdade (a Pessoa nasce, a
+  busca por texto encontra), e a limitação de exibição ficou documentada
+  em vez de escondida. Suíte **1049 → 1067 testes** (medido contra
+  `origin/main` via `git worktree`), mesmas 3 falhas pré-existentes.
+  **Ciclo 25 do roadmap — tarefa fechada, ciclo ainda não aceito**
+  (`neg-05` é o próximo passo). Só em `main` — não publicado.
+- 30/09/2026 — **#1101 corrigida via `dev-05`: dois defeitos independentes de
+  atribuição de nome no adaptador WhatsApp, achados investigando a #1089
+  (contato nomeado só dentro do WhatsApp).** (1) `contacts.upsert` grava um
+  valor-sentinela do próprio WhatsApp (`+EAA=` e variantes — 58% de TODAS as
+  Atribuições `titular`/`whatsapp` do Acervo real do Titular, ~99% entre
+  identificadores sem Pessoa) como se fosse nome; `pareceValorSentinela`
+  (`src/adaptadores/whatsapp/nome-sentinela-de-contato.ts`) reconhece a forma
+  (prefixo `+`, alfabeto base64, padding) e recusa antes de gravar. (2)
+  `nomeRepeteOEndereco` (núcleo) só comparava sufixo/prefixo de dígitos e não
+  reconhecia o nono dígito móvel brasileiro, inserido no MEIO do número —
+  medido 1.110 de 1.110 nomes `+55...` que ele deixava passar tinham
+  exatamente essa forma. `nomeRepeteONumeroBrasileiro`
+  (`src/adaptadores/whatsapp/nome-repete-numero-br.ts`) envolve a função do
+  núcleo sem subir a ela — vocabulário de Fonte fica no adaptador, pelo
+  cabeçalho já escrito em `nome-do-endereco.ts` — e é usado nos 4 pontos de
+  escrita do adaptador (`estado-ao-vivo.ts`, `ao-vivo.ts`, `importar.ts`×2).
+  Suíte **1037 → 1049 testes**, mesmas 3 falhas pré-existentes de
+  `cli-entrada.test.ts` (confirmadas idênticas em `main` sem esta mudança,
+  via `git stash`). **Só em `main` — não publicado, não distribuído.**
+- 29/09/2026 — **Investigado e NÃO REPRODUZIDO: JSON truncado em respostas grandes
+  (#1091, relato da mentorada Renata).** O relatório do agente dela (`David`) mostrava
+  `json.decoder.JSONDecodeError: Unterminated string` ao consumir `malote conversas`/
+  `mensagens` de conversa longa. Reproduzido nos dois caminhos que o malote controla,
+  contra Acervo real (thinkpad): CLI local (1,4 MB de saída, JSON válido, fecha limpo)
+  e caminho de rede real via `fetch`+`node:http` (1,55 MB, JSON válido). **Se o relato
+  se repetir, o primeiro lugar a olhar não é o malote — é o lado do consumidor**
+  (harness do agente truncando saída de comando antes de fazer parse; mesma classe de
+  suspeita já registrada na investigação da #1054, em 25/09/2026). Nenhuma mudança de
+  código feita por causa disso.
+- 29/09/2026 — **RELEASE v0.22.0 PUBLICADA E DISTRIBUÍDA NO THINKPAD, VERIFICADA POR
+  EFEITO** (#1068, #1069, #1070 — as três entradas abaixo, cada uma "AINDA NÃO
+  LIBERADO"/"Nenhuma release publicada ainda" está desatualizada por esta linha). PR #8
+  (`main → production`, CI verde) mergeado em `94728ee`; PR #9 completou bump+CHANGELOG
+  (mergeado em `58feb03`); tag `v0.22.0` no commit publicado.
+  **A corrida contra o `upgrade-fleet` aconteceu de fato**: o timer (`trust: immediate`,
+  a cada 30 min) puxou e auto-migrou o Acervo sozinho — via `abrirAcervo` no restart do
+  `malote-ouvinte`, sem `exigeContexto` no passo 20→21 — ANTES da Ação Documentada
+  manual rodar. Sem dano: v20→v21 não precisa do Registro, então o ouvinte subiu normal
+  (diferente do quase-incidente da v0.21.0, onde o passo `exigeContexto` teria recusado
+  subir). A Ação Documentada, escrita com o commit-alvo (`94728ee`) já defasado em
+  relação ao que tinha acabado de virar `production` (`58feb03`, só bump), RETROCEDEU
+  um commit ao rodar — corrigido por uma segunda Ação Documentada (código, sem tocar
+  Acervo). **Estado final confirmado por consulta direta no host**: `malote --versao`
+  → `0.22.0`; `versao_schema` → `21`; tabela `transcricoes` com 20.199 linhas
+  `fora-de-escopo` (a elegibilidade funcionou); 20.206 Anexos de áudio `presente`
+  (crescendo ao vivo, já sob o #1068). **Ciclo 23 ainda NÃO ACEITO** (`neg-05`) —
+  decisão do Titular foi publicar e aguardar tráfego real antes de aceitar a cláusula
+  do #1068 (mídia ao vivo, que só tinha prova de teste com biblioteca falsa) — agora
+  há sinal real para observar (produção rodando o código, contagem de áudio subindo).
 - 29/09/2026 — **Status do WhatsApp deixou de virar Conversa fantasma (#1069),
   IMPLEMENTADO EM `main`, AINDA NÃO LIBERADO.** Causa raiz: `material.ts` classificava
   coletiva por `ZSESSIONTYPE != 0`, colapsando grupo/lista-de-transmissão/status/
@@ -523,23 +653,68 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
-- **#1070, #1068 e #1069 fechadas — o ciclo 23 (`malote-midia-ao-vivo-e-transcricao`)
-  está pronto para `neg-05-aceita-ciclo`.** Nenhuma release publicada ainda — as três
-  tarefas estão em `main`, `production` continua na v0.21.0.
-- **As 809 Conversas fantasma de Status já gravadas no Acervo da Renata (#1069) NÃO
-  foram limpas — decisão explícita, não esquecimento.** O importador corrigido impede
-  crescer o problema; ele não desfaz o que já está gravado. Três razões para deixar
-  como está por ora: (1) migração que **remove** linha de `conversas` exigiria checar
-  se a máquina de conferência de contagens (`PlanoDeMigracao`) tolera declarar `-N`
-  linhas — hoje ela só reprova divergência não-declarada, nunca foi usada para
-  encolher uma tabela; isso é pergunta de spec, não de `dev-05`. (2) o Acervo da
-  Renata vive no bosgame, fora do `upgrade-fleet` por desenho — a mesma situação já
-  registrada para a #1052 em 25/09/2026: código publicado não chega lá sozinho, e
-  levar até lá não é escopo deste agente. (3) medido: 809 Conversas, **zero
-  Mensagem** — não há dado real em risco, só poluição de lista. Se limpar for
-  decidido, é ato do Titular: migração versionada (todo instalação) ou comando
-  explícito (`malote conversas` algo, por ora inexistente) — decisão dele, não
-  execução direta.
+- **#1089 (`pessoa promover-identificadores-nomeados`) não teve a medição de
+  campo rodada ainda — falta saber quantos Identificadores o Acervo real
+  promoveria hoje.** Adiada de propósito no `dev-04`: o checkout de
+  produção (thinkpad) está na branch `production`, que ainda não tem este
+  código (só `main` tem, até a release sair). Rodar em modo ensaio (sem
+  `--com-efeito`) depois do release, e conferir se o número fica bem abaixo
+  dos 11.043 brutos citados na spec original — a maioria era lixo do #1101,
+  e o filtro desta tarefa já recusa promover isso.
+- **A promoção pode criar Pessoa cujo nome EXIBIDO é lixo, mesmo com o
+  filtro de elegibilidade ativo — limitação conhecida, não bug.** Se um
+  Identificador tem Atribuição `titular` = valor-sentinela E `terceiro` =
+  nome real, a Pessoa nasce (a elegibilidade não bloqueia por causa de UMA
+  Atribuição ruim) e é buscável pelo nome bom (`procurarPessoas` casa em
+  qualquer Atribuição pendurada) — mas `nomeDaPessoa`/`melhorNome` não
+  filtra sentinela, então o nome CORRENTE exibido pode continuar sendo o
+  lixo (autoridade `titular` vence `terceiro` por rank, mesmo peso de
+  Fonte). Resolver isso de vez depende da limpeza retroativa do #1101
+  (também pendente, ver entrada abaixo) alcançar essas Atribuições — não é
+  escopo da #1089.
+- **#1101 corrigiu a ESCRITA, não o ESTOQUE — o Acervo real do Titular ainda tem
+  o lixo que as duas causas já produziram.** Antes de assumir que "nome ruim"
+  sumiu de qualquer Acervo existente: (a) `removerNomesInvalidos`
+  (`src/nucleo/identidade.ts:924`, o motor de `pessoa remover-nomes-invalidos`)
+  cobre só duas classes (endereço-repetido, marca-duplicata) — o padrão-sentinela
+  e o nono-dígito são uma TERCEIRA e QUARTA classe, e não podem subir para lá
+  como estão: o núcleo não pode conhecer vocabulário de Fonte (nono dígito
+  brasileiro) nem artefato de biblioteca (`+EAA=` do baileys). Precisa de
+  comando de limpeza equivalente, do lado do adaptador, antes de rodar contra
+  produção. (b) Medido em 30/09/2026 contra o Acervo do Titular: 14 Pessoas
+  JÁ exibem o valor-sentinela como nome corrente (`melhorNome` pegou a
+  atribuição-lixo mais recente). Nenhuma limpeza rodou ainda — a tarefa #1101
+  só impede que o problema cresça a partir de agora.
+- **#1070, #1068 e #1069 fechadas, release v0.22.0 publicada e distribuída no
+  thinkpad, verificada por efeito — o ciclo 23 (`malote-midia-ao-vivo-e-transcricao`)
+  está pronto para `neg-05-aceita-ciclo`.**
+- **Sem comando de retry para mídia ao vivo que falhou ao baixar (#1068) — tarefa
+  #1084 aberta.** Medido em produção logo após o deploy: 2 falhas reais (`document`
+  com `ETIMEDOUT`, `video` com `bad decrypt`), as duas ficaram `nunca-obtido` sem
+  derrubar o ouvinte, exatamente como desenhado — mas não há como reprocessá-las.
+  `malote midia` só tem `trazer` (backup local), nada que reuse a referência já
+  gravada em `bruto`. O `document` (falha de rede) é candidato razoável a recuperar;
+  o `video` chegou atrasado (reentrega offline do WhatsApp, horas depois do instante
+  original) e a suspeita é referência já expirada — não medido, hipótese. **Não
+  cobre o estoque histórico de antes desta correção** (94-99,8% dos Anexos ao vivo)
+  — essas referências quase certamente expiraram; o único caminho para elas é
+  `malote midia trazer` a partir de um backup do aparelho.
+- **RESOLVIDO em 29/09/2026 (#1088): as Conversas fantasma de Status já gravadas
+  agora são limpas por migração — passo `REMOVE_STATUS_FANTASMA_V22` (Acervo
+  v21→v22).** Critério final, medido contra o thinkpad e mais completo que a
+  suspeita original de sufixo de string: `json_extract(bruto, '$.ZSESSIONTYPE')
+  = 3`, que cobre as duas formas de endereço (`@status` e `@lid.status`) —
+  1060 candidatas em produção, das quais 696 com zero Mensagem (removidas) e
+  364 com "mensagem" (conteúdo de Status/Stories do backup, não chat; ficam,
+  de propósito — nunca perder dado por engano). A máquina de migração **foi**
+  provada para delta negativo — `divergenciasEsperadas` como GETTER (closure
+  que `aplicar()` preenche, lido depois de rodar), primeiro uso real desse
+  caminho, porque o número de linhas removidas varia por instalação e não dá
+  para declarar um `-N` fixo. `participacoes`/`metadados_de_coletiva` cascadeiam
+  (`ON DELETE CASCADE`) e entram na mesma declaração. **Isto só limpa
+  instalações que rodarem a migração** — o Acervo da Renata (bosgame) continua
+  fora do `upgrade-fleet` por desenho (mesma situação da #1052), então levar
+  o fix até lá é ato separado, fora do escopo deste agente.
 - **Lote que cai no derrame (Acervo ocupado) perde a mídia que trouxer (#1068).** O
   reprocessamento (`malote ouvinte reprocessar`) chama `receberEvento` de novo sobre o
   lote gravado em `nao-gravados.jsonl`, mas não há socket vivo nem `MidiaAoVivo` naquele
@@ -596,7 +771,7 @@ Repositório expõe services systemd. Convenções:
 - [ ] **O oráculo de classificação depende da NATUREZA que se testa, e confundi-los custou quase 8.323 eventos.** Para estabelecer que um código da Fonte é **saída**, a fração de membros que escreveu **antes** dele tem de ser alta e a que escreveu depois, baixa. Para **entrada**, o inverso — e a fração que escreveu antes tem de ser quase zero, porque ninguém escreve num grupo antes de ser adicionado. Em 30/08/2026 o mapa nasceu usando só os oráculos de saída e aplicando-os a todos os códigos; num código de entrada eles medem outra coisa (se a pessoa saiu depois) e devolvem um valor intermediário sem significado. O código 15 ficou de fora com "10,5%" e a spec chegou a afirmar que a Fonte não declarava entrada. **Ao acrescentar código ao mapa em `src/adaptadores/whatsapp/codigos-de-evento.ts`, escolher o oráculo pela natureza que se hipotetiza — e rodar os dois.**
 - [ ] **`--em <AAAA-MM-DD>` é o FIM daquele dia, capado ao fim do Alcance.** Data sem hora é um **dia**, e comparar meia-noite com o instante de um evento fez, em 30/08/2026, uma data dentro do Alcance ser reportada como fora — nas duas bordas. A regra atual está em `src/cli/index.ts`, no ramo `conversa presenca`; ao mexer nela, testar contra Conversa cujo Alcance começa e termina **no mesmo dia**, que é onde as duas bordas colidem. Fixture sintética com alcance de vários dias passa verde e não protege.
 - [ ] **Medir custo de importação por comparação de binários não resolve 5% nesta máquina.** Em 30/08/2026, contra 1.018.130 Mensagens e em **tempo de CPU**, a linha de base oscilou **11,5%** entre rodadas do mesmo binário — mais que o dobro do teto que se queria verificar, e pior que a dispersão sobre o material pequeno. Trocar de material não resolveu. Antes de escrever critério de aceite com teto percentual de desempenho, medir a dispersão do instrumento; quando ela for maior que o teto, o veredito honesto é **não verificável**, e o que resta é o limite estrutural (as Transições acrescentam 7,85% de linhas sobre as Mensagens).
-- [ ] **A raiz da instalação vem de `MALOTE_RAIZ`, não de `--raiz`.** Não existe essa flag; passá-la manda a instalação para o caminho padrão (`~/.local/state/malote`) sem avisar. Custou uma bateria de medições em 29/08/2026.
+- [ ] **DESATUALIZADO — corrigido em 30/09/2026: a válvula agora é `MALOTE_HOME`, não `MALOTE_RAIZ`.** Esta linha dizia "a raiz vem de `MALOTE_RAIZ`" desde 29/08/2026; a migração para XDG (ADR `20260913`) trocou a válvula sem que ninguém atualizasse a nota — `MALOTE_RAIZ` não redireciona mais nada (há teste pré-existente, `cli-entrada.test.ts`, documentando exatamente isso, numa das 3 falhas conhecidas da suíte). Confirmado ao vivo durante o aceite do ciclo 25: `--raiz` continua não existindo como flag, e `MALOTE_RAIZ` como variável de ambiente também não tem efeito nenhum — só `MALOTE_HOME` move a instalação.
 - [ ] **Desfazer não cobre o Registro, de propósito.** Decisão de configuração recusa desfazer e manda **redefinir**, dizendo onde ver o valor anterior — o comando de definir já é a porta. Remontar o objeto de opções de cada upsert seria uma segunda implementação de cada comando. Se isso mudar, é decisão nova, não conserto.
 - [ ] **Desfazer um lote não remove as Pessoas que ele criou.** Os vínculos voltam; as Pessoas ficam, porque o produto nunca remove Pessoa. Num lote real isso são centenas de recusas com a mesma causa, e o relatório as agrupa — não é falha.
 - [ ] **`GLOSSARIO.md` e o modelo têm ~216 violações de MD013 pré-existentes** (medido em 30/08/2026; o número anterior deste item, ~204, estava velho). O gate canônico do repo é `npm run lint` (eslint), que não olha markdown. Não tratar `markdownlint-cli2` vermelho nesses dois arquivos como regressão da sua mudança sem antes medir a linha de base.

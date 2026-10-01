@@ -23,6 +23,31 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.23.0] — 2026-09-30
+
+### Adicionado
+
+- **Comando `pessoa promover-identificadores-nomeados`.** Promove Identificador
+  sem Pessoa que já tem Atribuição de Nome (do WhatsApp ou de outra Fonte) a
+  Pessoa própria — sem depender de catálogo de contatos. Ensaio por padrão.
+- `malote conversas --desde <data>`, ordenado pela última Mensagem — feed de
+  atividade recente.
+- Retry de mídia recebida ao vivo que falhou ao baixar (`ETIMEDOUT`/rede).
+
+### Corrigido
+
+- `contacts.upsert` do WhatsApp não grava mais um valor-sentinela do próprio
+  app como se fosse nome de contato (58% das Atribuições afetadas em Acervo
+  real, antes da correção).
+- Nome que repete o próprio endereço pelo nono dígito móvel brasileiro deixa
+  de ser gravado como Atribuição de Nome.
+- `mensagens --desde <data>` sem resultado no período devolve lista vazia em
+  vez de `404`.
+- Entrada de Status do WhatsApp (`ZSESSIONTYPE=3`) nunca vira Conversa
+  coletiva — corrigido nos dois caminhos, importação e recepção ao vivo;
+  migração remove as Conversas fantasma já gravadas em instalações antigas,
+  sem perder Conversa com conteúdo real de Status/Stories.
+
 ## [0.22.0] — 2026-09-29
 
 ### Adicionado
