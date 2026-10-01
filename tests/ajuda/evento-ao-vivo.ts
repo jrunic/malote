@@ -97,6 +97,27 @@ export function mensagemComMidia(id: string, quando: number): MensagemDeEvento {
   };
 }
 
+/**
+ * Forma real do audioMessage, medida em 01/10/2026 contra o Acervo de
+ * produção do Titular: mimetype, fileLength, seconds, ptt, mediaKey,
+ * directPath. `seconds` é o campo que esta fixture existe para exercitar.
+ */
+export function mensagemComAudio(id: string, quando: number): MensagemDeEvento {
+  return {
+    key: { remoteJid: ENDERECOS.TELEFONE, id, fromMe: false },
+    messageTimestamp: quando,
+    message: {
+      audioMessage: {
+        mimetype: 'audio/ogg; codecs=opus',
+        fileLength: '44956',
+        seconds: 42,
+        ptt: true,
+        directPath: '/v/t62.7117-24/sintetico',
+      },
+    },
+  };
+}
+
 /** Ruido de protocolo — 42 de 288. NAO vira Mensagem. */
 export function eventoDeProtocolo(id: string, quando: number): MensagemDeEvento {
   return {
