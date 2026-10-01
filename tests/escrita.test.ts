@@ -9,6 +9,7 @@ import {
   registrarMensagem,
   InstanteImplausivelError,
   registrarAnexo,
+  atualizarDuracaoDoAnexo,
   descartarAnexo,
   conversaJaExiste,
   mensagemJaExiste,
@@ -366,6 +367,30 @@ test('descartar o Anexo preserva o Descritor e registra quando e por qual polít
     // A Mensagem continua lá: descartar arquivo nunca apaga Mensagem.
     const n = acervo.db.prepare('SELECT COUNT(*) AS n FROM mensagens').get() as { n: number };
     assert.equal(n.n, 1);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('atualizarDuracaoDoAnexo grava a duração sem tocar em mais nada do Descritor', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia Organa');
+    const mensagem = conversaComMensagem(acervo);
+    const anexo = registrarAnexo(acervo, {
+      mensagemId: mensagem,
+      tipo: 'audio',
+      tamanho: 34_565,
+      presenca: 'presente',
+      caminho: 'audio/ab/cd/ef.opus',
+    });
+
+    atualizarDuracaoDoAnexo(acervo, anexo, 8);
+
+    const [depois] = lerAnexos(acervo, mensagem);
+    assert.equal(depois?.duracao, 8);
+    assert.equal(depois?.tamanho, 34_565, 'o resto do Descritor não muda');
+    assert.equal(depois?.presenca, 'presente');
   } finally {
     c.limpar();
   }
