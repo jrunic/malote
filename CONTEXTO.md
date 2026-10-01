@@ -150,6 +150,16 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   base sozinho, antes de qualquer Ação Documentada — repetindo o quase-incidente da v0.21.0
   por desenho, não por acidente. Acervo em forma divergente é pulado e relatado, nunca
   migrado pelo worker; quem migra continua sendo `malote acervo migrar`/o ouvinte.
+- **`anexos.caminho` é RELATIVO ao Destino de Mídia do Inquilino, por desenho — o
+  Destino nunca entra no Acervo (mesma razão de `midia trazer`/`midia reprocessar`).
+  Todo consumidor que toca o arquivo em disco resolve via `lerDestinoDeMidia` + `join`
+  ANTES de abrir o arquivo.** Medido em 01/10/2026 (#1106), Acervo real: 20 de 20
+  Transcrições falhavam com "No such file or directory" apesar do arquivo existir — o
+  worker de transcrição era o único consumidor de disco que pulava esse join, porque
+  `malote servir` roda do diretório do checkout, nunca do Destino de Mídia. A guarda
+  de teste é não deixar `caminho` de fixture nascer absoluto por conveniência — foi
+  assim, em `tests/transcricao-worker.test.ts`, que o defeito ficou invisível por um
+  ciclo inteiro (#1070/#1068/#1069).
 - **O modo REDE é fail-closed e a guarda morre ANTES de qualquer I/O.** Só os comandos de
   leitura declarados em `COMANDOS_DE_REDE` consultam por HTTP; comando de escrita com
   `--servidor` recusa **antes de abrir Registro ou Acervo** — invocação errada não nasce
@@ -481,6 +491,25 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 01/10/2026 — **Tarefa #1106 corrigida via `dev-05`: worker de transcrição
+  passava caminho relativo pro motor sem resolver contra o Destino de Mídia —
+  EM `main`, AINDA NÃO PUBLICADA.** Causa raiz confirmada lendo o código e
+  reproduzida com ciclo de retorno (teste com fake ffmpeg que valida a
+  entrada, igual o real): `processarUmaVez` lia `elegivel.caminho` direto da
+  coluna `anexos.caminho`, que é relativo ao Destino de Mídia por desenho, e
+  nunca chamava `lerDestinoDeMidia` — único consumidor de disco do repo com
+  essa lacuna (os outros cinco+ lugares, inventariados, já faziam o join).
+  Corrigido: os Destinos de todos os Inquilinos são lidos de uma vez (com o
+  Registro fechado antes do `await` do motor, preservando a disciplina de
+  não reter handle durante subprocesso longo), e o caminho absoluto
+  (`join(destino.endereco, elegivel.caminho)`) é o que chega no ffmpeg.
+  Inquilino sem Destino configurado é pulado, sem marcar nada pendente.
+  Teste de regressão (`tests/transcricao-worker.test.ts`) verificado com
+  mutação nos dois sentidos — falha com o bug presente, reproduzindo a
+  mensagem exata de produção; passa com o fix. Suíte: 1088 → **1090
+  testes**, mesma baseline de 3 falhas pré-existentes, lint limpo. Achado
+  medindo o Acervo real de uma mentorada (bosgame) — ver Pendências para o
+  que fica fora do escopo deste agente.
 - 01/10/2026 — **Tarefa #1103 implementada via `dev-02`→`dev-10`→`dev-03`→
   `dev-10`→`dev-04`: três entregas independentes sobre o mecanismo de
   Transcrição do ciclo 23, todas em `main`, NENHUMA publicada ainda.**
@@ -714,6 +743,24 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
+- **#1106 corrigida via `dev-05` em `main` — AINDA NÃO PUBLICADA.** O worker de
+  transcrição (`src/cli/transcricao.ts`, `processarUmaVez`) passava `elegivel.caminho`
+  (sempre RELATIVO ao Destino de Mídia) direto pro motor, sem juntar com
+  `lerDestinoDeMidia` antes — toda Transcrição falhava com "No such file or directory"
+  em qualquer instalação onde `malote servir` não rode do próprio Destino de Mídia (o
+  caso normal). Achado medindo o Acervo real da mentorada Renata (bosgame): 20 de 20
+  falhas, mesma causa. Fix lê os Destinos de todos os Inquilinos de uma vez (fecha o
+  Registro antes do `await` do motor, preservando o ciclo de vida original), resolve
+  `join(destino.endereco, elegivel.caminho)` antes de chamar `transcrever`, e pula —
+  sem marcar pendente — Inquilino sem Destino configurado. Suíte: **1090 testes**,
+  mesma baseline de 3 falhas pré-existentes (`cli-entrada.test.ts`). Checado no
+  thinkpad (produção do Titular): `transcricoes` tem 20.199 linhas, todas
+  `fora-de-escopo` — o backfill do #1103 nunca rodou lá, então o Titular não foi
+  afetado ainda, mas seria no primeiro `incluir-estoque`/áudio ao vivo processado.
+  **Pendente, fora do escopo deste agente:** levar o fix até o bosgame (fora do
+  `upgrade-fleet` por desenho, mesma situação do #1052/#1088) e reenfileirar as 20
+  falhas lá (`malote transcricao reprocessar --inquilino <id>`) depois que o código
+  chegar — ato de outro agente, por decisão do Titular de 25/09/2026 sobre o bosgame.
 - **#1103 publicada e distribuída (v0.24.0) — três comandos de decisão do
   operador existem no binário de produção e nunca foram rodados contra o
   Acervo real: `malote midia extrair-duracao`, `malote transcricao
