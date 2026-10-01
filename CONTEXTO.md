@@ -509,8 +509,22 @@ Repositório expõe services systemd. Convenções:
   corrigidos antes do `dev-04`, com teste de disputa de escrita com trava
   real provando a correção. Detalhe completo nos 4 arquivos de revisão e nos
   3 planos (`## Resultado`), em documentos internos do autor, fora deste
-  repositório. **Nenhuma release publicada, nenhum deploy** — decisão de
-  propagar para produção é do Titular.
+  repositório.
+- 01/10/2026 — **RELEASE v0.24.0 PUBLICADA E DISTRIBUÍDA NO THINKPAD,
+  VERIFICADA POR EFEITO.** PR #11 (`main → production`), CI verde, merge
+  `929054c`. **Schema do Acervo migrou v22 → v23 sozinho, via
+  `malote-ouvinte@orlando.service`** (o passo `SOLICITACAO_DE_TRANSCRICAO_V23`
+  não exige contexto — mesma classe segura do passo v21→v22 da release
+  anterior) — sem incidente, confirmado contra o Acervo real:
+  `versao_schema` → 23, coluna `transcricoes.solicitada_em` presente.
+  `malote --versao` → `0.24.0`; os dois serviços (`malote-ouvinte@orlando`,
+  `malote-servidor`) `active` pós-restart; `malote --ajuda` confirma os três
+  comandos novos no binário publicado. **Os comandos de escrita novos
+  (`transcricao incluir-estoque`, `transcricao solicitar`, `midia
+  extrair-duracao`) não foram exercidos contra o Acervo real nesta
+  verificação** — são comandos de decisão do operador, e rodá-los é ato à
+  parte (Ação Documentada, se for para o Acervo de produção), não efeito
+  colateral do deploy.
 - 30/09/2026 — **RELEASE v0.23.0 PUBLICADA E DISTRIBUÍDA NO THINKPAD, VERIFICADA
   POR EFEITO.** PR #10 (`main → production`), CI verde, merge `86a3b1d`. Leva o
   ciclo 24 inteiro (#1090, #1088, #1094, #1092, #1091), o #1084 e o ciclo 25
@@ -700,13 +714,15 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
-- **#1103 implementada em `main`, release ainda não publicada — quando sair,
-  muda o schema (v22→v23) e exige a mesma disciplina de backup/migração já
-  usada nas releases anteriores que mudam forma.** Antes de publicar:
-  conferir se o `upgrade-fleet` (trust `immediate`, 30 min) pode chegar
-  antes da Ação Documentada de backup, como já aconteceu na v0.22.0 e na
-  v0.23.0 — nenhum dano nas duas vezes porque o passo de migração não
-  exigia contexto do Registro, mas vale checar de novo para v23.
+- **#1103 publicada e distribuída (v0.24.0) — três comandos de decisão do
+  operador existem no binário de produção e nunca foram rodados contra o
+  Acervo real: `malote midia extrair-duracao`, `malote transcricao
+  incluir-estoque`, `malote transcricao solicitar`.** Rodar qualquer um
+  deles contra produção é ato explícito (Ação Documentada, por escrever no
+  Acervo), não efeito automático do deploy — inclusive o backfill de
+  duração do estoque de ~270h de áudio (medido em 01/10/2026 contra o
+  mesmo Acervo), que é caro o bastante (~195h de CPU) para nunca rodar sem
+  `--limite` e decisão explícita de quando.
 - **O Critério 3 da spec #1103 (diferença entre duração gravada e duração
   real do arquivo, sempre < 1s) não tem verificação automatizada — só
   medição manual desta sessão contra o Acervo real do Titular (15 amostras,
