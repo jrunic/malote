@@ -481,6 +481,36 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 01/10/2026 — **Tarefa #1103 implementada via `dev-02`→`dev-10`→`dev-03`→
+  `dev-10`→`dev-04`: três entregas independentes sobre o mecanismo de
+  Transcrição do ciclo 23, todas em `main`, NENHUMA publicada ainda.**
+  (1) Duração do Anexo passa a ser extraída do Conteúdo Bruto já preservado
+  (`seconds` no evento ao vivo, `ZMOVIEDURATION` no backup) — sem `ffprobe`,
+  sem abrir arquivo — na escrita nova e via comando de backfill `malote
+  midia extrair-duracao`. (2) Comando de operador `malote transcricao
+  incluir-estoque --limite <n>` promove o estoque `fora-de-escopo` para a
+  fila normal, em lote controlado, só o que já bate a condição de
+  elegibilidade (arquivo presente). (3) Solicitação individual de
+  Transcrição com prioridade na fila — local (`malote transcricao
+  solicitar`) e **pela primeira rota de ESCRITA que a API por rede do
+  produto já teve**, `POST /transcricoes/solicitar` — superando de propósito
+  a decisão formal de "só leitura no v1" (ata de recorte v1; critério 5 do
+  ciclo 21, que continua valendo para o cliente CLI). **Muda a forma do
+  Acervo: schema v22 → v23** (migração `SOLICITACAO_DE_TRANSCRICAO_V23`,
+  coluna `transcricoes.solicitada_em`). 13 commits em `main`
+  (`eea0d6c`..`60c1e96`), suíte **1037 → 1088 testes**, mesma baseline de 3
+  falhas pré-existentes preservada o tempo todo, lint limpo. Revisão
+  independente (`dev-10` via `advisor`) rodada na spec e nos 3 planos, com
+  achados reais aplicados antes da execução — o mais grave: a arquitetura do
+  servidor tinha duas guardas duras contra escrita (despachante de método,
+  Acervo fisicamente somente-leitura) que a spec original não nomeava como
+  trabalho explícito, e um fire-and-forget sem `try/catch` que derrubaria
+  `malote servir` inteiro em caso de `SQLITE_BUSY` sob disputa — os dois
+  corrigidos antes do `dev-04`, com teste de disputa de escrita com trava
+  real provando a correção. Detalhe completo nos 4 arquivos de revisão e nos
+  3 planos (`## Resultado`), em documentos internos do autor, fora deste
+  repositório. **Nenhuma release publicada, nenhum deploy** — decisão de
+  propagar para produção é do Titular.
 - 30/09/2026 — **RELEASE v0.23.0 PUBLICADA E DISTRIBUÍDA NO THINKPAD, VERIFICADA
   POR EFEITO.** PR #10 (`main → production`), CI verde, merge `86a3b1d`. Leva o
   ciclo 24 inteiro (#1090, #1088, #1094, #1092, #1091), o #1084 e o ciclo 25
@@ -670,6 +700,25 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
+- **#1103 implementada em `main`, release ainda não publicada — quando sair,
+  muda o schema (v22→v23) e exige a mesma disciplina de backup/migração já
+  usada nas releases anteriores que mudam forma.** Antes de publicar:
+  conferir se o `upgrade-fleet` (trust `immediate`, 30 min) pode chegar
+  antes da Ação Documentada de backup, como já aconteceu na v0.22.0 e na
+  v0.23.0 — nenhum dano nas duas vezes porque o passo de migração não
+  exigia contexto do Registro, mas vale checar de novo para v23.
+- **O Critério 3 da spec #1103 (diferença entre duração gravada e duração
+  real do arquivo, sempre < 1s) não tem verificação automatizada — só
+  medição manual desta sessão contra o Acervo real do Titular (15 amostras,
+  via `ffprobe`), não um teste da suíte.** Se o estoque for incluído via
+  `malote transcricao incluir-estoque`/backfill de duração em produção,
+  vale reconferir numa amostra maior antes de considerar o critério
+  definitivamente fechado.
+- **A spec #1103 está "fora do roadmap"** — os 25 ciclos existentes estavam
+  todos `aceito` quando ela foi aberta, nenhum `em-execucao`. Falta o
+  `neg-05-aceita-ciclo` decidir se ela entra no re-fatiamento do
+  `roadmap.md` como ciclo novo, e o `neg-05` confrontar as três entregas
+  contra os 17 Critérios de Sucesso da spec.
 - **#1089 (`pessoa promover-identificadores-nomeados`) não teve a medição de
   campo rodada ainda — falta saber quantos Identificadores o Acervo real
   promoveria hoje.** Adiada de propósito no `dev-04`: o checkout de
