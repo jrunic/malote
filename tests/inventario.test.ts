@@ -1,9 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cenario } from './ajuda/acervo.js';
-import { listarIdentificadores } from '../src/nucleo/inventario.js';
-import { registrarCartaoDeCatalogo, registrarIdentificador } from '../src/nucleo/escrita.js';
-import { CFG_CONTATOS, CFG_CONTATOS_SEGUNDA } from './ajuda/configuracao.js';
+import { listarIdentificadores, listarAnexosDeAudioSemDuracao } from '../src/nucleo/inventario.js';
+import {
+  registrarCartaoDeCatalogo,
+  registrarIdentificador,
+  registrarConversa,
+  registrarMensagem,
+  registrarAnexo,
+} from '../src/nucleo/escrita.js';
+import { CFG_CONTATOS, CFG_CONTATOS_SEGUNDA, CFG_WHATSAPP } from './ajuda/configuracao.js';
 import {
   criarPessoa,
   mesclarPessoas,
@@ -114,4 +120,39 @@ test('endereço de Fonte que não é catálogo vem com lista VAZIA, nunca nula',
   } finally {
     c.limpar();
   }
+});
+
+test('listarAnexosDeAudioSemDuracao devolve só Anexo de áudio, com bruto, sem duração', () => {
+  const c = cenario();
+  const { acervo } = c.novoInquilino('Titular');
+  const conversa = registrarConversa(acervo, {
+    fonte: 'whatsapp', idExterno: 'conv-1', coletiva: false, configuracao: CFG_WHATSAPP,
+  });
+  const mensagem = registrarMensagem(acervo, {
+    direcao: 'recebida', conversaId: conversa, fonte: 'whatsapp', idExterno: 'msg-1',
+    ocorridaEm: Date.now(), agora: Date.now(),
+  });
+  // Elegível: áudio, sem duração, com bruto.
+  const comBruto = registrarAnexo(acervo, {
+    mensagemId: mensagem, tipo: 'audio', presenca: 'presente', caminho: 'a.opus',
+    bruto: '{"seconds":8}',
+  });
+  // Não elegível: já tem duração.
+  registrarAnexo(acervo, {
+    mensagemId: mensagem, tipo: 'audio', presenca: 'presente', caminho: 'b.opus',
+    duracao: 5, bruto: '{"seconds":5}',
+  });
+  // Não elegível: não é áudio.
+  registrarAnexo(acervo, {
+    mensagemId: mensagem, tipo: 'image', presenca: 'presente', caminho: 'c.jpg',
+    bruto: '{"seconds":99}',
+  });
+  // Não elegível: sem bruto, nada para extrair.
+  registrarAnexo(acervo, { mensagemId: mensagem, tipo: 'audio', presenca: 'nunca-obtido' });
+
+  const elegiveis = listarAnexosDeAudioSemDuracao(acervo);
+  assert.equal(elegiveis.length, 1);
+  assert.equal(elegiveis[0]?.anexoId, comBruto);
+  assert.equal(elegiveis[0]?.bruto, '{"seconds":8}');
+  c.limpar();
 });

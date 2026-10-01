@@ -138,3 +138,32 @@ export function listarAnexosPendentes(
 
   return linhas.map((l) => ({ anexoId: l.anexo_id, mensagemIdExterno: l.mensagem_id_externo }));
 }
+
+/** Um Anexo de áudio elegível para extração de duração do Conteúdo Bruto. */
+export interface AnexoDeAudioSemDuracao {
+  anexoId: string;
+  bruto: string;
+}
+
+/**
+ * Anexo de áudio sem duração gravada, mas com Conteúdo Bruto para extrair
+ * dela — Fonte-agnóstica de propósito: quem sabe QUAL chave do bruto ler
+ * (`seconds`, `ZMOVIEDURATION`) é o Adaptador (tarefa #670), não esta porta.
+ *
+ * SEM filtro de Fonte, ao contrário de `listarAnexosPendentes`: aqui não
+ * precisa, porque quem decide a chave de extração é o Adaptador que CHAMA
+ * esta porta, não ela — um Anexo de Fonte desconhecida simplesmente não bate
+ * nenhuma chave e o Adaptador o conta como `semChaveConhecida`, sem efeito
+ * colateral. Hoje só o WhatsApp produz Anexo de tipo `audio` (medido:
+ * o Adaptador de Instagram não gera nenhum) — se isso mudar, revisitar.
+ */
+export function listarAnexosDeAudioSemDuracao(acervo: Acervo): AnexoDeAudioSemDuracao[] {
+  const linhas = acervo.preparar(
+      `SELECT id AS anexo_id, bruto
+         FROM anexos
+        WHERE tipo = 'audio' AND duracao IS NULL AND bruto IS NOT NULL`,
+    )
+    .all() as Array<{ anexo_id: string; bruto: string }>;
+
+  return linhas.map((l) => ({ anexoId: l.anexo_id, bruto: l.bruto }));
+}
