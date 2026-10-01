@@ -173,7 +173,9 @@ Regras:
 - Código de saída 3 = problema com a credencial: reporte, não tente outra rota.
   Código 7 = resultado desconhecido: repetir é seguro.
 - O Inquilino vem da chave — não existe parâmetro de inquilino.
-- A API é somente leitura; escrita nem existe no modo rede.
+- A API é somente leitura, com UMA exceção nomeada: `POST /transcricoes/solicitar`
+  pede a Transcrição de um Anexo de áudio específico, na frente da fila — ver a
+  seção "Solicitar Transcrição" abaixo. Fora dela, escrita não existe no modo rede.
 ```
 
 ---
@@ -184,7 +186,7 @@ A CLI fala estas rotas — o `curl` continua válido quando não houver Node na 
 cliente. Toda consulta apresenta `Authorization: Bearer <chave>`; credencial ausente,
 inválida e revogada respondem o mesmo `401` de corpo vazio (não distingue, para não
 revelar a existência de Inquilinos alheios); rota desconhecida com chave válida responde
-`404`. Somente `GET`.
+`404`. Somente `GET`, com a exceção nomeada abaixo (`POST /transcricoes/solicitar`).
 
 | rota | parâmetros opcionais | resposta |
 |---|---|---|
@@ -232,3 +234,24 @@ legítima (`200`, lista vazia), nunca `404`. Confirmar a existência da própria
 Conversa que o chamador já nomeou não vaza nada de outro Inquilino — a
 consulta já é escopada ao Acervo da credencial. `400` para parâmetro
 malformado continua sendo invocação errada, não "não existe".
+
+## Solicitar Transcrição
+
+`POST /transcricoes/solicitar`, corpo `{"anexoId": "<id>"}` — pede a
+Transcrição de um Anexo de áudio específico, e ele passa a ser o próximo que
+o worker processa, à frente de qualquer item já pendente.
+
+Resposta assíncrona: `202` confirma que o pedido entrou na fila, sem esperar
+a Transcrição terminar — consulte o resultado por `GET /mensagens` (o campo
+`transcricao` de cada Anexo já mostra o estado: `pendente`, `concluida`,
+`falhou`).
+
+Recusas:
+- `404`, corpo vazio — Anexo inexistente, **ou de outro Inquilino**:
+  indistinguível de propósito, mesma garantia das outras rotas.
+- `400`, com `{"erro": "<motivo>"}` — Anexo não é áudio (`nao-e-audio`),
+  arquivo não presente (`arquivo-ausente`), ou já tem Transcrição concluída
+  (`ja-concluida`; não há mecanismo para forçar uma nova).
+- `503`, corpo vazio — o Acervo está sendo migrado; repita depois.
+- `500`, corpo vazio — falha inesperada ao gravar (ex.: disputa de escrita
+  que não liberou a tempo); seguro repetir.

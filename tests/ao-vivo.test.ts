@@ -8,6 +8,7 @@ import {
   mensagemColetivaComPar,
   mensagemColetivaSemPar,
   mensagemComMidia,
+  mensagemComAudio,
   mensagemEnviada,
   eventoDeProtocolo,
   ENDERECOS,
@@ -131,6 +132,21 @@ test('midia nasce nunca-obtido, com o bruto preservado', () => {
     assert.ok(a, 'o Anexo nasceu');
     assert.equal(a.presenca, 'nunca-obtido');
     assert.ok(a.bruto !== null && a.bruto.length > 0, 'o Conteúdo Bruto foi preservado');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('midia de áudio nasce com a duração que o evento declara', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Bail');
+    receberEvento(acervo, [mensagemComAudio('SSSS3333TTTT4444UUUU', QUANDO)], OPCOES);
+    const a = acervo.db.prepare("SELECT duracao FROM anexos WHERE tipo = 'audio'").get() as
+      | { duracao: number | null }
+      | undefined;
+    assert.ok(a, 'o Anexo de áudio nasceu');
+    assert.equal(a.duracao, 42, 'a duração que o evento declara entra no Descritor');
   } finally {
     c.limpar();
   }

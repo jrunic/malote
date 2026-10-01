@@ -8,6 +8,8 @@ import {
   marcarFalhou,
   listarFalhas,
   reenfileirarFalhas,
+  incluirEstoqueEmTranscricao,
+  solicitarTranscricao,
   contarTranscricoesPorEstado,
 } from '../src/nucleo/transcricao.js';
 import { cenario } from './ajuda/acervo.js';
@@ -174,6 +176,76 @@ test('listarFalhas e reenfileirarFalhas, com Operacao gravada na trilha', () => 
   }
 });
 
+test('incluirEstoqueEmTranscricao promove só o elegível, respeita o limite, e é idempotente', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+
+    // mensagemDeTeste(acervo) é chamado de novo para cada Anexo abaixo —
+    // idempotente de propósito (idExterno fixo em 'm1'/'111@s.whatsapp.net'):
+    // as cinco chamadas devolvem a MESMA Mensagem, e só os Anexos distintos
+    // importam para este teste.
+    // Três fora-de-escopo elegíveis (presente, com caminho).
+    const elegivel1 = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a1.opus',
+    });
+    acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(elegivel1);
+    const elegivel2 = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a2.opus',
+    });
+    acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(elegivel2);
+    const elegivel3 = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a3.opus',
+    });
+    acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(elegivel3);
+
+    // Fora-de-escopo SEM arquivo presente — não pode ser promovido (critério 6 da spec).
+    // `caminho` é omitido de propósito: EntradaAnexo.caminho é opcional
+    // (string | undefined), nunca aceita null — 'nunca-obtido' é o caso
+    // natural de "sem arquivo" (mesmo padrão de tests/escrita.test.ts).
+    const semArquivo = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'nunca-obtido',
+    });
+    acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(semArquivo);
+
+    // Já pendente — não é fora-de-escopo, não entra na contagem.
+    const jaPendente = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a5.opus',
+    });
+    acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'pendente')`).run(jaPendente);
+
+    const estado = (id: string) =>
+      (acervo.preparar('SELECT estado FROM transcricoes WHERE anexo_id = ?').get(id) as { estado: string })
+        .estado;
+
+    // Limite 2: promove só 2 dos 3 elegíveis, na ordem de id.
+    const primeiraChamada = incluirEstoqueEmTranscricao(acervo, 2);
+    assert.equal(primeiraChamada.promovidos, 2);
+    assert.equal(estado(semArquivo), 'fora-de-escopo', 'sem arquivo presente, nunca promovido');
+    assert.equal(estado(jaPendente), 'pendente', 'não mexe em quem já não é fora-de-escopo');
+
+    // Segunda chamada: promove o terceiro elegível que sobrou.
+    const segundaChamada = incluirEstoqueEmTranscricao(acervo, 10);
+    assert.equal(segundaChamada.promovidos, 1);
+    assert.equal(estado(elegivel1), 'pendente');
+    assert.equal(estado(elegivel2), 'pendente');
+    assert.equal(estado(elegivel3), 'pendente');
+
+    // Terceira chamada: nada mais a promover — idempotente.
+    const terceiraChamada = incluirEstoqueEmTranscricao(acervo, 10);
+    assert.equal(terceiraChamada.promovidos, 0);
+    assert.equal(estado(semArquivo), 'fora-de-escopo', 'continua intocado');
+
+    // Duas Operações gravadas (uma por chamada com efeito) — não uma por Anexo.
+    const operacoes = acervo.db
+      .prepare(`SELECT natureza FROM operacoes WHERE natureza = 'incluir-estoque-em-transcricao'`)
+      .all() as { natureza: string }[];
+    assert.equal(operacoes.length, 2, 'a terceira chamada, sem efeito, não abre Operação nova');
+  } finally {
+    c.limpar();
+  }
+});
+
 test('contarTranscricoesPorEstado agrupa por estado — o sinal proprio do criterio 4', () => {
   const c = cenario();
   try {
@@ -189,6 +261,147 @@ test('contarTranscricoesPorEstado agrupa por estado — o sinal proprio do crite
       { estado: 'concluida', n: 1 },
       { estado: 'pendente', n: 1 },
     ]);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('proximoElegivel escolhe o solicitado mesmo quando há Anexo pendente antes dele', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    // `registrarAnexo` gera o id com randomUUID() — não há ordem de
+    // inserção previsível por `a.id`, então este teste NÃO afirma nada
+    // sobre quem venceria sem solicitação (não é garantido). O único
+    // comportamento garantido, e o único testado aqui, é que SOLICITAR
+    // sempre vence sobre não-solicitado.
+    const semSolicitacao = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/semsolicitacao.opus',
+    });
+    marcarPendente(acervo, semSolicitacao);
+    const solicitado = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/solicitado.opus',
+    });
+
+    const r = solicitarTranscricao(acervo, solicitado);
+    assert.equal(r.aceita, true);
+
+    assert.equal(proximoElegivel(acervo)?.anexoId, solicitado, 'o solicitado vence o não-solicitado, sempre');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('dois pedidos em sequência são atendidos na ordem do pedido', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const primeiroPedido = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a.opus',
+    });
+    const segundoPedido = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/b.opus',
+    });
+
+    // `quando` EXPLÍCITO e distinto nos dois — duas chamadas síncronas de
+    // `new Date().toISOString()` podem colidir no mesmo milissegundo, e sem
+    // valores fixos o desempate ficaria sujeito a essa corrida.
+    assert.equal(
+      solicitarTranscricao(acervo, segundoPedido, { quando: 1000 }).aceita,
+      true,
+      'pedido PRIMEIRO, mesmo que o id tenha sido registrado depois',
+    );
+    assert.equal(solicitarTranscricao(acervo, primeiroPedido, { quando: 2000 }).aceita, true);
+
+    assert.equal(proximoElegivel(acervo)?.anexoId, segundoPedido, 'quem pediu primeiro (quando menor) é atendido primeiro');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('solicitarTranscricao funciona sobre nunca-visto, fora-de-escopo e falhou; recusa concluida', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+
+    const nuncaVisto = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a.opus',
+    });
+    assert.equal(solicitarTranscricao(acervo, nuncaVisto).aceita, true);
+
+    const foraDeEscopo = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/b.opus',
+    });
+    acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(foraDeEscopo);
+    assert.equal(solicitarTranscricao(acervo, foraDeEscopo).aceita, true);
+    const estadoFora = (acervo.preparar('SELECT estado FROM transcricoes WHERE anexo_id = ?').get(foraDeEscopo) as { estado: string }).estado;
+    assert.equal(estadoFora, 'pendente');
+
+    const falhou = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/c.opus',
+    });
+    marcarPendente(acervo, falhou);
+    marcarFalhou(acervo, falhou, 'motivo x');
+    const resultadoFalhou = solicitarTranscricao(acervo, falhou);
+    assert.equal(resultadoFalhou.aceita, true);
+    const linhaFalhou = acervo.preparar('SELECT estado, motivo_falha FROM transcricoes WHERE anexo_id = ?').get(falhou) as { estado: string; motivo_falha: string | null };
+    assert.equal(linhaFalhou.estado, 'pendente');
+    assert.equal(linhaFalhou.motivo_falha, null, 'o motivo da falha anterior é limpo');
+
+    const concluida = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/d.opus',
+    });
+    marcarPendente(acervo, concluida);
+    marcarConcluida(acervo, concluida, 'texto', 'whisper.cpp', 'small');
+    const resultadoConcluida = solicitarTranscricao(acervo, concluida);
+    assert.equal(resultadoConcluida.aceita, false);
+    assert.equal(resultadoConcluida.motivoDeRecusa, 'ja-concluida');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('solicitarTranscricao recusa Anexo inexistente, não-áudio, e sem arquivo presente', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+
+    assert.deepEqual(solicitarTranscricao(acervo, 'id-que-nao-existe'), {
+      aceita: false,
+      motivoDeRecusa: 'anexo-inexistente',
+    });
+
+    const imagem = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'image', presenca: 'presente', caminho: '/x/foto.jpg',
+    });
+    assert.deepEqual(solicitarTranscricao(acervo, imagem), { aceita: false, motivoDeRecusa: 'nao-e-audio' });
+
+    const semArquivo = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'nunca-obtido',
+    });
+    assert.deepEqual(solicitarTranscricao(acervo, semArquivo), { aceita: false, motivoDeRecusa: 'arquivo-ausente' });
+  } finally {
+    c.limpar();
+  }
+});
+
+test('solicitarTranscricao grava Operação, com o Anexo como Linha de Efeito', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const anexo = registrarAnexo(acervo, {
+      mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a.opus',
+    });
+    solicitarTranscricao(acervo, anexo);
+
+    const operacoes = acervo.db
+      .prepare(`SELECT natureza FROM operacoes WHERE natureza = 'solicitar-transcricao'`)
+      .all() as { natureza: string }[];
+    assert.equal(operacoes.length, 1);
+    const efeitos = acervo.db
+      .prepare(`SELECT chave, depois FROM linhas_de_efeito WHERE tabela = 'transcricoes' AND campo = 'estado'`)
+      .all() as { chave: string; depois: string }[];
+    assert.deepEqual(efeitos, [{ chave: anexo, depois: 'pendente' }]);
   } finally {
     c.limpar();
   }

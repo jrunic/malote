@@ -12,7 +12,9 @@ import { conversasMarcadas } from '../nucleo/marca-do-titular.js';
 import { lerDestinoDeMidia } from '../registro/destino-midia.js';
 import type { IdentidadeDeAcesso } from '../registro/chave-de-acesso.js';
 import { ehFonte } from '../nucleo/tipos.js';
-import type { ConversaId, Fonte } from '../nucleo/tipos.js';
+import type { ConversaId, Fonte, InquilinoId } from '../nucleo/tipos.js';
+import { abrirAcervo, versaoDoAcervoEmDisco, VERSAO_SCHEMA_ACERVO } from '../nucleo/acervo.js';
+import { solicitarTranscricao } from '../nucleo/transcricao.js';
 
 /**
  * As rotas. Cada uma recebe o Acervo que a Chave abriu e devolve dado.
@@ -56,12 +58,126 @@ const CONTENT_TYPE_POR_TIPO: Record<string, string> = {
   sticker: 'image/webp',
 };
 
+const TAMANHO_MAXIMO_DO_CORPO = 64 * 1024;
+
+async function lerCorpoJson(req: IncomingMessage): Promise<unknown> {
+  const pedacos: Buffer[] = [];
+  let total = 0;
+  for await (const pedaco of req as AsyncIterable<Buffer>) {
+    total += pedaco.length;
+    if (total > TAMANHO_MAXIMO_DO_CORPO) throw new Error('corpo grande demais');
+    pedacos.push(pedaco);
+  }
+  const texto = Buffer.concat(pedacos).toString('utf8');
+  return texto.length === 0 ? undefined : JSON.parse(texto);
+}
+
+/**
+ * A UNICA rota de ESCRITA da API por rede — spec #1103, parte 3. Supera a
+ * decisao formal de so-leitura do v1 (01-discussoes/20260824-recorte-v1.md)
+ * de proposito, por decisao do Titular — o criterio 5 do ciclo 21 continua
+ * valendo PARA O CLIENTE CLI, que nao aceita `--servidor` neste comando.
+ *
+ * Abre uma conexao PROPRIA, de ESCRITA — nunca `ctx.acervo`, que e
+ * somente-leitura para toda outra rota. Confere a versao do schema ANTES de
+ * abrir para escrita, mesma disciplina que o worker de Transcricao ja segue
+ * dentro de `malote servir` (CONTEXTO.md: nenhum processo de fundo abre para
+ * escrita sem checar a versao primeiro) — sem isso, o primeiro pedido
+ * pos-deploy migraria a base sozinho, repetindo por desenho o
+ * quase-incidente da v0.21.0.
+ *
+ * Isolamento por Inquilino: ESTRUTURAL, nao checagem a escrever — a conexao
+ * abre o Acervo do Inquilino da credencial, e Anexo de outro Inquilino
+ * simplesmente nao existe nessa base. `anexo-inexistente` e a MESMA resposta
+ * (404, corpo vazio) para "nao existe em lugar nenhum" e "existe, mas em
+ * outro Inquilino" — e por isso que a distincao nunca aparece aqui.
+ *
+ * CORPO INTEIRO sob try/catch — achado da revisao (dev-10, 01/10/2026):
+ * `responder()` chama esta funcao sem `await` (fire-and-forget, `void`). Uma
+ * excecao depois de um `await` (SQLITE_BUSY alem do busy_timeout, erro de
+ * disco) viraria unhandled rejection — e por padrao do Node isso DERRUBA O
+ * PROCESSO inteiro, nao so a requisicao. O worker de Transcricao ja tem essa
+ * disciplina (`.catch(...)` em `iniciarWorkerDeTranscricao`); esta rota
+ * precisa da mesma.
+ */
+async function responderSolicitacaoDeTranscricao(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: ContextoDaRequisicao,
+): Promise<void> {
+  try {
+    let corpo: unknown;
+    try {
+      corpo = await lerCorpoJson(req);
+    } catch {
+      json(res, 400, { erro: 'corpo invalido' });
+      return;
+    }
+
+    const anexoId =
+      typeof corpo === 'object' &&
+      corpo !== null &&
+      typeof (corpo as Record<string, unknown>)['anexoId'] === 'string'
+        ? ((corpo as Record<string, unknown>)['anexoId'] as string)
+        : undefined;
+    if (anexoId === undefined) {
+      json(res, 400, { erro: 'informe anexoId' });
+      return;
+    }
+
+    const pastaDeAcervos = join(ctx.dados, 'acervos');
+    const inquilinoId = ctx.identidade.inquilinoId as InquilinoId;
+    const versao = versaoDoAcervoEmDisco(pastaDeAcervos, inquilinoId);
+    if (versao !== undefined && versao !== VERSAO_SCHEMA_ACERVO) {
+      res.writeHead(503, { 'content-type': 'application/json' });
+      res.end('');
+      return;
+    }
+
+    const escrita = abrirAcervo(pastaDeAcervos, inquilinoId);
+    try {
+      const resultado = solicitarTranscricao(escrita, anexoId);
+      if (!resultado.aceita) {
+        if (resultado.motivoDeRecusa === 'anexo-inexistente') {
+          naoEncontrado(res);
+        } else {
+          json(res, 400, { erro: resultado.motivoDeRecusa });
+        }
+        return;
+      }
+      json(res, 202, { aceita: true });
+    } finally {
+      escrita.fechar();
+    }
+  } catch {
+    // NUNCA deixar subir sem resposta — SQLITE_BUSY além do busy_timeout cai
+    // aqui. `headersSent` evita escrever duas vezes se a excecao vier depois
+    // de uma resposta ja enviada (nao deveria acontecer, mas e gratis checar).
+    if (!res.headersSent) {
+      res.writeHead(500, { 'content-type': 'application/json' });
+      res.end('');
+    }
+  }
+}
+
 export function responder(req: IncomingMessage, res: ServerResponse, ctx: ContextoDaRequisicao): void {
   const url = new URL(req.url ?? '/', 'http://interno');
   const partes = url.pathname.split('/').filter((p) => p !== '');
 
+  // UNICA excecao ao bloqueio de metodo abaixo — tratada ANTES dele, nunca
+  // relaxando a guarda geral. Fire-and-forget de proposito: `responder` e
+  // sincrona para toda outra rota, e o `acervo` (somente-leitura) que
+  // `criarServidor` fecha ao final NAO e usado por este handler, que abre a
+  // propria conexao de escrita — fechar um nao afeta o outro.
+  if (req.method === 'POST' && partes.length === 2 && partes[0] === 'transcricoes' && partes[1] === 'solicitar') {
+    void responderSolicitacaoDeTranscricao(req, res, ctx);
+    return;
+  }
+
   if (req.method !== 'GET') {
-    // A Chave de Acesso e SOMENTE-LEITURA no v1, decidido em 24/08/2026.
+    // A Chave de Acesso e SOMENTE-LEITURA no v1 (decidido em 24/08/2026,
+    // 01-discussoes/20260824-recorte-v1.md), com a UNICA excecao nomeada
+    // acima — tratada antes desta guarda, nunca por ela.
     naoEncontrado(res);
     return;
   }

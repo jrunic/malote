@@ -13,8 +13,9 @@ import Database from 'better-sqlite3';
 import { abrirRegistro } from '../src/registro/registro.js';
 import { abrirAcervo } from '../src/nucleo/acervo.js';
 import { marcarConversa } from '../src/nucleo/marca-do-titular.js';
-import { registrarConversa } from '../src/nucleo/escrita.js';
+import { registrarConversa, registrarMensagem, registrarAnexo } from '../src/nucleo/escrita.js';
 import { resolverConfiguracao } from '../src/registro/configuracao-adaptador.js';
+import { CFG_WHATSAPP } from './ajuda/configuracao.js';
 
 test('criar Inquilino antes de existir Chave de Operador é recusado com instrução', () => {
   const { raiz, limpar } = instalacaoTemporaria();
@@ -187,6 +188,38 @@ test('trazer sem Destino configurado recusa, e a mensagem diz o que fazer', () =
     assert.match(r.saida, /Destino de Midia nao configurado/);
     // Asserção contra o MUNDO: o comando citado precisa existir de verdade.
     assert.match(r.saida, /malote inquilino destino/, 'a mensagem cita o comando que resolve');
+  } finally {
+    limpar();
+  }
+});
+
+test('malote midia extrair-duracao extrai do bruto e relata em --json', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const chave = /valor: (\S+)/.exec(rodar(raiz, ['operador', 'chave', 'criar']).saida)?.[1];
+    assert.ok(chave);
+    const inq = /id: (\S+)/.exec(
+      rodar(raiz, ['inquilino', 'criar', '--chave', chave, '--titular', 'Leia Organa']).saida,
+    )?.[1];
+    assert.ok(inq);
+
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inq!);
+    const conversa = registrarConversa(acervo, {
+      fonte: 'whatsapp', idExterno: 'conv-1', coletiva: false, configuracao: CFG_WHATSAPP,
+    });
+    const mensagem = registrarMensagem(acervo, {
+      direcao: 'recebida', conversaId: conversa, fonte: 'whatsapp', idExterno: 'msg-1',
+      ocorridaEm: Date.now(), agora: Date.now(),
+    });
+    registrarAnexo(acervo, {
+      mensagemId: mensagem, tipo: 'audio', presenca: 'presente', caminho: 'a.opus',
+      bruto: '{"seconds":8}',
+    });
+    acervo.fechar();
+
+    const r = rodar(raiz, ['midia', 'extrair-duracao', '--inquilino', inq!, '--json']);
+    assert.equal(r.codigo, 0, r.saida);
+    assert.deepEqual(JSON.parse(r.saida), { extraidas: 1, semChaveConhecida: 0 });
   } finally {
     limpar();
   }

@@ -533,11 +533,23 @@ function gravarUma(
     const conteudo = m.message?.[tipo];
     if (conteudo === undefined || conteudo === null) continue;
     const tipoDoAnexo = tipo.replace('Message', '');
+    // `seconds` é o campo que audioMessage/videoMessage declaram — a mesma
+    // chave que o motor de Transcrição já lê do bruto gravado aqui. Extraído
+    // na recepção, não depois: `bruto` grava o conteúdo normalizado por JSON
+    // round-trip (ver MidiaAoVivo.baixar), e o valor já está disponível sem
+    // custo extra.
+    const segundos =
+      typeof conteudo === 'object' &&
+      conteudo !== null &&
+      typeof (conteudo as Record<string, unknown>)['seconds'] === 'number'
+        ? ((conteudo as Record<string, unknown>)['seconds'] as number)
+        : undefined;
     const anexoId = registrarAnexo(acervo, {
       mensagemId,
       tipo: tipoDoAnexo,
       presenca: 'nunca-obtido',
       bruto: JSON.stringify(conteudo),
+      ...(segundos !== undefined ? { duracao: segundos } : {}),
     });
     // A #1068: quem baixa os bytes precisa saber ONDE, no lote CRU, esta esta
     // mensagem — ver o comentario de `anexosNuncaObtidos`.

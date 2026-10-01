@@ -7,7 +7,7 @@ import { abrirAcervo } from '../src/nucleo/acervo.js';
 import { registrarConversa, registrarMensagem, registrarAnexo } from '../src/nucleo/escrita.js';
 import { CFG_WHATSAPP } from './ajuda/configuracao.js';
 
-function instalacaoComAnexoDeAudio(estado: 'pendente' | 'concluida' | 'falhou'): {
+function instalacaoComAnexoDeAudio(estado: 'pendente' | 'concluida' | 'falhou' | 'fora-de-escopo'): {
   raiz: string;
   id: string;
   limpar: () => void;
@@ -34,6 +34,8 @@ function instalacaoComAnexoDeAudio(estado: 'pendente' | 'concluida' | 'falhou'):
     acervo
       .preparar(`INSERT INTO transcricoes (anexo_id, estado, texto) VALUES (?, 'concluida', 'ola')`)
       .run(anexoId);
+  } else if (estado === 'fora-de-escopo') {
+    acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(anexoId);
   } else {
     acervo
       .preparar(`INSERT INTO transcricoes (anexo_id, estado, motivo_falha) VALUES (?, 'falhou', 'erro x')`)
@@ -74,6 +76,63 @@ test('malote transcricao reprocessar sem --inquilino recusa com uso', () => {
     );
     assert.equal(codigo, 2);
     assert.match(linhas.join('\n'), /Uso: malote transcricao reprocessar/);
+  } finally {
+    limpar();
+  }
+});
+
+test('malote transcricao incluir-estoque respeita --limite e relata em --json', () => {
+  const { raiz, id, limpar } = instalacaoComAnexoDeAudio('fora-de-escopo');
+  try {
+    const linhas: string[] = [];
+    const codigo = executar(
+      ['transcricao', 'incluir-estoque', '--inquilino', id, '--limite', '10', '--json'],
+      { dados: raiz, estado: raiz, escrever: (t: string) => linhas.push(t) },
+    );
+    assert.equal(codigo, 0, linhas.join('\n'));
+    assert.deepEqual(JSON.parse(linhas.join('\n')), { promovidos: 1 });
+  } finally {
+    limpar();
+  }
+});
+
+test('malote transcricao incluir-estoque exige --inquilino e --limite', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const linhas: string[] = [];
+    const codigo = executar(
+      ['transcricao', 'incluir-estoque', '--inquilino', 'x'],
+      { dados: raiz, estado: raiz, escrever: (t: string) => linhas.push(t) },
+    );
+    assert.equal(codigo, 2);
+    assert.match(linhas.join('\n'), /--limite/);
+  } finally {
+    limpar();
+  }
+});
+
+test('malote transcricao solicitar aceita e recusa, com o motivo', () => {
+  const { raiz, id, limpar } = instalacaoComAnexoDeAudio('pendente');
+  try {
+    const acervo = abrirAcervo(`${raiz}/acervos`, id);
+    const anexo = (acervo.preparar('SELECT anexo_id FROM transcricoes').get() as { anexo_id: string }).anexo_id;
+    acervo.fechar();
+
+    const linhas1: string[] = [];
+    const codigo1 = executar(
+      ['transcricao', 'solicitar', '--anexo', anexo, '--inquilino', id],
+      { dados: raiz, estado: raiz, escrever: (t: string) => linhas1.push(t) },
+    );
+    assert.equal(codigo1, 0, linhas1.join('\n'));
+    assert.match(linhas1.join('\n'), /solicitado/);
+
+    const linhas2: string[] = [];
+    const codigo2 = executar(
+      ['transcricao', 'solicitar', '--anexo', 'id-inexistente', '--inquilino', id],
+      { dados: raiz, estado: raiz, escrever: (t: string) => linhas2.push(t) },
+    );
+    assert.equal(codigo2, 1);
+    assert.match(linhas2.join('\n'), /anexo-inexistente/);
   } finally {
     limpar();
   }

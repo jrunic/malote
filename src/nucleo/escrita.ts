@@ -490,6 +490,18 @@ export function registrarAnexo(acervo: Acervo, entrada: EntradaAnexo): string {
 }
 
 /**
+ * Atualiza a duração do Descritor. Raw, SEM Operação própria — igual
+ * `registrarAnexo`/`registrarMensagem`: quem chama em loop (o Adaptador que
+ * extrai do Conteúdo Bruto) abre UMA Operação em volta de todas as chamadas,
+ * no mesmo grão de `reenfileirarFalhas`. Abrir Operação aqui dentro
+ * multiplicaria por Anexo, e o backfill do estoque é medido em dezenas de
+ * milhares.
+ */
+export function atualizarDuracaoDoAnexo(acervo: Acervo, anexoId: string, duracao: number): void {
+  acervo.preparar('UPDATE anexos SET duracao = ? WHERE id = ?').run(duracao, anexoId);
+}
+
+/**
  * Marca o arquivo como descartado. NUNCA apaga a Mensagem nem o Anexo:
  * o Descritor sobrevive, e continua sendo possível saber que houve um vídeo
  * ali, de que tamanho e quando saiu.

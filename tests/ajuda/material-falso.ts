@@ -39,6 +39,8 @@ export interface MensagemFalsa {
   caminhoDeMidia?: string;
   /** Tamanho que o material DECLARA, em bytes — o ZFILESIZE real. */
   tamanhoDeMidia?: number;
+  /** Duração que o material DECLARA, em segundos — o ZMOVIEDURATION real. */
+  duracaoDeMidia?: number;
   /**
    * Conteudo do arquivo de midia. Quando presente, o arquivo e gravado no
    * caminho por hash E indexado no Manifest — o material CARREGA a midia.
@@ -179,7 +181,8 @@ export function backupFalso(conteudo: {
         ZISADMIN INTEGER, ZFIRSTNAME TEXT, ZCONTACTNAME TEXT
       );
       CREATE TABLE ZWAMEDIAITEM (
-        Z_PK INTEGER PRIMARY KEY, ZMEDIALOCALPATH TEXT, ZFILESIZE INTEGER, ZLATITUDE REAL
+        Z_PK INTEGER PRIMARY KEY, ZMEDIALOCALPATH TEXT, ZFILESIZE INTEGER, ZLATITUDE REAL,
+        ZMOVIEDURATION INTEGER
       );
       CREATE TABLE ZWAMESSAGE (
         Z_PK INTEGER PRIMARY KEY, ZSTANZAID TEXT, ZCHATSESSION INTEGER, ZFROMJID TEXT,
@@ -213,8 +216,8 @@ export function backupFalso(conteudo: {
       );
 
     const porMidia = chat.prepare(
-      `INSERT INTO ZWAMEDIAITEM (Z_PK, ZMEDIALOCALPATH, ZFILESIZE, ZLATITUDE)
-       VALUES (?, ?, ?, ?)`,
+      `INSERT INTO ZWAMEDIAITEM (Z_PK, ZMEDIALOCALPATH, ZFILESIZE, ZLATITUDE, ZMOVIEDURATION)
+       VALUES (?, ?, ?, ?, ?)`,
     );
     const porMensagem = chat.prepare(
       `INSERT INTO ZWAMESSAGE
@@ -230,7 +233,7 @@ export function backupFalso(conteudo: {
       let idDeMidia: number | null = null;
       if (m.caminhoDeMidia !== undefined) {
         idDeMidia = pkDeMidia++;
-        porMidia.run(idDeMidia, m.caminhoDeMidia, m.tamanhoDeMidia ?? null, m.latitude ?? null);
+        porMidia.run(idDeMidia, m.caminhoDeMidia, m.tamanhoDeMidia ?? null, m.latitude ?? null, m.duracaoDeMidia ?? null);
       }
       const conversa = dados.conversas.find((c) => c.pk === m.chatSessionPk);
       porMensagem.run(

@@ -40,6 +40,7 @@ import {
   lerDestinoDeMidia,
 } from '../registro/destino-midia.js';
 import { trazerArquivos } from '../adaptadores/whatsapp/trazer.js';
+import { extrairDuracoesDoBruto } from '../adaptadores/whatsapp/duracao-do-anexo.js';
 import { reprocessarMidiaNuncaObtida } from '../adaptadores/whatsapp/reprocessar-midia.js';
 import { conferirDisco, relatarAcervo } from '../nucleo/relatorio-de-acervo.js';
 import { aplicarRetencao, projetarRetencao } from '../nucleo/retencao.js';
@@ -119,7 +120,12 @@ import { conferirSeDesfazivel, desfazerOperacao } from '../nucleo/desfazer.js';
 import { caminhosDaConta, ouvir } from './ouvir.js';
 import { enderecoRecusado, servir } from './servir.js';
 import { lerUltimoEvento } from './ultimo-evento.js';
-import { reenfileirarFalhas, contarTranscricoesPorEstado } from '../nucleo/transcricao.js';
+import {
+  reenfileirarFalhas,
+  incluirEstoqueEmTranscricao,
+  solicitarTranscricao,
+  contarTranscricoesPorEstado,
+} from '../nucleo/transcricao.js';
 import { configuracaoDoMotor } from './motor-de-transcricao.js';
 import {
   contarDerrame,
@@ -275,7 +281,10 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvinte estado --conta <nome> [--json]
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
   malote transcricao reprocessar --inquilino <id>              (volta falhas para pendente)
+  malote transcricao incluir-estoque --inquilino <id> --limite <n> [--json]  (promove estoque fora-de-escopo, em lote)
+  malote transcricao solicitar --anexo <id> --inquilino <id>           (prioriza UM Anexo na fila)
   malote transcricao estado      --inquilino <id> [--json]     (contagem por estado; se o motor esta configurado)
+  malote midia extrair-duracao --inquilino <id> [--json]        (extrai duração do Conteúdo Bruto já gravado)
   malote servir     --porta <n> [--endereco <ip>] [--exposto]
   malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--json]
   malote mensagens  --inquilino <id> [--conversa <id>] [--desde D] [--ate D] [--fonte <nome>] [--direcao enviada|recebida] [--limite <n>] [--json]
@@ -799,6 +808,53 @@ function executarComAtor(
       }
     }
 
+    if (grupo === 'transcricao' && sub === 'incluir-estoque') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      const limiteTexto = opcao(argumentos, 'limite');
+      if (inquilino === undefined || limiteTexto === undefined) {
+        escrever('Uso: malote transcricao incluir-estoque --inquilino <id> --limite <n> [--json]');
+        return 2;
+      }
+      const limite = Number(limiteTexto);
+      if (!Number.isInteger(limite) || limite <= 0) {
+        escrever('--limite precisa ser um inteiro maior que zero.');
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const r = incluirEstoqueEmTranscricao(acervo, limite);
+        if (argumentos.includes('--json')) {
+          escrever(JSON.stringify(r));
+        } else {
+          escrever(`${r.promovidos} Anexo(s) de audio promovido(s) do estoque para a fila de Transcricao.`);
+        }
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
+    if (grupo === 'transcricao' && sub === 'solicitar') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      const anexo = opcao(argumentos, 'anexo');
+      if (inquilino === undefined || anexo === undefined) {
+        escrever('Uso: malote transcricao solicitar --anexo <id> --inquilino <id>');
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const r = solicitarTranscricao(acervo, anexo);
+        if (!r.aceita) {
+          escrever(`Recusado: ${r.motivoDeRecusa}`);
+          return 1;
+        }
+        escrever(`Anexo ${anexo} solicitado — na frente da fila de Transcricao.`);
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
     if (grupo === 'transcricao' && sub === 'estado') {
       const inquilino = opcao(argumentos, 'inquilino');
       if (inquilino === undefined) {
@@ -1134,6 +1190,29 @@ function executarComAtor(
         acervo.fechar();
       }
       return 0;
+    }
+
+    if (grupo === 'midia' && sub === 'extrair-duracao') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) {
+        escrever('Uso: malote midia extrair-duracao --inquilino <id> [--json]');
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const r = extrairDuracoesDoBruto(acervo);
+        if (argumentos.includes('--json')) {
+          escrever(JSON.stringify(r));
+        } else {
+          escrever(`${r.extraidas} Anexo(s) com duração extraída do Conteúdo Bruto.`);
+          if (r.semChaveConhecida > 0) {
+            escrever(`  ${r.semChaveConhecida} sem chave de duração conhecida no bruto (ignorados).`);
+          }
+        }
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
     }
 
     if (grupo === 'configuracao' && sub === 'listar') {

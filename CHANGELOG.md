@@ -23,6 +23,31 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.24.0] — 2026-10-01
+
+**Muda a forma do Acervo: schema v22 → v23** (coluna `transcricoes.solicitada_em`).
+
+### Adicionado
+
+- **Duração do Anexo de áudio**, extraída do Conteúdo Bruto já preservado
+  (`seconds` na recepção ao vivo, `ZMOVIEDURATION` no backup) — sem abrir
+  arquivo, sem `ffprobe`. Escrita nova grava automaticamente; o estoque já
+  gravado ganha o comando `malote midia extrair-duracao --inquilino <id>
+  [--json]`.
+- `malote transcricao incluir-estoque --inquilino <id> --limite <n> [--json]`
+  — promove, em lote controlado, Anexo de áudio `fora-de-escopo` para a fila
+  normal de Transcrição. Só promove quem já tem o arquivo presente.
+- `malote transcricao solicitar --anexo <id> --inquilino <id>` — pede a
+  Transcrição de um Anexo específico, e ele passa a ser o próximo que o
+  worker processa, à frente de qualquer item já pendente. Funciona sobre
+  Anexo nunca visto, `fora-de-escopo` ou `falhou`.
+- **`POST /transcricoes/solicitar`** — o mesmo pedido acima, pela API por
+  rede. **Primeira rota de ESCRITA que a API expõe**: superou de propósito a
+  decisão de "só leitura no v1" (recorte original), com autenticação pela
+  mesma Chave de Acesso e isolamento por Inquilino estrutural (a conexão de
+  escrita abre o Acervo do Inquilino da credencial). O cliente CLI continua
+  sem aceitar `--servidor` para este comando — a exceção é só da rota HTTP.
+
 ## [0.23.0] — 2026-09-30
 
 ### Adicionado
