@@ -14,7 +14,13 @@ import {
   vincularIdentificador,
 } from '../src/nucleo/identidade.js';
 
-test('o schema do Acervo está na versão 22', () => {
+test('o schema do Acervo está na versão 23', () => {
+  // v23 em 01/10/2026: a SOLICITACAO DE TRANSCRICAO entra — um Anexo pedido
+  // explicitamente (spec #1103, parte 3) passa a vencer na fila, antes de
+  // qualquer item pendente sem pedido. Coluna nova, nao tabela: linha
+  // anterior fica com NULL, que e o valor certo — nenhuma delas tinha sido
+  // solicitada quando foi gravada.
+  //
   // v22 em 29/09/2026: remove as Conversas fantasma de Status
   // (ZSESSIONTYPE=3, formas @status e @lid.status) que ja tinham ZERO
   // Mensagem — a #1069/#1094 ja impedem CRIAR novas; este passo limpa o
@@ -121,7 +127,7 @@ test('o schema do Acervo está na versão 22', () => {
   // v9: Transicao de Participacao como registro proprio, e a atividade que a
   // Fonte declara no retrato. Acervo v8 nao tem nem uma nem outra, e a
   // consulta de presenca leria silencio como ausencia.
-  assert.equal(VERSAO_SCHEMA_ACERVO, 22);
+  assert.equal(VERSAO_SCHEMA_ACERVO, 23);
 });
 
 test('o nome pendura em Identificador, sem Pessoa nenhuma', () => {

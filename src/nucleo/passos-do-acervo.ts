@@ -743,6 +743,21 @@ function passoRemoveStatusFantasma(): PassoDeMigracao {
 
 const REMOVE_STATUS_FANTASMA_V22: PassoDeMigracao = passoRemoveStatusFantasma();
 
+/**
+ * A Solicitacao de Transcricao entra, para prioridade na fila.
+ *
+ * `ALTER TABLE ADD COLUMN` e o caso barato, mesmo precedente do Ator
+ * (12 -> 13): nao recria tabela, nao move linha, e as linhas existentes
+ * ficam com NULL — que e o valor certo, porque nenhuma delas tinha sido
+ * solicitada quando foram gravadas. Sem `tabelasNovas`: nao ha tabela nova.
+ */
+const SOLICITACAO_DE_TRANSCRICAO_V23: PassoDeMigracao = {
+  de: 22,
+  para: 23,
+  descricao: 'acrescenta a solicitacao individual de Transcricao, para prioridade na fila',
+  aplicar: (db) => db.exec('ALTER TABLE transcricoes ADD COLUMN solicitada_em TEXT;'),
+};
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -756,6 +771,7 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   DIRECAO_INSTAGRAM_V20,
   TRANSCRICAO_ELEGIBILIDADE_V21,
   REMOVE_STATUS_FANTASMA_V22,
+  SOLICITACAO_DE_TRANSCRICAO_V23,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {

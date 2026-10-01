@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3';
  * Politica completa das duas bases na ADR local
  * `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_ACERVO = 22;
+export const VERSAO_SCHEMA_ACERVO = 23;
 
 /**
  * Forma mais antiga que a maquina de migracao alcanca.
@@ -622,7 +622,11 @@ export function aplicarSchemaAcervo(db: Database): void {
       motivo_falha TEXT,
       motor        TEXT,
       modelo       TEXT,
-      gerada_em    TEXT,
+      gerada_em      TEXT,
+      -- Instante em que um Anexo foi explicitamente pedido — nao-nulo so
+      -- quando ha pedido ativo. proximoElegivel prioriza quem tem este
+      -- campo preenchido, por ordem de pedido (spec #1103, parte 3).
+      solicitada_em  TEXT,
       CHECK (estado != 'concluida' OR texto IS NOT NULL),
       FOREIGN KEY (anexo_id) REFERENCES anexos(id) ON DELETE CASCADE
     );
