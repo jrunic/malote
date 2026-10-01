@@ -481,6 +481,23 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 30/09/2026 — **RELEASE v0.23.0 PUBLICADA E DISTRIBUÍDA NO THINKPAD, VERIFICADA
+  POR EFEITO.** PR #10 (`main → production`), CI verde, merge `86a3b1d`. Leva o
+  ciclo 24 inteiro (#1090, #1088, #1094, #1092, #1091), o #1084 e o ciclo 25
+  (#1089), mais o bug #1101. **Muda a forma do Acervo: schema v21 → v22**
+  (migração do #1088, que remove Conversa fantasma de Status) — o
+  `upgrade-fleet` (`trust: immediate`, 30 min) puxou e migrou sozinho **antes**
+  de a Ação Documentada de backup manual rodar, sem incidente: o passo não
+  exige contexto do Registro (diferente do #1043), então não havia corrida
+  perigosa a vencer, só disciplina de backup que chegou tarde. Verificado
+  contra o host real: `malote --versao` → `0.23.0`; `malote-ouvinte@orlando` e
+  `malote-servidor` `active` pós-restart; `versao_schema` → `22`; **zero**
+  Conversas fantasma de Status restantes (consulta direta contra o Acervo
+  real, confirmando o critério de sucesso do #1088 em produção, não só em
+  teste). Script de backup (`91-diario/20260930-acao-perigosa-backup-acervo-
+  antes-release-v023-thinkpad.sh` da pasta de trabalho) ficou sem uso — pode
+  ser descartado ou guardado como precedente para a próxima migração de
+  schema.
 - 30/09/2026 — **#1089 implementada via `dev-02`→`dev-10`→`dev-03`→`dev-10`→
   `dev-04`: Pessoa nasce de nome que a Fonte declara, sem depender de
   catálogo.** Comando novo `pessoa promover-identificadores-nomeados`
