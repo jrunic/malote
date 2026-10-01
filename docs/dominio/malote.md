@@ -4,7 +4,7 @@ projeto: malote
 tipo: dominio
 descricao: "Modelo do arquivo pessoal de conversas — núcleo genérico multi-inquilino (Inquilino, Conversa, Mensagem, Pessoa, Identificador, Anexo) desacoplado das fontes por Adaptador"
 status: aprovado
-aprovado-em: 2026-09-30
+aprovado-em: 2026-10-01
 escopo: repo:malote
 plataforma: "*"
 dominios: [tecnologia]
@@ -250,7 +250,9 @@ Duas regras atravessam o modelo inteiro:
 - **Transcrição** (objeto de valor, opcional) — o texto extraído de um Anexo de tipo áudio por
   reconhecimento de fala local, com estado (pendente, concluída, falhou, fora-de-escopo — este
   último para o estoque já presente antes da Transcrição existir), o motor/modelo que a
-  produziu e o instante em que foi gerada. Só existe para Anexo de áudio.
+  produziu, o instante em que foi gerada, e o instante em que foi **solicitada** — presente só
+  quando um pedido explícito a colocou na frente da fila (ver `solicitar-transcricao`). Só
+  existe para Anexo de áudio.
 
 **Invariantes**
 
@@ -685,6 +687,30 @@ Consequências que o modelo assume por causa disso:
 - **Saída:** quantas Transcrições falhas voltaram a `pendente`
 - **Regras:** mesmo espírito de `reprocessar-derrame` — o estado de falha é terminal até este ato; nunca retentado sozinho. É comando de decisão: grava uma Operação, com uma Linha de Efeito por Anexo reenfileirado.
 - **Não-funcionais:** idempotente — sem falha pendente, devolve zero e não grava Operação.
+
+### extrair-duracao-de-anexo
+
+- **Ator:** humano ou agente, por comando explícito
+- **Entrada:** Inquilino
+- **Saída:** quantos Anexos de áudio ganharam duração, e quantos têm Conteúdo Bruto preservado sem a chave de duração conhecida
+- **Regras:** extrai do Conteúdo Bruto já preservado (nunca abre o arquivo, nunca invoca ferramenta externa de mídia) — Fonte-agnóstica na seleção, Fonte-específica só na leitura da chave. Idempotente: só alcança Anexo sem duração ainda gravada. Comando de decisão: grava uma Operação, com uma Linha de Efeito por Anexo.
+- **Não-funcionais:** cobre todo o Acervo, não só o que está na fila de Transcrição — duração é atributo do Descritor, não da Transcrição.
+
+### incluir-estoque-em-transcricao
+
+- **Ator:** humano ou agente, por comando explícito, só local (nunca por rede)
+- **Entrada:** Inquilino, limite de quantos Anexos promover nesta chamada
+- **Saída:** quantos Anexos `fora-de-escopo` foram promovidos para `pendente`
+- **Regras:** só promove Anexo que já bate a mesma condição de elegibilidade de `transcrever-anexo` (presente, com caminho) — nunca só o estado. Nunca promove mais que o limite pedido. Comando de decisão: grava uma Operação, com uma Linha de Efeito por Anexo promovido.
+- **Não-funcionais:** idempotente — chamar duas vezes sobre o mesmo recorte do estoque não reprocessa quem já saiu de `fora-de-escopo`.
+
+### solicitar-transcricao
+
+- **Ator:** humano ou agente, local ou por rede (única operação de escrita que a rede expõe)
+- **Entrada:** identificador do Anexo
+- **Saída:** aceito (o Anexo passa a ser o próximo elegível) ou recusado, com o motivo
+- **Regras:** funciona sobre Anexo nunca visto, `fora-de-escopo` ou `falhou`; recusa sobre `concluída` (sem mecanismo de forçar). Mesma condição de elegibilidade de `transcrever-anexo` — não contorna nada que a fila normal exija. Prioridade: quem foi solicitado vence quem não foi; entre dois solicitados, vence quem pediu primeiro. Comando de decisão: grava uma Operação, com o Anexo como Linha de Efeito e o Ator de quem pediu (local ou `acesso:<chaveId>` quando por rede).
+- **Não-funcionais:** a rota de rede resolve o Inquilino exclusivamente pela Chave de Acesso, nunca por parâmetro; pedir Anexo de outro Inquilino é indistinguível de pedir Anexo inexistente.
 
 ### listar-operacoes
 - **Ator:** humano ou agente
