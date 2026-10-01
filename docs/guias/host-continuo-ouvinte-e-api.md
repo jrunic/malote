@@ -48,8 +48,10 @@ Três propriedades que o desenho cobra:
 
 1. **Um processo ouvinte por conta** — dois ouvintes sobre a mesma conta derrubam o
    vínculo um do outro. Contas diferentes convivem.
-2. **O servidor só lê** — a consulta por rede abre o Acervo somente-leitura; quem escreve
-   é a CLI no host.
+2. **O servidor só lê, com uma exceção nomeada** — a consulta por rede abre o
+   Acervo somente-leitura; a única escrita é `POST /transcricoes/solicitar`
+   (ver o guia do cliente e do agente), que abre uma conexão própria, separada,
+   só para essa rota. Fora dela, quem escreve é a CLI no host.
 3. **Categorias separadas** — o que é dado irrecuperável e o que é estado que se refaz
    vivem em raízes diferentes (ver o guia de armazenamento).
 
