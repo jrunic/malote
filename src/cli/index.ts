@@ -126,6 +126,7 @@ import {
   solicitarTranscricao,
   contarTranscricoesPorEstado,
 } from '../nucleo/transcricao.js';
+import { registrarEnvio } from '../nucleo/envio.js';
 import { configuracaoDoMotor } from './motor-de-transcricao.js';
 import {
   contarDerrame,
@@ -871,6 +872,49 @@ function executarComAtor(
         } else {
           escrever(`Motor: ${motorConfigurado ? 'configurado' : 'NAO configurado'}`);
           for (const c of contagens) escrever(`  ${c.estado}: ${c.n}`);
+        }
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
+    if (grupo === 'enviar') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      const apelido = opcao(argumentos, 'configuracao');
+      const para = opcao(argumentos, 'para');
+      const texto = opcao(argumentos, 'texto');
+      if (inquilino === undefined || apelido === undefined || para === undefined || texto === undefined) {
+        escrever(
+          'Uso: malote enviar --inquilino <id> --configuracao <apelido> --para <endereco> --texto <texto>',
+        );
+        return 2;
+      }
+      if (!para.includes('@')) {
+        escrever(
+          `--para precisa de endereco completo (ex.: 5511999990000@s.whatsapp.net), recebido "${para}".`,
+        );
+        return 2;
+      }
+      // BUSCA, NUNCA CRIA — mesmo motivo de `ouvir.ts`: Configuracao errada por
+      // digitacao criaria uma conta paralela, e o Envio ficaria pendente para
+      // sempre numa fila que nenhum `ouvir` le, sem alarme.
+      const cfg = configuracaoPorApelido(registro, inquilino, 'whatsapp', apelido);
+      if (cfg === undefined) {
+        escrever(`Configuracao "${apelido}" nao existe neste Inquilino para whatsapp.`);
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const r = registrarEnvio(acervo, {
+          configuracaoId: cfg.id,
+          destino: { enderecoCru: para },
+          conteudo: { tipo: 'texto', texto },
+        });
+        if (argumentos.includes('--json')) {
+          escrever(JSON.stringify({ envioId: r.envioId, identificadorDeEnvio: r.identificadorDeEnvio }));
+        } else {
+          escrever(`Envio registrado: ${r.envioId} (pendente — processado pelo "malote ouvir" da conta).`);
         }
         return 0;
       } finally {
