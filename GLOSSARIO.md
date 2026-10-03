@@ -3,8 +3,8 @@ id: 202608240950
 projeto: malote
 tipo: referencia
 descricao: "Linguagem universal do malote — termos do arquivo multi-inquilino de conversas, com sinônimos a evitar"
-status: aprovado
-aprovado-em: 2026-09-28
+status: rascunho
+aprovado-em:
 escopo: repo:malote
 plataforma: "*"
 tags: [glossario, malote, linguagem-universal, ddd]
@@ -179,6 +179,27 @@ modelo, nunca fac-símile: o Anexo continua sendo a fonte de verdade.
 Assunto, descrição e imagem de uma Conversa coletiva, com quem alterou e quando.
 *Evitar*: metadados de grupo, subject, tópico, nome do grupo.
 
+**Envio**:
+Um pedido para o malote falar pela conta de uma Configuração de Adaptador — o inverso de
+Mensagem recebida. Fica `pendente` até o processo com a conexão viva o processar; termina
+`enviado` (com a Mensagem resultante) ou `falhou` (reenfileirável). Garantia **ao menos uma
+vez**: resultado indeterminado nunca é descartado em silêncio.
+*Evitar*: mensagem a enviar, outbox, fila de saída, post, dispatch.
+
+**Identificador de Envio**:
+Gerado e gravado antes de qualquer tentativa de envio — é o que permite decidir "já saiu"
+versus "falta tentar" sob a garantia ao menos uma vez, sem reenviar às cegas.
+*Evitar*: message id, token de idempotência, nonce.
+
+**Conteúdo do Envio**:
+O que um Envio carrega: texto, ou um Anexo (bytes mais Descritor) a enviar.
+*Evitar*: payload, corpo, body.
+
+**Destinatário do Envio**:
+A Conversa para onde o Conteúdo do Envio vai — nasce no ato, pela mesma porta que a
+recepção usa, quando ainda não existe.
+*Evitar*: target, para, recipient.
+
 ### Fontes e integração
 
 **Fonte**:
@@ -305,6 +326,8 @@ A remoção do arquivo de um Anexo do disco, preservando o Descritor.
 - Uma **Operação** é desfeita no máximo uma vez.
 - Uma **Fonte** é servida por 1..N **Adaptadores**; cada **Adaptador** tem 1 **Estado de Sincronização** por conta.
 - Uma **Política de Retenção** produz N **Descartes** sobre **Anexos**.
+- Um **Envio** pertence a exatamente 1 **Configuração de Adaptador** e, quando concluído, aponta para exatamente 1 **Mensagem**.
+- Um **Envio** tem exatamente 1 **Destinatário do Envio** (uma **Conversa**) e exatamente 1 **Conteúdo do Envio**.
 
 ## Diálogo de exemplo
 
