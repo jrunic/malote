@@ -5,6 +5,7 @@ import { configuracaoPorApelido } from '../registro/configuracao-adaptador.js';
 import { abrirAcervo, type Acervo } from '../nucleo/acervo.js';
 import { receberEvento, type MensagemRecebida } from '../adaptadores/whatsapp/ao-vivo.js';
 import { processarEstadoDeConversa } from '../adaptadores/whatsapp/estado-ao-vivo.js';
+import { processarEnvios } from '../adaptadores/whatsapp/enviar.js';
 import { conectar } from '../adaptadores/whatsapp/conexao.js';
 import { lerDestinoDeMidia } from '../registro/destino-midia.js';
 import { gravarArquivoDeAnexo } from '../nucleo/arquivo-de-anexo.js';
@@ -281,6 +282,11 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
   // `captura-de-retrato.ts` para por que ela existe e qual e o prazo dela.
   const capturar = abrirCaptura(process.env['MALOTE_CAPTURA_DE_RETRATO']);
 
+  // Declarada ANTES de `conectar`: `aoTerminar`, passado a ele, precisa
+  // referencia-la antes de o poller existir (ver atribuicao logo apos
+  // `conectar` retornar).
+  let pararPollerDeEnvio: (() => void) | undefined;
+
   try {
     const conexao = await conectar({
       pastaDoVinculo: caminhos.vinculo,
@@ -312,6 +318,9 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
       registrar: (linha) => escrever(`[ouvinte] ${linha}`),
       aoTerminar: (motivo) => {
         escrever(`[ouvinte] encerrando: ${motivo}`);
+        // Para o poller ANTES de fechar o Acervo — e nao marca Envio pendente
+        // como falhou: a causa e do vinculo, nao do Envio (#1112, criterio 12).
+        pararPollerDeEnvio?.();
         fecharUmaVez();
         // Diferente de zero: o supervisor tem de saber que isto NAO foi uma
         // parada pedida. Vinculo invalidado exige pareamento humano.
@@ -424,8 +433,37 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
         }),
     });
 
+    // Poller de Envio: so processa a fila DESTA Configuracao, pela conexao que
+    // este processo mantem viva — nunca socket proprio (#1112). O mecanismo de
+    // nao empilhar passada e por PROCESSO (igual ao worker de Transcricao em
+    // src/cli/transcricao.ts), nao lock real entre instancias — suficiente
+    // porque um `ouvir` atende uma unica Configuracao por desenho.
+    const INTERVALO_DE_ENVIO_MS = Number(process.env['MALOTE_ENVIO_INTERVALO_MS'] ?? '5000');
+    let processandoEnvio = false;
+    const pollerDeEnvio = setInterval(
+      () => {
+        if (processandoEnvio) return;
+        processandoEnvio = true;
+        comAtor(atorDeServico('ouvinte-whatsapp'), () =>
+          processarEnvios(acervo, {
+            configuracao,
+            enviar: (jid, conteudo) => conexao.enviar(jid, conteudo),
+          }),
+        )
+          .catch((erro: unknown) =>
+            escrever(`[ouvinte] passada de envio abortou: ${(erro as Error).message}`),
+          )
+          .finally(() => {
+            processandoEnvio = false;
+          });
+      },
+      Number.isInteger(INTERVALO_DE_ENVIO_MS) && INTERVALO_DE_ENVIO_MS > 0 ? INTERVALO_DE_ENVIO_MS : 5000,
+    );
+    pararPollerDeEnvio = (): void => clearInterval(pollerDeEnvio);
+
     const parada = (sinal: string): void => {
       escrever(`[ouvinte] ${sinal} recebido; parando.`);
+      pararPollerDeEnvio?.();
       conexao.parar();
       fecharUmaVez();
       encerrar(0);
