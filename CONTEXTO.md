@@ -466,6 +466,32 @@ Hard limits sempre relevantes durante a sessão.
   (lista de transmissão e o feed agregado `status@broadcast`) não foi tocado** —
   critério 11a nunca cobriu essa forma, e ela continua tendo Mensagem real.
 
+- **Envio nunca abre conexão própria — `Conexao.enviar` discrimina falha de
+  transporte de falha definitiva, e a diferença decide o estado.** Boom 428
+  (`connectionClosed`) e 408 (`connectionLost`) são rotina de transporte, não
+  falha de dado: `conexao.enviar` os filtra e devolve `undefined`
+  (indeterminado), nunca propaga como exceção. Qualquer outra exceção
+  (destinatário inválido, rejeição da plataforma) sobe para
+  `processarEnvios`, que marca `falhou` — nunca o contrário. Confundir os
+  dois faria toda janela de religação com um Envio pendente virar falha
+  definitiva em silêncio.
+- **A Conversa de um Envio nasce no PROCESSAMENTO (dentro do `ouvir`), nunca
+  na solicitação.** `solicitar-envio` grava só a linha do pedido, com o
+  endereço cru quando a Conversa ainda não existe; `processarEnvios` é quem
+  resolve ou cria, e só DEPOIS de confirmar sucesso do envio — destinatário
+  errado nunca deixa Conversa imortal no Acervo (Conversa nunca é apagada).
+  É o que permite a rota de rede (`/envios/solicitar`) gravar só uma linha,
+  sem precisar do mesmo mecanismo de escrita de domínio que criar Conversa
+  exigiria.
+- **A fila de Envio prioriza por `tentativas` antes de `solicitada_em`.** Um
+  Envio que já tentou e voltou indeterminado cede a vez aos que nunca
+  tentaram — sem isso, um Envio problemático trava a fila inteira daquela
+  Configuração atrás de si, porque o poller sempre pegaria o mesmo primeiro.
+- **Envio órfão por vínculo invalidado nunca vira `falhou`.** Quando o
+  adaptador invalida o vínculo (`loggedOut`), o poller para, mas nenhum
+  Envio `pendente` daquela Configuração é tocado — a causa é do vínculo, não
+  do Envio, e ele fica pendente até reparear.
+
 ## Decisões Herdadas (explícitas)
 
 Repetidas aqui em vez de herdadas de configuração externa ao repositório — quem lê este arquivo tem o contrato inteiro:
@@ -490,6 +516,30 @@ Repositório expõe services systemd. Convenções:
   `post_install: "restart:<unit1> <unit2> ..."` no entry do config.
 
 ## Estado Atual
+
+- 03/10/2026 — **Ciclo 27 (`malote-envio-de-mensagem`, #1112) em execução:
+  Plano 1 de 3 implementado e commitado — Envio de TEXTO de ponta a ponta.**
+  Fundamentado em espiga contra a conta real da Hera (ata
+  `13-processos/manter-malote/01-discussoes/20261003-envio-de-mensagens-pelo-malote.md`):
+  `sock.sendMessage` confirmado funcionando, eco de `messages.upsert`
+  (`type: 'append'`) confirmado gravando a Mensagem pela porta de recepção
+  já existente, sem código novo. Agregado **Envio** novo (schema v23→v24):
+  `registrarEnvio`/`proximoEnvioPendente`/`marcarEnvioEnviado`/
+  `marcarEnvioFalhou`/`reenfileirarEnviosFalhos` no núcleo;
+  `Conexao.enviar` no módulo de conexão, discriminando falha de transporte
+  (Boom 428/408) de falha definitiva; `processarEnvios` no adaptador
+  WhatsApp, resolvendo/criando a Conversa só após sucesso; poller dentro de
+  `ouvir.ts`; comandos `malote enviar`/`malote envio reprocessar`/
+  `malote envio estado`. 10 commits, suíte de 1090 para **1121 testes**,
+  mesma baseline de 3 falhas pré-existentes. Duas revisões independentes
+  (`dev-10` via advisor) rodaram antes da execução — na spec e no plano —,
+  cada uma achando furos reais corrigidos antes do `dev-04`: a mais grave,
+  a Conversa do Envio nasce no **processamento** (dentro do `ouvir`), nunca
+  na solicitação, para a rota de rede não precisar abrir escrita de
+  domínio. **Planos 2 (mídia) e 3 (rede) escritos e revisados (advisor),
+  ainda não implementados.** Falta, de todo o ciclo, a Verificação de Campo
+  contra a conta real da Hera — pendente de Ação Documentada, fora de
+  código.
 
 - 01/10/2026 — **RELEASE v0.24.1 PUBLICADA E DISTRIBUÍDA NOS TRÊS PACOTES,
   VERIFICADA POR EFEITO.** PR #12 (`main → production`, CI verde), merge
