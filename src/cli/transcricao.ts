@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { abrirRegistro, listarInquilinos } from '../registro/registro.js';
+import { lerDestinoDeMidia, type DestinoDeMidia } from '../registro/destino-midia.js';
 import { abrirAcervo, versaoDoAcervoEmDisco, VERSAO_SCHEMA_ACERVO } from '../nucleo/acervo.js';
 import { proximoElegivel, marcarPendente, marcarConcluida, marcarFalhou } from '../nucleo/transcricao.js';
 import { configuracaoDoMotor, transcrever, MotorDeTranscricaoError } from './motor-de-transcricao.js';
@@ -42,6 +43,15 @@ export async function processarUmaVez(ambiente: AmbienteDoWorker): Promise<Resul
 
   const registro = abrirRegistro(ambiente.dados);
   const inquilinos = listarInquilinos(registro);
+  // Le os Destinos de todos de uma vez, ainda com o Registro aberto, e fecha
+  // ANTES do laco — mesmo motivo do Acervo ser fechado antes do subprocesso:
+  // nada aqui pode ficar retendo um arquivo aberto por um `await` que leva
+  // minutos. `caminho` (ver abaixo) e RELATIVO a esse Destino.
+  const destinos = new Map<string, DestinoDeMidia>();
+  for (const inquilino of inquilinos) {
+    const destino = lerDestinoDeMidia(registro, inquilino.id);
+    if (destino !== undefined) destinos.set(inquilino.id, destino);
+  }
   registro.fechar();
 
   for (const inquilino of inquilinos) {
@@ -61,11 +71,27 @@ export async function processarUmaVez(ambiente: AmbienteDoWorker): Promise<Resul
       continue;
     }
 
+    // `elegivel.caminho` e RELATIVO ao Destino de Midia do Inquilino — o
+    // Destino e configuracao por Inquilino e nunca entra no Acervo (mesmo
+    // principio de `midia trazer`/`midia reprocessar`). Sem resolver contra
+    // ele aqui, o motor recebe um caminho que nao existe a partir do cwd do
+    // processo (#1106).
+    const destino = destinos.get(inquilino.id);
+    if (destino === undefined) {
+      acervo.fechar();
+      ambiente.escrever(
+        `[transcricao] Inquilino ${inquilino.id}: Destino de Midia nao configurado. Pulado.`,
+      );
+      continue;
+    }
+
     marcarPendente(acervo, elegivel.anexoId);
     acervo.fechar(); // libera o Acervo enquanto o subprocesso roda — pode levar minutos.
 
+    const caminhoAbsoluto = join(destino.endereco, elegivel.caminho);
+
     try {
-      const texto = await transcrever(config, elegivel.caminho);
+      const texto = await transcrever(config, caminhoAbsoluto);
       const depois = abrirAcervo(join(ambiente.dados, 'acervos'), inquilino.id);
       marcarConcluida(depois, elegivel.anexoId, texto, 'whisper.cpp', config.whisperModelo);
       depois.fechar();

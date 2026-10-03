@@ -23,6 +23,17 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.24.1] — 2026-10-01
+
+### Corrigido
+
+- **O worker de transcrição de áudio falhava sempre, em qualquer instalação
+  onde `malote servir` não roda do próprio Destino de Mídia** (o caso
+  normal). Ele passava o caminho do Anexo — relativo ao Destino de Mídia por
+  desenho — direto para o `ffmpeg`, sem resolver o caminho absoluto antes.
+  Toda Transcrição terminava `falhou`, com "No such file or directory",
+  mesmo com o arquivo presente no disco.
+
 ## [0.24.0] — 2026-10-01
 
 **Muda a forma do Acervo: schema v22 → v23** (coluna `transcricoes.solicitada_em`).
