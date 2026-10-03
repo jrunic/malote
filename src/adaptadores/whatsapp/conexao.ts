@@ -25,12 +25,18 @@ interface Socket {
   requestPairingCode: (numero: string) => Promise<string>;
   /** Pede URL nova para midia cuja referencia expirou. Usado so no reupload. */
   updateMediaMessage: (mensagem: unknown) => Promise<unknown>;
+  /** Envia conteudo pelo socket corrente. Tipado largo porque o conteudo
+   *  (texto, imagem, documento) e vocabulario da biblioteca, nao do nucleo. */
+  sendMessage: (
+    jid: string,
+    content: unknown,
+  ) => Promise<{ key?: { id?: string } } | undefined>;
 }
 
 interface Biblioteca {
   default: (config: { auth: unknown }) => Socket;
   useMultiFileAuthState: (pasta: string) => Promise<{ state: unknown; saveCreds: () => void }>;
-  DisconnectReason: { loggedOut: number };
+  DisconnectReason: { loggedOut: number; connectionClosed: number; connectionLost: number };
   /**
    * Baixa e decifra o Anexo de UMA mensagem. Recebe a mensagem CRUA — com
    * `mediaKey` como `Uint8Array` de verdade — nunca a normalizada por
@@ -95,6 +101,17 @@ export interface OpcoesDeConexao {
 export interface Conexao {
   /** Encerra sem religar. Idempotente. */
   parar: () => void;
+  /**
+   * Envia conteudo pelo socket CORRENTE — nunca um socket capturado no
+   * momento da abertura, porque a conexao religa (#1112). Devolve o
+   * `keyId` quando a biblioteca confirma relay. Devolve `undefined`
+   * (INDETERMINADO, nunca excecao) quando: o retorno da biblioteca e
+   * `undefined`; ou a excecao e de TRANSPORTE (Boom 428 connectionClosed,
+   * 408 connectionLost — conexao caida, rotina, nao falha de dado).
+   * Qualquer outra excecao PROPAGA — e falha definitiva (destinatario
+   * invalido etc.), e quem chama (`processarEnvios`) marca `falhou`.
+   */
+  enviar: (jid: string, conteudo: unknown) => Promise<{ keyId: string } | undefined>;
 }
 
 /**
@@ -175,10 +192,20 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
   let espera = ESPERA_INICIAL;
   let codigoPedido = false;
   let agendado: NodeJS.Timeout | undefined;
+  // O socket CORRENTE. Reatribuido a cada `abrir()` — a conexao religa, e
+  // `enviar` nunca pode falar com um socket fechado por acreditar que o
+  // primeiro continua valendo.
+  let sockAtual: Socket | undefined;
+
+  const CODIGOS_DE_TRANSPORTE = new Set<number>([
+    lib.DisconnectReason.connectionClosed,
+    lib.DisconnectReason.connectionLost,
+  ]);
 
   const abrir = (): void => {
     if (parado) return;
     const sock = lib.default({ auth: state });
+    sockAtual = sock;
     sock.ev.on('creds.update', saveCreds as (dado: never) => void);
 
     sock.ev.on('messages.upsert', ((dado: { messages?: unknown[] }) => {
@@ -319,6 +346,20 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
     parar: (): void => {
       parado = true;
       if (agendado !== undefined) clearTimeout(agendado);
+    },
+    enviar: async (jid: string, conteudo: unknown): Promise<{ keyId: string } | undefined> => {
+      if (sockAtual === undefined) return undefined;
+      try {
+        const resultado = await sockAtual.sendMessage(jid, conteudo);
+        if (resultado?.key?.id === undefined) return undefined;
+        return { keyId: resultado.key.id };
+      } catch (erro) {
+        const codigo = (erro as { output?: { statusCode?: number } })?.output?.statusCode;
+        if (codigo !== undefined && CODIGOS_DE_TRANSPORTE.has(codigo)) {
+          return undefined;
+        }
+        throw erro;
+      }
     },
   };
 }
