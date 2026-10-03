@@ -135,3 +135,67 @@ export function marcarEnvioFalhou(acervo: Acervo, envioId: string, motivo: strin
 export function incrementarTentativaDeEnvio(acervo: Acervo, envioId: string): void {
   acervo.preparar(`UPDATE envios SET tentativas = tentativas + 1 WHERE id = ?`).run(envioId);
 }
+
+/**
+ * Grava a Conversa resolvida/criada apos o envio ter sucesso, e apaga o
+ * destino cru — a partir daqui o Envio sabe para onde foi sem reresolver.
+ */
+export function atualizarConversaDoEnvio(
+  acervo: Acervo,
+  envioId: string,
+  conversaId: string,
+): void {
+  acervo
+    .preparar(`UPDATE envios SET conversa_id = ?, destino_cru = NULL WHERE id = ?`)
+    .run(conversaId, envioId);
+}
+
+export interface EnvioFalho {
+  envioId: string;
+  motivoFalha: string | null;
+}
+
+export function listarEnviosFalhos(acervo: Acervo): EnvioFalho[] {
+  return (
+    acervo
+      .preparar(`SELECT id AS envioId, motivo_falha AS motivoFalha FROM envios WHERE estado = 'falhou'`)
+      .all() as { envioId: string; motivoFalha: string | null }[]
+  ).map((l) => ({ envioId: l.envioId, motivoFalha: l.motivoFalha }));
+}
+
+/**
+ * Volta todo Envio falho para pendente E ZERA tentativas — mesmo espirito de
+ * `reenfileirarFalhas` (Transcricao) e `reprocessar-derrame`: estado de
+ * falha e terminal ate este ato explicito.
+ */
+export function reenfileirarEnviosFalhos(acervo: Acervo): number {
+  const falhas = listarEnviosFalhos(acervo);
+  if (falhas.length === 0) return 0;
+  emOperacao(acervo, { natureza: 'reprocessar-envio', reversibilidade: 'por-efeito' }, (op) => {
+    for (const f of falhas) {
+      acervo
+        .preparar(`UPDATE envios SET estado = 'pendente', motivo_falha = NULL, tentativas = 0 WHERE id = ?`)
+        .run(f.envioId);
+      op.valor({
+        tabela: 'envios',
+        chave: f.envioId,
+        campo: 'estado',
+        antes: 'falhou',
+        depois: 'pendente',
+      });
+    }
+  });
+  return falhas.length;
+}
+
+export interface ContagemDeEnvio {
+  estado: 'pendente' | 'enviado' | 'falhou';
+  n: number;
+}
+
+/** O "sinal proprio" de `malote envio estado` — nunca embutido em outra saida. */
+export function contarEnviosPorEstado(acervo: Acervo): ContagemDeEnvio[] {
+  return acervo
+    .preparar(`SELECT estado, COUNT(*) AS n FROM envios GROUP BY estado ORDER BY estado`)
+    .all() as ContagemDeEnvio[];
+}

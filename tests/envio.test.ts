@@ -6,6 +6,10 @@ import {
   marcarEnvioEnviado,
   marcarEnvioFalhou,
   incrementarTentativaDeEnvio,
+  atualizarConversaDoEnvio,
+  listarEnviosFalhos,
+  reenfileirarEnviosFalhos,
+  contarEnviosPorEstado,
 } from '../src/nucleo/envio.js';
 import { registrarConversa } from '../src/nucleo/escrita.js';
 import { cenario } from './ajuda/acervo.js';
@@ -184,6 +188,102 @@ test('incrementarTentativaDeEnvio soma uma tentativa, mantendo pendente', () => 
       .get(r.envioId) as { estado: string; tentativas: number };
     assert.equal(linha.estado, 'pendente');
     assert.equal(linha.tentativas, 2);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('atualizarConversaDoEnvio grava a Conversa resolvida e apaga o destino cru', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const r = registrarEnvio(acervo, {
+      configuracaoId: CFG_WHATSAPP.id,
+      destino: { enderecoCru: '111@s.whatsapp.net' },
+      conteudo: { tipo: 'texto', texto: 'oi' },
+    });
+    const conversaId = registrarConversa(acervo, {
+      fonte: 'whatsapp',
+      idExterno: '111@s.whatsapp.net',
+      coletiva: false,
+      configuracao: CFG_WHATSAPP,
+    });
+
+    atualizarConversaDoEnvio(acervo, r.envioId, conversaId);
+
+    const linha = acervo
+      .preparar('SELECT conversa_id, destino_cru FROM envios WHERE id = ?')
+      .get(r.envioId) as { conversa_id: string | null; destino_cru: string | null };
+    assert.equal(linha.conversa_id, conversaId);
+    assert.equal(linha.destino_cru, null);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('reenfileirarEnviosFalhos volta falhas para pendente, zera tentativas, e grava Operacao', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const r = registrarEnvio(acervo, {
+      configuracaoId: CFG_WHATSAPP.id,
+      destino: { enderecoCru: '111@s.whatsapp.net' },
+      conteudo: { tipo: 'texto', texto: 'oi' },
+    });
+    incrementarTentativaDeEnvio(acervo, r.envioId);
+    marcarEnvioFalhou(acervo, r.envioId, 'erro definitivo');
+
+    const n = reenfileirarEnviosFalhos(acervo);
+    assert.equal(n, 1);
+    assert.deepEqual(listarEnviosFalhos(acervo), []);
+
+    const linha = acervo
+      .preparar('SELECT estado, tentativas FROM envios WHERE id = ?')
+      .get(r.envioId) as { estado: string; tentativas: number };
+    assert.equal(linha.estado, 'pendente');
+    assert.equal(linha.tentativas, 0);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('reenfileirarEnviosFalhos sem falha pendente devolve zero e nao grava Operacao', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const antes = (acervo.preparar('SELECT COUNT(*) AS n FROM operacoes').get() as { n: number }).n;
+    assert.equal(reenfileirarEnviosFalhos(acervo), 0);
+    const depois = (acervo.preparar('SELECT COUNT(*) AS n FROM operacoes').get() as { n: number }).n;
+    assert.equal(depois, antes);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('contarEnviosPorEstado agrupa por estado', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    registrarEnvio(acervo, {
+      configuracaoId: CFG_WHATSAPP.id,
+      destino: { enderecoCru: '111@s.whatsapp.net' },
+      conteudo: { tipo: 'texto', texto: 'a' },
+    });
+    const r2 = registrarEnvio(acervo, {
+      configuracaoId: CFG_WHATSAPP.id,
+      destino: { enderecoCru: '222@s.whatsapp.net' },
+      conteudo: { tipo: 'texto', texto: 'b' },
+    });
+    marcarEnvioFalhou(acervo, r2.envioId, 'x');
+
+    const contagens = contarEnviosPorEstado(acervo);
+    assert.deepEqual(
+      contagens.sort((a, b) => a.estado.localeCompare(b.estado)),
+      [
+        { estado: 'falhou', n: 1 },
+        { estado: 'pendente', n: 1 },
+      ],
+    );
   } finally {
     c.limpar();
   }
