@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3';
  * Politica completa das duas bases na ADR local
  * `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_ACERVO = 23;
+export const VERSAO_SCHEMA_ACERVO = 24;
 
 /**
  * Forma mais antiga que a maquina de migracao alcanca.
@@ -654,6 +654,44 @@ export function aplicarSchemaAcervo(db: Database): void {
     CREATE TRIGGER IF NOT EXISTS transcricoes_texto_del AFTER DELETE ON transcricoes BEGIN
       INSERT INTO transcricoes_texto(transcricoes_texto, rowid, texto) VALUES ('delete', old.rowid, old.texto);
     END;
+
+    -- ENVIO: pedido para o malote falar pela conta de uma Configuracao de
+    -- Adaptador — o inverso de Mensagem recebida. A Conversa so e gravada
+    -- DEPOIS de confirmar sucesso do envio (destino errado nao deixa
+    -- Conversa imortal no Acervo — Conversa nunca e apagada). ate la,
+    -- destino_cru guarda o endereco e conversa_id fica NULL.
+    --
+    -- conteudo_tipo ja aceita os tres valores desde este passo: SQLite nao
+    -- permite ALTER de CHECK, e as colunas de midia (plano 2) entram por
+    -- ADD COLUMN simples se o CHECK ja previr o valor.
+    --
+    -- A Mensagem resultante NAO nasce aqui: ela entra pelo caminho normal de
+    -- recepcao (messages.upsert -> receber-ao-vivo); identificador_de_envio
+    -- e o que permite correlacionar depois, se precisar.
+    CREATE TABLE IF NOT EXISTS envios (
+      id                     TEXT PRIMARY KEY,
+      identificador_de_envio TEXT NOT NULL UNIQUE,
+      configuracao_id        TEXT NOT NULL,
+      conversa_id            TEXT,
+      destino_cru            TEXT,
+      conteudo_tipo          TEXT NOT NULL CHECK (conteudo_tipo IN ('texto', 'imagem', 'documento')),
+      conteudo_texto         TEXT,
+      estado                 TEXT NOT NULL
+        CHECK (estado IN ('pendente', 'enviado', 'falhou')),
+      motivo_falha           TEXT,
+      -- Quantas vezes o processamento tentou e o resultado foi INDETERMINADO
+      -- (transporte caido). Usada para ordenar a fila — quem tentou mais
+      -- espera a vez dos outros, em vez de travar a fila inteira atras do
+      -- mesmo Envio problematico.
+      tentativas             INTEGER NOT NULL DEFAULT 0,
+      solicitada_em          TEXT NOT NULL,
+      concluida_em           TEXT,
+      CHECK (conversa_id IS NOT NULL OR destino_cru IS NOT NULL),
+      CHECK (conteudo_tipo != 'texto' OR conteudo_texto IS NOT NULL),
+      FOREIGN KEY (conversa_id) REFERENCES conversas(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_envios_fila ON envios(configuracao_id, estado, tentativas, solicitada_em);
 
   `);
 
