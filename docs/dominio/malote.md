@@ -3,8 +3,8 @@ id: 202608240940
 projeto: malote
 tipo: dominio
 descricao: "Modelo do arquivo pessoal de conversas — núcleo genérico multi-inquilino (Inquilino, Conversa, Mensagem, Pessoa, Identificador, Anexo, Envio) desacoplado das fontes por Adaptador"
-status: rascunho
-aprovado-em:
+status: aprovado
+aprovado-em: 2026-10-03
 escopo: repo:malote
 plataforma: "*"
 dominios: [tecnologia]
@@ -683,19 +683,23 @@ Nenhuma. Contexto único.
   mídia por rede é **upload** (não caminho de arquivo local), o que por sua vez exige TLS de
   verdade antes de aceitar bytes e Chave de Acesso por essa rota — nunca o `node:http` cru que
   o servidor expõe hoje atrás de loopback/túnel.
-- **Assumido, a confirmar no gate:** que Destinatário do Envio é sempre uma Conversa, nunca um
-  endereço solto sem Conversa correspondente — espelha o invariante de que toda Mensagem
-  pertence a uma Conversa. Não foi medido se "mandar para um endereço nunca visto" precisa de
-  caminho diferente do "a Conversa nasce no mesmo ato".
-- **Assumido, a confirmar no gate:** que Envio não carrega Marca do Titular nem Citação —
+- **Confirmado por Orlando em 03/10/2026:** Destinatário do Envio é sempre uma Conversa,
+  **direta ou coletiva** — enviar para um grupo de WhatsApp é suportado pela mesma operação,
+  sem caminho especial. Confirmado **por leitura do código vendorizado**
+  (`sock.sendMessage` já distingue grupo internamente — `messages-send.js:259`, mesma API
+  pública usada na espiga de 03/10 — nenhuma função separada), **não por medição empírica**
+  contra um grupo real: a espiga só exercitou self-chat. Decisão de seguir sem medir essa
+  ponta é do Titular.
+- **Confirmado por Orlando em 03/10/2026:** Envio não carrega Marca do Titular nem Citação —
   essas só fazem sentido em Mensagem já existente, e um Envio em `pendente` ainda não é uma.
-- **Assumido, a confirmar no gate:** que `processar-envio` é sequencial por Configuração (como
-  `transcrever-anexo` é sequencial no Inquilino inteiro), não por Inquilino — duas
-  Configurações do mesmo Inquilino podem processar Envios em paralelo, cada uma na sua própria
+- **Confirmado por Orlando em 03/10/2026:** `processar-envio` é sequencial por Configuração
+  (como `transcrever-anexo` é sequencial no Inquilino inteiro), não por Inquilino — duas
+  Configurações do mesmo Inquilino processam Envios em paralelo, cada uma na sua própria
   conexão, sem disputa.
-- **Em aberto, fora do escopo deste modelo:** onde a Hera (ou qualquer Configuração de WhatsApp
-  nova) mora — Inquilino próprio versus Configuração dentro de um Inquilino existente — é
-  decisão de instalação, não de modelo; o agregado Envio funciona igual nos dois casos.
+- **Confirmado por Orlando em 03/10/2026:** onde a Hera mora — Inquilino próprio versus
+  Configuração dentro de um Inquilino existente — é decisão de instalação, não de modelo; o
+  agregado Envio funciona igual nos dois casos. (A decisão de instalação em si, Inquilino
+  próprio, já tinha sido tomada em 03/10/2026, fora deste modelo.)
 - **Nota de 11/09/2026:** `importar-catalogo-de-identidade` e `propor-vinculo-por-catalogo` existiam no produto desde o ciclo 7 e **nunca tinham entrado neste modelo**. Foram acrescentadas agora, ao modelar o ciclo 16 — a lacuna apareceu porque o ciclo 16 as toca, não porque alguém auditou o modelo.
 - **Assumido, a confirmar no gate:** que uma Configuração tem **uma** Pasta de Entrada. O modelo já admite Material espalhado por mais de uma pasta dentro do mesmo lote (medido no Instagram), mas não duas pastas de entrada distintas para a mesma conta.
 - **Assumido:** que a Natureza do Material é estável por Configuração. Se um dia a mesma conta emitir ora completo, ora parcial, a declaração passa a ser por Material e este invariante muda. **Revisto em 12/09/2026:** vale para material; na recepção contínua a Natureza é do **evento**, porque a mesma Configuração entrega retrato e atualização.
