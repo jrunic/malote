@@ -4,6 +4,9 @@ import { executar } from '../src/cli/index.js';
 import { instalacaoTemporaria } from './ajuda/instalacao.js';
 import { abrirRegistro, criarInquilino } from '../src/registro/registro.js';
 import { resolverConfiguracao, listarConfiguracoes } from '../src/registro/configuracao-adaptador.js';
+import { registrarEnvio } from '../src/nucleo/envio.js';
+import { abrirAcervo } from '../src/nucleo/acervo.js';
+import { join } from 'node:path';
 
 function comInquilinoEConfiguracao(raiz: string, apelido: string): { inquilinoId: string } {
   const registro = abrirRegistro(raiz);
@@ -127,6 +130,58 @@ test('malote enviar e operacao LOCAL — recusa com --servidor setado', async ()
     );
     assert.equal(codigo, 2);
     assert.match(linhas.join('\n'), /operacao LOCAL/);
+  } finally {
+    limpar();
+  }
+});
+
+test('malote envio reprocessar volta falhas para pendente', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilinoId } = comInquilinoEConfiguracao(raiz, 'padrao');
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilinoId);
+    const r = registrarEnvio(acervo, {
+      configuracaoId: 'cfg-qualquer',
+      destino: { enderecoCru: '5511999990000@s.whatsapp.net' },
+      conteudo: { tipo: 'texto', texto: 'oi' },
+    });
+    acervo
+      .preparar(`UPDATE envios SET estado = 'falhou', motivo_falha = 'x' WHERE id = ?`)
+      .run(r.envioId);
+    acervo.fechar();
+
+    const linhas: string[] = [];
+    const codigo = await executar(
+      ['envio', 'reprocessar', '--inquilino', inquilinoId],
+      { dados: raiz, estado: raiz, escrever: (l: string) => linhas.push(l) },
+    );
+    assert.equal(codigo, 0);
+    assert.match(linhas.join('\n'), /1/);
+  } finally {
+    limpar();
+  }
+});
+
+test('malote envio estado mostra a contagem por estado', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilinoId } = comInquilinoEConfiguracao(raiz, 'padrao');
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilinoId);
+    registrarEnvio(acervo, {
+      configuracaoId: 'cfg-qualquer',
+      destino: { enderecoCru: '5511999990000@s.whatsapp.net' },
+      conteudo: { tipo: 'texto', texto: 'oi' },
+    });
+    acervo.fechar();
+
+    const linhas: string[] = [];
+    const codigo = await executar(
+      ['envio', 'estado', '--inquilino', inquilinoId, '--json'],
+      { dados: raiz, estado: raiz, escrever: (l: string) => linhas.push(l) },
+    );
+    assert.equal(codigo, 0);
+    const saida = JSON.parse(linhas.at(-1) ?? '{}');
+    assert.deepEqual(saida, { pendente: 1 });
   } finally {
     limpar();
   }

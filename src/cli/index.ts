@@ -126,7 +126,11 @@ import {
   solicitarTranscricao,
   contarTranscricoesPorEstado,
 } from '../nucleo/transcricao.js';
-import { registrarEnvio } from '../nucleo/envio.js';
+import {
+  registrarEnvio,
+  reenfileirarEnviosFalhos,
+  contarEnviosPorEstado,
+} from '../nucleo/envio.js';
 import { configuracaoDoMotor } from './motor-de-transcricao.js';
 import {
   contarDerrame,
@@ -915,6 +919,47 @@ function executarComAtor(
           escrever(JSON.stringify({ envioId: r.envioId, identificadorDeEnvio: r.identificadorDeEnvio }));
         } else {
           escrever(`Envio registrado: ${r.envioId} (pendente — processado pelo "malote ouvir" da conta).`);
+        }
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
+    if (grupo === 'envio' && sub === 'reprocessar') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) {
+        escrever('Uso: malote envio reprocessar --inquilino <id>');
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const n = reenfileirarEnviosFalhos(acervo);
+        if (argumentos.includes('--json')) {
+          escrever(JSON.stringify({ reenfileirados: n }));
+        } else {
+          escrever(`${n} Envio(s) que tinham falhado voltaram para pendente.`);
+        }
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
+    if (grupo === 'envio' && sub === 'estado') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) {
+        escrever('Uso: malote envio estado --inquilino <id> [--json]');
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const contagens = contarEnviosPorEstado(acervo);
+        const porEstado = Object.fromEntries(contagens.map((c) => [c.estado, c.n]));
+        if (argumentos.includes('--json')) {
+          escrever(JSON.stringify(porEstado));
+        } else {
+          for (const c of contagens) escrever(`  ${c.estado}: ${c.n}`);
         }
         return 0;
       } finally {
