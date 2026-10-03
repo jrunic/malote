@@ -288,3 +288,88 @@ test('contarEnviosPorEstado agrupa por estado', () => {
     c.limpar();
   }
 });
+
+test('registrarEnvio com imagem grava caminho e mimetype, e a legenda em conteudo_texto', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const r = registrarEnvio(acervo, {
+      configuracaoId: CFG_WHATSAPP.id,
+      destino: { enderecoCru: '111@s.whatsapp.net' },
+      conteudo: {
+        tipo: 'imagem',
+        caminhoArquivo: '/tmp/staging/x.jpg',
+        mimetype: 'image/jpeg',
+        legenda: 'uma legenda',
+      },
+    });
+
+    const linha = acervo
+      .preparar(
+        `SELECT conteudo_tipo, conteudo_texto, conteudo_caminho_arquivo, conteudo_mimetype
+           FROM envios WHERE id = ?`,
+      )
+      .get(r.envioId) as {
+      conteudo_tipo: string;
+      conteudo_texto: string | null;
+      conteudo_caminho_arquivo: string | null;
+      conteudo_mimetype: string | null;
+    };
+    assert.equal(linha.conteudo_tipo, 'imagem');
+    assert.equal(linha.conteudo_texto, 'uma legenda');
+    assert.equal(linha.conteudo_caminho_arquivo, '/tmp/staging/x.jpg');
+    assert.equal(linha.conteudo_mimetype, 'image/jpeg');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('registrarEnvio com documento grava nome de arquivo', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const r = registrarEnvio(acervo, {
+      configuracaoId: CFG_WHATSAPP.id,
+      destino: { enderecoCru: '111@s.whatsapp.net' },
+      conteudo: {
+        tipo: 'documento',
+        caminhoArquivo: '/tmp/staging/doc.pdf',
+        mimetype: 'application/pdf',
+        nomeDeArquivo: 'relatorio.pdf',
+      },
+    });
+
+    const linha = acervo
+      .preparar(`SELECT conteudo_nome_arquivo FROM envios WHERE id = ?`)
+      .get(r.envioId) as { conteudo_nome_arquivo: string | null };
+    assert.equal(linha.conteudo_nome_arquivo, 'relatorio.pdf');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('proximoEnvioPendente devolve o conteudo de imagem com os campos certos', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    registrarEnvio(acervo, {
+      configuracaoId: CFG_WHATSAPP.id,
+      destino: { enderecoCru: '111@s.whatsapp.net' },
+      conteudo: {
+        tipo: 'imagem',
+        caminhoArquivo: '/tmp/staging/x.jpg',
+        mimetype: 'image/jpeg',
+      },
+    });
+
+    const proximo = proximoEnvioPendente(acervo, CFG_WHATSAPP.id);
+    assert.equal(proximo?.conteudo.tipo, 'imagem');
+    if (proximo?.conteudo.tipo === 'imagem') {
+      assert.equal(proximo.conteudo.caminhoArquivo, '/tmp/staging/x.jpg');
+      assert.equal(proximo.conteudo.mimetype, 'image/jpeg');
+      assert.equal(proximo.conteudo.legenda, undefined);
+    }
+  } finally {
+    c.limpar();
+  }
+});

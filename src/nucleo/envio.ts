@@ -10,10 +10,31 @@ export interface ConteudoDeEnvioTexto {
   texto: string;
 }
 
+export interface ConteudoDeEnvioImagem {
+  tipo: 'imagem';
+  /** Caminho de STAGING — nunca o caminho original do usuario. */
+  caminhoArquivo: string;
+  mimetype: string;
+  legenda?: string;
+}
+
+export interface ConteudoDeEnvioDocumento {
+  tipo: 'documento';
+  caminhoArquivo: string;
+  mimetype: string;
+  nomeDeArquivo: string;
+  legenda?: string;
+}
+
+export type ConteudoDeEnvio =
+  | ConteudoDeEnvioTexto
+  | ConteudoDeEnvioImagem
+  | ConteudoDeEnvioDocumento;
+
 export interface EntradaDeEnvio {
   configuracaoId: string;
   destino: DestinoDeEnvio;
-  conteudo: ConteudoDeEnvioTexto;
+  conteudo: ConteudoDeEnvio;
 }
 
 export interface ResultadoDeRegistro {
@@ -33,14 +54,21 @@ export function registrarEnvio(acervo: Acervo, entrada: EntradaDeEnvio): Resulta
   const identificadorDeEnvio = randomUUID();
   const conversaId = 'conversaId' in entrada.destino ? entrada.destino.conversaId : null;
   const destinoCru = 'enderecoCru' in entrada.destino ? entrada.destino.enderecoCru : null;
+  const c = entrada.conteudo;
+  // Legenda de midia mora em conteudo_texto, a mesma coluna do texto puro.
+  const conteudoTexto = c.tipo === 'texto' ? c.texto : (c.legenda ?? null);
+  const caminhoArquivo = c.tipo === 'texto' ? null : c.caminhoArquivo;
+  const mimetype = c.tipo === 'texto' ? null : c.mimetype;
+  const nomeDeArquivo = c.tipo === 'documento' ? c.nomeDeArquivo : null;
 
   emOperacao(acervo, { natureza: 'solicitar-envio', reversibilidade: 'por-efeito' }, (op) => {
     acervo
       .preparar(
         `INSERT INTO envios
            (id, identificador_de_envio, configuracao_id, conversa_id, destino_cru,
-            conteudo_tipo, conteudo_texto, estado, solicitada_em)
-         VALUES (?, ?, ?, ?, ?, 'texto', ?, 'pendente', ?)`,
+            conteudo_tipo, conteudo_texto, conteudo_caminho_arquivo, conteudo_mimetype,
+            conteudo_nome_arquivo, estado, solicitada_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendente', ?)`,
       )
       .run(
         envioId,
@@ -48,7 +76,11 @@ export function registrarEnvio(acervo: Acervo, entrada: EntradaDeEnvio): Resulta
         entrada.configuracaoId,
         conversaId,
         destinoCru,
-        entrada.conteudo.texto,
+        c.tipo,
+        conteudoTexto,
+        caminhoArquivo,
+        mimetype,
+        nomeDeArquivo,
         new Date().toISOString(),
       );
     op.valor({ tabela: 'envios', chave: envioId, campo: 'estado', antes: null, depois: 'pendente' });
@@ -62,7 +94,7 @@ export interface EnvioElegivel {
   identificadorDeEnvio: string;
   conversaId: string | null;
   destinoCru: string | null;
-  conteudo: ConteudoDeEnvioTexto;
+  conteudo: ConteudoDeEnvio;
 }
 
 /**
@@ -80,7 +112,8 @@ export function proximoEnvioPendente(
 ): EnvioElegivel | undefined {
   const linha = acervo
     .preparar(
-      `SELECT id, identificador_de_envio, conversa_id, destino_cru, conteudo_texto
+      `SELECT id, identificador_de_envio, conversa_id, destino_cru, conteudo_tipo,
+              conteudo_texto, conteudo_caminho_arquivo, conteudo_mimetype, conteudo_nome_arquivo
          FROM envios
         WHERE configuracao_id = ? AND estado = 'pendente'
         ORDER BY tentativas ASC, solicitada_em ASC, rowid ASC
@@ -92,16 +125,41 @@ export function proximoEnvioPendente(
         identificador_de_envio: string;
         conversa_id: string | null;
         destino_cru: string | null;
-        conteudo_texto: string;
+        conteudo_tipo: 'texto' | 'imagem' | 'documento';
+        conteudo_texto: string | null;
+        conteudo_caminho_arquivo: string | null;
+        conteudo_mimetype: string | null;
+        conteudo_nome_arquivo: string | null;
       }
     | undefined;
   if (linha === undefined) return undefined;
+
+  const legenda = linha.conteudo_texto !== null ? { legenda: linha.conteudo_texto } : {};
+  let conteudo: ConteudoDeEnvio;
+  if (linha.conteudo_tipo === 'texto') {
+    conteudo = { tipo: 'texto', texto: linha.conteudo_texto as string };
+  } else if (linha.conteudo_tipo === 'imagem') {
+    conteudo = {
+      tipo: 'imagem',
+      caminhoArquivo: linha.conteudo_caminho_arquivo as string,
+      mimetype: linha.conteudo_mimetype as string,
+      ...legenda,
+    };
+  } else {
+    conteudo = {
+      tipo: 'documento',
+      caminhoArquivo: linha.conteudo_caminho_arquivo as string,
+      mimetype: linha.conteudo_mimetype as string,
+      nomeDeArquivo: linha.conteudo_nome_arquivo as string,
+      ...legenda,
+    };
+  }
   return {
     envioId: linha.id,
     identificadorDeEnvio: linha.identificador_de_envio,
     conversaId: linha.conversa_id,
     destinoCru: linha.destino_cru,
-    conteudo: { tipo: 'texto', texto: linha.conteudo_texto },
+    conteudo,
   };
 }
 
