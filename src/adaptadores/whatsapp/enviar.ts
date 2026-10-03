@@ -1,7 +1,9 @@
+import { readFileSync, existsSync } from 'node:fs';
 import type { Acervo } from '../../nucleo/acervo.js';
 import { registrarConversa } from '../../nucleo/escrita.js';
 import { enderecoEhColetivo } from './ao-vivo.js';
 import {
+  type ConteudoDeEnvio,
   proximoEnvioPendente,
   marcarEnvioEnviado,
   marcarEnvioFalhou,
@@ -20,6 +22,14 @@ export interface OpcoesDeProcessamento {
    * chega aqui como excecao e falha DEFINITIVA.
    */
   enviar: (jid: string, conteudo: unknown) => Promise<{ keyId: string } | undefined>;
+  /**
+   * Chamado quando um Envio de MIDIA (imagem/documento) sai com sucesso —
+   * nunca para texto. `ouvir.ts` o usa para alimentar o mapa de bytes
+   * originados: quando o eco daquela Mensagem chegar, usa o arquivo de
+   * staging em vez de baixar de volta do WhatsApp. Este modulo nunca move
+   * nem apaga o staging.
+   */
+  aoEnviar?: (keyId: string, caminhoDeStaging: string) => void;
 }
 
 export interface ResultadoDoProcessamento {
@@ -40,6 +50,38 @@ function formaDeEnderecoReconhecida(endereco: string): boolean {
     endereco.endsWith('@g.us') ||
     endereco.endsWith('@lid')
   );
+}
+
+/**
+ * Monta o conteudo no formato que `sendMessage` espera. Le o arquivo de
+ * staging AQUI: arquivo removido ou ilegivel vira falha definitiva, e vale
+ * igual para base criada do zero e base migrada (os CHECK do schema fresco
+ * nao alcancam a migrada). `readFileSync` carrega o arquivo inteiro — ok
+ * para imagem/documento tipicos; stream fica para quando houver medicao.
+ */
+function montarConteudo(conteudo: ConteudoDeEnvio): { payload: unknown } | { erro: string } {
+  if (conteudo.tipo === 'texto') return { payload: { text: conteudo.texto } };
+  if (!existsSync(conteudo.caminhoArquivo)) {
+    return { erro: `arquivo de staging nao encontrado: ${conteudo.caminhoArquivo}` };
+  }
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(conteudo.caminhoArquivo);
+  } catch (erro) {
+    return { erro: `falha ao ler staging: ${(erro as Error).message}` };
+  }
+  const legenda = conteudo.legenda !== undefined ? { caption: conteudo.legenda } : {};
+  if (conteudo.tipo === 'imagem') {
+    return { payload: { image: bytes, mimetype: conteudo.mimetype, ...legenda } };
+  }
+  return {
+    payload: {
+      document: bytes,
+      mimetype: conteudo.mimetype,
+      fileName: conteudo.nomeDeArquivo,
+      ...legenda,
+    },
+  };
 }
 
 /**
@@ -72,10 +114,14 @@ export async function processarEnvios(
     }
   }
 
-  const conteudo = { text: envio.conteudo.texto };
+  const montado = montarConteudo(envio.conteudo);
+  if ('erro' in montado) {
+    marcarEnvioFalhou(acervo, envio.envioId, montado.erro);
+    return { processados: 1 };
+  }
 
   try {
-    const resultado = await opcoes.enviar(jid, conteudo);
+    const resultado = await opcoes.enviar(jid, montado.payload);
     if (resultado === undefined) {
       // Indeterminado — a propria conexao ja filtrou transporte caido.
       // Fica pendente, com tentativa somada, retentado na proxima passada.
@@ -96,6 +142,9 @@ export async function processarEnvios(
       atualizarConversaDoEnvio(acervo, envio.envioId, conversaId);
     }
     marcarEnvioEnviado(acervo, envio.envioId);
+    if (envio.conteudo.tipo !== 'texto') {
+      opcoes.aoEnviar?.(resultado.keyId, envio.conteudo.caminhoArquivo);
+    }
   } catch (erro) {
     // Chegou aqui: NAO e falha de transporte (conexao.ts ja filtrou). E
     // definitiva — destinatario invalido, rejeicao da plataforma etc.
