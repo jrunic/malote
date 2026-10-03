@@ -791,6 +791,25 @@ const ENVIO_V24: PassoDeMigracao = {
   tabelasNovas: ['envios'],
 };
 
+/**
+ * Envio ganha midia: imagem e documento. ADD COLUMN, nao recriacao — mesmo
+ * precedente de SOLICITACAO_DE_TRANSCRICAO_V23 (#1103): linhas existentes
+ * (todas de texto) ficam com NULL nas colunas novas, que e o valor certo.
+ * Os CHECK de midia do schema fresco nao alcancam base migrada por aqui; a
+ * garantia real e a validacao em processarEnvios.
+ */
+const ENVIO_MIDIA_V25: PassoDeMigracao = {
+  de: 24,
+  para: 25,
+  descricao: 'acrescenta imagem e documento ao Envio (caminho, mimetype, nome de arquivo)',
+  aplicar: (db) =>
+    db.exec(`
+      ALTER TABLE envios ADD COLUMN conteudo_caminho_arquivo TEXT;
+      ALTER TABLE envios ADD COLUMN conteudo_mimetype TEXT;
+      ALTER TABLE envios ADD COLUMN conteudo_nome_arquivo TEXT;
+    `),
+};
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -806,6 +825,7 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   REMOVE_STATUS_FANTASMA_V22,
   SOLICITACAO_DE_TRANSCRICAO_V23,
   ENVIO_V24,
+  ENVIO_MIDIA_V25,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {

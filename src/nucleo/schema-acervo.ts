@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3';
  * Politica completa das duas bases na ADR local
  * `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_ACERVO = 24;
+export const VERSAO_SCHEMA_ACERVO = 25;
 
 /**
  * Forma mais antiga que a maquina de migracao alcanca.
@@ -676,6 +676,13 @@ export function aplicarSchemaAcervo(db: Database): void {
       destino_cru            TEXT,
       conteudo_tipo          TEXT NOT NULL CHECK (conteudo_tipo IN ('texto', 'imagem', 'documento')),
       conteudo_texto         TEXT,
+      -- Caminho de STAGING (nunca o caminho original do usuario — a CLI copia
+      -- antes de gravar o pedido). So preenchido para imagem/documento.
+      conteudo_caminho_arquivo TEXT,
+      conteudo_mimetype        TEXT,
+      -- Nome original do arquivo, para o fileName que o WhatsApp exibe. So
+      -- documento usa; imagem nao tem nome de arquivo no protocolo.
+      conteudo_nome_arquivo    TEXT,
       estado                 TEXT NOT NULL
         CHECK (estado IN ('pendente', 'enviado', 'falhou')),
       motivo_falha           TEXT,
@@ -688,6 +695,8 @@ export function aplicarSchemaAcervo(db: Database): void {
       concluida_em           TEXT,
       CHECK (conversa_id IS NOT NULL OR destino_cru IS NOT NULL),
       CHECK (conteudo_tipo != 'texto' OR conteudo_texto IS NOT NULL),
+      CHECK (conteudo_tipo = 'texto' OR conteudo_caminho_arquivo IS NOT NULL),
+      CHECK (conteudo_tipo != 'documento' OR conteudo_mimetype IS NOT NULL),
       FOREIGN KEY (conversa_id) REFERENCES conversas(id)
     );
 

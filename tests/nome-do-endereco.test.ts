@@ -14,7 +14,10 @@ import {
   vincularIdentificador,
 } from '../src/nucleo/identidade.js';
 
-test('o schema do Acervo está na versão 24', () => {
+test('o schema do Acervo está na versão 25', () => {
+  // v25 em 03/10/2026: Envio ganha midia — imagem e documento. ADD COLUMN,
+  // sem tabela nova.
+  //
   // v24 em 03/10/2026: o agregado ENVIO entra — pedido para o malote falar
   // pela conta de uma Configuracao de Adaptador. Tabela nova, nenhuma linha
   // preexistente a migrar.
@@ -131,7 +134,7 @@ test('o schema do Acervo está na versão 24', () => {
   // v9: Transicao de Participacao como registro proprio, e a atividade que a
   // Fonte declara no retrato. Acervo v8 nao tem nem uma nem outra, e a
   // consulta de presenca leria silencio como ausencia.
-  assert.equal(VERSAO_SCHEMA_ACERVO, 24);
+  assert.equal(VERSAO_SCHEMA_ACERVO, 25);
 });
 
 test('o nome pendura em Identificador, sem Pessoa nenhuma', () => {
