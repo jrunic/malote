@@ -468,3 +468,87 @@ test('o perdedor da corrida com pedido DIFERENTE responde 409 e limpa o proprio 
     cena.encerrar();
   }
 });
+
+async function pegar(cena: { url: string }, caminho: string, chave?: string) {
+  const r = await fetch(`${cena.url}${caminho}`, { headers: chave ? { authorization: `Bearer ${chave}` } : {} });
+  return { status: r.status, texto: await r.text() };
+}
+
+test('GET /envios/<identificador> devolve o estado, sem texto nem caminho (#1117)', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    const feito = await postar(cena, cena.chave.valor, {
+      ...BASE_TEXTO,
+      texto: 'segredo-do-texto',
+      identificadorDeEnvio: IDENT,
+    });
+    const porIdentificador = await pegar(cena, `/envios/${IDENT}`, cena.chave.valor);
+    assert.equal(porIdentificador.status, 200);
+    const corpo = JSON.parse(porIdentificador.texto) as Record<string, unknown>;
+    assert.equal(corpo['estado'], 'pendente');
+    assert.equal(corpo['tentativas'], 0);
+    assert.equal(corpo['tipo'], 'texto');
+    assert.equal(corpo['configuracao'], 'hera');
+    assert.equal(corpo['envioId'], feito.corpo['envioId']);
+    assert.equal(corpo['identificadorDeEnvio'], IDENT);
+    assert.equal(corpo['motivoFalha'], null);
+    assert.ok(!porIdentificador.texto.includes('segredo-do-texto'), 'o texto do Envio nao sai por esta rota');
+    const porId = await pegar(cena, `/envios/${feito.corpo['envioId'] as string}`, cena.chave.valor);
+    assert.equal(porId.status, 200);
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('Envio inexistente e Envio de outro Inquilino respondem igual: 404 vazio (#1117)', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    await postar(cena, cena.chave.valor, { ...BASE_TEXTO, identificadorDeEnvio: IDENT });
+    const alheio = await pegar(cena, `/envios/${IDENT}`, cena.chaveDoOutro.valor);
+    const inventado = await pegar(cena, '/envios/00000000-0000-4000-8000-000000000000', cena.chave.valor);
+    assert.equal(alheio.status, 404);
+    assert.equal(alheio.texto, '');
+    assert.equal(inventado.status, 404);
+    assert.equal(inventado.texto, '');
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('GET /envios/contagem devolve os tres estados, e nao e lido como identificador (#1117)', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    const vazio = await pegar(cena, '/envios/contagem', cena.chave.valor);
+    assert.equal(vazio.status, 200);
+    assert.deepEqual(JSON.parse(vazio.texto), { pendente: 0, enviado: 0, falhou: 0 });
+    await postar(cena, cena.chave.valor, { ...BASE_TEXTO, identificadorDeEnvio: IDENT });
+    const um = await pegar(cena, '/envios/contagem', cena.chave.valor);
+    assert.deepEqual(JSON.parse(um.texto), { pendente: 1, enviado: 0, falhou: 0 });
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('GET /envios/solicitar e 404 (e nao um identificador), sem credencial e 401 (#1117)', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    assert.equal((await pegar(cena, '/envios/solicitar', cena.chave.valor)).status, 404);
+    assert.equal((await pegar(cena, '/envios/contagem')).status, 401);
+    assert.equal((await pegar(cena, `/envios/${IDENT}`)).status, 401);
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('as rotas de leitura do Envio nao gravam Operacao (#1117)', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    await postar(cena, cena.chave.valor, { ...BASE_TEXTO, identificadorDeEnvio: IDENT });
+    const antes = cena.operacoesDeSolicitacao();
+    await pegar(cena, `/envios/${IDENT}`, cena.chave.valor);
+    await pegar(cena, '/envios/contagem', cena.chave.valor);
+    assert.equal(cena.operacoesDeSolicitacao(), antes);
+  } finally {
+    cena.encerrar();
+  }
+});

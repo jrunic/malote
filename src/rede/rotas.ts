@@ -17,8 +17,10 @@ import type { ConversaId, Fonte, InquilinoId } from '../nucleo/tipos.js';
 import { abrirAcervo, versaoDoAcervoEmDisco, VERSAO_SCHEMA_ACERVO } from '../nucleo/acervo.js';
 import { solicitarTranscricao } from '../nucleo/transcricao.js';
 import {
+  contarEnviosPorEstado,
   EnvioDivergenteError,
   examinarRepeticao,
+  lerEnvio,
   registrarEnvio,
   type ConteudoDeEnvio,
   type ExameDeRepeticao,
@@ -453,6 +455,43 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     // 01-discussoes/20260824-recorte-v1.md), com a UNICA excecao nomeada
     // acima — tratada antes desta guarda, nunca por ela.
     naoEncontrado(res);
+    return;
+  }
+
+  // Leitura do Envio (#1117). A contagem vem ANTES da rota de um Envio: senao a palavra
+  // `contagem` seria lida como identificador. Nenhuma das duas grava Operacao.
+  if (partes.length === 2 && partes[0] === 'envios' && partes[1] === 'contagem') {
+    json(res, 200, Object.fromEntries(contarEnviosPorEstado(ctx.acervo).map((c) => [c.estado, c.n])));
+    return;
+  }
+  if (partes.length === 2 && partes[0] === 'envios') {
+    const envio = lerEnvio(ctx.acervo, partes[1] as string);
+    if (envio === undefined) {
+      naoEncontrado(res);
+      return;
+    }
+    const registro = abrirRegistro(ctx.dados);
+    let apelido: string | null;
+    try {
+      apelido =
+        listarConfiguracoes(registro, ctx.identidade.inquilinoId).find((c) => c.id === envio.configuracaoId)
+          ?.apelido ?? null;
+    } finally {
+      registro.fechar();
+    }
+    // Sem texto nem caminho de arquivo: o estado basta para decidir repetir, e conteudo
+    // exposto por rota nova e superficie nova.
+    json(res, 200, {
+      envioId: envio.envioId,
+      identificadorDeEnvio: envio.identificadorDeEnvio,
+      configuracao: apelido,
+      estado: envio.estado,
+      tentativas: envio.tentativas,
+      motivoFalha: envio.motivoFalha,
+      tipo: envio.tipo,
+      solicitadaEm: envio.solicitadaEm,
+      concluidaEm: envio.concluidaEm,
+    });
     return;
   }
 
