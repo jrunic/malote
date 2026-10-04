@@ -25,6 +25,9 @@ import {
   type ConteudoDeEnvio,
   type ExameDeRepeticao,
 } from '../nucleo/envio.js';
+import { identificarPorValor } from '../nucleo/identificar.js';
+import { enriquecerPresenca } from '../nucleo/nomes-em-lote.js';
+import { lerPrecedenciasDeNome, type PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
 
 /**
  * As rotas. Cada uma recebe o Acervo que a Chave abriu e devolve dado.
@@ -495,6 +498,34 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     return;
   }
 
+  // Identificar por valor (#1126): parte do Identificador, com ou sem Pessoa. Valor desconhecido
+  // e lista vazia — e busca, nao endereco. So le.
+  if (partes.length === 1 && partes[0] === 'identificadores') {
+    const valor = url.searchParams.get('valor');
+    if (valor === null || valor === '') {
+      json(res, 400, { erro: 'informe o parametro valor' });
+      return;
+    }
+    const fonteParam = url.searchParams.get('fonte');
+    if (fonteParam !== null && !ehFonte(fonteParam)) {
+      json(res, 400, { erro: `fonte desconhecida: ${fonteParam}` });
+      return;
+    }
+    const registro = abrirRegistro(ctx.dados);
+    let precedencia: PrecedenciaDeNome;
+    try {
+      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+    } finally {
+      registro.fechar();
+    }
+    json(
+      res,
+      200,
+      identificarPorValor(ctx.acervo, { valor, ...(fonteParam !== null ? { fonte: fonteParam } : {}) }, precedencia),
+    );
+    return;
+  }
+
   if (partes.length === 1 && partes[0] === 'conversas') {
     // Parametros OPCIONAIS: quem nao os envia recebe a resposta de sempre —
     // o contrato publicado no guia do cliente nao muda de significado.
@@ -526,6 +557,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const registro = abrirRegistro(ctx.dados);
     let configuracaoId: string | undefined;
     let apelidoPorId: Map<string, string>;
+    let precedencia: PrecedenciaDeNome;
     try {
       if (configuracaoApelido !== null) {
         const resolucao = resolverFiltroDeConfiguracao(
@@ -543,6 +575,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       apelidoPorId = new Map(
         listarConfiguracoes(registro, ctx.identidade.inquilinoId).map((c) => [c.id, c.apelido]),
       );
+      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
     } finally {
       registro.fechar();
     }
@@ -558,6 +591,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       : undefined;
 
     let conversas = listarConversas(ctx.acervo, {
+      precedencia,
       ...(fonte !== undefined ? { fonte: fonte as Fonte } : {}),
       ...(coletiva !== undefined ? { coletiva: coletiva === 'true' } : {}),
       ...(busca !== undefined ? { busca } : {}),
@@ -575,6 +609,8 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       assunto: c.assunto,
       mensagens: c.mensagens,
       configuracao: c.configuracaoId === null ? null : (apelidoPorId.get(c.configuracaoId) ?? null),
+      nome: c.nome,
+      origemDoNome: c.origemDoNome,
     }));
 
     if (marcadas !== undefined) {
@@ -847,7 +883,16 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     }
     // A pergunta de Presenca que o modelo ja responde; o --em e o fim do dia
     // capado ao Alcance, regra medida (CONTEXTO.md).
-    json(res, 200, { presenca: quemEstavaEm(ctx.acervo, { conversaId, em }) });
+    const registro = abrirRegistro(ctx.dados);
+    let precedencia: PrecedenciaDeNome;
+    try {
+      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+    } finally {
+      registro.fechar();
+    }
+    json(res, 200, {
+      presenca: enriquecerPresenca(ctx.acervo, quemEstavaEm(ctx.acervo, { conversaId, em }), precedencia),
+    });
     return;
   }
 

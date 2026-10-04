@@ -1,6 +1,9 @@
+import { createServer } from 'node:http';
 import { cenario } from './acervo.js';
 import { CFG_WHATSAPP } from './configuracao.js';
-import type { Acervo } from '../../src/nucleo/acervo.js';
+import { abrirAcervoSomenteLeitura, type Acervo } from '../../src/nucleo/acervo.js';
+import { criarServidor } from '../../src/rede/servidor.js';
+import { emitirChaveDeAcesso } from '../../src/registro/chave-de-acesso.js';
 import {
   registrarConversa,
   registrarIdentificador,
@@ -131,4 +134,69 @@ export function acervoDeIdentidade(): { acervo: Acervo; s: Sementes; limpar: () 
   const c = cenario();
   const { acervo } = c.novoInquilino('Titular');
   return { acervo, s: semearIdentidade(acervo), limpar: c.limpar };
+}
+
+async function portaLivre(): Promise<number> {
+  const srv = createServer();
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+  const porta = (srv.address() as { port: number }).port;
+  await new Promise<void>((r) => srv.close(() => r()));
+  return porta;
+}
+
+export interface CenaDeIdentidade {
+  raiz: string;
+  url: string;
+  inquilinoId: string;
+  s: Sementes;
+  chave: { id: string; valor: string };
+  /** Chave de OUTRO Inquilino, cujo Acervo tem o MESMO valor de Identificador com outro nome. */
+  chaveDoOutro: { id: string; valor: string };
+  pedir: (caminho: string, chave?: string) => Promise<{ status: number; corpo: string }>;
+  operacoes: () => number;
+  encerrar: () => void;
+}
+
+/** Servidor real sobre um Acervo com a identidade semeada e um segundo Inquilino com o mesmo valor. */
+export async function subirCenaDeIdentidade(): Promise<CenaDeIdentidade> {
+  const c = cenario();
+  const { id: inquilinoId, acervo } = c.novoInquilino('Titular');
+  const s = semearIdentidade(acervo);
+  acervo.fechar();
+  const { id: outroId, acervo: acervoDoOutro } = c.novoInquilino('Outro');
+  const intruso = registrarIdentificador(acervoDoOutro, { fonte: 'whatsapp', valor: BRUNO }).id;
+  registrarNome(acervoDoOutro, { identificadorId: intruso, origem: 'whatsapp', nome: 'Intruso', autoridade: 'terceiro' });
+  acervoDoOutro.fechar();
+  const chave = emitirChaveDeAcesso(c.registro, inquilinoId);
+  const chaveDoOutro = emitirChaveDeAcesso(c.registro, outroId);
+
+  const porta = await portaLivre();
+  const srv = criarServidor({ dados: c.raiz, porta });
+  await new Promise<void>((r) => srv.listen(porta, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${porta}`;
+  return {
+    raiz: c.raiz,
+    url,
+    inquilinoId,
+    s,
+    chave: { id: chave.id, valor: chave.valor },
+    chaveDoOutro: { id: chaveDoOutro.id, valor: chaveDoOutro.valor },
+    pedir: async (caminho, k) => {
+      const r = await fetch(`${url}${caminho}`, { headers: k ? { authorization: `Bearer ${k}` } : {} });
+      return { status: r.status, corpo: await r.text() };
+    },
+    operacoes: () => {
+      const a = abrirAcervoSomenteLeitura(`${c.raiz}/acervos`, inquilinoId);
+      try {
+        return (a.db.prepare('SELECT COUNT(*) AS n FROM operacoes').get() as { n: number }).n;
+      } finally {
+        a.fechar();
+      }
+    },
+    encerrar: () => {
+      srv.closeAllConnections();
+      srv.close();
+      c.limpar();
+    },
+  };
 }
