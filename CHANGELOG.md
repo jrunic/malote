@@ -23,6 +23,30 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.28.0] — 2026-10-04
+
+Não muda a forma do Acervo nem do Registro. Os campos novos das respostas são acréscimos: os que já
+existiam não mudam de nome nem de sentido.
+
+### Adicionado
+
+- **`malote identificar <valor>`, nos dois modos.** O que o Acervo sabe de um Identificador, **com ou sem
+  Pessoa**: os Identificadores gravados que o valor alcança, as formas que a correspondência de endereço
+  conhece (a canônica e as alternativas, gravadas ou não), os nomes com a origem de cada um, o nome
+  corrente pela precedência do Inquilino, a Pessoa quando há, e em quantas Conversas e Mensagens aparece.
+  O valor é comparado exato; valor desconhecido devolve lista vazia. Por rede é `GET /identificadores?valor=`
+  (e `--fonte`), e `--inquilino` é recusado.
+- **Nome nos participantes.** `GET /conversas/<id>/participantes` traz, por participante, `valor`, `nome`,
+  `origemDoNome` e `pessoaId` (`null` onde não há).
+- **Nome na Conversa direta.** A listagem de Conversas traz `nome` e `origemDoNome` nas diretas de WhatsApp,
+  e `conversas --busca` passa a achar a Conversa direta pelo nome de qualquer Atribuição do Identificador do
+  outro lado, além do assunto das coletivas. O `conversas` local também mostra o nome.
+
+### Limitação conhecida
+
+- Um valor-sentinela que a plataforma grava no lugar do nome aparece como nome, porque a precedência de nome
+  não o filtra.
+
 ## [0.27.1] — 2026-10-04
 
 Não muda a forma do Acervo nem do Registro.
