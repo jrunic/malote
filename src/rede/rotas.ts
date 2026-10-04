@@ -15,6 +15,7 @@ import type { IdentidadeDeAcesso } from '../registro/chave-de-acesso.js';
 import { ehFonte, PRESENCAS } from '../nucleo/tipos.js';
 import type { ConversaId, Fonte, InquilinoId } from '../nucleo/tipos.js';
 import { identificadoresDoRemetente } from '../nucleo/remetente.js';
+import { autoresDaConversa } from '../nucleo/autores-da-conversa.js';
 import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
 import { abrirAcervo, versaoDoAcervoEmDisco, VERSAO_SCHEMA_ACERVO } from '../nucleo/acervo.js';
 import { solicitarTranscricao } from '../nucleo/transcricao.js';
@@ -971,6 +972,23 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     // Envoltorio nomeado, forma das outras rotas; Pessoa inexistente e lista
     // vazia — e busca, nao endereco.
     json(res, 200, { pessoas: procurarPessoas(ctx.acervo, { texto }) });
+    return;
+  }
+
+  if (partes.length === 3 && partes[0] === 'conversas' && partes[2] === 'autores') {
+    const conversaId = partes[1] as ConversaId;
+    if (fonteDaConversa(ctx.acervo, conversaId) === undefined) {
+      naoEncontrado(res);
+      return;
+    }
+    const registro = abrirRegistro(ctx.dados);
+    let precedencia: PrecedenciaDeNome;
+    try {
+      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+    } finally {
+      registro.fechar();
+    }
+    json(res, 200, { autores: autoresDaConversa(ctx.acervo, conversaId, precedencia) });
     return;
   }
 

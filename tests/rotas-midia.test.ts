@@ -208,3 +208,25 @@ test('as leituras novas nao gravam Operacao (#1129)', async () => {
     cena.encerrar();
   }
 });
+
+test('GET /conversas/<id>/autores: quem escreveu, com nome; 404 igual; sem Operacao (#1129)', async () => {
+  const cena = await subirCenaDeMidia();
+  try {
+    const r = await cena.pedir(`/conversas/${cena.s.grupo}/autores`, cena.chave.valor);
+    assert.equal(r.status, 200);
+    const autores = j(r.corpo).autores as Array<{ identificadorId: string; nome: string | null; valor: string }>;
+    assert.equal(autores.length, 3, 'Ana, Bruno e Dani, uma vez cada, mesmo com varias Mensagens');
+    assert.equal(autores.find((a) => a.identificadorId === cena.s.dani)!.nome, 'Dani');
+    const dele = await cena.pedir(`/conversas/${cena.s.grupo}/autores`, cena.chaveDoOutro.valor);
+    const nunca = await cena.pedir('/conversas/nao-existe/autores', cena.chave.valor);
+    assert.equal(dele.status, 404);
+    assert.equal(nunca.status, 404);
+    assert.equal(dele.corpo, nunca.corpo, 'indistinguiveis');
+    assert.equal((await cena.pedir(`/conversas/${cena.s.grupo}/autores`)).status, 401);
+    const antes = cena.operacoes();
+    await cena.pedir(`/conversas/${cena.s.grupo}/autores`, cena.chave.valor);
+    assert.equal(cena.operacoes(), antes);
+  } finally {
+    cena.encerrar();
+  }
+});
