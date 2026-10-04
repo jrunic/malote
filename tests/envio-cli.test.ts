@@ -109,7 +109,7 @@ test('malote enviar recusa --para sem forma reconhecida de endereco', async () =
   }
 });
 
-test('malote enviar e operacao LOCAL — recusa com --servidor setado', async () => {
+test('o executor local recusa uma invocacao de enviar que chegue a ele com servidor declarado', async () => {
   const { raiz, limpar } = instalacaoTemporaria();
   try {
     const { inquilinoId } = comInquilinoEConfiguracao(raiz, 'padrao');

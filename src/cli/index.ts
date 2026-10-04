@@ -15,6 +15,7 @@ import { decodificarCursor } from '../nucleo/cursor.js';
 import { expandirData, procurarPessoas } from '../nucleo/consulta.js';
 import { ehPontoDeEntrada } from './entrada.js';
 import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
+import { executarEnviarRede } from './enviar-rede.js';
 import { basename, join } from 'node:path';
 import type { Fonte } from '../nucleo/tipos.js';
 import {
@@ -2745,6 +2746,16 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
     // #1084: baixar midia de novo e I/O de rede — mesmo motivo do ouvir,
     // despachado ANTES de `executar()` para poder `await`.
     void executarMidiaReprocessar(argumentos, ambiente).then((codigo) => process.exit(codigo));
+  } else if (argumentos[0] === 'enviar' && ambiente.servidor !== undefined) {
+    // Modo REDE para o Envio (ciclo 28): a variavel de ambiente liga o modo, e `--servidor`
+    // so troca a URL — a mesma precedencia das consultas. `enviar` NAO esta em
+    // COMANDOS_DE_REDE (a allowlist de LEITURA): e uma escrita, com despacho proprio.
+    void executarEnviarRede(argumentos, {
+      servidor: opcao(argumentos, 'servidor') ?? ambiente.servidor,
+      chave: ambiente.chave,
+      env: process.env,
+      escrever: (t) => console.log(t),
+    }).then((codigo) => process.exit(codigo));
   } else if (COMANDOS_DE_REDE.has(argumentos[0] ?? '') && ambiente.servidor !== undefined) {
     // Modo REDE: a consulta e async (HTTP), e o executar e sincrono — mesmo
     // padrao do ouvir. A chave e a identidade; sem ela, recusa com o contrato
