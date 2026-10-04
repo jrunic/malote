@@ -7,6 +7,8 @@ import { resolverConfiguracao, listarConfiguracoes } from '../src/registro/confi
 import { registrarEnvio } from '../src/nucleo/envio.js';
 import { abrirAcervo } from '../src/nucleo/acervo.js';
 import { join } from 'node:path';
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 function comInquilinoEConfiguracao(raiz: string, apelido: string): { inquilinoId: string } {
   const registro = abrirRegistro(raiz);
@@ -182,6 +184,109 @@ test('malote envio estado mostra a contagem por estado', async () => {
     assert.equal(codigo, 0);
     const saida = JSON.parse(linhas.at(-1) ?? '{}');
     assert.deepEqual(saida, { pendente: 1 });
+  } finally {
+    limpar();
+  }
+});
+
+const ARGS_BASE = (inquilinoId: string): string[] => [
+  'enviar',
+  '--inquilino',
+  inquilinoId,
+  '--configuracao',
+  'padrao',
+  '--para',
+  '5511999990000@s.whatsapp.net',
+];
+
+test('malote enviar --imagem copia o arquivo para staging e grava o Envio', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilinoId } = comInquilinoEConfiguracao(raiz, 'padrao');
+    const pastaOrigem = mkdtempSync(join(tmpdir(), 'malote-origem-'));
+    const caminhoOrigem = join(pastaOrigem, 'foto.jpg');
+    writeFileSync(caminhoOrigem, Buffer.from('bytes-da-foto'));
+
+    const codigo = await executar([...ARGS_BASE(inquilinoId), '--imagem', caminhoOrigem], {
+      dados: raiz,
+      estado: raiz,
+      escrever: () => undefined,
+    });
+
+    assert.equal(codigo, 0);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilinoId);
+    const linha = acervo
+      .preparar('SELECT conteudo_tipo, conteudo_caminho_arquivo, conteudo_mimetype FROM envios')
+      .get() as { conteudo_tipo: string; conteudo_caminho_arquivo: string; conteudo_mimetype: string };
+    acervo.fechar();
+    assert.equal(linha.conteudo_tipo, 'imagem');
+    assert.notEqual(linha.conteudo_caminho_arquivo, caminhoOrigem, 'deveria ser copia, nao o original');
+    assert.ok(existsSync(linha.conteudo_caminho_arquivo));
+    assert.ok(existsSync(caminhoOrigem), 'o original nao deveria ser movido nem apagado');
+    assert.equal(linha.conteudo_mimetype, 'image/jpeg');
+  } finally {
+    limpar();
+  }
+});
+
+test('malote enviar --documento deriva o nome de arquivo do caminho e a legenda de --texto', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilinoId } = comInquilinoEConfiguracao(raiz, 'padrao');
+    const pastaOrigem = mkdtempSync(join(tmpdir(), 'malote-origem-'));
+    const caminhoOrigem = join(pastaOrigem, 'relatorio-final.pdf');
+    writeFileSync(caminhoOrigem, Buffer.from('bytes-do-pdf'));
+
+    const codigo = await executar(
+      [...ARGS_BASE(inquilinoId), '--documento', caminhoOrigem, '--texto', 'segue o relatorio'],
+      { dados: raiz, estado: raiz, escrever: () => undefined },
+    );
+
+    assert.equal(codigo, 0);
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilinoId);
+    const linha = acervo
+      .preparar('SELECT conteudo_nome_arquivo, conteudo_mimetype, conteudo_texto FROM envios')
+      .get() as { conteudo_nome_arquivo: string; conteudo_mimetype: string; conteudo_texto: string };
+    acervo.fechar();
+    assert.equal(linha.conteudo_nome_arquivo, 'relatorio-final.pdf');
+    assert.equal(linha.conteudo_mimetype, 'application/pdf');
+    assert.equal(linha.conteudo_texto, 'segue o relatorio');
+  } finally {
+    limpar();
+  }
+});
+
+test('malote enviar recusa --imagem e --documento juntos', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilinoId } = comInquilinoEConfiguracao(raiz, 'padrao');
+    const pastaOrigem = mkdtempSync(join(tmpdir(), 'malote-origem-'));
+    const a = join(pastaOrigem, 'a.jpg');
+    const b = join(pastaOrigem, 'b.pdf');
+    writeFileSync(a, 'x');
+    writeFileSync(b, 'y');
+    const codigo = await executar([...ARGS_BASE(inquilinoId), '--imagem', a, '--documento', b], {
+      dados: raiz,
+      estado: raiz,
+      escrever: () => undefined,
+    });
+    assert.equal(codigo, 2);
+    assert.equal(existsSync(join(raiz, 'envios-pendentes')), false, 'recusa nao deveria copiar nada');
+  } finally {
+    limpar();
+  }
+});
+
+test('malote enviar --imagem com arquivo inexistente recusa antes de copiar', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilinoId } = comInquilinoEConfiguracao(raiz, 'padrao');
+    const codigo = await executar(
+      [...ARGS_BASE(inquilinoId), '--imagem', '/caminho/que/nao/existe.jpg'],
+      { dados: raiz, estado: raiz, escrever: () => undefined },
+    );
+    assert.equal(codigo, 2);
+    assert.equal(existsSync(join(raiz, 'envios-pendentes')), false);
   } finally {
     limpar();
   }

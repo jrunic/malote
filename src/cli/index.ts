@@ -1,12 +1,20 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { raizDeDados, raizDeEstado } from './caminhos.js';
 import { pedirGet, pedirGetBinario } from './cliente.js';
 import { decodificarCursor } from '../nucleo/cursor.js';
 import { expandirData, procurarPessoas } from '../nucleo/consulta.js';
 import { ehPontoDeEntrada } from './entrada.js';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import type { Fonte } from '../nucleo/tipos.js';
 import {
   abrirRegistro,
@@ -398,6 +406,24 @@ const COMANDOS_DE_REDE = new Set([
  * formato do modo local quando ha saida em texto; o --json devolve o corpo da
  * API. O codigo de saida e o contrato do cliente (3/4/5/6/7).
  */
+const MIMETYPE_POR_EXTENSAO: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.pdf': 'application/pdf',
+  '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.txt': 'text/plain',
+};
+
+function mimetypeDoCaminho(caminho: string): string {
+  const ponto = caminho.lastIndexOf('.');
+  const extensao = ponto === -1 ? '' : caminho.slice(ponto).toLowerCase();
+  return MIMETYPE_POR_EXTENSAO[extensao] ?? 'application/octet-stream';
+}
+
 export async function executarConsultaRede(
   argumentos: string[],
   rede: { servidor: string; chave: string; escrever: (t: string) => void },
@@ -888,10 +914,22 @@ function executarComAtor(
       const apelido = opcao(argumentos, 'configuracao');
       const para = opcao(argumentos, 'para');
       const texto = opcao(argumentos, 'texto');
-      if (inquilino === undefined || apelido === undefined || para === undefined || texto === undefined) {
+      const imagem = opcao(argumentos, 'imagem');
+      const documento = opcao(argumentos, 'documento');
+      if (inquilino === undefined || apelido === undefined || para === undefined) {
         escrever(
-          'Uso: malote enviar --inquilino <id> --configuracao <apelido> --para <endereco> --texto <texto>',
+          'Uso: malote enviar --inquilino <id> --configuracao <apelido> --para <endereco> ' +
+            '(--texto <texto> | --imagem <caminho> [--texto <legenda>] | ' +
+            '--documento <caminho> [--texto <legenda>])',
         );
+        return 2;
+      }
+      if (imagem === undefined && documento === undefined && texto === undefined) {
+        escrever('Informe --texto, --imagem ou --documento.');
+        return 2;
+      }
+      if (imagem !== undefined && documento !== undefined) {
+        escrever('--imagem e --documento sao mutuamente exclusivos.');
         return 2;
       }
       if (!para.includes('@')) {
@@ -908,12 +946,40 @@ function executarComAtor(
         escrever(`Configuracao "${apelido}" nao existe neste Inquilino para whatsapp.`);
         return 2;
       }
+      const caminhoDeMidia = imagem ?? documento;
+      if (caminhoDeMidia !== undefined && !existsSync(caminhoDeMidia)) {
+        escrever(`Arquivo nao encontrado: ${caminhoDeMidia}`);
+        return 2;
+      }
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      // Staging por COPIA: o original do usuario nunca e movido nem apagado.
+      let caminhoDeStaging: string | undefined;
       try {
+        let conteudo: Parameters<typeof registrarEnvio>[1]['conteudo'];
+        if (caminhoDeMidia === undefined) {
+          conteudo = { tipo: 'texto', texto: texto as string };
+        } else {
+          const pastaDeStaging = join(ambiente.dados, 'envios-pendentes');
+          mkdirSync(pastaDeStaging, { recursive: true });
+          caminhoDeStaging = join(pastaDeStaging, randomUUID());
+          copyFileSync(caminhoDeMidia, caminhoDeStaging);
+          const mimetype = mimetypeDoCaminho(caminhoDeMidia);
+          const legenda = texto !== undefined ? { legenda: texto } : {};
+          conteudo =
+            imagem !== undefined
+              ? { tipo: 'imagem', caminhoArquivo: caminhoDeStaging, mimetype, ...legenda }
+              : {
+                  tipo: 'documento',
+                  caminhoArquivo: caminhoDeStaging,
+                  mimetype,
+                  nomeDeArquivo: basename(caminhoDeMidia),
+                  ...legenda,
+                };
+        }
         const r = registrarEnvio(acervo, {
           configuracaoId: cfg.id,
           destino: { enderecoCru: para },
-          conteudo: { tipo: 'texto', texto },
+          conteudo,
         });
         if (argumentos.includes('--json')) {
           escrever(JSON.stringify({ envioId: r.envioId, identificadorDeEnvio: r.identificadorDeEnvio }));
@@ -921,6 +987,16 @@ function executarComAtor(
           escrever(`Envio registrado: ${r.envioId} (pendente — processado pelo "malote ouvir" da conta).`);
         }
         return 0;
+      } catch (erro) {
+        // Pedido nao gravado: a copia nao tem dono. Limpeza best-effort.
+        if (caminhoDeStaging !== undefined) {
+          try {
+            unlinkSync(caminhoDeStaging);
+          } catch {
+            // ja nao existe
+          }
+        }
+        throw erro;
       } finally {
         acervo.fechar();
       }
