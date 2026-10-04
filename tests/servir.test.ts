@@ -40,6 +40,29 @@ test('servir sobe e desliga o worker de transcricao junto do SIGTERM', async () 
   }
 });
 
+test('servir NAO anuncia "somente leitura": nomeia as duas rotas de escrita', async () => {
+  const dados = mkdtempSync(join(tmpdir(), 'malote-servir-'));
+  try {
+    const linhas: string[] = [];
+    const promessa = servir(['--porta', '0'], {
+      dados,
+      estado: dados,
+      escrever: (l) => linhas.push(l),
+      iniciarWorker: () => () => {},
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    process.emit('SIGTERM');
+    await promessa;
+
+    const saida = linhas.join('\n');
+    assert.doesNotMatch(saida, /somente leitura/i, 'o anuncio mente: ha duas rotas de escrita');
+    assert.match(saida, /\/transcricoes\/solicitar/);
+    assert.match(saida, /\/envios\/solicitar/);
+  } finally {
+    rmSync(dados, { recursive: true, force: true });
+  }
+});
+
 function motorFalsoQueDorme(segundos: number): { whisperBinario: string; ffmpegBinario: string; pasta: string } {
   const pasta = mkdtempSync(join(tmpdir(), 'malote-motor-falso-servir-'));
   const ffmpeg = join(pasta, 'ffmpeg-falso.sh');

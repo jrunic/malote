@@ -48,10 +48,11 @@ Três propriedades que o desenho cobra:
 
 1. **Um processo ouvinte por conta** — dois ouvintes sobre a mesma conta derrubam o
    vínculo um do outro. Contas diferentes convivem.
-2. **O servidor só lê, com uma exceção nomeada** — a consulta por rede abre o
-   Acervo somente-leitura; a única escrita é `POST /transcricoes/solicitar`
-   (ver o guia do cliente e do agente), que abre uma conexão própria, separada,
-   só para essa rota. Fora dela, quem escreve é a CLI no host.
+2. **O servidor só lê, com duas exceções nomeadas** — a consulta por rede abre o
+   Acervo somente-leitura; as únicas escritas são `POST /transcricoes/solicitar`
+   e `POST /envios/solicitar` (ver o guia do cliente e do agente), que abrem uma
+   conexão própria, separada, só para essas rotas. Fora delas, quem escreve é a
+   CLI no host.
 3. **Categorias separadas** — o que é dado irrecuperável e o que é estado que se refaz
    vivem em raízes diferentes (ver o guia de armazenamento).
 
@@ -206,6 +207,13 @@ Exponha ao mundo por um proxy reverso com TLS (Caddy, nginx…). O servidor resp
 distingue, para não revelar a existência de Inquilinos alheios. O lado de quem consome —
 autenticação, rotas e como instruir um agente — está no
 [guia do cliente e do agente](cliente-e-agente.md).
+
+**A rota de Envio (`POST /envios/solicitar`) eleva o risco de expor sem TLS.**
+Ela carrega, no mesmo corpo, a Chave de Acesso e, quando o Envio é imagem ou
+documento, os bytes do arquivo. E a Chave deixa de ser só de leitura: quem a
+tem pode **falar pela conta** que o malote vigia. Nunca exponha a porta do
+`malote servir` sem um proxy reverso com TLS na frente, nem em rede que pareça
+confiável.
 
 ## 5. Verificar a saúde de fora
 
