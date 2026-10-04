@@ -142,6 +142,17 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
 
 ## Restrições
 
+- **Nenhum `process.exit(` direto em `src/`: quem encerra o processo é `cli/encerrar.ts`, que espera o
+  stdout e o stderr entregarem o que já foi escrito (#1125).** `process.exit` logo depois de um
+  `console.log` perde o que o pipe ainda não aceitou: a escrita em pipe é assíncrona quando passa do
+  buffer (64 KB, medido no macOS e no Linux, Node 22), e o resto morre com o processo. Arquivo e
+  terminal escondem o defeito, por isso só o agente, que lê por pipe, via a resposta cortada — o
+  relato da #1091 (`Unterminated string`) foi dado como não reproduzido por 5 dias porque a
+  reprodução usou arquivo e `fetch` direto. O defeito só aparece quando **uma escrita** passa do
+  buffer (o `--json` e todo o modo rede); a saída em texto, linha a linha, passa. O teto de 10 s de
+  `encerrar` existe para o processo não pendurar com leitor que nunca esvazia o pipe: perder a
+  cauda é melhor que não sair. `tests/sem-exit-direto.test.ts` varre `src/`, e
+  `tests/saida-por-pipe.test.ts` roda o executável por pipe, nos dois modos.
 - **Processo de fundo dentro de `malote servir` (o worker de transcrição, e qualquer futuro
   análogo) NUNCA abre o Acervo para escrita sem checar a versão gravada primeiro.**
   `abrirAcervo` migra a base — e um processo que atende requisição de fora não pode ter esse
@@ -541,6 +552,16 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 04/10/2026 — **CICLO 29 ACEITO: consulta do Envio por rede e repetição segura do `enviar`,
+  release v0.27.0 em produção** (#1117, PR #17, tag `v0.27.0`). O código 7 do `enviar` por rede
+  tem saída: o cliente gera o Identificador de Envio, manda e imprime; repetir com o mesmo
+  `--identificador` não cria segundo Envio (`200` com `repetido`; outro pedido com o mesmo
+  identificador, `409`). `GET /envios/<identificador ou id>` e `GET /envios/contagem`, e
+  `malote envio estado [<identificador>] --chave-em` por rede; `envio reprocessar` continua só
+  local, por decisão do Titular. Sem schema. Suíte 1176 para 1218. Provado em campo contra a
+  Hera: dois `enviar` com o mesmo identificador devolveram o mesmo Envio, que passou a
+  `enviado`, e a chave do Titular saiu 6. **Só com prova de teste:** o `409`, a corrida e o aviso
+  de servidor sem repetição segura.
 - 04/10/2026 — **RELEASE v0.26.0 PUBLICADA E DISTRIBUÍDA NOS TRÊS PACOTES: `malote
   enviar` fala por rede** (#1116, ciclo 28 `malote-enviar-por-rede-no-cliente`, PR #15,
   tag `v0.26.0`). Com `MALOTE_SERVIDOR` no ambiente o comando pede o Envio ao servidor
