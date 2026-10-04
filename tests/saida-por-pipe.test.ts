@@ -36,7 +36,15 @@ function rodar(
 
 const QUANTAS = 150;
 
-/** Mensagens grandes o bastante para a saida passar de 64 KB com folga (~170 KB). */
+/**
+ * Mensagens grandes o bastante para a saida passar de QUALQUER buffer: ~1,5 MB.
+ *
+ * O stdio de um filho do Node e um socketpair (Unix), e nao um pipe(2): o buffer de envio do
+ * Linux e de ~208 KB, e 170 KB de saida cabiam nele em parte das execucoes — o filho nao
+ * bloqueava, o teste do teto saiu em 0,35 s na CI e os outros dois teriam passado MESMO COM o
+ * defeito. Medido: a falha apareceu em 1 de 2 execucoes do mesmo commit. A saida precisa
+ * ultrapassar o buffer com folga, ou o teste mede a sorte do kernel.
+ */
 function semearMensagensGrandes(c: CenarioDeRede): void {
   const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA as never);
   try {
@@ -45,7 +53,7 @@ function semearMensagensGrandes(c: CenarioDeRede): void {
         conversaId: c.conversaDeA,
         fonte: 'whatsapp',
         idExterno: `grande-${i}`,
-        conteudo: `MSG-${String(i).padStart(4, '0')} ${'x'.repeat(1000)}`,
+        conteudo: `MSG-${String(i).padStart(4, '0')} ${'x'.repeat(10_000)}`,
         ocorridaEm: Date.parse('2026-06-02T12:00:00Z') + i * 1000,
         agora: Date.now(),
         direcao: 'recebida',
@@ -68,7 +76,7 @@ test('modo REDE: a saida de mais de 64 KB chega inteira por pipe (#1125)', async
       ['mensagens', '--conversa', c.conversaDeA, '--limite', '1000'],
     );
     assert.equal(r.codigo, 0, r.stderr);
-    assert.ok(Buffer.byteLength(r.stdout) > 150_000, `a saida devia passar de 150 KB, veio ${Buffer.byteLength(r.stdout)}`);
+    assert.ok(Buffer.byteLength(r.stdout) > 1_000_000, `a saida devia passar de 1 MB, veio ${Buffer.byteLength(r.stdout)}`);
     const corpo = JSON.parse(r.stdout) as { mensagens: unknown[] };
     assert.equal(corpo.mensagens.length, QUANTAS + 1, 'as 150 semeadas mais a do cenario');
     assert.equal(contarMarcas(r.stdout), QUANTAS);
@@ -86,7 +94,7 @@ test('modo LOCAL com --json: a saida de mais de 64 KB chega inteira por pipe (#1
       ['mensagens', '--inquilino', c.inquilinoA, '--conversa', c.conversaDeA, '--limite', '1000', '--json'],
     );
     assert.equal(r.codigo, 0, r.stderr);
-    assert.ok(Buffer.byteLength(r.stdout) > 150_000, `a saida devia passar de 150 KB, veio ${Buffer.byteLength(r.stdout)}`);
+    assert.ok(Buffer.byteLength(r.stdout) > 1_000_000, `a saida devia passar de 1 MB, veio ${Buffer.byteLength(r.stdout)}`);
     // --json e UMA escrita so, maior que o buffer do pipe: e o caso que o texto, linha a linha, esconde.
     assert.equal((JSON.parse(r.stdout) as unknown[]).length, QUANTAS + 1);
     assert.equal(contarMarcas(r.stdout), QUANTAS);

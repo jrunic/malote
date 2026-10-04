@@ -142,6 +142,16 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
 
 ## Restrições
 
+- **`identificar` parte do Identificador gravado e lista as formas da correspondência à parte; nome em
+  lote, nunca por linha (#1126).** O Acervo grava o endereço na forma canônica e guarda a alternativa só
+  como correspondência (valor contra valor, sem id); parte das alternativas existe também como linha, por
+  herança — por isso a resposta tem duas listas e a forma sem linha leva `identificador: null`. O nome
+  corrente de um conjunto (a listagem de Conversas, os participantes) sai de **uma consulta** com a
+  precedência aplicada em memória (`nomesEmLote`): o handler do servidor é síncrono, e a listagem sem filtro
+  já faz uma contagem correlacionada por linha sobre ~1,4 M Mensagens. O Identificador do outro lado da
+  Conversa direta vem de um `LEFT JOIN` pela chave única `(fonte, valor)`, nunca de chave montada em JS.
+  Baseline medida em produção (04/10/2026) para o aceite: `conversas` sem filtro **0,62 a 2,12 s e
+  1.407.993 bytes**; teto com os campos novos: 3 s e 2,0 MB.
 - **Nenhum `process.exit(` direto em `src/`: quem encerra o processo é `cli/encerrar.ts`, que espera o
   stdout e o stderr entregarem o que já foi escrito (#1125).** `process.exit` logo depois de um
   `console.log` perde o que o pipe ainda não aceitou: a escrita em pipe é assíncrona quando passa do
@@ -152,7 +162,11 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   buffer (o `--json` e todo o modo rede); a saída em texto, linha a linha, passa. O teto de 10 s de
   `encerrar` existe para o processo não pendurar com leitor que nunca esvazia o pipe: perder a
   cauda é melhor que não sair. `tests/sem-exit-direto.test.ts` varre `src/`, e
-  `tests/saida-por-pipe.test.ts` roda o executável por pipe, nos dois modos.
+  `tests/saida-por-pipe.test.ts` roda o executável por pipe, nos dois modos. **A saída desses testes
+  tem de passar de ~1 MB**: o stdio de um filho do Node é um socketpair, não `pipe(2)`, e o buffer de envio
+  do Linux (~208 KB) engolia os 170 KB da primeira versão — o teste do teto saiu em 0,35 s na CI em 1 de 2
+  execuções do mesmo commit, e os outros dois teriam passado mesmo com o defeito. Medido no Linux com o
+  `process.exit` direto: a saída para em 146–182 KB.
 - **Processo de fundo dentro de `malote servir` (o worker de transcrição, e qualquer futuro
   análogo) NUNCA abre o Acervo para escrita sem checar a versão gravada primeiro.**
   `abrirAcervo` migra a base — e um processo que atende requisição de fora não pode ter esse
@@ -735,16 +749,14 @@ Repositório expõe services systemd. Convenções:
   Suíte **1037 → 1049 testes**, mesmas 3 falhas pré-existentes de
   `cli-entrada.test.ts` (confirmadas idênticas em `main` sem esta mudança,
   via `git stash`). **Só em `main` — não publicado, não distribuído.**
-- 29/09/2026 — **Investigado e NÃO REPRODUZIDO: JSON truncado em respostas grandes
-  (#1091, relato da mentorada Renata).** O relatório do agente dela (`David`) mostrava
-  `json.decoder.JSONDecodeError: Unterminated string` ao consumir `malote conversas`/
-  `mensagens` de conversa longa. Reproduzido nos dois caminhos que o malote controla,
-  contra Acervo real (thinkpad): CLI local (1,4 MB de saída, JSON válido, fecha limpo)
-  e caminho de rede real via `fetch`+`node:http` (1,55 MB, JSON válido). **Se o relato
-  se repetir, o primeiro lugar a olhar não é o malote — é o lado do consumidor**
-  (harness do agente truncando saída de comando antes de fazer parse; mesma classe de
-  suspeita já registrada na investigação da #1054, em 25/09/2026). Nenhuma mudança de
-  código feita por causa disso.
+- 04/10/2026 — **RELEASE v0.27.1: a saída de mais de 64 KB não é mais cortada por pipe (#1125, que
+  reabre a #1091).** O relato da Renata (`Unterminated string` ao consumir `malote conversas`/
+  `mensagens`) tinha sido dado como "não reproduzido" em 29/09 porque a reprodução usou a CLI local
+  e `fetch` direto, nunca a CLI em modo rede **por pipe**. A causa era o `process.exit` do ponto de
+  entrada logo depois do `console.log` (ver a Restrição de `encerrar`): por pipe, a saída parava em
+  65.536 bytes, no macOS e no Linux. PR #18, merge `0a57a91`, tag `v0.27.1`; medido depois, com o
+  `malote` instalado: `participantes` por pipe 242.481 bytes (antes 65.536) e `conversas` sem filtro
+  1.407.993, JSON válido pelo `jq`. A suspeita de "harness do agente truncando" estava errada.
 - 29/09/2026 — **RELEASE v0.22.0 PUBLICADA E DISTRIBUÍDA NO THINKPAD, VERIFICADA POR
   EFEITO** (#1068, #1069, #1070 — as três entradas abaixo, cada uma "AINDA NÃO
   LIBERADO"/"Nenhuma release publicada ainda" está desatualizada por esta linha). PR #8

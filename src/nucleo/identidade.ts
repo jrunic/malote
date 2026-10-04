@@ -324,7 +324,7 @@ export interface NomeAtribuido {
   ancora: 'pessoa' | 'identificador';
 }
 
-interface LinhaDeNome {
+export interface LinhaDeNome {
   origem: string;
   nome: string;
   atribuido_em: string;
@@ -447,7 +447,7 @@ export function registrarNome(acervo: Acervo, entrada: EntradaDeNome): boolean {
   });
 }
 
-function montarNomes(linhas: LinhaDeNome[]): NomeAtribuido[] {
+export function montarNomes(linhas: LinhaDeNome[]): NomeAtribuido[] {
   return linhas.map((l) => ({
     origem: l.origem,
     nome: l.nome,
@@ -528,10 +528,11 @@ export function historicoDeNomes(acervo: Acervo, pessoaId: PessoaId): NomeAtribu
 const RANK_DA_AUTORIDADE: Record<AutoridadeDeNome, number> = { titular: 2, terceiro: 0 };
 const rankDe = (a: AutoridadeDeNome | null): number => (a === null ? 1 : RANK_DA_AUTORIDADE[a]);
 
-function melhorNome(
+/** A Atribuicao que a precedencia escolhe — o texto E a origem dele. */
+export function nomeEscolhido(
   historico: NomeAtribuido[],
   precedencia: PrecedenciaDeNome,
-): string | null {
+): NomeAtribuido | null {
   let melhor: NomeAtribuido | undefined;
   let melhorPeso = -1;
   let melhorEhPreferido = false;
@@ -571,7 +572,11 @@ function melhorNome(
       melhor = atual;
     }
   }
-  return melhor?.nome ?? null;
+  return melhor ?? null;
+}
+
+function melhorNome(historico: NomeAtribuido[], precedencia: PrecedenciaDeNome): string | null {
+  return nomeEscolhido(historico, precedencia)?.nome ?? null;
 }
 
 /**

@@ -473,16 +473,24 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 
 - **Ator:** humano ou agente
 - **Entrada:** Inquilino, Conversa, data
-- **Saída:** quatro grupos — *presente*, *saiu antes desta data* (com o instante), *ainda não entrou* e *sem informação* —, o Alcance da Conversa, e a ressalva nas duas direções
+- **Saída:** quatro grupos — *presente*, *saiu antes desta data* (com o instante), *ainda não entrou* e *sem informação* —, o Alcance da Conversa, e a ressalva nas duas direções; cada participante traz o valor do Identificador, o nome corrente com a origem e a Pessoa, quando há
 - **Regras:** a rota é o **último evento até a data**, e é ela que trata reentrada sem caso especial. Não havendo evento até a data, decide o primeiro depois dela: saída posterior prova presença — ninguém sai de onde não está —, e entrada posterior prova que a Pessoa ainda não tinha entrado. Fora do Alcance, todos caem em *sem informação*, nas duas direções. Conversa sem Alcance responde que não tem, e não devolve o roster. A ressalva é parte da estrutura da resposta, e não do texto de apresentação — posta na apresentação, sumiria no `--json`.
 - **Não-funcionais:** grava zero Operações. Não se diz "estritamente de leitura": autenticar grava a tentativa, comportamento do ciclo 1.
+
+### consultar-identificador
+
+- **Ator:** humano ou agente
+- **Entrada:** Inquilino, valor de Identificador, Fonte opcional
+- **Saída:** os Identificadores **gravados** que o valor alcança (ele, a forma canônica e as alternativas que existem como linha) e as **formas** que a correspondência de endereço conhece, gravadas ou não; por Identificador, a Pessoa quando há, as Atribuições de Nome com origem, o nome corrente e a origem dele, e a presença em Conversas (participação ou autoria) e Mensagens
+- **Regras:** parte do Identificador, não da Pessoa — Identificador sem Pessoa é respondido. O nome corrente segue a precedência do Inquilino. Valor desconhecido é resposta vazia, não erro. O valor é comparado exato.
+- **Não-funcionais:** só leitura, zero Operações; por rede, o Inquilino vem da Chave.
 
 ### consultar-conversas
 
 - **Ator:** humano ou agente
 - **Entrada:** Inquilino, mais filtros por Pessoa, Fonte, período, texto, tipo de Mensagem, presença de Anexo e Marca do Titular
 - **Saída:** Conversas ou Mensagens, em formato legível por humano ou estruturado para agente
-- **Regras:** consulta atravessa Fontes e Configurações de Adaptador por padrão — duas contas de WhatsApp do mesmo Inquilino aparecem juntas, sem flag. **Nunca atravessa Inquilino.** Restringir a uma Fonte é filtro, não modo. Filtro por Pessoa resolve todos os Identificadores daquela Pessoa, em todas as Fontes. Resultado indica a Presença do Anexo, nunca omite a Mensagem por o arquivo não estar em disco.
+- **Regras:** consulta atravessa Fontes e Configurações de Adaptador por padrão — duas contas de WhatsApp do mesmo Inquilino aparecem juntas, sem flag. **Nunca atravessa Inquilino.** Restringir a uma Fonte é filtro, não modo. Filtro por Pessoa resolve todos os Identificadores daquela Pessoa, em todas as Fontes. Resultado indica a Presença do Anexo, nunca omite a Mensagem por o arquivo não estar em disco. A Conversa direta traz o nome do Identificador do outro lado, e o texto de busca casa também esse nome.
 - **Não-funcionais:** só leitura. Nenhum caminho de consulta escreve no Acervo. Quando invocada por rede, o Inquilino vem da Chave de Acesso, nunca de parâmetro do chamador.
 
 ### resolver-identidade

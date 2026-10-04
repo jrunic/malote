@@ -18,8 +18,11 @@ import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
 import { executarEnviarRede } from './enviar-rede.js';
 import { executarEnvioEstadoRede } from './envio-estado-rede.js';
 import { encerrar } from './encerrar.js';
+import { primeiroPosicional } from './posicional.js';
+import { formatarIdentificacao } from './identificar-texto.js';
+import { identificarPorValor } from '../nucleo/identificar.js';
 import { basename, join } from 'node:path';
-import type { Fonte } from '../nucleo/tipos.js';
+import { ehFonte, type Fonte } from '../nucleo/tipos.js';
 import {
   abrirRegistro,
   criarInquilino,
@@ -305,6 +308,8 @@ Titular (nao exige chave enquanto nao houver rede):
   malote envio estado       [<identificador>] [--chave-em <VARIAVEL>] [--json]
                                         (com MALOTE_SERVIDOR no ambiente: consulta por REDE a contagem, ou um Envio)
   malote envio reprocessar  --inquilino <id> [--json]   (so local)
+  malote identificar <valor> --inquilino <id> [--fonte <fonte>] [--json]   (o que o Acervo sabe de um Identificador, com ou sem Pessoa)
+  malote identificar <valor> [--fonte <fonte>] [--json]                    (com MALOTE_SERVIDOR no ambiente: por REDE; o Inquilino vem da chave)
   malote transcricao reprocessar --inquilino <id>              (volta falhas para pendente)
   malote transcricao incluir-estoque --inquilino <id> --limite <n> [--json]  (promove estoque fora-de-escopo, em lote)
   malote transcricao solicitar --anexo <id> --inquilino <id>           (prioriza UM Anexo na fila)
@@ -411,6 +416,7 @@ const COMANDOS_DE_REDE = new Set([
   'relatorio',
   'configuracao',
   'midia',
+  'identificar',
 ]);
 
 /**
@@ -454,6 +460,35 @@ export async function executarConsultaRede(
   else if (grupo === 'mensagens') {
     const conversa = opcao(argumentos, 'conversa');
     caminho = conversa === undefined ? '/mensagens' : `/conversas/${conversa}/mensagens`;
+  }
+  else if (grupo === 'identificar') {
+    if (argumentos.includes('--inquilino')) {
+      rede.escrever(
+        '--inquilino nao existe no modo rede: o Inquilino vem da Chave de Acesso. ' +
+          'Para consultar a instalacao local, rode com `env -u MALOTE_SERVIDOR`.',
+      );
+      return 2;
+    }
+    const valor = primeiroPosicional(argumentos, 1);
+    if (valor === undefined) {
+      rede.escrever('Uso: malote identificar <valor> [--fonte <fonte>] [--json]');
+      return 2;
+    }
+    const qi = new URLSearchParams({ valor });
+    const fonteOpcao = opcao(argumentos, 'fonte');
+    if (fonteOpcao !== undefined) qi.set('fonte', fonteOpcao);
+    try {
+      const r = await pedirGet(rede.servidor, rede.chave, `/identificadores?${qi.toString()}`);
+      if (argumentos.includes('--json')) {
+        rede.escrever(JSON.stringify(JSON.parse(r.corpo), null, 2));
+      } else {
+        for (const l of formatarIdentificacao(JSON.parse(r.corpo))) rede.escrever(l);
+      }
+      return 0;
+    } catch (e) {
+      rede.escrever((e as Error).message);
+      return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
+    }
   }
   else if (grupo === 'midia') {
     const anexoId = argumentos[1];
@@ -1870,7 +1905,9 @@ function executarComAtor(
           listarConfiguracoes(registro, inquilino).map((c) => [c.id, c.apelido]),
         );
 
+        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
         let conversas = listarConversas(acervo, {
+          precedencia,
           ...(pessoa === undefined ? {} : { pessoaId: pessoa }),
           ...(busca === undefined ? {} : { busca }),
           ...(fonte === undefined ? {} : { fonte: fonte as Fonte }),
@@ -1885,6 +1922,8 @@ function executarComAtor(
           assunto: c.assunto,
           mensagens: c.mensagens,
           configuracao: c.configuracaoId === null ? null : (apelidoPorId.get(c.configuracaoId) ?? null),
+          nome: c.nome,
+          origemDoNome: c.origemDoNome,
         }));
 
         if (marcadas !== undefined) {
@@ -1897,7 +1936,7 @@ function executarComAtor(
         } else {
           for (const c of conversas) {
             const natureza = c.coletiva ? 'coletiva' : 'direta';
-            escrever(`${c.id}  ${natureza}  ${c.mensagens} msgs  ${c.assunto ?? ''}`);
+            escrever(`${c.id}  ${natureza}  ${c.mensagens} msgs  ${c.assunto ?? c.nome ?? ''}`);
           }
         }
       } finally {
@@ -2045,6 +2084,35 @@ function executarComAtor(
             `${p.id}  ${p.nome ?? '(sem nome)'}  ${p.identificadores.length} endereco(s)${marca}`,
           );
         }
+      } finally {
+        acervo.fechar();
+      }
+      return 0;
+    }
+
+    if (grupo === 'identificar') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino.');
+      const valor = primeiroPosicional(argumentos, 1);
+      if (valor === undefined) {
+        escrever('Uso: malote identificar <valor> --inquilino <id> [--fonte <fonte>] [--json]');
+        return 2;
+      }
+      const fonteOpcao = opcao(argumentos, 'fonte');
+      if (fonteOpcao !== undefined && !ehFonte(fonteOpcao)) {
+        escrever(`Fonte desconhecida: ${fonteOpcao}.`);
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const r = identificarPorValor(
+          acervo,
+          { valor, ...(fonteOpcao !== undefined ? { fonte: fonteOpcao } : {}) },
+          precedencia,
+        );
+        if (temBandeira(argumentos, 'json')) escrever(JSON.stringify(r, null, 2));
+        else for (const l of formatarIdentificacao(r)) escrever(l);
       } finally {
         acervo.fechar();
       }
