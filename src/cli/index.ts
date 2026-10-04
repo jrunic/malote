@@ -1011,10 +1011,14 @@ function executarComAtor(
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
         const n = reenfileirarEnviosFalhos(acervo);
+        // Inclui os que ja estavam pendentes, entre eles os orfaos de um
+        // vinculo invalidado: a causa nao e do Envio e nao se resolve aqui.
+        const pendentes = contarEnviosPorEstado(acervo).find((c) => c.estado === 'pendente')?.n ?? 0;
         if (argumentos.includes('--json')) {
-          escrever(JSON.stringify({ reenfileirados: n }));
+          escrever(JSON.stringify({ reenfileirados: n, pendentes }));
         } else {
           escrever(`${n} Envio(s) que tinham falhado voltaram para pendente.`);
+          escrever(`${pendentes} Envio(s) pendente(s) no total, a espera de um "malote ouvir" com vinculo ativo.`);
         }
         return 0;
       } finally {

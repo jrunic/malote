@@ -120,36 +120,47 @@ export async function processarEnvios(
     return { processados: 1 };
   }
 
+  let resultado: { keyId: string } | undefined;
   try {
-    const resultado = await opcoes.enviar(jid, montado.payload);
-    if (resultado === undefined) {
-      // Indeterminado — a propria conexao ja filtrou transporte caido.
-      // Fica pendente, com tentativa somada, retentado na proxima passada.
-      incrementarTentativaDeEnvio(acervo, envio.envioId);
-      return { processados: 1 };
-    }
-    // SUCESSO: a Conversa so e gravada/garantida AQUI, depois de confirmar
-    // que o envio saiu — destinatario errado nunca deixa Conversa imortal
-    // no Acervo (#1112, achado do dev-10).
-    if (envio.conversaId === null) {
-      const coletiva = enderecoEhColetivo(jid);
-      const conversaId = registrarConversa(acervo, {
-        fonte: FONTE,
-        idExterno: jid,
-        coletiva,
-        ...(coletiva ? {} : { configuracao: opcoes.configuracao }),
-      });
-      atualizarConversaDoEnvio(acervo, envio.envioId, conversaId);
-    }
-    marcarEnvioEnviado(acervo, envio.envioId);
-    if (envio.conteudo.tipo !== 'texto') {
-      opcoes.aoEnviar?.(resultado.keyId, envio.conteudo.caminhoArquivo);
-    }
+    resultado = await opcoes.enviar(jid, montado.payload);
   } catch (erro) {
     // Chegou aqui: NAO e falha de transporte (conexao.ts ja filtrou). E
     // definitiva — destinatario invalido, rejeicao da plataforma etc.
     marcarEnvioFalhou(acervo, envio.envioId, String((erro as Error).message ?? erro));
+    return { processados: 1 };
   }
+  if (resultado === undefined) {
+    // Indeterminado — a propria conexao ja filtrou transporte caido.
+    // Fica pendente, com tentativa somada, retentado na proxima passada.
+    incrementarTentativaDeEnvio(acervo, envio.envioId);
+    return { processados: 1 };
+  }
+
+  // A MENSAGEM JA SAIU. O que vem abaixo e contabilidade, e uma falha dela
+  // (banco ocupado, disco) NAO pode virar `falhou`: `falhou` so volta a
+  // `pendente` por reprocessar explicito, que reenviaria, e a mensagem ja foi.
+  // Por isso nada aqui esta num `catch`: a excecao sobe, o Envio continua
+  // `pendente` e a proxima passada tenta de novo — ao menos uma vez, com o
+  // risco de duplicata nomeado na spec (criterio 6 da #1112).
+  if (envio.conteudo.tipo !== 'texto') {
+    // Antes da contabilidade: o eco chega de qualquer jeito, e o mapa de
+    // bytes originados precisa existir mesmo que a gravacao abaixo falhe.
+    opcoes.aoEnviar?.(resultado.keyId, envio.conteudo.caminhoArquivo);
+  }
+  // A Conversa so e gravada/garantida AQUI, depois de confirmar que o envio
+  // saiu — destinatario errado nunca deixa Conversa imortal no Acervo (#1112,
+  // achado do dev-10).
+  if (envio.conversaId === null) {
+    const coletiva = enderecoEhColetivo(jid);
+    const conversaId = registrarConversa(acervo, {
+      fonte: FONTE,
+      idExterno: jid,
+      coletiva,
+      ...(coletiva ? {} : { configuracao: opcoes.configuracao }),
+    });
+    atualizarConversaDoEnvio(acervo, envio.envioId, conversaId);
+  }
+  marcarEnvioEnviado(acervo, envio.envioId);
 
   return { processados: 1 };
 }

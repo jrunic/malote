@@ -23,6 +23,21 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.25.1] — 2026-10-04
+
+Não muda a forma do Acervo.
+
+### Corrigido
+
+- **Uma falha ao gravar o resultado de um Envio, depois de a mensagem já ter
+  saído, marcava o Envio como `falhou`.** `falhou` só volta a `pendente` por
+  `malote envio reprocessar`, que reenviaria uma mensagem que já foi. Agora o
+  Envio continua `pendente` e a próxima passada tenta de novo (ao menos uma
+  vez, como já era a garantia declarada).
+- `malote envio reprocessar` passa a dizer também quantos Envios continuam
+  pendentes (inclui os que esperam um `ouvir` com vínculo ativo), e o `--json`
+  ganha o campo `pendentes`.
+
 ## [0.25.0] — 2026-10-04
 
 **Muda a forma do Acervo: schema v23 → v25** (tabela nova `envios` na v24;

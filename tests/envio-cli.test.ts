@@ -291,3 +291,40 @@ test('malote enviar --imagem com arquivo inexistente recusa antes de copiar', as
     limpar();
   }
 });
+
+// Criterio 12: o relato do reprocessamento diz quantos Envios pendentes ha —
+// os orfaos de um vinculo invalidado entram nessa conta.
+test('malote envio reprocessar diz quantos Envios continuam pendentes', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilinoId } = comInquilinoEConfiguracao(raiz, 'padrao');
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilinoId);
+    for (const n of [1, 2]) {
+      registrarEnvio(acervo, {
+        configuracaoId: 'cfg-qualquer',
+        destino: { enderecoCru: `55119999900${n}0@s.whatsapp.net` },
+        conteudo: { tipo: 'texto', texto: 'oi' },
+      });
+    }
+    acervo.fechar();
+
+    const linhas: string[] = [];
+    const codigo = await executar(['envio', 'reprocessar', '--inquilino', inquilinoId], {
+      dados: raiz,
+      estado: raiz,
+      escrever: (l: string) => linhas.push(l),
+    });
+    assert.equal(codigo, 0);
+    assert.match(linhas.join('\n'), /2 Envio\(s\) pendente\(s\)/);
+
+    const json: string[] = [];
+    await executar(['envio', 'reprocessar', '--inquilino', inquilinoId, '--json'], {
+      dados: raiz,
+      estado: raiz,
+      escrever: (l: string) => json.push(l),
+    });
+    assert.deepEqual(JSON.parse(json[0]!), { reenfileirados: 0, pendentes: 2 });
+  } finally {
+    limpar();
+  }
+});
