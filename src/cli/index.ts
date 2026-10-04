@@ -16,6 +16,7 @@ import { expandirData, procurarPessoas } from '../nucleo/consulta.js';
 import { ehPontoDeEntrada } from './entrada.js';
 import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
 import { executarEnviarRede } from './enviar-rede.js';
+import { executarEnvioEstadoRede } from './envio-estado-rede.js';
 import { basename, join } from 'node:path';
 import type { Fonte } from '../nucleo/tipos.js';
 import {
@@ -2756,6 +2757,16 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
     // so troca a URL — a mesma precedencia das consultas. `enviar` NAO esta em
     // COMANDOS_DE_REDE (a allowlist de LEITURA): e uma escrita, com despacho proprio.
     void executarEnviarRede(argumentos, {
+      servidor: opcao(argumentos, 'servidor') ?? ambiente.servidor,
+      chave: ambiente.chave,
+      env: process.env,
+      escrever: (t) => console.log(t),
+    }).then((codigo) => process.exit(codigo));
+  } else if (argumentos[0] === 'envio' && argumentos[1] === 'estado' && ambiente.servidor !== undefined) {
+    // Ciclo 29: `envio estado` consulta por rede. NAO entra em COMANDOS_DE_REDE (a allowlist de
+    // leitura nao tem `--chave-em`), e `envio reprocessar` segue no executor local, que recusa
+    // com o servidor declarado.
+    void executarEnvioEstadoRede(argumentos, {
       servidor: opcao(argumentos, 'servidor') ?? ambiente.servidor,
       chave: ambiente.chave,
       env: process.env,

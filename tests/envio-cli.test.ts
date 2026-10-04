@@ -328,3 +328,23 @@ test('malote envio reprocessar diz quantos Envios continuam pendentes', async ()
     limpar();
   }
 });
+
+test('malote envio estado local lista os tres estados em texto, mesmo com o Acervo vazio (#1117)', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilinoId } = comInquilinoEConfiguracao(raiz, 'padrao');
+    const linhas: string[] = [];
+    const codigo = await executar(['envio', 'estado', '--inquilino', inquilinoId], {
+      dados: raiz,
+      estado: raiz,
+      escrever: (l: string) => linhas.push(l),
+    });
+    assert.equal(codigo, 0);
+    const saida = linhas.join('\n');
+    assert.match(saida, /enviado: 0/);
+    assert.match(saida, /falhou: 0/);
+    assert.match(saida, /pendente: 0/);
+  } finally {
+    limpar();
+  }
+});
