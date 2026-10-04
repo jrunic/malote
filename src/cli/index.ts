@@ -14,6 +14,7 @@ import { pedirGet, pedirGetBinario } from './cliente.js';
 import { decodificarCursor } from '../nucleo/cursor.js';
 import { expandirData, procurarPessoas } from '../nucleo/consulta.js';
 import { ehPontoDeEntrada } from './entrada.js';
+import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
 import { basename, join } from 'node:path';
 import type { Fonte } from '../nucleo/tipos.js';
 import {
@@ -406,24 +407,6 @@ const COMANDOS_DE_REDE = new Set([
  * formato do modo local quando ha saida em texto; o --json devolve o corpo da
  * API. O codigo de saida e o contrato do cliente (3/4/5/6/7).
  */
-const MIMETYPE_POR_EXTENSAO: Record<string, string> = {
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.pdf': 'application/pdf',
-  '.doc': 'application/msword',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  '.txt': 'text/plain',
-};
-
-function mimetypeDoCaminho(caminho: string): string {
-  const ponto = caminho.lastIndexOf('.');
-  const extensao = ponto === -1 ? '' : caminho.slice(ponto).toLowerCase();
-  return MIMETYPE_POR_EXTENSAO[extensao] ?? 'application/octet-stream';
-}
-
 export async function executarConsultaRede(
   argumentos: string[],
   rede: { servidor: string; chave: string; escrever: (t: string) => void },
