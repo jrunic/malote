@@ -890,8 +890,8 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
-- **Ciclo 31 (#1129) implementado em `main`, release v0.29.0 ainda não publicada; o critério de custo é medição de
-  campo e entra no aceite.** Conferir antes de dar o ciclo por aceito, na maior Conversa (270.453 Mensagens), com os
+- **Ciclo 31 (#1129): release v0.29.0 em produção desde 04/10/2026 (PR #20, merge `3c29193`, tag `v0.29.0`, nos três
+  pacotes); o critério de custo é medição de campo e entra no aceite, que ainda não rodou.** Conferir antes de dar o ciclo por aceito, na maior Conversa (270.453 Mensagens), com os
   comandos do Step 7 da Task 7 do plano: primeira página de `anexos` em até 2 s para `image` **e** para `document`
   (o tipo raro é o caso de varredura), `GET /conversas/<id>/autores` em até 2 s, e o export em até 6 min com até
   300 MB de memória residente, por arquivo e por `| cat > /dev/null`. Se `document` passar de 2 s, o índice é a
