@@ -530,290 +530,39 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
-- 03/10/2026 — **Ciclo 27 (`malote-envio-de-mensagem`, #1112) em execução:
-  Plano 1 de 3 implementado e commitado — Envio de TEXTO de ponta a ponta.**
-  Fundamentado em espiga contra a conta real da Hera (ata
-  `13-processos/manter-malote/01-discussoes/20261003-envio-de-mensagens-pelo-malote.md`):
-  `sock.sendMessage` confirmado funcionando, eco de `messages.upsert`
-  (`type: 'append'`) confirmado gravando a Mensagem pela porta de recepção
-  já existente, sem código novo. Agregado **Envio** novo (schema v23→v24):
-  `registrarEnvio`/`proximoEnvioPendente`/`marcarEnvioEnviado`/
-  `marcarEnvioFalhou`/`reenfileirarEnviosFalhos` no núcleo;
-  `Conexao.enviar` no módulo de conexão, discriminando falha de transporte
-  (Boom 428/408) de falha definitiva; `processarEnvios` no adaptador
-  WhatsApp, resolvendo/criando a Conversa só após sucesso; poller dentro de
-  `ouvir.ts`; comandos `malote enviar`/`malote envio reprocessar`/
-  `malote envio estado`. 10 commits, suíte de 1090 para **1121 testes**,
-  mesma baseline de 3 falhas pré-existentes. Duas revisões independentes
-  (`dev-10` via advisor) rodaram antes da execução — na spec e no plano —,
-  cada uma achando furos reais corrigidos antes do `dev-04`: a mais grave,
-  a Conversa do Envio nasce no **processamento** (dentro do `ouvir`), nunca
-  na solicitação, para a rota de rede não precisar abrir escrita de
-  domínio. **Planos 2 (mídia) e 3 (rede) escritos e revisados (advisor),
-  ainda não implementados.** Falta, de todo o ciclo, a Verificação de Campo
-  contra a conta real da Hera — pendente de Ação Documentada, fora de
-  código.
-
-- 01/10/2026 — **RELEASE v0.24.1 PUBLICADA E DISTRIBUÍDA NOS TRÊS PACOTES,
-  VERIFICADA POR EFEITO.** PR #12 (`main → production`, CI verde), merge
-  `6874c58`, tag `v0.24.1`. Via `upgrade-now`: `malote` (thinkpad, os dois
-  serviços reiniciados), `malote-cliente` (contabo), `malote-cliente-macbook`
-  (localhost) — os três confirmados em `6874c58`/`0.24.1`. Verificado contra
-  o host real, não só o processo: `malote --versao` responde `0.24.1` nos
-  três, os serviços do thinkpad `active` desde o restart, e o código do fix
-  (`lerDestinoDeMidia`, guarda de "Destino nao configurado") presente no
-  checkout que `malote servir` de fato executa (roda da fonte, sem build).
-  **Tarefa #1106 corrigida via `dev-05`: worker de transcrição
-  passava caminho relativo pro motor sem resolver contra o Destino de Mídia.**
-  Causa raiz confirmada lendo o código e
-  reproduzida com ciclo de retorno (teste com fake ffmpeg que valida a
-  entrada, igual o real): `processarUmaVez` lia `elegivel.caminho` direto da
-  coluna `anexos.caminho`, que é relativo ao Destino de Mídia por desenho, e
-  nunca chamava `lerDestinoDeMidia` — único consumidor de disco do repo com
-  essa lacuna (os outros cinco+ lugares, inventariados, já faziam o join).
-  Corrigido: os Destinos de todos os Inquilinos são lidos de uma vez (com o
-  Registro fechado antes do `await` do motor, preservando a disciplina de
-  não reter handle durante subprocesso longo), e o caminho absoluto
-  (`join(destino.endereco, elegivel.caminho)`) é o que chega no ffmpeg.
-  Inquilino sem Destino configurado é pulado, sem marcar nada pendente.
-  Teste de regressão (`tests/transcricao-worker.test.ts`) verificado com
-  mutação nos dois sentidos — falha com o bug presente, reproduzindo a
-  mensagem exata de produção; passa com o fix. Suíte: 1088 → **1090
-  testes**, mesma baseline de 3 falhas pré-existentes, lint limpo. Achado
-  medindo o Acervo real de uma mentorada (bosgame) — ver Pendências para o
-  que fica fora do escopo deste agente.
-- 01/10/2026 — **Tarefa #1103 implementada via `dev-02`→`dev-10`→`dev-03`→
-  `dev-10`→`dev-04`: três entregas independentes sobre o mecanismo de
-  Transcrição do ciclo 23, todas em `main`, NENHUMA publicada ainda.**
-  (1) Duração do Anexo passa a ser extraída do Conteúdo Bruto já preservado
-  (`seconds` no evento ao vivo, `ZMOVIEDURATION` no backup) — sem `ffprobe`,
-  sem abrir arquivo — na escrita nova e via comando de backfill `malote
-  midia extrair-duracao`. (2) Comando de operador `malote transcricao
-  incluir-estoque --limite <n>` promove o estoque `fora-de-escopo` para a
-  fila normal, em lote controlado, só o que já bate a condição de
-  elegibilidade (arquivo presente). (3) Solicitação individual de
-  Transcrição com prioridade na fila — local (`malote transcricao
-  solicitar`) e **pela primeira rota de ESCRITA que a API por rede do
-  produto já teve**, `POST /transcricoes/solicitar` — superando de propósito
-  a decisão formal de "só leitura no v1" (ata de recorte v1; critério 5 do
-  ciclo 21, que continua valendo para o cliente CLI). **Muda a forma do
-  Acervo: schema v22 → v23** (migração `SOLICITACAO_DE_TRANSCRICAO_V23`,
-  coluna `transcricoes.solicitada_em`). 13 commits em `main`
-  (`eea0d6c`..`60c1e96`), suíte **1037 → 1088 testes**, mesma baseline de 3
-  falhas pré-existentes preservada o tempo todo, lint limpo. Revisão
-  independente (`dev-10` via `advisor`) rodada na spec e nos 3 planos, com
-  achados reais aplicados antes da execução — o mais grave: a arquitetura do
-  servidor tinha duas guardas duras contra escrita (despachante de método,
-  Acervo fisicamente somente-leitura) que a spec original não nomeava como
-  trabalho explícito, e um fire-and-forget sem `try/catch` que derrubaria
-  `malote servir` inteiro em caso de `SQLITE_BUSY` sob disputa — os dois
-  corrigidos antes do `dev-04`, com teste de disputa de escrita com trava
-  real provando a correção. Detalhe completo nos 4 arquivos de revisão e nos
-  3 planos (`## Resultado`), em documentos internos do autor, fora deste
-  repositório.
-- 01/10/2026 — **RELEASE v0.24.0 PUBLICADA E DISTRIBUÍDA NO THINKPAD,
-  VERIFICADA POR EFEITO.** PR #11 (`main → production`), CI verde, merge
-  `929054c`. **Schema do Acervo migrou v22 → v23 sozinho, via
-  `malote-ouvinte@orlando.service`** (o passo `SOLICITACAO_DE_TRANSCRICAO_V23`
-  não exige contexto — mesma classe segura do passo v21→v22 da release
-  anterior) — sem incidente, confirmado contra o Acervo real:
-  `versao_schema` → 23, coluna `transcricoes.solicitada_em` presente.
-  `malote --versao` → `0.24.0`; os dois serviços (`malote-ouvinte@orlando`,
-  `malote-servidor`) `active` pós-restart; `malote --ajuda` confirma os três
-  comandos novos no binário publicado. **Os comandos de escrita novos
-  (`transcricao incluir-estoque`, `transcricao solicitar`, `midia
-  extrair-duracao`) não foram exercidos contra o Acervo real nesta
-  verificação** — são comandos de decisão do operador, e rodá-los é ato à
-  parte (Ação Documentada, se for para o Acervo de produção), não efeito
-  colateral do deploy.
-- 30/09/2026 — **RELEASE v0.23.0 PUBLICADA E DISTRIBUÍDA NO THINKPAD, VERIFICADA
-  POR EFEITO.** PR #10 (`main → production`), CI verde, merge `86a3b1d`. Leva o
-  ciclo 24 inteiro (#1090, #1088, #1094, #1092, #1091), o #1084 e o ciclo 25
-  (#1089), mais o bug #1101. **Muda a forma do Acervo: schema v21 → v22**
-  (migração do #1088, que remove Conversa fantasma de Status) — o
-  `upgrade-fleet` (`trust: immediate`, 30 min) puxou e migrou sozinho **antes**
-  de a Ação Documentada de backup manual rodar, sem incidente: o passo não
-  exige contexto do Registro (diferente do #1043), então não havia corrida
-  perigosa a vencer, só disciplina de backup que chegou tarde. Verificado
-  contra o host real: `malote --versao` → `0.23.0`; `malote-ouvinte@orlando` e
-  `malote-servidor` `active` pós-restart; `versao_schema` → `22`; **zero**
-  Conversas fantasma de Status restantes (consulta direta contra o Acervo
-  real, confirmando o critério de sucesso do #1088 em produção, não só em
-  teste). Script de backup (`91-diario/20260930-acao-perigosa-backup-acervo-
-  antes-release-v023-thinkpad.sh` da pasta de trabalho) ficou sem uso — pode
-  ser descartado ou guardado como precedente para a próxima migração de
-  schema.
-- 30/09/2026 — **#1089 implementada via `dev-02`→`dev-10`→`dev-03`→`dev-10`→
-  `dev-04`: Pessoa nasce de nome que a Fonte declara, sem depender de
-  catálogo.** Comando novo `pessoa promover-identificadores-nomeados`
-  (ensaio por padrão) promove Identificador sem Pessoa que já tem
-  Atribuição de Nome a Pessoa própria, vinculada por Procedência
-  `material` — que já existia na hierarquia do domínio desde o início e
-  nunca teve produtor até agora. Duas primitivas novas no núcleo
-  (`listarElegiveisParaPromocao`, `promoverIdentificadores`), Fonte-
-  agnósticas; o filtro de nome inválido conhecido do WhatsApp (sentinela
-  do #1101, nono dígito) e a exclusão permanente de endereço em forma
-  alternativa (`@lid`) ficam na CLI, que já é o lugar autorizado a compor
-  mais de um Adaptador — o núcleo continua sem vocabulário de Fonte. Uma
-  Operação por invocação inteira (reentrância sobre `criar-pessoa` e
-  `vincular`, mesmo padrão já medido em `aplicarLote`), desfazer pelo
-  mecanismo genérico da trilha (a linha do vínculo é desfeita; a linha da
-  Pessoa é recusada por desenho — Pessoa nunca é apagada). `docs/dominio/
-  malote.md` ganhou a operação nova e a terceira via de nascimento de
-  Pessoa (gate recarimbado). **Duas rodadas de revisão independente
-  (`dev-10` via advisor)** — spec e plano — cada uma achou furo real antes
-  de seguir: na spec, o desenho original de "promover a forma alternativa
-  depois de resolvida" foi trocado por exclusão permanente, por risco de
-  colisão de `pessoa_id` da família do #1052; no plano, um teste afirmava
-  que o nome exibido da Pessoa seria o "nome bom" quando na verdade
-  `nomeDaPessoa` não filtra sentinela e continuaria exibindo o lixo — o
-  teste foi corrigido para afirmar o que é verdade (a Pessoa nasce, a
-  busca por texto encontra), e a limitação de exibição ficou documentada
-  em vez de escondida. Suíte **1049 → 1067 testes** (medido contra
-  `origin/main` via `git worktree`), mesmas 3 falhas pré-existentes.
-  **Ciclo 25 do roadmap — tarefa fechada, ciclo ainda não aceito**
-  (`neg-05` é o próximo passo). Só em `main` — não publicado.
-- 30/09/2026 — **#1101 corrigida via `dev-05`: dois defeitos independentes de
-  atribuição de nome no adaptador WhatsApp, achados investigando a #1089
-  (contato nomeado só dentro do WhatsApp).** (1) `contacts.upsert` grava um
-  valor-sentinela do próprio WhatsApp (`+EAA=` e variantes — 58% de TODAS as
-  Atribuições `titular`/`whatsapp` do Acervo real do Titular, ~99% entre
-  identificadores sem Pessoa) como se fosse nome; `pareceValorSentinela`
-  (`src/adaptadores/whatsapp/nome-sentinela-de-contato.ts`) reconhece a forma
-  (prefixo `+`, alfabeto base64, padding) e recusa antes de gravar. (2)
-  `nomeRepeteOEndereco` (núcleo) só comparava sufixo/prefixo de dígitos e não
-  reconhecia o nono dígito móvel brasileiro, inserido no MEIO do número —
-  medido 1.110 de 1.110 nomes `+55...` que ele deixava passar tinham
-  exatamente essa forma. `nomeRepeteONumeroBrasileiro`
-  (`src/adaptadores/whatsapp/nome-repete-numero-br.ts`) envolve a função do
-  núcleo sem subir a ela — vocabulário de Fonte fica no adaptador, pelo
-  cabeçalho já escrito em `nome-do-endereco.ts` — e é usado nos 4 pontos de
-  escrita do adaptador (`estado-ao-vivo.ts`, `ao-vivo.ts`, `importar.ts`×2).
-  Suíte **1037 → 1049 testes**, mesmas 3 falhas pré-existentes de
-  `cli-entrada.test.ts` (confirmadas idênticas em `main` sem esta mudança,
-  via `git stash`). **Só em `main` — não publicado, não distribuído.**
-- 29/09/2026 — **Investigado e NÃO REPRODUZIDO: JSON truncado em respostas grandes
-  (#1091, relato da mentorada Renata).** O relatório do agente dela (`David`) mostrava
-  `json.decoder.JSONDecodeError: Unterminated string` ao consumir `malote conversas`/
-  `mensagens` de conversa longa. Reproduzido nos dois caminhos que o malote controla,
-  contra Acervo real (thinkpad): CLI local (1,4 MB de saída, JSON válido, fecha limpo)
-  e caminho de rede real via `fetch`+`node:http` (1,55 MB, JSON válido). **Se o relato
-  se repetir, o primeiro lugar a olhar não é o malote — é o lado do consumidor**
-  (harness do agente truncando saída de comando antes de fazer parse; mesma classe de
-  suspeita já registrada na investigação da #1054, em 25/09/2026). Nenhuma mudança de
-  código feita por causa disso.
-- 29/09/2026 — **RELEASE v0.22.0 PUBLICADA E DISTRIBUÍDA NO THINKPAD, VERIFICADA POR
-  EFEITO** (#1068, #1069, #1070 — as três entradas abaixo, cada uma "AINDA NÃO
-  LIBERADO"/"Nenhuma release publicada ainda" está desatualizada por esta linha). PR #8
-  (`main → production`, CI verde) mergeado em `94728ee`; PR #9 completou bump+CHANGELOG
-  (mergeado em `58feb03`); tag `v0.22.0` no commit publicado.
-  **A corrida contra o `upgrade-fleet` aconteceu de fato**: o timer (`trust: immediate`,
-  a cada 30 min) puxou e auto-migrou o Acervo sozinho — via `abrirAcervo` no restart do
-  `malote-ouvinte`, sem `exigeContexto` no passo 20→21 — ANTES da Ação Documentada
-  manual rodar. Sem dano: v20→v21 não precisa do Registro, então o ouvinte subiu normal
-  (diferente do quase-incidente da v0.21.0, onde o passo `exigeContexto` teria recusado
-  subir). A Ação Documentada, escrita com o commit-alvo (`94728ee`) já defasado em
-  relação ao que tinha acabado de virar `production` (`58feb03`, só bump), RETROCEDEU
-  um commit ao rodar — corrigido por uma segunda Ação Documentada (código, sem tocar
-  Acervo). **Estado final confirmado por consulta direta no host**: `malote --versao`
-  → `0.22.0`; `versao_schema` → `21`; tabela `transcricoes` com 20.199 linhas
-  `fora-de-escopo` (a elegibilidade funcionou); 20.206 Anexos de áudio `presente`
-  (crescendo ao vivo, já sob o #1068). **Ciclo 23 ainda NÃO ACEITO** (`neg-05`) —
-  decisão do Titular foi publicar e aguardar tráfego real antes de aceitar a cláusula
-  do #1068 (mídia ao vivo, que só tinha prova de teste com biblioteca falsa) — agora
-  há sinal real para observar (produção rodando o código, contagem de áudio subindo).
-- 29/09/2026 — **Status do WhatsApp deixou de virar Conversa fantasma (#1069),
-  IMPLEMENTADO EM `main`, AINDA NÃO LIBERADO.** Causa raiz: `material.ts` classificava
-  coletiva por `ZSESSIONTYPE != 0`, colapsando grupo/lista-de-transmissão/status/
-  comunidade numa só categoria. Status (tipo 3) não é chat de verdade — filtrado antes
-  de criar Conversa, contado em `descartes.conversas['status']`, surfacado no
-  relatório da importação. **A correção NÃO foi a sugerida na tarefa** (`=== 1`) —
-  medição contra o adaptador macOS do charla (mesmo formato de backup, decisão do
-  Titular em 21/09/2026) mapeou os 5 valores reais e provou por mutação que `=== 1`
-  demoveria lista de transmissão e comunidade a Conversa direta, contradizendo a
-  #825/#826. Suíte: 1000 → **1003 testes**, mesma baseline de 3 falhas
-  pré-existentes. Nenhuma release publicada ainda.
-- 29/09/2026 — **Mídia recebida ao vivo agora é baixada de verdade (#1068), IMPLEMENTADO
-  EM `main`, AINDA NÃO LIBERADO.** Causa raiz: nenhum código chamava
-  `downloadMediaMessage` — Anexo ao vivo nascia `nunca-obtido` para sempre, medido no
-  Acervo real da Renata em 94-99,8% conforme o tipo. `conexao.ts` ganhou
-  `MidiaAoVivo.baixar(indice)`, usando a mensagem CRUA (ver Restrições); `ao-vivo.ts`
-  devolve `anexosNuncaObtidos` com o índice do lote; `ouvir.ts` lê o Destino de Mídia
-  do Inquilino antes de conectar e baixa em segundo plano, gravando pela porta do
-  núcleo que já existia (`gravarArquivoDeAnexo`). Falha de download, banco ocupado, ou
-  Destino ausente mantêm o Anexo `nunca-obtido`, sem derrubar o ouvinte. Suíte: 993 →
-  **1000 testes**, mesma baseline de 3 falhas pré-existentes. **Destrava a #1070
-  (transcrição) em uso real** — sem isto, áudio nunca chegava a `presente` para a fila
-  processar. Nenhuma release publicada ainda.
-- 28-29/09/2026 — **Transcrição de áudio via Whisper local, IMPLEMENTADA EM `main`, AINDA
-  NÃO LIBERADA.** Tarefa #1070, ciclo `malote-midia-ao-vivo-e-transcricao` (plano 3 de 3),
-  spec e plano revisados por `dev-10`+advisor (3 bloqueia na spec, 7 na plano — todos
-  corrigidos antes da execução; achados incluem `transcrever()` bloqueando o event loop se
-  fosse síncrono, `proximoElegivel` não alcançando `pendente` órfão, e o worker migrando o
-  Acervo sem checar versão). 12 tasks TDD, 13ª é verificação de campo. Schema **v21**:
-  tabela `transcricoes` pendurada no Anexo (só `tipo=audio`), com FTS
-  `transcricoes_texto`; passo de migração marca todo Anexo de áudio já `presente` como
-  `fora-de-escopo` — mecanismo, não intenção, contra o worker disparar sozinho o backfill
-  do estoque existente. Motor: `whisper.cpp` + `ffmpeg`, dois binários de sistema
-  declarados por variável de ambiente (`MALOTE_WHISPER_BINARIO`, `MALOTE_WHISPER_MODELO`,
-  `MALOTE_FFMPEG_BINARIO`), nunca instalados pelo malote — ADR
-  `docs/decisoes/20260928-dependencia-nativa-do-whisper-cpp-para-transcricao-de-audio.md`.
-  Fronteira nova: só `src/cli/motor-de-transcricao.ts` referencia essas variáveis, guardado
-  por `tests/fronteira-de-dependencia.test.ts`, poder confirmado por mutação. Busca
-  (`buscarMensagens`) passou a casar também na Transcrição, com proveniência marcada
-  (`origemDaCorrespondencia`) — a Transcrição é aproximação de modelo, nunca fato.
-  **Verificação de campo feita contra binário real no thinkpad** (`whisper.cpp`/`ffmpeg`
-  já instalados de uma medição anterior): motor real transcreveu um Anexo de áudio real de
-  produção (referenciado por caminho, nunca copiado) com texto plausível e coerente,
-  exposto por `GET /mensagens`, falha real (arquivo ausente) gravou motivo sem travar o
-  worker, `transcricao reprocessar` funcionou. Produção confirmada intocada antes/depois
-  (20.199 Anexos de áudio, contagem idêntica). Suíte: **993 testes**, 3 falhas
-  pré-existentes sem relação. **Não há release nem deploy** — `dev-09-encerra-tarefa` ainda
-  não rodou para a #1070; o aceite do ciclo 23 inteiro depende também de #1068 e #1069
-  (`dev-05`, ainda não iniciadas).
-- 22/09/2026 — **`malote configuracao criar` em produção: declarar a conta sem exigir
-  material.** Achado real de uso (mentorado Walter, bloqueado por dificuldade de gerar o
-  export do WhatsApp) — tarefa #1042, spec e plano com `dev-10` (0 `bloqueia` na spec, 2
-  `bloqueia` corrigidos no plano antes da execução). O comando reaproveita
-  `resolverConfiguracao`/`definirContaDaConfiguracao`, sem tocar no guard "busca, nunca
-  cria" de `ouvir`. `docs/dominio/malote.md` ganhou as entradas `resolver-configuracao`
-  e `definir-conta` (já existiam em código, nunca documentadas), gate recarimbado para
-  `2026-09-22`. Tutorial de instalação corrigido: o passo 6 ensinava um comando
-  (`entrada declarar --fonte whatsapp`) que a própria CLI recusa desde que a varredura
-  ficou restrita a Fontes varríveis — agora tem dois caminhos, com material ou só para
-  o ouvinte. **Release v0.20.0**, PR #4 (`main → production`), CI verde, merge `945549d`,
-  tag no commit publicado. `production` estava em v0.19.0 (`dbd6c66`). Suíte: 941 testes,
-  937 passam (3 falhas pré-existentes, sem relação, confirmadas por `git stash` antes da
-  mudança). **Deploy nos hosts da frota (`upgrade-fleet`) não foi feito nesta sessão** —
-  release publicada no GitHub, não distribuída; decisão do Titular quando/se propagar.
-- 16/09/2026 — **`bin/malote` corrigido: o alvo de `package.json.bin` agora roda da
-  fonte, sem `dist/`.** Achado na instalação real da frota (tarefa #991): o `bin`
-  apontava pra `dist/cli/index.js`, que só existe após build — e o produto roda **da
-  fonte**, sem build, em toda instalação real. `npm link` nem chegava a criar o
-  symlink global, porque o alvo não existia. Corrigido com `bin/malote`, que resolve
-  o próprio diretório por `import.meta.url` (nunca CWD — `node --import tsx` resolve
-  o pacote `tsx` pelo CWD do processo, não pelo caminho do script) e roda o filho com
-  `cwd` fixado na raiz do repositório. Guia do cliente ganhou o passo `npm link`.
-  Regressão provada de ponta a ponta: clone limpo, sem `dist/`, `npm ci` + `npm link`,
-  invocado de fora do repositório. Suíte em 895 testes.
-- 16/09/2026 — **repositório público.** O histórico público começa no commit "Initial
-  public release"; o histórico de construção anterior pertence ao repositório privado de
-  origem. **v0.17.0 em produção**, armazenamento XDG por categoria (`XDG_DATA_HOME` para
-  dado, `XDG_STATE_HOME` para estado do ouvinte, `MALOTE_HOME` como válvula). Suíte:
-  **873 testes, 0 falhas**. CI verde (Node 22, Linux). Sem tags públicas ainda — a primeira
-  sai da próxima release.
-- 2026-08-24 — repo criado **privado**. Torna-se público só depois da varredura anti-vazamento de conteúdo E do espaço de refs do remoto — refs de pull request sobrevivem ao squash, e a única remoção confiável é apagar e recriar.
-- 2026-08-26 — **ciclo 2 entregue**: segundo adaptador (Instagram, material exportado). Suíte em 138 verdes. O teste de aceite do desenho passou — acrescentar Fonte não alterou uma linha de `src/nucleo/` nem de `src/registro/`, medido por diff contra a linha de base do ciclo.
-- 2026-08-28 — **ciclo 4 entregue**: ingestão recorrente. Suíte em 244 verdes. O Acervo passou a lembrar qual Material já entrou (schema v5), a Configuração de Adaptador saiu de tabela morta para chave do Estado de Sincronização, e o adaptador de WhatsApp passou a ler a conta business — que era ilegível.
-- 2026-08-29 — **ciclo 7 entregue**: o catálogo de contatos entra como Adaptador comum (vCard), propõe identidade por telefone, por nome e por múltiplos endereços, e aplica — vinculando e mesclando. Suíte em 378 verdes, schema v7 (`cartoes_de_catalogo`). Medido contra 1.018.130 Mensagens: 6.265 de 6.268 propostas aplicadas em 1,9 s, 458 mesclagens, e 3.629 das 5.118 Conversas diretas passaram a ter Pessoa.
-- 2026-08-29 — **ciclo 8 entregue**: trilha de auditoria de escrita. Toda decisão grava uma **Operação** com o efeito linha a linha, nas duas bases — Acervo **v8** e Registro **v2**. Suíte em 432 verdes. Medido contra o catálogo real: a aplicação de 922 Propostas passou de **3.102 Operações para 1**, e desfazer o lote de outra sessão reverteu 2.180 vínculos, recusando 922 com a causa dita.
-- 2026-08-30 — **ciclo 9 entregue**: Transição de Participação. O evento que a Fonte declara vira registro próprio (Acervo **v9**), e a consulta responde "quem estava nesta Conversa em tal data" em quatro grupos, dentro de um **Alcance** declarado por Conversa. Suíte em 456 verdes. Medido contra os dois backups: **16.402 Transições em 346 Conversas**, com 2 Operações para 2 comandos sobre 1,1 milhão de Mensagens.
-- 2026-09-01 — **ciclo 14 entregue**: migração versionada. Forma anterior **sobe por passos** declarados, ordenados e idempotentes, em vez de ser recusada — Acervo **v11** (piso 10) e Registro **v3** (piso 2), na mesma máquina. A execução é atômica, a conferência de contagens reprova divergência não declarada, e a verificação de integridade compara contra a linha de base para não abortar por dano herdado. Suíte em 506 verdes. Medido contra material real (94.346 Mensagens, 22 tabelas): forma 10 subiu para 11 com **zero** linha perdida em tabela de dado, e a segunda execução se anuncia como sem trabalho.
-- 2026-09-03 — **ciclo 10 entregue**: recepção ao vivo. O produto recebe do WhatsApp por um processo dedicado, converge com o material exportado na mesma Referência Externa, e grava a Transição de Participação que a Fonte declara. Suíte em **550 verdes**. Verificado contra conta real: religação após queda 428, desligamento limpo por sinal, e o instante do último evento legível de fora sem abrir o Acervo. O identificador do evento administrativo **não** converge entre as Fontes, e o produto mede a duplicação em vez de prometê-la inexistente.
-- 2026-09-03 — **ciclo 11 entregue**: superfície de rede e Chave de Acesso. O acervo é consultável por rede, autenticado, com o Inquilino vindo da credencial; e a trilha passou a dizer **por ordem de quem**. Suíte em **593 verdes**, Registro **v5**, Acervo **v13**. Nenhuma dependência nova — o servidor é `node:http`.
-- Modelo de domínio e glossário `aprovado` desde 2026-08-24; ciclo 1 aceito em 2026-08-26.
+- 04/10/2026 — **CICLO 27 ACEITO: o malote envia mensagem (texto, imagem,
+  documento), RELEASES v0.25.0 E v0.25.1 EM PRODUÇÃO no thinkpad** (#1112, três
+  planos, PRs #13 e #14, tags `v0.25.0` e `v0.25.1`). Agregado **Envio** novo
+  (Acervo v23→v25, migrou sozinho no host, `quick_check ok`): `malote enviar`
+  (`--texto`, `--imagem`, `--documento`), `malote envio estado|reprocessar` e
+  `POST /envios/solicitar` (segunda rota de escrita da API; a Chave de Acesso
+  agora **fala pela conta**, e a ADR de confidencialidade foi revisada). Quem
+  envia é o `ouvir` da Configuração, pela conexão que ele já tem; a Mensagem
+  volta pelo eco pela porta de recepção, e o staging vira o arquivo do Anexo.
+  Suíte de 1090 para **1144 testes**, baseline de 3 falhas pré-existentes.
+  Prova de campo: rodada real contra a conta da Hera em instalação descartável
+  no macbook (script `20261003-acao-perigosa-hera-verificacao-de-campo-do-envio.sh`,
+  na pasta de trabalho). **O aceite achou três lacunas e o ciclo só fechou
+  depois de corrigi-las:** falha ao gravar o resultado depois do envio virava
+  `falhou` (agora fica `pendente`), `envio reprocessar` não contava pendentes,
+  e grupo não tinha teste. Detalhe por critério: `## Resultado` da spec, na
+  pasta de trabalho.
 
 ## Pendências
+
+- **Envio em produção, sem uso real ainda.** A Hera ainda não está no thinkpad: a
+  verificação rodou numa instalação descartável (`~/malote-hera-verificacao` no
+  macbook, vínculo copiado da espiga — pode ser descartada depois de conferir que
+  não é mais necessária). O próximo passo é Ação Documentada: Inquilino próprio,
+  Configuração e vínculo no thinkpad. Antes de assumir que o Envio funciona em
+  produção, **mandar um Envio real por lá** — a release foi verificada só por
+  versão, schema e ouvinte vivo.
+- **Sem prova de campo:** envio para **grupo** e a rota `POST /envios/solicitar`
+  contra o servidor de produção (só teste); a falha pós-envio só tem teste com
+  erro injetado.
+- **Staging órfão em `envios-pendentes/`** se o `ouvir` cair entre o envio e o
+  eco: o mapa de bytes originados é de processo. O produto não detecta nem limpa;
+  o guia de armazenamento diz que removê-lo à mão é seguro.
 
 - **#1106 corrigida via `dev-05` — RELEASE v0.24.1 PUBLICADA E DISTRIBUÍDA** (ver
   Estado Atual). O worker de
