@@ -566,6 +566,17 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 04/10/2026 — **CICLO 30 ACEITO: identidade pelo modo rede, release v0.28.0 em produção** (#1126, PR #19,
+  tag `v0.28.0`). `malote identificar <valor>` (local e `GET /identificadores?valor=`) devolve o que o Acervo
+  sabe de um Identificador **com ou sem Pessoa**: os Identificadores gravados, as formas da correspondência
+  de endereço, os nomes com a origem, o nome corrente pela precedência do Inquilino e a presença em Conversas
+  e Mensagens. `participantes` e a listagem de Conversas trazem `nome` e `origemDoNome`, e `conversas --busca`
+  acha a direta pelo nome. Sem schema; suíte 1223 para 1266. Medido em produção: `conversas` sem filtro
+  0,65 a 0,78 s quente (2,82 s fria) e 1.894.490 bytes; 4.947 das 6.363 diretas com nome. **Só com prova de
+  teste:** a precedência trocada, o isolamento entre Inquilinos, `%` e `_` na busca. **Limitação vista em
+  produção:** nome-sentinela da plataforma aparece como nome (a limpeza do estoque do #1101 segue pendente).
+  A release teve CI vermelho num teste da v0.27.1 que passava sem poder no Linux (socketpair); ver a
+  Restrição de `encerrar`.
 - 04/10/2026 — **CICLO 29 ACEITO: consulta do Envio por rede e repetição segura do `enviar`,
   release v0.27.0 em produção** (#1117, PR #17, tag `v0.27.0`). O código 7 do `enviar` por rede
   tem saída: o cliente gera o Identificador de Envio, manda e imprime; repetir com o mesmo
