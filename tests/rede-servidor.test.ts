@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { cenarioDeRede } from './ajuda/rede.js';
 import { instalacaoTemporaria } from './ajuda/instalacao.js';
 import { executar } from '../src/cli/index.js';
+import { criarInquilino } from '../src/registro/registro.js';
 import { abrirAcervo } from '../src/nucleo/acervo.js';
 import { registrarConversa } from '../src/nucleo/escrita.js';
 import { resolverConfiguracao } from '../src/registro/configuracao-adaptador.js';
@@ -685,6 +686,27 @@ test('GET /midia/<id> com presenca presente mas arquivo sumiu do disco devolve 4
     const r = await c.pedir(`/midia/${anexoId}`, chave.valor);
     assert.equal(r.status, 404);
     assert.equal(r.corpo, '');
+  } finally {
+    await c.parar();
+  }
+});
+
+test('Chave valida de Inquilino SEM Acervo responde 503 vazio e o servidor segue de pe (#1115)', async () => {
+  // Inquilino criado e chave emitida antes de o Acervo existir: abrir somente-leitura
+  // lanca, e a excecao dentro do manipulador derrubava o PROCESSO — para todos os
+  // Inquilinos, com uma unica requisicao de credencial valida.
+  const c = await cenarioDeRede();
+  try {
+    const semAcervo = criarInquilino(c.registro, { titularNome: 'Sem Acervo' });
+    const chave = c.emitir(semAcervo);
+    const r = await c.pedir('/configuracoes', chave.valor);
+    assert.equal(r.status, 503);
+    assert.equal(r.corpo, '', 'corpo vazio: nada sobre o que existe ou falta');
+
+    // O servidor sobreviveu: outro Inquilino, com Acervo, segue sendo atendido.
+    const viva = c.emitir(c.inquilinoA);
+    const ok = await c.pedir('/configuracoes', viva.valor);
+    assert.equal(ok.status, 200);
   } finally {
     await c.parar();
   }
