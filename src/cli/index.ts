@@ -17,6 +17,7 @@ import { ehPontoDeEntrada } from './entrada.js';
 import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
 import { executarEnviarRede } from './enviar-rede.js';
 import { executarEnvioEstadoRede } from './envio-estado-rede.js';
+import { encerrar } from './encerrar.js';
 import { basename, join } from 'node:path';
 import type { Fonte } from '../nucleo/tipos.js';
 import {
@@ -2748,13 +2749,13 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
   // aqui e o que permite `executar()` continuar sincrona, do jeito que os testes
   // e todos os outros comandos a usam.
   if (argumentos[0] === 'ouvir') {
-    void ouvir(argumentos, ambiente).then((codigo) => process.exit(codigo));
+    void ouvir(argumentos, ambiente).then(encerrar);
   } else if (argumentos[0] === 'servir') {
-    void servir(argumentos, ambiente).then((codigo) => process.exit(codigo));
+    void servir(argumentos, ambiente).then(encerrar);
   } else if (argumentos[0] === 'midia' && argumentos[1] === 'reprocessar') {
     // #1084: baixar midia de novo e I/O de rede — mesmo motivo do ouvir,
     // despachado ANTES de `executar()` para poder `await`.
-    void executarMidiaReprocessar(argumentos, ambiente).then((codigo) => process.exit(codigo));
+    void executarMidiaReprocessar(argumentos, ambiente).then(encerrar);
   } else if (argumentos[0] === 'enviar' && ambiente.servidor !== undefined) {
     // Modo REDE para o Envio (ciclo 28): a variavel de ambiente liga o modo, e `--servidor`
     // so troca a URL — a mesma precedencia das consultas. `enviar` NAO esta em
@@ -2764,7 +2765,7 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
       chave: ambiente.chave,
       env: process.env,
       escrever: (t) => console.log(t),
-    }).then((codigo) => process.exit(codigo));
+    }).then(encerrar);
   } else if (argumentos[0] === 'envio' && argumentos[1] === 'estado' && ambiente.servidor !== undefined) {
     // Ciclo 29: `envio estado` consulta por rede. NAO entra em COMANDOS_DE_REDE (a allowlist de
     // leitura nao tem `--chave-em`), e `envio reprocessar` segue no executor local, que recusa
@@ -2774,7 +2775,7 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
       chave: ambiente.chave,
       env: process.env,
       escrever: (t) => console.log(t),
-    }).then((codigo) => process.exit(codigo));
+    }).then(encerrar);
   } else if (COMANDOS_DE_REDE.has(argumentos[0] ?? '') && ambiente.servidor !== undefined) {
     // Modo REDE: a consulta e async (HTTP), e o executar e sincrono — mesmo
     // padrao do ouvir. A chave e a identidade; sem ela, recusa com o contrato
@@ -2782,14 +2783,15 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
     const chave = ambiente.chave;
     if (chave === undefined) {
       console.log('Informe MALOTE_CHAVE_DE_ACESSO: a Chave de Acesso e a identidade da consulta por rede.');
-      process.exit(2);
+      encerrar(2);
+    } else {
+      void executarConsultaRede(argumentos, {
+        servidor: opcao(argumentos, 'servidor') ?? (ambiente.servidor as string),
+        chave,
+        escrever: (t) => console.log(t),
+      }).then(encerrar);
     }
-    void executarConsultaRede(argumentos, {
-      servidor: opcao(argumentos, 'servidor') ?? (ambiente.servidor as string),
-      chave,
-      escrever: (t) => console.log(t),
-    }).then((codigo) => process.exit(codigo));
   } else {
-    process.exit(executar(argumentos, ambiente));
+    encerrar(executar(argumentos, ambiente));
   }
 }

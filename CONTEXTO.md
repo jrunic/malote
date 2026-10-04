@@ -142,6 +142,17 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
 
 ## Restrições
 
+- **Nenhum `process.exit(` direto em `src/`: quem encerra o processo é `cli/encerrar.ts`, que espera o
+  stdout e o stderr entregarem o que já foi escrito (#1125).** `process.exit` logo depois de um
+  `console.log` perde o que o pipe ainda não aceitou: a escrita em pipe é assíncrona quando passa do
+  buffer (64 KB, medido no macOS e no Linux, Node 22), e o resto morre com o processo. Arquivo e
+  terminal escondem o defeito, por isso só o agente, que lê por pipe, via a resposta cortada — o
+  relato da #1091 (`Unterminated string`) foi dado como não reproduzido por 5 dias porque a
+  reprodução usou arquivo e `fetch` direto. O defeito só aparece quando **uma escrita** passa do
+  buffer (o `--json` e todo o modo rede); a saída em texto, linha a linha, passa. O teto de 10 s de
+  `encerrar` existe para o processo não pendurar com leitor que nunca esvazia o pipe: perder a
+  cauda é melhor que não sair. `tests/sem-exit-direto.test.ts` varre `src/`, e
+  `tests/saida-por-pipe.test.ts` roda o executável por pipe, nos dois modos.
 - **Processo de fundo dentro de `malote servir` (o worker de transcrição, e qualquer futuro
   análogo) NUNCA abre o Acervo para escrita sem checar a versão gravada primeiro.**
   `abrirAcervo` migra a base — e um processo que atende requisição de fora não pode ter esse
