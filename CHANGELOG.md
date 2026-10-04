@@ -23,6 +23,32 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.27.0] — 2026-10-04
+
+Não muda a forma do Acervo nem do Registro. **Ordem de release:** o servidor recebe esta versão
+antes de qualquer cliente — um servidor anterior ignora o identificador novo e duplicaria numa
+repetição.
+
+### Adicionado
+
+- **Repetição segura do `malote enviar` por rede.** O cliente gera um Identificador de Envio
+  para cada pedido, o manda e o imprime. Repetir o mesmo pedido com o mesmo identificador
+  (`--identificador <uuid>`) não cria um segundo Envio: o servidor responde `200` com
+  `repetido`. O mesmo identificador com Configuração, destinatário ou conteúdo diferente
+  responde `409`. O código de saída 7 do `enviar` passa a dizer o identificador e como
+  repetir; um servidor que não confirma o identificador faz o cliente avisar que repetir pode
+  duplicar.
+- **Consulta do Envio por rede.** `GET /envios/<identificador ou id>` devolve o estado, as
+  tentativas e o motivo da falha (sem o texto nem o arquivo), e `GET /envios/contagem` devolve
+  a contagem por estado. `malote envio estado [<identificador>]` consulta por rede quando o
+  servidor está no ambiente, e aceita `--chave-em <VARIÁVEL>`. `envio reprocessar` continua
+  só local.
+
+### Alterado
+
+- `malote envio estado` (local) lista sempre os três estados, `enviado`, `falhou` e
+  `pendente`, com zero quando não há.
+
 ## [0.26.1] — 2026-10-04
 
 Não muda a forma do Acervo nem do Registro.
