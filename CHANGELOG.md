@@ -23,6 +23,31 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+Não muda a forma do Acervo nem do Registro. Os campos e parâmetros novos são acréscimos: os que já existiam
+não mudam de nome nem de sentido.
+
+### Adicionado
+
+- **`malote anexos --conversa <id>`, nos dois modos.** Os Anexos de uma Conversa, em ordem cronológica, com o
+  Descritor, a Presença (o Anexo sem arquivo em disco aparece) e a Mensagem de origem. Filtra por tipo,
+  remetente, período e presença, e pagina por `proximo` e `--antes`. Por rede é
+  `GET /conversas/<id>/anexos`, e `--inquilino` é recusado. Na CLI, `--tipo` aceita também `imagem` e
+  `documento`.
+- **`--remetente <valor>` em `mensagens`** (comando local, `GET /mensagens` e `GET /conversas/<id>/mensagens`).
+  O valor é o do Identificador (LID ou JID), com ou sem Pessoa, e alcança a forma canônica e as alternativas
+  que a correspondência de endereço conhece. Valor desconhecido devolve lista vazia.
+- **`malote exportar --conversa <id>`, nos dois modos.** Grava a Conversa em `txt` ou `json`, filtrável por
+  remetente e período, com o nome de quem escreveu. Com `--saida` o arquivo só vira definitivo na última
+  página; uma falha no meio não deixa arquivo que pareça completo.
+- **`GET /conversas/<id>/autores`.** Quem escreveu na Conversa, uma vez cada, com `valor`, `nome`,
+  `origemDoNome` e `pessoaId`, participante ou não.
+
+### Limitação conhecida
+
+- O remetente sem nome sai pelo valor do Identificador; o de Instagram sem nome sai como
+  `nome-exibicao:<Nome>`.
+- `exportar` local sem `--saida` acumula a saída em memória; numa Conversa grande, use `--saida`.
+
 ## [0.28.0] — 2026-10-04
 
 Não muda a forma do Acervo nem do Registro. Os campos novos das respostas são acréscimos: os que já

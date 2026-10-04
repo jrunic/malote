@@ -488,9 +488,9 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 ### consultar-conversas
 
 - **Ator:** humano ou agente
-- **Entrada:** Inquilino, mais filtros por Pessoa, Fonte, período, texto, tipo de Mensagem, presença de Anexo e Marca do Titular
-- **Saída:** Conversas ou Mensagens, em formato legível por humano ou estruturado para agente
-- **Regras:** consulta atravessa Fontes e Configurações de Adaptador por padrão — duas contas de WhatsApp do mesmo Inquilino aparecem juntas, sem flag. **Nunca atravessa Inquilino.** Restringir a uma Fonte é filtro, não modo. Filtro por Pessoa resolve todos os Identificadores daquela Pessoa, em todas as Fontes. Resultado indica a Presença do Anexo, nunca omite a Mensagem por o arquivo não estar em disco. A Conversa direta traz o nome do Identificador do outro lado, e o texto de busca casa também esse nome.
+- **Entrada:** Inquilino, mais filtros por Pessoa, remetente (o valor de um Identificador), Fonte, período, texto, tipo de Mensagem, tipo e presença de Anexo e Marca do Titular
+- **Saída:** Conversas, Mensagens ou os Anexos de uma Conversa, em formato legível por humano ou estruturado para agente
+- **Regras:** consulta atravessa Fontes e Configurações de Adaptador por padrão — duas contas de WhatsApp do mesmo Inquilino aparecem juntas, sem flag. **Nunca atravessa Inquilino.** Restringir a uma Fonte é filtro, não modo. Filtro por Pessoa resolve todos os Identificadores daquela Pessoa, em todas as Fontes. Resultado indica a Presença do Anexo, nunca omite a Mensagem por o arquivo não estar em disco. A Conversa direta traz o nome do Identificador do outro lado, e o texto de busca casa também esse nome. O filtro por remetente parte do Identificador, e não da Pessoa, e alcança a forma canônica e as alternativas que a correspondência de endereço conhece; remetente sem Pessoa se filtra, e valor desconhecido é resposta vazia. A listagem de Anexos traz o Descritor e a Presença de cada um, em ordem cronológica, e nunca omite o Anexo cujo arquivo não está em disco.
 - **Não-funcionais:** só leitura. Nenhum caminho de consulta escreve no Acervo. Quando invocada por rede, o Inquilino vem da Chave de Acesso, nunca de parâmetro do chamador.
 
 ### resolver-identidade

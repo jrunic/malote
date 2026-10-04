@@ -152,6 +152,15 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   Conversa direta vem de um `LEFT JOIN` pela chave única `(fonte, valor)`, nunca de chave montada em JS.
   Baseline medida em produção (04/10/2026) para o aceite: `conversas` sem filtro **0,62 a 2,12 s e
   1.407.993 bytes**; teto com os campos novos: 3 s e 2,0 MB.
+- **Listar Anexos e exportar Conversa seguem o que o ciclo 31 mediu: uma consulta por página (nunca uma por
+  Mensagem), `ordem=cronologica` em TODA página do export, e nome por autor, nunca por participante.** Na maior
+  Conversa (270.453 Mensagens) a página de 500 custa 0,45 s e 276 KB; paginar tudo é ~541 páginas, ~4 min e
+  ~150 MB, por isso a listagem de Anexos é rota própria. O default de ordem de
+  `GET /conversas/<id>/mensagens` **muda com o cursor** (cronológica sem, decrescente com): um export que omite
+  `ordem` na segunda página repete e pula. `participantes` não dá nome a quem escreveu: numa Conversa de
+  101.527 Mensagens, 850 dos 2.200 autores (39%, e 23% das Mensagens) não constam dele, então o nome vem de
+  `GET /conversas/<id>/autores`. O filtro por remetente parte do Identificador (`identificadoresDoRemetente`
+  concorda com `identificarPorValor`, e um teste fixa isso), e `autorIds` vazio devolve NADA, nunca tudo.
 - **Nenhum `process.exit(` direto em `src/`: quem encerra o processo é `cli/encerrar.ts`, que espera o
   stdout e o stderr entregarem o que já foi escrito (#1125).** `process.exit` logo depois de um
   `console.log` perde o que o pipe ainda não aceitou: a escrita em pipe é assíncrona quando passa do
