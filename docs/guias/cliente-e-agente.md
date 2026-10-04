@@ -123,7 +123,7 @@ montado à mão.
 | 4 | servidor inalcançável |
 | 5 | erro do servidor |
 | 6 | uso errado da API (4xx que não 401) |
-| 7 | tempo esgotado — **resultado desconhecido**; repetir uma consulta é seguro; repetir um `enviar` **pode duplicar a mensagem** |
+| 7 | tempo esgotado — **resultado desconhecido**; repetir uma consulta é seguro; repetir um `enviar` é seguro **se usar o mesmo `--identificador`** que o comando imprimiu (sem ele, **pode duplicar a mensagem**) |
 
 ## 4. Ensinar um agente
 
@@ -150,6 +150,11 @@ Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`
   não corrigida por este parâmetro).
   `--fixada` exige `--configuracao` junto, e funciona local ou em modo rede.
 - `malote configuracao listar` — lista as Configurações do Inquilino (apelido + fonte).
+- `malote envio estado [<identificador>] [--chave-em <VARIÁVEL>] [--json]` — sem argumento, a
+  contagem de Envios por estado do Inquilino da chave (`enviado`, `falhou`, `pendente`, sempre
+  os três); com o identificador que o `enviar` imprimiu, o estado daquele Envio. Para o Envio
+  da Hera, use `--chave-em` com a chave dela: a chave de outro Inquilino responde `6`, igual a
+  Envio inexistente. `envio reprocessar` não existe por rede — só local.
 - `malote mensagens [--conversa <id>] [--desde D] [--ate D] [--limite N] [--direcao enviada|recebida] [--favorito true --configuracao A]` —
   conteúdo. Sem `--conversa`, atravessa todas as Conversas e Fontes do
   Inquilino, ordenado por recência por default — é o comando para "últimas
@@ -171,8 +176,11 @@ Regras:
 - Paginação: quando a resposta traz `proximo`, devolva-o em `--antes` na próxima
   chamada. Não monte cursor à mão.
 - Código de saída 3 = problema com a credencial: reporte, não tente outra rota.
-  Código 7 = resultado desconhecido: repetir uma consulta é seguro; para `enviar`, confira antes com
-  `malote mensagens --direcao enviada` — repetir pode mandar a mensagem duas vezes.
+  Código 7 = resultado desconhecido: repetir uma consulta é seguro; para `enviar`, repita com o
+  **mesmo** `--identificador` que o comando imprimiu (o servidor não cria um segundo Envio) e
+  confira o estado com `malote envio estado <identificador> --chave-em <VARIÁVEL>`. Repetir
+  sem o identificador, ou se o `enviar` avisou que o servidor não confirmou o identificador,
+  pode mandar a mensagem duas vezes.
 - O Inquilino vem da chave — não existe parâmetro de inquilino.
 - A API é somente leitura, com DUAS exceções nomeadas: `POST /transcricoes/solicitar`
   pede a Transcrição de um Anexo de áudio específico, na frente da fila (seção
@@ -280,10 +288,16 @@ malote enviar --configuracao hera --para <endereço> --documento relatorio.pdf
   padrão. Ex.: `malote enviar ... --chave-em MALOTE_CHAVE_DE_ACESSO_HERA`.
 - O pedido inteiro (arquivo em base64 mais o envelope) tem teto de 8 MB, o que deixa o
   arquivo perto de 6 MB. O cliente recusa antes de abrir conexão.
-- **Código 7 (tempo esgotado) não é inofensivo aqui:** o pedido pode ter entrado, e
-  repetir pode mandar a mensagem duas vezes. Confira antes com `malote mensagens
-  --direcao enviada` (a Mensagem aparece alguns segundos depois de o `ouvir` da conta
-  processar o Envio).
+- **Repetição segura.** O cliente gera um Identificador de Envio para cada pedido, manda e o
+  **imprime**. Quando a resposta não chega (código 7, ou 4 e 5), repita com `--identificador
+  <o que foi impresso>`: o mesmo pedido não cria segundo Envio — o servidor responde `200` com
+  `repetido` e o cliente imprime "Envio ja registrado". Identificador usado antes para
+  **outro** pedido (outra Configuração, destinatário ou conteúdo) sai com código 6.
+  O Identificador é escopado ao Inquilino. Se o `enviar` avisar que o servidor **não
+  confirmou** o identificador, é um servidor sem repetição segura: repetir pode duplicar.
+  No `--json` esse aviso não sai — confira o campo `identificadorDeEnvio` do corpo.
+- Para saber se o Envio entrou e em que estado está: `malote envio estado <identificador>
+  --chave-em <VARIÁVEL>` (texto) ou o `GET /envios/<identificador>` (seção abaixo).
 
 Quem chama o HTTP direto usa a tabela e as respostas abaixo.
 
@@ -299,18 +313,35 @@ Corpo (JSON):
 | `mimetype` | string | se `tipo` for mídia | |
 | `nomeDeArquivo` | string | se `tipo` for `"documento"` | |
 | `fonte` | string | não (padrão `"whatsapp"`) | só `"whatsapp"` é aceito hoje |
+| `identificadorDeEnvio` | UUID | não | torna a repetição segura: o mesmo pedido com o mesmo identificador devolve o Envio existente |
 
-Resposta: `202` com `{"aceita": true, "envioId": "<id>"}` quando o pedido
-entrou na fila. O `202` não confirma que a mensagem saiu: o Envio fica
-`pendente` até o `malote ouvir` daquela Configuração processá-lo.
+Resposta: `202` com `{"aceita": true, "envioId": "<id>", "identificadorDeEnvio": "<uuid>"}`
+quando o pedido entrou na fila. O `202` não confirma que a mensagem saiu: o Envio fica
+`pendente` até o `malote ouvir` daquela Configuração processá-lo. Repetição do mesmo
+pedido com o mesmo `identificadorDeEnvio`: `200` com os mesmos campos e `"repetido": true`.
 
 Recusas:
 - `404`, corpo vazio — a Configuração não existe neste Inquilino. É a mesma
   resposta para "não existe em lugar nenhum" e "existe em outro Inquilino".
 - `400`, com `{"erro": "<motivo>"}` — corpo inválido ou maior que o limite,
-  campo obrigatório ausente, `tipo` desconhecido ou `fonte` sem suporte.
+  campo obrigatório ausente, `tipo` desconhecido, `fonte` sem suporte ou
+  `identificadorDeEnvio` que não é UUID.
+- `409`, com `{"erro": "<motivo>"}` — o `identificadorDeEnvio` já foi usado para outro
+  pedido (outra Configuração, destinatário, tipo, texto, mimetype ou nome de arquivo).
+  Os bytes do arquivo não são comparados.
 - `503`, corpo vazio — o Acervo está sendo migrado; repita depois.
 - `500`, corpo vazio — falha inesperada ao gravar; o pedido não foi aceito.
 
 A Chave de Acesso desta rota fala pela conta. Trate-a como credencial de
 envio, e só exponha o servidor atrás de TLS.
+
+## Consultar Envio
+
+Duas leituras, `GET`, pelo Inquilino da Chave (nunca por parâmetro), que não gravam Operação:
+
+- `GET /envios/<identificador ou id>` — `200` com `envioId`, `identificadorDeEnvio`,
+  `configuracao` (apelido), `estado` (`pendente`, `enviado` ou `falhou`), `tentativas`,
+  `motivoFalha`, `tipo`, `solicitadaEm` e `concluidaEm`. Sem o texto nem o arquivo do
+  Envio. Inexistente, ou de outro Inquilino: `404` de corpo vazio, igual nos dois casos.
+- `GET /envios/contagem` — `200` com `{"pendente": n, "enviado": n, "falhou": n}`, os três
+  sempre presentes.
