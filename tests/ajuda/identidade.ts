@@ -158,14 +158,23 @@ export interface CenaDeIdentidade {
 }
 
 /** Servidor real sobre um Acervo com a identidade semeada e um segundo Inquilino com o mesmo valor. */
-export async function subirCenaDeIdentidade(): Promise<CenaDeIdentidade> {
+export async function subirCenaDeIdentidade<T = undefined>(
+  opcoes: {
+    /** Sementes a mais no Acervo do Titular, antes de ele ser fechado. */
+    semearMais?: (acervo: Acervo, s: Sementes) => T;
+    /** Sementes no Acervo do OUTRO Inquilino (o que tem o mesmo valor de Identificador). */
+    semearNoOutro?: (acervo: Acervo, intruso: string) => void;
+  } = {},
+): Promise<CenaDeIdentidade & { extra: T }> {
   const c = cenario();
   const { id: inquilinoId, acervo } = c.novoInquilino('Titular');
   const s = semearIdentidade(acervo);
+  const extra = opcoes.semearMais?.(acervo, s) as T;
   acervo.fechar();
   const { id: outroId, acervo: acervoDoOutro } = c.novoInquilino('Outro');
   const intruso = registrarIdentificador(acervoDoOutro, { fonte: 'whatsapp', valor: BRUNO }).id;
   registrarNome(acervoDoOutro, { identificadorId: intruso, origem: 'whatsapp', nome: 'Intruso', autoridade: 'terceiro' });
+  opcoes.semearNoOutro?.(acervoDoOutro, intruso);
   acervoDoOutro.fechar();
   const chave = emitirChaveDeAcesso(c.registro, inquilinoId);
   const chaveDoOutro = emitirChaveDeAcesso(c.registro, outroId);
@@ -179,6 +188,7 @@ export async function subirCenaDeIdentidade(): Promise<CenaDeIdentidade> {
     url,
     inquilinoId,
     s,
+    extra,
     chave: { id: chave.id, valor: chave.valor },
     chaveDoOutro: { id: chaveDoOutro.id, valor: chaveDoOutro.valor },
     pedir: async (caminho, k) => {
