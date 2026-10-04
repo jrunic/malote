@@ -23,6 +23,19 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.27.1] — 2026-10-04
+
+Não muda a forma do Acervo nem do Registro.
+
+### Corrigido
+
+- **A saída de mais de 64 KB não é mais cortada quando o stdout é um pipe.** O ponto de entrada
+  chamava `process.exit` logo depois de escrever, e o que o pipe ainda não tinha aceitado morria com o
+  processo: `malote participantes` por rede entregava 65.536 de 242.481 bytes por pipe, e `jq` ou
+  `python` falhavam com JSON incompleto. Afetava o modo rede e o `--json` local, em macOS e Linux;
+  redirecionar para arquivo escondia o defeito. O processo agora espera a saída ser entregue antes de
+  sair (com teto de 10 s se ninguém ler o pipe).
+
 ## [0.27.0] — 2026-10-04
 
 Não muda a forma do Acervo nem do Registro. **Ordem de release:** o servidor recebe esta versão
