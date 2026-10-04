@@ -890,6 +890,14 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
+- **Ciclo 31 (#1129) implementado em `main`, release v0.29.0 ainda não publicada; o critério de custo é medição de
+  campo e entra no aceite.** Conferir antes de dar o ciclo por aceito, na maior Conversa (270.453 Mensagens), com os
+  comandos do Step 7 da Task 7 do plano: primeira página de `anexos` em até 2 s para `image` **e** para `document`
+  (o tipo raro é o caso de varredura), `GET /conversas/<id>/autores` em até 2 s, e o export em até 6 min com até
+  300 MB de memória residente, por arquivo e por `| cat > /dev/null`. Se `document` passar de 2 s, o índice é a
+  próxima conversa, e só então. O modo local do `exportar` sem `--saida` acumula a saída em memória: é limite
+  conhecido, escrito na `--ajuda`.
+
 - **A Hera roda no thinkpad (`malote-ouvinte@hera`, Inquilino próprio) e o Envio está
   provado em produção pelos dois caminhos** — local no thinkpad e por rede do macbook
   (`malote enviar --chave-em`). Resíduos de **decisão do Titular**, não do código: a
