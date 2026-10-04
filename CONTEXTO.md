@@ -536,6 +536,20 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 04/10/2026 — **RELEASE v0.26.0 PUBLICADA E DISTRIBUÍDA NOS TRÊS PACOTES: `malote
+  enviar` fala por rede** (#1116, ciclo 28 `malote-enviar-por-rede-no-cliente`, PR #15,
+  tag `v0.26.0`). Com `MALOTE_SERVIDOR` no ambiente o comando pede o Envio ao servidor
+  (texto, imagem, documento); sem ele, é o comando local de sempre. Inquilino só da chave
+  (`--inquilino` recusado), `--chave-em <VARIÁVEL>` escolhe a chave pelo **nome** da
+  variável e recusa sem cair na padrão, falhas nos códigos 3/4/5/6/7 (o 7 diz que repetir
+  pode duplicar). Sem mudança de schema nem de servidor. Suíte de 1144 para **1175
+  testes**, baseline de 3 falhas. **Provado em campo** do macbook contra a produção, com a
+  Chave de Acesso própria da Hera (emitida por Ação Documentada), e a contraprova — a chave
+  do Titular pedindo a Configuração `hera` — saiu 6 sem gravar nada. Veio de uma pergunta do
+  Titular ("é possível chamar o envio pela Hera a partir do macbook?"), e o custo da entrega
+  escolhida foi dito e aceito: a chave da Hera está no service do cliente, então toda
+  sessão do macbook a carrega. Achado do ensaio, aberto como **#1115**: `malote servir`
+  derruba o processo numa requisição autenticada para Inquilino sem Acervo.
 - 04/10/2026 — **CICLO 27 ACEITO: o malote envia mensagem (texto, imagem,
   documento), RELEASES v0.25.0 E v0.25.1 EM PRODUÇÃO no thinkpad** (#1112, três
   planos, PRs #13 e #14, tags `v0.25.0` e `v0.25.1`). Agregado **Envio** novo
@@ -815,16 +829,28 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
-- **Envio em produção, sem uso real ainda.** A Hera ainda não está no thinkpad: a
-  verificação rodou numa instalação descartável (`~/malote-hera-verificacao` no
-  macbook, vínculo copiado da espiga — pode ser descartada depois de conferir que
-  não é mais necessária). O próximo passo é Ação Documentada: Inquilino próprio,
-  Configuração e vínculo no thinkpad. Antes de assumir que o Envio funciona em
-  produção, **mandar um Envio real por lá** — a release foi verificada só por
-  versão, schema e ouvinte vivo.
-- **Sem prova de campo:** envio para **grupo** e a rota `POST /envios/solicitar`
-  contra o servidor de produção (só teste); a falha pós-envio só tem teste com
-  erro injetado.
+- **A Hera roda no thinkpad (`malote-ouvinte@hera`, Inquilino próprio) e o Envio está
+  provado em produção pelos dois caminhos** — local no thinkpad e por rede do macbook
+  (`malote enviar --chave-em`). Resíduos de **decisão do Titular**, não do código: a
+  instalação descartável do macbook (`~/malote-hera-verificacao`, com 4 Mensagens reais e
+  sem vínculo) e as duas cópias renomeadas do vínculo (`*.migrado-para-thinkpad-*`, no
+  macbook — credenciais de uma sessão que já avançou). E o vínculo da Hera tem **uma única
+  cópia viva**, no thinkpad, fora do `jd-backup` (tarefa #909): perdê-lo custa um
+  pareamento novo, sem perder Mensagem.
+- **Sem prova de campo:** envio para **grupo**, imagem/documento **por rede** e a falha
+  pós-envio (só teste, com erro injetado).
+- **O código 7 do `enviar` por rede não tem como ser resolvido pelo cliente:** faltam
+  `envio estado`/`reprocessar` e uma consulta do Envio por rede (fora do escopo do ciclo
+  28). A conferência que existe é `malote mensagens --direcao enviada`, com atraso de alguns
+  segundos e mostrando a Mensagem, não o estado do Envio. Repetir um `enviar` que deu 7
+  pode duplicar a mensagem.
+- **As skills `kn-31-acessa-malote` das mentoradas** (cópias em
+  `14-projetos/20260915-configurar-maquinas-walter/` e
+  `14-projetos/20260923-configurar-maquinas-renata/`, fora deste repo) dizem "repetir é
+  seguro" e "não existe caminho de envio". **Medido em 04/10/2026:** continuam verdadeiras
+  para o que descrevem (só comandos de consulta, em instalações que não rodam a v0.26.0).
+  Reabrir **se** o Envio for habilitado para uma mentorada: aí a tabela de códigos e a frase
+  "só leitura" precisam do `enviar` e do aviso do código 7.
 - **Staging órfão em `envios-pendentes/`** se o `ouvir` cair entre o envio e o
   eco: o mapa de bytes originados é de processo. O produto não detecta nem limpa;
   o guia de armazenamento diz que removê-lo à mão é seguro.
