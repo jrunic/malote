@@ -38,6 +38,14 @@ Regras que o produto segue (e testa):
 - o que o produto cria nasce `0700`;
 - os caminhos são os mesmos em qualquer sistema operacional.
 
+Dentro de `XDG_DATA_HOME/malote/`, o Envio de imagem ou documento usa uma pasta de
+trabalho: `envios-pendentes/`. Cada arquivo ali é a cópia que um pedido de Envio ainda
+vai enviar. Quando a mensagem sai e o eco chega, o malote **move** a cópia para
+`envios-pendentes/processados/` e nunca a apaga — limpar `processados/` é seu. Um arquivo
+que ficar em `envios-pendentes/` fora de `processados/` depois de o Envio estar
+`enviado` é resíduo de um `malote ouvir` que caiu entre o envio e o eco: o produto não o
+detecta nem o limpa, e removê-lo à mão é seguro.
+
 ## Backup — por categoria, não por lista
 
 A pergunta que separa as duas categorias: *se eu apagar isto, o que se perde?*

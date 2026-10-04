@@ -487,6 +487,19 @@ Hard limits sempre relevantes durante a sessão.
   Envio que já tentou e voltou indeterminado cede a vez aos que nunca
   tentaram — sem isso, um Envio problemático trava a fila inteira daquela
   Configuração atrás de si, porque o poller sempre pegaria o mesmo primeiro.
+- **O eco do Envio de mídia pode chegar ANTES de `aoEnviar` rodar, e o laço
+  de `anexosNuncaObtidos` espera a passada de Envio em curso.** Medido lendo
+  a biblioteca vendorizada: o `sendMessage` emite o eco num `process.nextTick`
+  atrás de um mutex, e nada garante que a continuação do `await` que chama
+  `aoEnviar` rode antes dele. Sem a espera, o eco não acharia o `keyId` no mapa
+  `bytesOriginados` e baixaria de volta do WhatsApp os bytes que o malote acabou
+  de enviar, em silêncio — o Anexo ficaria `presente` do mesmo jeito, então só
+  um teste que emite o eco **de dentro** do `sendMessage` pega. A passada é
+  publicada (`passadaDeEnvio`) ANTES de começar, porque o eco pode vir do
+  primeiro trecho síncrono dela. O staging é movido para `processados/` depois
+  de gravar o Anexo, nunca apagado; se o processo cair entre o envio e o eco,
+  o mapa de processo morre e o arquivo fica órfão em `envios-pendentes/`
+  (janela aceita e nomeada, sem detecção).
 - **Envio órfão por vínculo invalidado nunca vira `falhou`.** Quando o
   adaptador invalida o vínculo (`loggedOut`), o poller para, mas nenhum
   Envio `pendente` daquela Configuração é tocado — a causa é do vínculo, não

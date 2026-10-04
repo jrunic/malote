@@ -1071,6 +1071,12 @@ test('midia originada pelo proprio Envio usa o staging: downloadMediaMessage NUN
       'bytes-originais-da-imagem',
     );
 
+    // O Envio terminou `enviado`, e nao so "o download nao foi chamado".
+    const envio = abrirAcervoSomenteLeitura(join(raiz, 'acervos'), id);
+    const estado = envio.preparar('SELECT estado FROM envios').get() as { estado: string };
+    envio.fechar();
+    assert.equal(estado.estado, 'enviado');
+
     // MOVIDO, nunca apagado — mesmo principio da Pasta de Entrada.
     assert.equal(existsSync(caminhoStaging), false, 'staging deveria ter saido do lugar original');
     assert.ok(
