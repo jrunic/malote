@@ -142,6 +142,16 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
 
 ## Restrições
 
+- **`identificar` parte do Identificador gravado e lista as formas da correspondência à parte; nome em
+  lote, nunca por linha (#1126).** O Acervo grava o endereço na forma canônica e guarda a alternativa só
+  como correspondência (valor contra valor, sem id); parte das alternativas existe também como linha, por
+  herança — por isso a resposta tem duas listas e a forma sem linha leva `identificador: null`. O nome
+  corrente de um conjunto (a listagem de Conversas, os participantes) sai de **uma consulta** com a
+  precedência aplicada em memória (`nomesEmLote`): o handler do servidor é síncrono, e a listagem sem filtro
+  já faz uma contagem correlacionada por linha sobre ~1,4 M Mensagens. O Identificador do outro lado da
+  Conversa direta vem de um `LEFT JOIN` pela chave única `(fonte, valor)`, nunca de chave montada em JS.
+  Baseline medida em produção (04/10/2026) para o aceite: `conversas` sem filtro **0,62 a 2,12 s e
+  1.407.993 bytes**; teto com os campos novos: 3 s e 2,0 MB.
 - **Nenhum `process.exit(` direto em `src/`: quem encerra o processo é `cli/encerrar.ts`, que espera o
   stdout e o stderr entregarem o que já foi escrito (#1125).** `process.exit` logo depois de um
   `console.log` perde o que o pipe ainda não aceitou: a escrita em pipe é assíncrona quando passa do

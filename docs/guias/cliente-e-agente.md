@@ -101,6 +101,9 @@ malote midia <anexoId> --saida ./foto.jpg
 # Resolução de pessoa: texto entra, id sai (os outros comandos pedem o id)
 malote pessoas --texto "Bail Organa"
 
+# Quem é este endereço? (com ou sem Pessoa; o valor é comparado exato)
+malote identificar 5511999990000@s.whatsapp.net
+
 # Participantes de uma conversa coletiva (opcional: posição em uma data)
 malote participantes --conversa <id>
 malote participantes --conversa <id> --em 2026-09-15
@@ -149,7 +152,20 @@ Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`
   Sem `--desde`, a ordem continua sendo a de criação da Conversa (limitação conhecida,
   não corrigida por este parâmetro).
   `--fixada` exige `--configuracao` junto, e funciona local ou em modo rede.
+  A Conversa **direta** de WhatsApp traz `nome` e `origemDoNome`: o nome corrente do
+  Identificador do outro lado e de onde ele vem (`null` na coletiva, na direta sem nome
+  gravado e nas de Instagram). `--busca T` casa o assunto das coletivas **e** o nome de
+  qualquer Atribuição daquele Identificador, sem distinguir maiúscula. Limitação conhecida:
+  um valor-sentinela que a plataforma grava no lugar do nome aparece como nome.
 - `malote configuracao listar` — lista as Configurações do Inquilino (apelido + fonte).
+- `malote identificar <valor> [--fonte F] [--json]` — o que o Acervo sabe de um Identificador (o endereço
+  de uma Pessoa numa Fonte), **com ou sem Pessoa**: use quando só se tem um número ou um endereço da
+  plataforma e se quer saber quem é. Devolve os Identificadores gravados que o valor alcança, as formas que
+  a correspondência de endereço conhece (a forma canônica e as alternativas, gravadas ou não), os nomes com
+  a **origem** de cada um (plataforma, catálogo), o nome corrente pela precedência do Inquilino, a Pessoa
+  quando há, e em quantas Conversas e Mensagens aparece. O valor é comparado **exato** — com o sufixo da
+  plataforma (`...@s.whatsapp.net`) —, e valor que o Acervo nunca viu devolve lista vazia, não erro. Por
+  rede, `--inquilino` é recusado (o Inquilino vem da chave).
 - `malote envio estado [<identificador>] [--chave-em <VARIÁVEL>] [--json]` — sem argumento, a
   contagem de Envios por estado do Inquilino da chave (`enviado`, `falhou`, `pendente`, sempre
   os três); com o identificador que o `enviar` imprimiu, o estado daquele Envio. Para o Envio
@@ -164,8 +180,12 @@ Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`
   só em modo rede; exige `--configuracao`.
 - `malote buscar --texto T [--conversa <id>] [--desde D] [--ate D]` — busca no conteúdo.
 - `malote pessoas --texto T` — resolve nome/endereço para `id`; os outros comandos
-  pedem o id, nunca o nome.
-- `malote participantes --conversa <id> [--em AAAA-MM-DD]` — quem estava na conversa.
+  pedem o id, nunca o nome. Só acha **Pessoa**: endereço que ninguém ligou a uma Pessoa
+  não aparece aqui — para ele, `malote identificar`.
+- `malote participantes --conversa <id> [--em AAAA-MM-DD]` — quem estava na conversa. Cada
+  participante traz `valor` (o endereço), `nome`, `origemDoNome` e `pessoaId` (`null` onde
+  não há), além do `identificadorId` e da situação de sempre. O nome é o do próprio
+  Identificador, pela precedência do Inquilino.
 - `malote relatorio` — totais por fonte e natureza.
 - `malote midia <anexoId> --saida <arquivo>` — grava os bytes do Anexo (foto/documento)
   no caminho local dado. Só existe em modo rede. **Não imprime** os bytes — não há
@@ -201,12 +221,13 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 
 | rota | parâmetros opcionais | resposta |
 |---|---|---|
-| `GET /conversas` | `fonte`, `coletiva`, `busca`, `pessoa`, `limite`, `configuracao`, `fixada`, `desde` | `{ conversas: [{ id, fonte, coletiva, assunto, mensagens, configuracao }] }` |
+| `GET /conversas` | `fonte`, `coletiva`, `busca`, `pessoa`, `limite`, `configuracao`, `fixada`, `desde` | `{ conversas: [{ id, fonte, coletiva, assunto, mensagens, configuracao, nome, origemDoNome }] }` |
 | `GET /mensagens` | `limite`, `desde`, `ate`, `autor`, `fonte`, `direcao`, `antes`, `ordem` | `{ mensagens: [...], proximo? }` |
 | `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `antes`, `ordem`, `direcao`, `favorito`, `configuracao` | `{ mensagens: [...], proximo? }` |
 | `GET /buscar?texto=` | `conversa`, `autor`, `desde`, `ate`, `limite` | `{ mensagens: [...] }` |
 | `GET /pessoas?texto=` | — | `{ pessoas: [{ id, nome, identificadores }] }` |
-| `GET /conversas/<id>/participantes` | `em` | `{ presenca: {...} }` |
+| `GET /conversas/<id>/participantes` | `em` | `{ presenca: {...} }` — cada participante com `valor`, `nome`, `origemDoNome`, `pessoaId` |
+| `GET /identificadores?valor=` | `fonte` | `{ consultado, identificadores: [...], formas: [...] }` — vazio quando o Acervo nunca viu o valor |
 | `GET /relatorio` | — | `{ relatorio: { conversas, mensagens } }` |
 | `GET /chaves` | — | `{ chaves: [...] }` — as chaves do próprio Inquilino |
 | `GET /configuracoes` | — | `{ configuracoes: [{ apelido, fonte }] }` |
