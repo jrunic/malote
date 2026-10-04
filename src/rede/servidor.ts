@@ -82,10 +82,26 @@ export function criarServidor(opcoes: OpcoesDoServidor): Server {
     // atende requisicao de fora nao pode ter esse poder. A porta recusa forma
     // divergente, que e o certo — superficie de consulta nao conserta base,
     // avisa.
-    const acervo = abrirAcervoSomenteLeitura(
-      join(opcoes.dados, 'acervos'),
-      identidade.inquilinoId as InquilinoId,
-    );
+    //
+    // A abertura pode lancar — Acervo ainda inexistente para um Inquilino com
+    // Chave emitida, ou forma divergente — e excecao dentro do manipulador
+    // derruba o PROCESSO, para todos os Inquilinos. Vira 503 de corpo vazio:
+    // a Chave e valida, o que falta e do lado do servidor, e o corpo nao diz
+    // nada sobre o que existe (#1115).
+    let acervo;
+    try {
+      acervo = abrirAcervoSomenteLeitura(
+        join(opcoes.dados, 'acervos'),
+        identidade.inquilinoId as InquilinoId,
+      );
+    } catch (e) {
+      process.stderr.write(
+        `acervo indisponivel para a Chave ${identidade.chaveId}: ${e instanceof Error ? e.message : String(e)}\n`,
+      );
+      res.writeHead(503, { 'content-type': 'application/json' });
+      res.end('');
+      return;
+    }
     try {
       // O Ator escopa por REQUISICAO. Com estado global, a Operacao de uma
       // sairia com o Ator de outra.

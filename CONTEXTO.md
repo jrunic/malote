@@ -549,7 +549,10 @@ Repositório expõe services systemd. Convenções:
   Titular ("é possível chamar o envio pela Hera a partir do macbook?"), e o custo da entrega
   escolhida foi dito e aceito: a chave da Hera está no service do cliente, então toda
   sessão do macbook a carrega. Achado do ensaio, aberto como **#1115**: `malote servir`
-  derruba o processo numa requisição autenticada para Inquilino sem Acervo.
+  derruba o processo numa requisição autenticada para Inquilino sem Acervo — **corrigido em `main`
+  (#1115): a abertura do Acervo que falha responde 503 de corpo vazio e loga em stderr; ainda NÃO
+  publicado (precisa de release patch).** `inquilino criar` continua sem criar o Acervo, de propósito:
+  quem cria é o primeiro `abrirAcervo` do ouvinte ou do `acervo migrar`.
 - 04/10/2026 — **CICLO 27 ACEITO: o malote envia mensagem (texto, imagem,
   documento), RELEASES v0.25.0 E v0.25.1 EM PRODUÇÃO no thinkpad** (#1112, três
   planos, PRs #13 e #14, tags `v0.25.0` e `v0.25.1`). Agregado **Envio** novo
