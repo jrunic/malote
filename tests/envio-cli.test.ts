@@ -183,7 +183,7 @@ test('malote envio estado mostra a contagem por estado', async () => {
     );
     assert.equal(codigo, 0);
     const saida = JSON.parse(linhas.at(-1) ?? '{}');
-    assert.deepEqual(saida, { pendente: 1 });
+    assert.deepEqual(saida, { enviado: 0, falhou: 0, pendente: 1 });
   } finally {
     limpar();
   }
