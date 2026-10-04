@@ -23,6 +23,18 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.26.1] — 2026-10-04
+
+Não muda a forma do Acervo nem do Registro.
+
+### Corrigido
+
+- **`malote servir` não cai mais com Chave válida de um Inquilino sem Acervo.** Abrir o
+  Acervo somente-leitura lançava dentro do manipulador e a exceção encerrava o processo,
+  para todos os Inquilinos, com uma única requisição autenticada. Agora a requisição recebe
+  `503` de corpo vazio e a causa vai para o stderr do servidor. Vale também para Acervo em
+  forma divergente.
+
 ## [0.26.0] — 2026-10-04
 
 Não muda a forma do Acervo nem do Registro, e não muda o servidor.
