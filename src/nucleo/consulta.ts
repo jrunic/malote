@@ -3,6 +3,7 @@ import type { PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
 import { SQL_FAMILIA } from './familia.js';
 import type { ConversaId, Direcao, EstadoDeTranscricao, Fonte, MensagemId, PessoaId, Presenca } from './tipos.js';
 import { nomeDoIdentificador } from './identidade.js';
+import { nomesEmLote } from './nomes-em-lote.js';
 
 /**
  * Leitura do Acervo. Nenhum caminho daqui escreve.
@@ -132,6 +133,14 @@ export interface ConversaListada {
   mensagens: number;
   /** Null para Conversa coletiva — ela pertence ao Inquilino, nao a uma Configuracao. */
   configuracaoId: string | null;
+  /**
+   * Nome corrente (e origem) do Identificador do outro lado da Conversa DIRETA — o de mesmo valor
+   * que o identificador externo dela. Null na coletiva, na direta sem nome, na direta cujo
+   * identificador externo nao e um Identificador (hoje, as de Instagram) e quando o filtro nao
+   * trouxe a precedencia.
+   */
+  nome: string | null;
+  origemDoNome: string | null;
 }
 
 export interface FiltroDeConversa {
@@ -161,6 +170,13 @@ export interface FiltroDeConversa {
    * `busca` ja documentava essa limitacao).
    */
   desde?: number;
+  /**
+   * Quando presente, a Conversa direta cujo identificador externo e um Identificador gravado da
+   * mesma Fonte traz o nome corrente (e a origem) desse Identificador. Ausente, `nome` vem
+   * `null` — nao se resolve nome sem a precedencia do Inquilino. Dentro do filtro, e nao como
+   * terceiro parametro: a aridade de `listarConversas` e guardada por teste.
+   */
+  precedencia?: PrecedenciaDeNome;
 }
 
 export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): ConversaListada[] {
@@ -187,13 +203,18 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
   if (filtro.busca !== undefined) {
     // Termo do usuario e LITERAL: % e _ sao escapados, senao "100%" casa
     // qualquer coisa. LOWER para case-insensitive por ser ASCII-safe.
+    // Casa o assunto (coletiva) OU o nome de QUALQUER Atribuicao do Identificador do outro lado
+    // da Conversa direta (identificador externo que e Identificador gravado da mesma Fonte).
     condicoes.push(
-      "LOWER(md.assunto) LIKE LOWER(?) ESCAPE '\\'",
+      `(LOWER(md.assunto) LIKE LOWER(?) ESCAPE '\\'
+        OR (c.coletiva = 0 AND EXISTS (
+              SELECT 1 FROM identificadores bi
+                JOIN atribuicoes_de_nome ba ON ba.identificador_id = bi.id
+               WHERE bi.fonte = c.fonte AND bi.valor = c.id_externo
+                 AND LOWER(ba.nome) LIKE LOWER(?) ESCAPE '\\')))`,
     );
-    valores.push(
-      filtro.busca.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
-        .replace(/^/, '%') + '%',
-    );
+    const termo = filtro.busca.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+    valores.push(`%${termo}%`, `%${termo}%`);
   }
   if (filtro.configuracaoId !== undefined) {
     condicoes.push('c.configuracao_id = ?');
@@ -205,10 +226,11 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
   let linhas: Array<Record<string, unknown>>;
   if (filtro.desde !== undefined) {
     linhas = acervo.preparar(
-        `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, md.assunto,
+        `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, md.assunto, i.id AS identificador_id,
                 COUNT(msg.id) AS mensagens
            FROM conversas c
            LEFT JOIN metadados_de_coletiva md ON md.conversa_id = c.id
+           LEFT JOIN identificadores i ON i.fonte = c.fonte AND i.valor = c.id_externo AND c.coletiva = 0
            LEFT JOIN mensagens msg ON msg.conversa_id = c.id
            ${onde}
            GROUP BY c.id
@@ -218,24 +240,43 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
       .all(...valores, filtro.desde) as Array<Record<string, unknown>>;
   } else {
     linhas = acervo.preparar(
-        `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, md.assunto,
+        `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, md.assunto, i.id AS identificador_id,
                 (SELECT COUNT(*) FROM mensagens x WHERE x.conversa_id = c.id) AS mensagens
            FROM conversas c
            LEFT JOIN metadados_de_coletiva md ON md.conversa_id = c.id
+           LEFT JOIN identificadores i ON i.fonte = c.fonte AND i.valor = c.id_externo AND c.coletiva = 0
            ${onde}
            ORDER BY c.criada_em${limite}`,
       )
       .all(...valores) as Array<Record<string, unknown>>;
   }
 
-  return linhas.map((l) => ({
+  const base = linhas.map((l) => ({
     id: l['id'] as string,
     fonte: l['fonte'] as Fonte,
     coletiva: (l['coletiva'] as number) === 1,
     assunto: (l['assunto'] as string | null) ?? null,
     mensagens: l['mensagens'] as number,
     configuracaoId: (l['configuracao_id'] as string | null) ?? null,
+    nome: null as string | null,
+    origemDoNome: null as string | null,
+    identificadorId: (l['identificador_id'] as string | null) ?? null,
   }));
+
+  if (filtro.precedencia !== undefined) {
+    // UM lote: os ids ja saem da propria consulta; os nomes, de uma consulta so.
+    const idsDosNomes = base.map((c) => c.identificadorId).filter((id): id is string => id !== null);
+    const nomes = nomesEmLote(acervo, idsDosNomes, filtro.precedencia);
+    for (const c of base) {
+      const n = c.identificadorId === null ? undefined : nomes.get(c.identificadorId);
+      if (n !== undefined) {
+        c.nome = n.nome;
+        c.origemDoNome = n.origem;
+      }
+    }
+  }
+
+  return base.map(({ identificadorId: _identificadorId, ...c }) => c);
 }
 
 export interface MensagemLida {
