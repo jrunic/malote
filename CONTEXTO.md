@@ -161,6 +161,14 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   101.527 Mensagens, 850 dos 2.200 autores (39%, e 23% das Mensagens) não constam dele, então o nome vem de
   `GET /conversas/<id>/autores`. O filtro por remetente parte do Identificador (`identificadoresDoRemetente`
   concorda com `identificarPorValor`, e um teste fixa isso), e `autorIds` vazio devolve NADA, nunca tudo.
+- **O texto que o usuário digita é TEXTO, nunca sintaxe: `buscarMensagens` o cita palavra por palavra
+  (`termoParaFts5`) antes de ir ao `MATCH` do FTS5, e o servidor tem rede de segurança para o que escapar (#1131).**
+  O termo ia cru, e `a.b`, `a&b`, `AND` ou uma aspas solta lançavam `SqliteError` dentro do manipulador: excecao ali
+  derruba o PROCESSO, que atende todos os Inquilinos, e o servidor de produção caiu duas vezes assim (o export
+  de uma Conversa de 206 mil Mensagens morreu com 502 por uma dessas). `servidor.ts` captura a exceção da rota
+  e responde `500` de corpo vazio, logando mensagem e caminho SEM a query (pode ter texto de conversa); isso não
+  substitui tratar o erro na rota, só impede que um defeito vire queda. Palavra citada se comporta como a solta
+  de antes (caixa e acento ignorados, E entre palavras); `AND`/`OR`/`NOT`, `*` e `NEAR` deixam de ser operadores.
 - **Nenhum `process.exit(` direto em `src/`: quem encerra o processo é `cli/encerrar.ts`, que espera o
   stdout e o stderr entregarem o que já foi escrito (#1125).** `process.exit` logo depois de um
   `console.log` perde o que o pipe ainda não aceitou: a escrita em pipe é assíncrona quando passa do
@@ -890,8 +898,15 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
-- **Ciclo 31 (#1129) implementado em `main`, release v0.29.0 ainda não publicada; o critério de custo é medição de
-  campo e entra no aceite.** Conferir antes de dar o ciclo por aceito, na maior Conversa (270.453 Mensagens), com os
+- **Ciclo 31 (#1129): a v0.29.0 (PR #20, merge `3c29193`) tem um defeito, corrigido em `main` (`a9bd7dd`) e AINDA NÃO
+  publicado; o ciclo NÃO está aceito.** `anexos --presenca <qualquer>` entrava em `anexos` por `idx_anexos_presenca` e,
+  por Mensagem, varria todos os Anexos daquela presenca: na maior Conversa passou de 60 s e, como o servidor é
+  síncrono, travou todos os clientes por minutos (SIGKILL no restart). Corrigido com `+a.presenca = ?`; medido no
+  Acervo real depois: `presente` 51 ms, `nunca-obtido` 17 ms. **Antes de aceitar:** publicar a v0.29.1 e repetir as
+  medições pelo servidor, **com um filtro de cada vez e um `curl --max-time` curto**: uma consulta lenta que o
+  cliente abandona continua rodando no servidor. Medido ANTES do defeito aparecer: `anexos` `image` 0,46–0,52 s e
+  `document` 1,19–1,53 s, `autores` 0,63 s quente, export da maior Conversa (271.052 Mensagens) em 133 s com 123 MB
+  (e 120 MB com consumidor lento, 456 s). Conferir antes de dar o ciclo por aceito, na maior Conversa (270.453 Mensagens), com os
   comandos do Step 7 da Task 7 do plano: primeira página de `anexos` em até 2 s para `image` **e** para `document`
   (o tipo raro é o caso de varredura), `GET /conversas/<id>/autores` em até 2 s, e o export em até 6 min com até
   300 MB de memória residente, por arquivo e por `| cat > /dev/null`. Se `document` passar de 2 s, o índice é a

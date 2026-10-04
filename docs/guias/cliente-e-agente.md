@@ -209,7 +209,9 @@ Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`
   pareça completo**, e `--saida` que já existe é recusada. Sem `--saida` escreve na saída padrão, e então o
   **código de saída** é o único sinal de truncamento. Conversa grande: use `--saida` (o modo local sem ela
   acumula a saída em memória). Pagina `mensagens` de 500 em 500, mandando `ordem=cronologica` em toda página.
-- `malote buscar --texto T [--conversa <id>] [--desde D] [--ate D]` — busca no conteúdo.
+- `malote buscar --texto T [--conversa <id>] [--desde D] [--ate D]` — busca no conteúdo. O texto é **literal**: cada
+  palavra entre aspas e todas por E, sem caixa e sem acento. Ponto, `&`, aspas, `AND`, `OR`, `NOT`, `*` e `NEAR` são
+  texto, não operador (`roc*` não acha `rock`; `a.b` acha a Mensagem que tem `a.b`).
 - `malote pessoas --texto T` — resolve nome/endereço para `id`; os outros comandos
   pedem o id, nunca o nome. Só acha **Pessoa**: endereço que ninguém ligou a uma Pessoa
   não aparece aqui — para ele, `malote identificar`.

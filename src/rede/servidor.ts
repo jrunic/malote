@@ -107,14 +107,24 @@ export function criarServidor(opcoes: OpcoesDoServidor): Server {
     try {
       // O Ator escopa por REQUISICAO. Com estado global, a Operacao de uma
       // sairia com o Ator de outra.
-      comAtor(atorDeAcesso(identidade.chaveId), () =>
+      comAtor(atorDeAcesso(identidade.chaveId), () => {
+        opcoes.ganchoDeTeste?.antesDeResponder?.(res);
         responder(req, res, {
           acervo,
           identidade,
           dados: opcoes.dados,
           ...(opcoes.ganchoDeTeste ? { ganchoDeTeste: opcoes.ganchoDeTeste } : {}),
-        }),
-      );
+        });
+      });
+    } catch (e) {
+      // REDE DE SEGURANCA (#1131): excecao em QUALQUER rota derrubava o PROCESSO, para todos os
+      // Inquilinos — o servidor e um so e atende todos. Vira 500 de corpo vazio (o corpo nao diz nada do
+      // que aconteceu por dentro), e o processo segue. O log leva a mensagem e o caminho SEM a query, que
+      // pode ter texto de conversa. Nao substitui tratar o erro na rota: um 500 e defeito, so nao e queda.
+      const caminho = (req.url ?? '').split('?')[0];
+      process.stderr.write(`erro na rota ${req.method ?? '?'} ${caminho}: ${e instanceof Error ? e.message : String(e)}\n`);
+      if (!res.headersSent) res.writeHead(500, { 'content-type': 'application/json' });
+      res.end('');
     } finally {
       acervo.fechar();
     }

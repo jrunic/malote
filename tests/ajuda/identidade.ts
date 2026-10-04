@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { cenario } from './acervo.js';
 import { CFG_WHATSAPP } from './configuracao.js';
 import { abrirAcervoSomenteLeitura, type Acervo } from '../../src/nucleo/acervo.js';
-import { criarServidor } from '../../src/rede/servidor.js';
+import { criarServidor, type OpcoesDoServidor } from '../../src/rede/servidor.js';
 import { emitirChaveDeAcesso } from '../../src/registro/chave-de-acesso.js';
 import {
   registrarConversa,
@@ -164,6 +164,8 @@ export async function subirCenaDeIdentidade<T = undefined>(
     semearMais?: (acervo: Acervo, s: Sementes) => T;
     /** Sementes no Acervo do OUTRO Inquilino (o que tem o mesmo valor de Identificador). */
     semearNoOutro?: (acervo: Acervo, intruso: string) => void;
+    /** SO PARA TESTE: o gancho que o servidor aceita (ver `ContextoDaRequisicao`). */
+    ganchoDeTeste?: OpcoesDoServidor['ganchoDeTeste'];
   } = {},
 ): Promise<CenaDeIdentidade & { extra: T }> {
   const c = cenario();
@@ -180,7 +182,11 @@ export async function subirCenaDeIdentidade<T = undefined>(
   const chaveDoOutro = emitirChaveDeAcesso(c.registro, outroId);
 
   const porta = await portaLivre();
-  const srv = criarServidor({ dados: c.raiz, porta });
+  const srv = criarServidor({
+    dados: c.raiz,
+    porta,
+    ...(opcoes.ganchoDeTeste ? { ganchoDeTeste: opcoes.ganchoDeTeste } : {}),
+  });
   await new Promise<void>((r) => srv.listen(porta, '127.0.0.1', r));
   const url = `http://127.0.0.1:${porta}`;
   return {

@@ -143,3 +143,26 @@ test('o plano parte das Mensagens da Conversa pelo indice e entra nos Anexos pel
     limpar();
   }
 });
+
+test('nenhum filtro faz o plano entrar em Anexos por idx_anexos_presenca: o laço aninhado varreria todos os Anexos daquela presenca por Mensagem (#1129)', () => {
+  const { acervo, s, limpar } = acervoDeMidia();
+  try {
+    const combinacoes: Array<[string, Parameters<typeof montarConsultaDeAnexos>[0]]> = [
+      ['presenca=presente', { conversaId: s.grupo, presenca: 'presente' }],
+      ['presenca=nunca-obtido', { conversaId: s.grupo, presenca: 'nunca-obtido' }],
+      ['presenca=descartado', { conversaId: s.grupo, presenca: 'descartado' }],
+      ['presenca + tipo', { conversaId: s.grupo, presenca: 'presente', tipo: 'image' }],
+      ['presenca + periodo + remetente', { conversaId: s.grupo, presenca: 'presente', de: 1, ate: 9e15, autorIds: [s.bruno] }],
+    ];
+    for (const [nome, f] of combinacoes) {
+      const { sql, valores } = montarConsultaDeAnexos({ ...f, limite: 500 });
+      const plano = (acervo.preparar(`EXPLAIN QUERY PLAN ${sql}`).all(...valores) as Array<{ detail: string }>)
+        .map((l) => l.detail)
+        .join(' | ');
+      assert.doesNotMatch(plano, /idx_anexos_presenca/, `${nome}: ${plano}`);
+      assert.match(plano, /SEARCH a USING INDEX idx_anexos_mensagem/, `${nome}: ${plano}`);
+    }
+  } finally {
+    limpar();
+  }
+});

@@ -54,7 +54,11 @@ export function montarConsultaDeAnexos(filtro: FiltroDeAnexos): { sql: string; v
     valores.push(filtro.ate);
   }
   if (filtro.presenca !== undefined) {
-    condicoes.push('a.presenca = ?');
+    // O `+` unario DESLIGA o indice neste termo. Sem ele o SQLite entra em `anexos` por
+    // `idx_anexos_presenca` e, para CADA Mensagem da Conversa, varre todos os Anexos daquela presenca do
+    // Acervo inteiro (medido em 04/10/2026 no Acervo real: 333.783 `presente`, 533.325 `nunca-obtido`):
+    // a consulta passa de minutos, e o servidor e sincrono — trava todos os clientes ate acabar.
+    condicoes.push('+a.presenca = ?');
     valores.push(filtro.presenca);
   }
   if (filtro.cursor !== undefined) {
