@@ -1,5 +1,7 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { basename } from 'node:path';
 import { pedirPost, type CodigoDeFalha } from './cliente.js';
+import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
 
 /**
  * `malote enviar` no MODO REDE: pede o Envio ao servidor (`POST /envios/solicitar`) em vez
@@ -10,7 +12,14 @@ import { pedirPost, type CodigoDeFalha } from './cliente.js';
  * Recusa local = codigo 2, ANTES de qualquer I/O de rede.
  */
 
+/**
+ * Copia do limite do CORPO da rota de Envio, que mora na camada de rede — e a camada da CLI
+ * nao pode importa-la (fronteira da biblioteca de recepcao). Um teste compara as duas. E
+ * limite do corpo JSON, nao do arquivo: o base64 incha o arquivo em 4/3.
+ */
+export const LIMITE_DO_CORPO_DE_ENVIO = 8 * 1024 * 1024;
 const TIMEOUT_TEXTO_MS = 30_000;
+const TIMEOUT_ARQUIVO_MS = 120_000;
 
 export interface RedeDeEnvio {
   /** Ja resolvido pelo ponto de entrada: `--servidor` ou a variavel de ambiente. */
@@ -95,12 +104,46 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
     return 2;
   }
 
-  const corpo: Record<string, unknown> = { configuracao: apelido, para, tipo: 'texto', texto };
+  let corpo: Record<string, unknown>;
+  if (caminhoDoArquivo === undefined) {
+    corpo = { configuracao: apelido, para, tipo: 'texto', texto };
+  } else {
+    // Guarda de memoria: o base64 nunca e menor que a entrada, entao arquivo que sozinho ja
+    // passa do limite do corpo e recusado sem ser lido. A checagem exata, pos-codificacao,
+    // logo abaixo, e a guarda de verdade.
+    const tamanhoDoArquivo = statSync(caminhoDoArquivo).size;
+    if (tamanhoDoArquivo > LIMITE_DO_CORPO_DE_ENVIO) {
+      escrever(
+        `O arquivo tem ${tamanhoDoArquivo} bytes e o pedido todo (em base64) tem teto de ` +
+          `${LIMITE_DO_CORPO_DE_ENVIO} bytes: o teto pratico do arquivo fica perto de 6 MB.`,
+      );
+      return 2;
+    }
+    const bytes = readFileSync(caminhoDoArquivo);
+    corpo = {
+      configuracao: apelido,
+      para,
+      tipo: imagem !== undefined ? 'imagem' : 'documento',
+      arquivoBase64: bytes.toString('base64'),
+      mimetype: mimetypeDoCaminho(caminhoDoArquivo),
+      ...(documento !== undefined ? { nomeDeArquivo: basename(caminhoDoArquivo) } : {}),
+      ...(texto !== undefined ? { texto } : {}),
+    };
+  }
+  const corpoJson = JSON.stringify(corpo);
+  const tamanho = Buffer.byteLength(corpoJson);
+  if (tamanho > LIMITE_DO_CORPO_DE_ENVIO) {
+    escrever(
+      `Pedido de ${tamanho} bytes passa do limite de ${LIMITE_DO_CORPO_DE_ENVIO} bytes do corpo ` +
+        '(o arquivo em base64 incha ~4/3: o teto pratico do arquivo fica perto de 6 MB).',
+    );
+    return 2;
+  }
 
   let resposta: { corpo: string };
   try {
-    resposta = await pedirPost(rede.servidor, chave, '/envios/solicitar', JSON.stringify(corpo), {
-      timeoutMs: rede.timeoutMs ?? TIMEOUT_TEXTO_MS,
+    resposta = await pedirPost(rede.servidor, chave, '/envios/solicitar', corpoJson, {
+      timeoutMs: rede.timeoutMs ?? (caminhoDoArquivo === undefined ? TIMEOUT_TEXTO_MS : TIMEOUT_ARQUIVO_MS),
     });
   } catch (e) {
     const falha = e as CodigoDeFalha;

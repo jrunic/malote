@@ -172,7 +172,7 @@ async function responderSolicitacaoDeTranscricao(
  * pelo WhatsApp tem 100-300 KB e a maioria dos PDFs cabe folgado; maior que
  * isso e recusado com 400, nunca aceito e truncado.
  */
-const TAMANHO_MAXIMO_DO_CORPO_DE_ENVIO = 8 * 1024 * 1024;
+export const TAMANHO_MAXIMO_DO_CORPO_DE_ENVIO = 8 * 1024 * 1024;
 
 async function lerCorpoJsonGrande(req: IncomingMessage, limite: number): Promise<unknown> {
   const pedacos: Buffer[] = [];

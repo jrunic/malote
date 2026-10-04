@@ -1,7 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { executarEnviarRede, type RedeDeEnvio } from '../src/cli/enviar-rede.js';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  executarEnviarRede,
+  LIMITE_DO_CORPO_DE_ENVIO,
+  type RedeDeEnvio,
+} from '../src/cli/enviar-rede.js';
+import { TAMANHO_MAXIMO_DO_CORPO_DE_ENVIO } from '../src/rede/rotas.js';
 import { subirCenaDeEnvio, subirServidorContador } from './ajuda/servidor-de-envio.js';
 
 const BASE = ['enviar', '--configuracao', 'hera', '--para', '5511999990000@s.whatsapp.net'];
@@ -208,4 +217,81 @@ test('timeout: codigo 7, e a mensagem diz que repetir pode duplicar', async () =
     srv.closeAllConnections();
     srv.close();
   }
+});
+
+function arquivoTemporario(nome: string, bytes: Buffer): string {
+  const pasta = mkdtempSync(join(tmpdir(), 'malote-enviar-rede-'));
+  const caminho = join(pasta, nome);
+  writeFileSync(caminho, bytes);
+  return caminho;
+}
+const sha = (b: Buffer): string => createHash('sha256').update(b).digest('hex');
+
+test('imagem: o servidor recebe os MESMOS bytes, com legenda e mimetype pela extensao', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    const bytes = Buffer.from(Array.from({ length: 5000 }, (_, i) => (i * 7) % 256)); // binario de verdade
+    const arquivo = arquivoTemporario('foto.png', bytes);
+    const r = rede(cena.url, cena.chave.valor);
+    const codigo = await executarEnviarRede([...BASE, '--imagem', arquivo, '--texto', 'legenda'], r.rede);
+    assert.equal(codigo, 0, r.saida());
+    const envio = cena.lerEnvios()[0]!;
+    assert.equal(envio.conteudo_tipo, 'imagem');
+    assert.equal(envio.conteudo_mimetype, 'image/png');
+    assert.equal(envio.conteudo_texto, 'legenda');
+    assert.equal(sha(readFileSync(envio.conteudo_caminho_arquivo!)), sha(bytes));
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('documento: bytes iguais, nome do arquivo e mimetype', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    const bytes = Buffer.from('%PDF-1.4 conteudo de teste');
+    const arquivo = arquivoTemporario('relatorio-final.pdf', bytes);
+    const r = rede(cena.url, cena.chave.valor);
+    const codigo = await executarEnviarRede([...BASE, '--documento', arquivo], r.rede);
+    assert.equal(codigo, 0, r.saida());
+    const envio = cena.lerEnvios()[0]!;
+    assert.equal(envio.conteudo_tipo, 'documento');
+    assert.equal(envio.conteudo_nome_arquivo, 'relatorio-final.pdf');
+    assert.equal(envio.conteudo_mimetype, 'application/pdf');
+    assert.equal(sha(readFileSync(envio.conteudo_caminho_arquivo!)), sha(bytes));
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('pedido acima do limite do corpo: recusa 2 ANTES de abrir conexao, falando do pedido', async () => {
+  const s = await subirServidorContador();
+  try {
+    // 6 MiB + 1 KiB: o arquivo cabe no limite de 8 MiB, mas o base64 (x4/3) + envelope passam dele
+    const arquivo = arquivoTemporario('grande.pdf', Buffer.alloc(6 * 1024 * 1024 + 1024, 7));
+    const r = rede(s.url, 'k');
+    const codigo = await executarEnviarRede([...BASE, '--documento', arquivo], r.rede);
+    assert.equal(codigo, 2);
+    assert.match(r.saida(), /Pedido de \d+ bytes passa do limite/);
+    assert.equal(s.requisicoes(), 0, 'abriu conexao antes de recusar');
+  } finally {
+    s.fechar();
+  }
+});
+
+test('arquivo que sozinho passa do limite do corpo: recusa 2 sem abrir conexao', async () => {
+  const s = await subirServidorContador();
+  try {
+    const arquivo = arquivoTemporario('enorme.pdf', Buffer.alloc(LIMITE_DO_CORPO_DE_ENVIO + 1024, 7));
+    const r = rede(s.url, 'k');
+    const codigo = await executarEnviarRede([...BASE, '--documento', arquivo], r.rede);
+    assert.equal(codigo, 2);
+    assert.match(r.saida(), /O arquivo tem \d+ bytes/);
+    assert.equal(s.requisicoes(), 0);
+  } finally {
+    s.fechar();
+  }
+});
+
+test('o limite do cliente e igual ao do servidor (a copia nao pode divergir em silencio)', () => {
+  assert.equal(LIMITE_DO_CORPO_DE_ENVIO, TAMANHO_MAXIMO_DO_CORPO_DE_ENVIO);
 });
