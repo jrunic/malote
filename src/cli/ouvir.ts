@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { abrirRegistro, listarInquilinos } from '../registro/registro.js';
 import { configuracaoPorApelido } from '../registro/configuracao-adaptador.js';
 import { abrirAcervo, type Acervo } from '../nucleo/acervo.js';
@@ -287,6 +287,19 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
   // `conectar` retornar).
   let pararPollerDeEnvio: (() => void) | undefined;
 
+  // keyId -> caminho de staging. Alimentado por `aoEnviar` quando um Envio de
+  // MIDIA sai com sucesso; consumido no laco de `anexosNuncaObtidos` quando o
+  // eco daquela Mensagem chega, ANTES de recorrer a `midia.baixar` — que
+  // baixaria de volta do WhatsApp os bytes que o proprio malote acabou de
+  // enviar (#1112). Mapa de PROCESSO: se o processo cair entre o envio e o
+  // eco, o staging fica orfao em `envios-pendentes/` (janela aceita e
+  // nomeada na spec, fora de escopo).
+  const bytesOriginados = new Map<string, string>();
+  // A passada de Envio em curso, se houver. A biblioteca pode emitir o eco
+  // DE DENTRO do sendMessage, antes de `aoEnviar` rodar: quem recebe o eco
+  // espera a passada terminar antes de decidir entre staging e download.
+  let passadaDeEnvio: Promise<unknown> | undefined;
+
   try {
     const conexao = await conectar({
       pastaDoVinculo: caminhos.vinculo,
@@ -394,12 +407,34 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
           for (const anexo of r.anexosNuncaObtidos) {
             const destino = destinoDeMidia;
             if (destino === undefined) continue;
-            void midia
-              .baixar(anexo.indice)
+            const keyId = mensagens[anexo.indice]?.key?.id;
+            const emVoo = passadaDeEnvio;
+            let caminhoOriginado: string | undefined;
+            void (async (): Promise<Buffer> => {
+              if (keyId !== undefined) {
+                caminhoOriginado = bytesOriginados.get(keyId);
+                if (caminhoOriginado === undefined && emVoo !== undefined) {
+                  await emVoo.catch(() => undefined);
+                  caminhoOriginado = bytesOriginados.get(keyId);
+                }
+              }
+              return caminhoOriginado !== undefined
+                ? readFileSync(caminhoOriginado)
+                : midia.baixar(anexo.indice);
+            })()
               .then((bytes) =>
                 comAtor(atorDeServico('ouvinte-whatsapp'), () => {
                   try {
                     gravarArquivoDeAnexo(acervo, { anexoId: anexo.anexoId, destino, bytes });
+                    // MOVE, nunca apaga ("o produto nunca apaga o que moveu"),
+                    // e so DEPOIS de gravar: se a escrita falhar, o staging
+                    // continua no lugar para a proxima tentativa.
+                    if (caminhoOriginado !== undefined && keyId !== undefined) {
+                      bytesOriginados.delete(keyId);
+                      const processados = join(dirname(caminhoOriginado), 'processados');
+                      mkdirSync(processados, { recursive: true });
+                      renameSync(caminhoOriginado, join(processados, basename(caminhoOriginado)));
+                    }
                   } catch (erroDeEscrita) {
                     // Mesma politica do resto deste arquivo: banco ocupado
                     // NAO E FALHA, e um catch largo aqui esconderia defeito
@@ -444,10 +479,19 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
       () => {
         if (processandoEnvio) return;
         processandoEnvio = true;
+        // Publicada ANTES de a passada comecar: o eco pode chegar de dentro
+        // do primeiro trecho sincrono dela, antes de a atribuicao abaixo.
+        let terminouAPassada: () => void = () => undefined;
+        passadaDeEnvio = new Promise<void>((resolver) => {
+          terminouAPassada = resolver;
+        });
         comAtor(atorDeServico('ouvinte-whatsapp'), () =>
           processarEnvios(acervo, {
             configuracao,
             enviar: (jid, conteudo) => conexao.enviar(jid, conteudo),
+            aoEnviar: (keyId, caminhoDeStaging) => {
+              bytesOriginados.set(keyId, caminhoDeStaging);
+            },
           }),
         )
           .catch((erro: unknown) =>
@@ -455,6 +499,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
           )
           .finally(() => {
             processandoEnvio = false;
+            terminouAPassada();
           });
       },
       Number.isInteger(INTERVALO_DE_ENVIO_MS) && INTERVALO_DE_ENVIO_MS > 0 ? INTERVALO_DE_ENVIO_MS : 5000,
