@@ -152,6 +152,15 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   Conversa direta vem de um `LEFT JOIN` pela chave única `(fonte, valor)`, nunca de chave montada em JS.
   Baseline medida em produção (04/10/2026) para o aceite: `conversas` sem filtro **0,62 a 2,12 s e
   1.407.993 bytes**; teto com os campos novos: 3 s e 2,0 MB.
+- **Listar Anexos e exportar Conversa seguem o que o ciclo 31 mediu: uma consulta por página (nunca uma por
+  Mensagem), `ordem=cronologica` em TODA página do export, e nome por autor, nunca por participante.** Na maior
+  Conversa (270.453 Mensagens) a página de 500 custa 0,45 s e 276 KB; paginar tudo é ~541 páginas, ~4 min e
+  ~150 MB, por isso a listagem de Anexos é rota própria. O default de ordem de
+  `GET /conversas/<id>/mensagens` **muda com o cursor** (cronológica sem, decrescente com): um export que omite
+  `ordem` na segunda página repete e pula. `participantes` não dá nome a quem escreveu: numa Conversa de
+  101.527 Mensagens, 850 dos 2.200 autores (39%, e 23% das Mensagens) não constam dele, então o nome vem de
+  `GET /conversas/<id>/autores`. O filtro por remetente parte do Identificador (`identificadoresDoRemetente`
+  concorda com `identificarPorValor`, e um teste fixa isso), e `autorIds` vazio devolve NADA, nunca tudo.
 - **Nenhum `process.exit(` direto em `src/`: quem encerra o processo é `cli/encerrar.ts`, que espera o
   stdout e o stderr entregarem o que já foi escrito (#1125).** `process.exit` logo depois de um
   `console.log` perde o que o pipe ainda não aceitou: a escrita em pipe é assíncrona quando passa do
@@ -566,6 +575,17 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 04/10/2026 — **CICLO 30 ACEITO: identidade pelo modo rede, release v0.28.0 em produção** (#1126, PR #19,
+  tag `v0.28.0`). `malote identificar <valor>` (local e `GET /identificadores?valor=`) devolve o que o Acervo
+  sabe de um Identificador **com ou sem Pessoa**: os Identificadores gravados, as formas da correspondência
+  de endereço, os nomes com a origem, o nome corrente pela precedência do Inquilino e a presença em Conversas
+  e Mensagens. `participantes` e a listagem de Conversas trazem `nome` e `origemDoNome`, e `conversas --busca`
+  acha a direta pelo nome. Sem schema; suíte 1223 para 1266. Medido em produção: `conversas` sem filtro
+  0,65 a 0,78 s quente (2,82 s fria) e 1.894.490 bytes; 4.947 das 6.363 diretas com nome. **Só com prova de
+  teste:** a precedência trocada, o isolamento entre Inquilinos, `%` e `_` na busca. **Limitação vista em
+  produção:** nome-sentinela da plataforma aparece como nome (a limpeza do estoque do #1101 segue pendente).
+  A release teve CI vermelho num teste da v0.27.1 que passava sem poder no Linux (socketpair); ver a
+  Restrição de `encerrar`.
 - 04/10/2026 — **CICLO 29 ACEITO: consulta do Envio por rede e repetição segura do `enviar`,
   release v0.27.0 em produção** (#1117, PR #17, tag `v0.27.0`). O código 7 do `enviar` por rede
   tem saída: o cliente gera o Identificador de Envio, manda e imprime; repetir com o mesmo
@@ -869,6 +889,14 @@ Repositório expõe services systemd. Convenções:
 - Modelo de domínio e glossário `aprovado` desde 2026-08-24; ciclo 1 aceito em 2026-08-26.
 
 ## Pendências
+
+- **Ciclo 31 (#1129) implementado em `main`, release v0.29.0 ainda não publicada; o critério de custo é medição de
+  campo e entra no aceite.** Conferir antes de dar o ciclo por aceito, na maior Conversa (270.453 Mensagens), com os
+  comandos do Step 7 da Task 7 do plano: primeira página de `anexos` em até 2 s para `image` **e** para `document`
+  (o tipo raro é o caso de varredura), `GET /conversas/<id>/autores` em até 2 s, e o export em até 6 min com até
+  300 MB de memória residente, por arquivo e por `| cat > /dev/null`. Se `document` passar de 2 s, o índice é a
+  próxima conversa, e só então. O modo local do `exportar` sem `--saida` acumula a saída em memória: é limite
+  conhecido, escrito na `--ajuda`.
 
 - **A Hera roda no thinkpad (`malote-ouvinte@hera`, Inquilino próprio) e o Envio está
   provado em produção pelos dois caminhos** — local no thinkpad e por rede do macbook

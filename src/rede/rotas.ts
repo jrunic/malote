@@ -12,8 +12,11 @@ import { configuracaoPorApelido, listarConfiguracoes, resolverFiltroDeConfigurac
 import { conversasMarcadas } from '../nucleo/marca-do-titular.js';
 import { lerDestinoDeMidia } from '../registro/destino-midia.js';
 import type { IdentidadeDeAcesso } from '../registro/chave-de-acesso.js';
-import { ehFonte } from '../nucleo/tipos.js';
+import { ehFonte, PRESENCAS } from '../nucleo/tipos.js';
 import type { ConversaId, Fonte, InquilinoId } from '../nucleo/tipos.js';
+import { identificadoresDoRemetente } from '../nucleo/remetente.js';
+import { autoresDaConversa } from '../nucleo/autores-da-conversa.js';
+import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
 import { abrirAcervo, versaoDoAcervoEmDisco, VERSAO_SCHEMA_ACERVO } from '../nucleo/acervo.js';
 import { solicitarTranscricao } from '../nucleo/transcricao.js';
 import {
@@ -640,6 +643,15 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       json(res, 400, { erro: `fonte invalida: ${fonte}` });
       return;
     }
+    const remetente = q.get('remetente');
+    if (remetente === '') {
+      json(res, 400, { erro: 'remetente vazio — informe o valor do Identificador' });
+      return;
+    }
+    const autorIds =
+      remetente === null
+        ? undefined
+        : identificadoresDoRemetente(ctx.acervo, { valor: remetente, ...(fonte !== null ? { fonte } : {}) });
 
     let cursor: { ocorridaEm: number; id: string } | undefined;
     if (antes !== null) {
@@ -669,6 +681,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       ...(filtroAte !== undefined ? { ate: filtroAte } : {}),
       ...(autor !== null ? { pessoaId: autor } : {}),
       ...(fonte !== null ? { fonte } : {}), // já estreitado para Fonte pela guarda ehFonte acima
+      ...(autorIds !== undefined ? { autorIds } : {}),
       ...(direcao !== null ? { direcao: direcao as 'enviada' | 'recebida' } : {}),
       ...(limite !== null ? { limite: Number(limite) } : {}),
       ordem,
@@ -693,6 +706,89 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     return;
   }
 
+  if (partes.length === 3 && partes[0] === 'conversas' && partes[2] === 'anexos') {
+    const conversaId = partes[1] as ConversaId;
+    const q = url.searchParams;
+    // Uma so ordem (cronologica): nao ha default que mude com o cursor, e pedir outra e erro de uso.
+    if (q.has('ordem')) {
+      json(res, 400, { erro: 'esta rota tem uma so ordem (cronologica); `ordem` nao existe aqui' });
+      return;
+    }
+    let limite: number | undefined;
+    const limiteTexto = q.get('limite');
+    if (limiteTexto !== null) {
+      limite = Number(limiteTexto);
+      if (!Number.isInteger(limite) || limite < 1) {
+        json(res, 400, { erro: 'limite precisa ser um inteiro maior que zero' });
+        return;
+      }
+    }
+    const presenca = q.get('presenca');
+    if (presenca !== null && !(PRESENCAS as readonly string[]).includes(presenca)) {
+      json(res, 400, { erro: 'presenca invalida — use presente, nunca-obtido ou descartado' });
+      return;
+    }
+    const tipo = q.get('tipo');
+    if (tipo === '') {
+      json(res, 400, { erro: 'tipo vazio — informe o tipo do Anexo' });
+      return;
+    }
+    const remetente = q.get('remetente');
+    if (remetente === '') {
+      json(res, 400, { erro: 'remetente vazio — informe o valor do Identificador' });
+      return;
+    }
+    let cursor: { ocorridaEm: number; id: string } | undefined;
+    const antes = q.get('antes');
+    if (antes !== null) {
+      cursor = decodificarCursor(antes);
+      if (cursor === undefined) {
+        json(res, 400, { erro: 'cursor invalido — devolva o token `proximo` tal como recebeu' });
+        return;
+      }
+    }
+    let filtroDe: number | undefined;
+    let filtroAte: number | undefined;
+    try {
+      const desde = q.get('desde');
+      const ate = q.get('ate');
+      if (desde !== null) filtroDe = expandirData(desde, 'inicio');
+      if (ate !== null) filtroAte = expandirData(ate, 'fim');
+    } catch (e) {
+      json(res, 400, { erro: (e as Error).message });
+      return;
+    }
+
+    // A Conversa existir e a UNICA coisa que decide 404 — a regra da #1090: lista vazia por filtro
+    // que nao casa e resposta legitima (200). Os 400 acima vem ANTES e nao revelam existencia.
+    const fonteDaConversaAtual = fonteDaConversa(ctx.acervo, conversaId);
+    if (fonteDaConversaAtual === undefined) {
+      naoEncontrado(res);
+      return;
+    }
+    // A Fonte da Conversa restringe o remetente: o mesmo valor em OUTRA Fonte nao entra. Mutante que
+    // sobrevive por EQUIVALENCIA — a fixture so tem Fonte whatsapp, entao tirar `fonte` daqui nao muda
+    // nenhuma resposta; a restricao em si e coberta no nucleo (`remetente.test.ts`, caso da Fonte).
+    const autorIds =
+      remetente === null
+        ? undefined
+        : identificadoresDoRemetente(ctx.acervo, { valor: remetente, fonte: fonteDaConversaAtual });
+
+    const anexos = listarAnexosDaConversa(ctx.acervo, {
+      conversaId,
+      ...(tipo !== null ? { tipo } : {}),
+      ...(autorIds !== undefined ? { autorIds } : {}),
+      ...(filtroDe !== undefined ? { de: filtroDe } : {}),
+      ...(filtroAte !== undefined ? { ate: filtroAte } : {}),
+      ...(presenca !== null ? { presenca: presenca as (typeof PRESENCAS)[number] } : {}),
+      ...(limite !== undefined ? { limite } : {}),
+      ...(cursor !== undefined ? { cursor } : {}),
+    });
+    const proximo = cursorDaProximaPagina(anexos, limite);
+    json(res, 200, { anexos, ...(proximo !== undefined ? { proximo } : {}) });
+    return;
+  }
+
   if (partes.length === 3 && partes[0] === 'conversas' && partes[2] === 'mensagens') {
     const conversaId = partes[1] as ConversaId;
     const q = url.searchParams;
@@ -706,6 +802,11 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const direcao = q.get('direcao');
     if (direcao !== null && direcao !== 'enviada' && direcao !== 'recebida') {
       json(res, 400, { erro: 'direcao invalida — use "enviada" ou "recebida"' });
+      return;
+    }
+    const remetente = q.get('remetente');
+    if (remetente === '') {
+      json(res, 400, { erro: 'remetente vazio — informe o valor do Identificador' });
       return;
     }
     let cursor: { ocorridaEm: number; id: string } | undefined;
@@ -739,6 +840,10 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       naoEncontrado(res);
       return;
     }
+    const autorIds =
+      remetente === null
+        ? undefined
+        : identificadoresDoRemetente(ctx.acervo, { valor: remetente, fonte: fonteDaConversaAtual });
 
     let configuracaoId: string | undefined;
     if (favorito === 'true') {
@@ -780,6 +885,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       ...(filtroDe !== undefined ? { de: filtroDe } : {}),
       ...(filtroAte !== undefined ? { ate: filtroAte } : {}),
       ...(autor !== null ? { pessoaId: autor } : {}),
+      ...(autorIds !== undefined ? { autorIds } : {}),
       ...(direcao !== null ? { direcao: direcao as 'enviada' | 'recebida' } : {}),
       ...(limite !== null ? { limite: Number(limite) } : {}),
       ...(favorito === 'true' ? { favorito: true, configuracaoId: configuracaoId! } : {}),
@@ -866,6 +972,23 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     // Envoltorio nomeado, forma das outras rotas; Pessoa inexistente e lista
     // vazia — e busca, nao endereco.
     json(res, 200, { pessoas: procurarPessoas(ctx.acervo, { texto }) });
+    return;
+  }
+
+  if (partes.length === 3 && partes[0] === 'conversas' && partes[2] === 'autores') {
+    const conversaId = partes[1] as ConversaId;
+    if (fonteDaConversa(ctx.acervo, conversaId) === undefined) {
+      naoEncontrado(res);
+      return;
+    }
+    const registro = abrirRegistro(ctx.dados);
+    let precedencia: PrecedenciaDeNome;
+    try {
+      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+    } finally {
+      registro.fechar();
+    }
+    json(res, 200, { autores: autoresDaConversa(ctx.acervo, conversaId, precedencia) });
     return;
   }
 

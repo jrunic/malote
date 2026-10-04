@@ -22,7 +22,12 @@ import { primeiroPosicional } from './posicional.js';
 import { formatarIdentificacao } from './identificar-texto.js';
 import { identificarPorValor } from '../nucleo/identificar.js';
 import { basename, join } from 'node:path';
-import { ehFonte, type Fonte } from '../nucleo/tipos.js';
+import { ehFonte, PRESENCAS, type Fonte } from '../nucleo/tipos.js';
+import { MENSAGEM_SEM_INQUILINO_NA_REDE } from './sem-inquilino-na-rede.js';
+import { formatarAnexos, tipoGuardado } from './anexos-texto.js';
+import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
+import { identificadoresDoRemetente } from '../nucleo/remetente.js';
+import { esperarEscoamento, executarExportarLocal, executarExportarRede, lerPedidoDeExport } from './exportar.js';
 import {
   abrirRegistro,
   criarInquilino,
@@ -40,6 +45,7 @@ import {
   lerMensagens,
   listarSemEndereco,
   conversaExiste,
+  fonteDaConversa,
 } from '../nucleo/consulta.js';
 import { conversasMarcadas } from '../nucleo/marca-do-titular.js';
 import { importarMaterial } from '../adaptadores/whatsapp/importar.js';
@@ -317,9 +323,19 @@ Titular (nao exige chave enquanto nao houver rede):
   malote midia extrair-duracao --inquilino <id> [--json]        (extrai duração do Conteúdo Bruto já gravado)
   malote servir     --porta <n> [--endereco <ip>] [--exposto]
   malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--json]
-  malote mensagens  --inquilino <id> [--conversa <id>] [--desde D] [--ate D] [--fonte <nome>] [--direcao enviada|recebida] [--limite <n>] [--json]
+  malote mensagens  --inquilino <id> [--conversa <id>] [--desde D] [--ate D] [--fonte <nome>] [--direcao enviada|recebida] [--remetente <valor>] [--limite <n>] [--json]
                                         (sem --conversa: atravessa todas as Conversas e Fontes,
-                                         ordenado por recencia por default — ultimas mensagens)
+                                         ordenado por recencia por default — ultimas mensagens;
+                                         --remetente e o valor do Identificador (LID ou JID), com ou sem Pessoa)
+  malote anexos     --inquilino <id> --conversa <id> [--tipo image|video|audio|document|sticker|other|imagem|documento] [--remetente <valor>] [--desde D] [--ate D] [--presenca presente|nunca-obtido|descartado] [--limite <n>] [--antes <token>] [--json]
+  malote anexos     --conversa <id> [mesmas opcoes, sem --inquilino]
+                                        (com MALOTE_SERVIDOR no ambiente: por REDE; os Anexos de UMA Conversa, em ordem
+                                         cronologica; o id e o que se passa a 'malote midia <id> --saida <arquivo>')
+  malote exportar   --inquilino <id> --conversa <id> [--formato txt|json] [--saida <arquivo>] [--sobrescrever] [--remetente <valor>] [--desde D] [--ate D]
+  malote exportar   --conversa <id> [mesmas opcoes, sem --inquilino]
+                                        (com MALOTE_SERVIDOR no ambiente: por REDE; horarios em UTC; sem --saida escreve na
+                                         saida padrao; --json e o mesmo que --formato json; o arquivo nasce como <saida>.parcial;
+                                         Conversa grande: use --saida, o modo local sem ela acumula a saida em memoria)
   malote midia <id> --saida <arquivo>   (bytes do Anexo — SO em modo rede;
                                           local, leia 'caminho' de 'mensagens --json')
   malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--json]
@@ -417,6 +433,7 @@ const COMANDOS_DE_REDE = new Set([
   'configuracao',
   'midia',
   'identificar',
+  'anexos',
 ]);
 
 /**
@@ -432,7 +449,7 @@ export async function executarConsultaRede(
   const q = new URLSearchParams();
   for (const nome of ['busca', 'fonte', 'coletiva', 'pessoa', 'limite', 'conversa',
     'autor', 'desde', 'ate', 'antes', 'em', 'texto', 'configuracao', 'favorito', 'fixada',
-    'ordem', 'direcao']) {
+    'ordem', 'direcao', 'remetente']) {
     const valor = opcao(argumentos, nome);
     if (valor !== undefined) q.set(nome, valor);
   }
@@ -463,10 +480,7 @@ export async function executarConsultaRede(
   }
   else if (grupo === 'identificar') {
     if (argumentos.includes('--inquilino')) {
-      rede.escrever(
-        '--inquilino nao existe no modo rede: o Inquilino vem da Chave de Acesso. ' +
-          'Para consultar a instalacao local, rode com `env -u MALOTE_SERVIDOR`.',
-      );
+      rede.escrever(MENSAGEM_SEM_INQUILINO_NA_REDE);
       return 2;
     }
     const valor = primeiroPosicional(argumentos, 1);
@@ -483,6 +497,39 @@ export async function executarConsultaRede(
         rede.escrever(JSON.stringify(JSON.parse(r.corpo), null, 2));
       } else {
         for (const l of formatarIdentificacao(JSON.parse(r.corpo))) rede.escrever(l);
+      }
+      return 0;
+    } catch (e) {
+      rede.escrever((e as Error).message);
+      return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
+    }
+  }
+  else if (grupo === 'anexos') {
+    if (argumentos.includes('--inquilino')) {
+      rede.escrever(MENSAGEM_SEM_INQUILINO_NA_REDE);
+      return 2;
+    }
+    const conversa = opcao(argumentos, 'conversa');
+    if (conversa === undefined) {
+      rede.escrever('Informe --conversa <id>.');
+      return 2;
+    }
+    const qa = new URLSearchParams();
+    for (const nome of ['remetente', 'desde', 'ate', 'presenca', 'limite', 'antes']) {
+      const valor = opcao(argumentos, nome);
+      if (valor !== undefined) qa.set(nome, valor);
+    }
+    const tipo = opcao(argumentos, 'tipo');
+    if (tipo !== undefined) qa.set('tipo', tipoGuardado(tipo));
+    const sufixo = qa.toString();
+    try {
+      const r = await pedirGet(rede.servidor, rede.chave, `/conversas/${conversa}/anexos${sufixo ? `?${sufixo}` : ''}`);
+      if (argumentos.includes('--json')) {
+        rede.escrever(JSON.stringify(JSON.parse(r.corpo), null, 2));
+      } else {
+        const corpo = JSON.parse(r.corpo) as { anexos: Parameters<typeof formatarAnexos>[0]; proximo?: string };
+        for (const l of formatarAnexos(corpo.anexos)) rede.escrever(l);
+        if (corpo.proximo !== undefined) rede.escrever(`proximo: ${corpo.proximo}  (use --antes)`);
       }
       return 0;
     } catch (e) {
@@ -1816,6 +1863,18 @@ function executarComAtor(
         const ate = opcao(argumentos, 'ate');
         const autor = opcao(argumentos, 'autor');
         const fonte = opcao(argumentos, 'fonte');
+        const remetente = opcao(argumentos, 'remetente');
+        // Mutante que sobrevive por EQUIVALENCIA: tirar `fonteDaConversa` daqui nao muda nenhuma resposta na
+        // fixture (uma Fonte so); a restricao por Fonte e coberta no nucleo (`remetente.test.ts`).
+        const fonteDoRemetente =
+          (conversa !== undefined ? fonteDaConversa(acervo, conversa) : undefined) ?? (fonte as Fonte | undefined);
+        const autorIds =
+          remetente === undefined
+            ? undefined
+            : identificadoresDoRemetente(acervo, {
+                valor: remetente,
+                ...(fonteDoRemetente !== undefined ? { fonte: fonteDoRemetente } : {}),
+              });
         const direcaoOpcao = opcao(argumentos, 'direcao');
         if (direcaoOpcao !== undefined && direcaoOpcao !== 'enviada' && direcaoOpcao !== 'recebida') {
           escrever('--direcao aceita "enviada" ou "recebida".');
@@ -1834,6 +1893,7 @@ function executarComAtor(
           ...(desde === undefined ? {} : { de: expandirData(desde, 'inicio') }),
           ...(ate === undefined ? {} : { ate: expandirData(ate, 'fim') }),
           ...(autor === undefined ? {} : { pessoaId: autor }),
+          ...(autorIds === undefined ? {} : { autorIds }),
           ...(fonte === undefined ? {} : { fonte: fonte as Fonte }),
           ...(direcaoOpcao === undefined ? {} : { direcao: direcaoOpcao }),
           ...(limite === undefined ? {} : { limite: Number(limite) }),
@@ -2117,6 +2177,96 @@ function executarComAtor(
         acervo.fechar();
       }
       return 0;
+    }
+
+    if (grupo === 'anexos') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino.');
+      const conversa = opcao(argumentos, 'conversa');
+      if (conversa === undefined) {
+        escrever('Informe --conversa <id>.');
+        return 2;
+      }
+      const presencaOpcao = opcao(argumentos, 'presenca');
+      if (presencaOpcao !== undefined && !(PRESENCAS as readonly string[]).includes(presencaOpcao)) {
+        escrever('--presenca aceita presente, nunca-obtido ou descartado.');
+        return 2;
+      }
+      const limiteOpcao = opcao(argumentos, 'limite');
+      let limite: number | undefined;
+      if (limiteOpcao !== undefined) {
+        limite = Number(limiteOpcao);
+        if (!Number.isInteger(limite) || limite < 1) {
+          escrever('--limite precisa ser um inteiro maior que zero.');
+          return 2;
+        }
+      }
+      const antesOpcao = opcao(argumentos, 'antes');
+      const cursor = antesOpcao === undefined ? undefined : decodificarCursor(antesOpcao);
+      if (antesOpcao !== undefined && cursor === undefined) {
+        escrever('Cursor invalido — devolva o token proximo tal como recebeu.');
+        return 2;
+      }
+      let de: number | undefined;
+      let ate: number | undefined;
+      try {
+        const desde = opcao(argumentos, 'desde');
+        const ateOpcao = opcao(argumentos, 'ate');
+        if (desde !== undefined) de = expandirData(desde, 'inicio');
+        if (ateOpcao !== undefined) ate = expandirData(ateOpcao, 'fim');
+      } catch (e) {
+        escrever((e as Error).message);
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const fonteDaConversaAtual = fonteDaConversa(acervo, conversa);
+        if (fonteDaConversaAtual === undefined) {
+          escrever(`Conversa desconhecida: ${conversa}`);
+          return 2;
+        }
+        const remetente = opcao(argumentos, 'remetente');
+        const tipo = opcao(argumentos, 'tipo');
+        const anexos = listarAnexosDaConversa(acervo, {
+          conversaId: conversa,
+          ...(tipo !== undefined ? { tipo: tipoGuardado(tipo) } : {}),
+          ...(remetente !== undefined
+            ? { autorIds: identificadoresDoRemetente(acervo, { valor: remetente, fonte: fonteDaConversaAtual }) }
+            : {}),
+          ...(de !== undefined ? { de } : {}),
+          ...(ate !== undefined ? { ate } : {}),
+          ...(presencaOpcao !== undefined ? { presenca: presencaOpcao as (typeof PRESENCAS)[number] } : {}),
+          ...(limite !== undefined ? { limite } : {}),
+          ...(cursor !== undefined ? { cursor } : {}),
+        });
+        const proximo = cursorDaProximaPagina(anexos, limite);
+        if (temBandeira(argumentos, 'json')) {
+          escrever(JSON.stringify({ anexos, ...(proximo !== undefined ? { proximo } : {}) }, null, 2));
+        } else {
+          for (const l of formatarAnexos(anexos)) escrever(l);
+          if (proximo !== undefined) escrever(`proximo: ${proximo}  (use --antes)`);
+        }
+      } finally {
+        acervo.fechar();
+      }
+      return 0;
+    }
+
+    if (grupo === 'exportar') {
+      const lido = lerPedidoDeExport(argumentos);
+      if ('erro' in lido) {
+        escrever(lido.erro);
+        return 2;
+      }
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino.');
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        return executarExportarLocal(acervo, precedencia, lido.pedido, { escrever, erro: escrever });
+      } finally {
+        acervo.fechar();
+      }
     }
 
     if (grupo === 'pessoa' && sub === 'ver') {
@@ -2843,6 +2993,16 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
       chave: ambiente.chave,
       env: process.env,
       escrever: (t) => console.log(t),
+    }).then(encerrar);
+  } else if (argumentos[0] === 'exportar' && ambiente.servidor !== undefined) {
+    // Ciclo 31: `exportar` por REDE e um laco de paginas, assincrono, e grava arquivo — NAO e uma leitura de
+    // COMANDOS_DE_REDE. Dados na saida padrao, erro e diagnostico na saida de erro.
+    void executarExportarRede(argumentos, {
+      servidor: opcao(argumentos, 'servidor') ?? ambiente.servidor,
+      chave: ambiente.chave,
+      escrever: (t) => console.log(t),
+      erro: (t) => console.error(t),
+      aguardarEscoamento: () => esperarEscoamento(process.stdout),
     }).then(encerrar);
   } else if (COMANDOS_DE_REDE.has(argumentos[0] ?? '') && ambiente.servidor !== undefined) {
     // Modo REDE: a consulta e async (HTTP), e o executar e sincrono — mesmo

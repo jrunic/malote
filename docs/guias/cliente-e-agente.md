@@ -91,6 +91,19 @@ malote mensagens --conversa <id> --antes "<cursor>"
 malote mensagens --direcao recebida --limite 10
 malote mensagens --direcao recebida --fonte whatsapp --limite 10
 
+# Só o que um remetente escreveu: o valor do endereço (LID ou JID), com ou sem Pessoa
+malote mensagens --conversa <id> --remetente 5511999990000@s.whatsapp.net
+
+# Os Anexos de UMA conversa, em ordem cronológica, com a presença de cada um
+malote anexos --conversa <id>
+malote anexos --conversa <id> --tipo imagem --presenca presente --limite 50
+malote anexos --conversa <id> --remetente 5511999990000@s.whatsapp.net --desde 2026-09-01
+# O id da última coluna é o que `malote midia` baixa; a resposta traz `proximo` quando há mais.
+
+# Uma conversa para um arquivo (txt ou json), com o nome de quem falou
+malote exportar --conversa <id> --saida ./conversa.txt
+malote exportar --conversa <id> --remetente 5511999990000@s.whatsapp.net --desde 2026-09-01 --json --saida ./dele.json
+
 # Busca no conteúdo, com filtros
 malote buscar --texto "orçamento" --conversa <id> --desde 2026-09-01 --limite 50
 
@@ -178,6 +191,24 @@ Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`
   default, como sempre. `--favorito` só existe com `--conversa` (precisa da
   Fonte da própria Conversa para resolver a Configuração sem ambiguidade) e
   só em modo rede; exige `--configuracao`.
+- `malote mensagens ... --remetente <valor>` — só o que aquele endereço escreveu. O valor é o do
+  Identificador (LID ou JID), comparado exato, e **alcança a forma canônica e as alternativas** que a
+  correspondência de endereço conhece. Funciona sem Pessoa, e é o que `--autor` (id de Pessoa) não faz.
+  Valor desconhecido devolve lista vazia, nunca tudo.
+- `malote anexos --conversa <id> [--tipo T] [--remetente V] [--desde D] [--ate D] [--presenca P] [--limite N]
+  [--antes TOKEN] [--json]` — os Anexos de **uma** Conversa, em ordem cronológica. Cada um traz o Descritor,
+  a Presença (`presente`, `nunca-obtido` ou `descartado`: o que não está em disco aparece, nunca some), o
+  id (o que se passa a `malote midia`) e a Mensagem de origem. `--tipo` aceita o que o Acervo guarda
+  (`image`, `video`, `audio`, `document`, `sticker`, `other`, ...) e, só na CLI, `imagem` e `documento`.
+  Uma só ordem, sem `--ordem`. Em rede, `--inquilino` é recusado.
+- `malote exportar --conversa <id> [--formato txt|json | --json] [--saida <arquivo>] [--sobrescrever]
+  [--remetente V] [--desde D] [--ate D]` — a Conversa inteira num arquivo. `txt` traz uma Mensagem por bloco
+  (`AAAA-MM-DD HH:MM:SS  Nome: texto`, horários em UTC, Anexos em linha própria com o id); `json`, o mesmo
+  que a rota devolve. O nome é o do autor (`Eu` nas enviadas, `(sistema)` nos eventos). Com `--saida` o arquivo
+  nasce como `<saida>.parcial` e só vira definitivo na última página: **falha no meio não deixa arquivo que
+  pareça completo**, e `--saida` que já existe é recusada. Sem `--saida` escreve na saída padrão, e então o
+  **código de saída** é o único sinal de truncamento. Conversa grande: use `--saida` (o modo local sem ela
+  acumula a saída em memória). Pagina `mensagens` de 500 em 500, mandando `ordem=cronologica` em toda página.
 - `malote buscar --texto T [--conversa <id>] [--desde D] [--ate D]` — busca no conteúdo.
 - `malote pessoas --texto T` — resolve nome/endereço para `id`; os outros comandos
   pedem o id, nunca o nome. Só acha **Pessoa**: endereço que ninguém ligou a uma Pessoa
@@ -222,8 +253,10 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 | rota | parâmetros opcionais | resposta |
 |---|---|---|
 | `GET /conversas` | `fonte`, `coletiva`, `busca`, `pessoa`, `limite`, `configuracao`, `fixada`, `desde` | `{ conversas: [{ id, fonte, coletiva, assunto, mensagens, configuracao, nome, origemDoNome }] }` |
-| `GET /mensagens` | `limite`, `desde`, `ate`, `autor`, `fonte`, `direcao`, `antes`, `ordem` | `{ mensagens: [...], proximo? }` |
-| `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `antes`, `ordem`, `direcao`, `favorito`, `configuracao` | `{ mensagens: [...], proximo? }` |
+| `GET /mensagens` | `limite`, `desde`, `ate`, `autor`, `remetente`, `fonte`, `direcao`, `antes`, `ordem` | `{ mensagens: [...], proximo? }` |
+| `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `remetente`, `antes`, `ordem`, `direcao`, `favorito`, `configuracao` | `{ mensagens: [...], proximo? }` |
+| `GET /conversas/<id>/anexos` | `tipo`, `remetente`, `desde`, `ate`, `presenca`, `limite`, `antes` | `{ anexos: [{ id, tipo, presenca, tamanho, nomeOriginal, mensagemId, autorId, ocorridaEm, ... }], proximo? }` — uma só ordem; `ordem` é `400` |
+| `GET /conversas/<id>/autores` | — | `{ autores: [{ identificadorId, valor, nome, origemDoNome, pessoaId }] }` — quem escreveu na Conversa, uma vez cada (participante ou não) |
 | `GET /buscar?texto=` | `conversa`, `autor`, `desde`, `ate`, `limite` | `{ mensagens: [...] }` |
 | `GET /pessoas?texto=` | — | `{ pessoas: [{ id, nome, identificadores }] }` |
 | `GET /conversas/<id>/participantes` | `em` | `{ presenca: {...} }` — cada participante com `valor`, `nome`, `origemDoNome`, `pessoaId` |
@@ -249,6 +282,11 @@ Com `fixada=true`, `configuracao` escopa a Marca, não a atribuição — é o q
 achar coletiva fixada. `favorito` em `/conversas/<id>/mensagens` exige `configuracao`
 junto; a Fonte usada para resolver o apelido é a da própria Conversa (nunca ambígua),
 não uma que o chamador precise informar.
+
+`GET /conversas/<id>/anexos` e `GET /conversas/<id>/autores` seguem a regra das rotas por Conversa: `404` de corpo
+vazio só para Conversa inexistente ou de outro Inquilino (igual nos dois casos), e lista vazia por filtro que nada
+casa é `200`. Parâmetro inválido (`presenca`, data, cursor, `limite`, `remetente` ou `tipo` vazios) é `400`.
+`remetente` é o valor do Identificador, comparado exato; valor desconhecido é lista vazia.
 
 `GET /mensagens` atravessa todas as Conversas e Fontes do Inquilino — é a
 consulta para "últimas mensagens", sem escolher uma Conversa antes.

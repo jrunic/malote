@@ -49,25 +49,26 @@ function montarTranscricao(l: Record<string, unknown>): TranscricaoLida | null {
   };
 }
 
+/** As colunas de um Anexo com a Transcricao (`a` = anexos, `t` = transcricoes), na ordem de `anexoDeLinha`. */
+export const COLUNAS_DO_ANEXO = `
+  a.id, a.tipo, a.tamanho, a.nome_original, a.duracao, a.impressao, a.presenca, a.caminho,
+  a.descartado_em, a.descartado_por,
+  t.estado       AS transcricao_estado,
+  t.texto        AS transcricao_texto,
+  t.motivo_falha AS transcricao_motivo_falha,
+  t.motor        AS transcricao_motor,
+  t.modelo       AS transcricao_modelo,
+  t.gerada_em    AS transcricao_gerada_em`;
+
 const SELECT_ANEXO = `
-  SELECT a.id, a.tipo, a.tamanho, a.nome_original, a.duracao, a.impressao, a.presenca, a.caminho,
-         a.descartado_em, a.descartado_por,
-         t.estado       AS transcricao_estado,
-         t.texto        AS transcricao_texto,
-         t.motivo_falha AS transcricao_motivo_falha,
-         t.motor        AS transcricao_motor,
-         t.modelo       AS transcricao_modelo,
-         t.gerada_em    AS transcricao_gerada_em
+  SELECT ${COLUNAS_DO_ANEXO}
     FROM anexos a
     LEFT JOIN transcricoes t ON t.anexo_id = a.id
 `;
 
-export function lerAnexos(acervo: Acervo, mensagemId: MensagemId): AnexoLido[] {
-  const linhas = acervo
-    .preparar(`${SELECT_ANEXO} WHERE a.mensagem_id = ? ORDER BY a.id`)
-    .all(mensagemId) as Array<Record<string, unknown>>;
-
-  return linhas.map((l) => ({
+/** O Anexo que uma linha com `COLUNAS_DO_ANEXO` descreve. Um lugar so: tres consultas o usam. */
+export function anexoDeLinha(l: Record<string, unknown>): AnexoLido {
+  return {
     id: l['id'] as string,
     tipo: l['tipo'] as string,
     tamanho: (l['tamanho'] as number | null) ?? null,
@@ -79,7 +80,15 @@ export function lerAnexos(acervo: Acervo, mensagemId: MensagemId): AnexoLido[] {
     descartadoEm: (l['descartado_em'] as string | null) ?? null,
     descartadoPor: (l['descartado_por'] as string | null) ?? null,
     transcricao: montarTranscricao(l),
-  }));
+  };
+}
+
+export function lerAnexos(acervo: Acervo, mensagemId: MensagemId): AnexoLido[] {
+  const linhas = acervo
+    .preparar(`${SELECT_ANEXO} WHERE a.mensagem_id = ? ORDER BY a.id`)
+    .all(mensagemId) as Array<Record<string, unknown>>;
+
+  return linhas.map(anexoDeLinha);
 }
 
 /** Um Anexo pelo próprio id, ou `undefined` se não existe. */
@@ -88,19 +97,7 @@ export function lerAnexoPorId(acervo: Acervo, anexoId: string): AnexoLido | unde
     | Record<string, unknown>
     | undefined;
   if (linha === undefined) return undefined;
-  return {
-    id: linha['id'] as string,
-    tipo: linha['tipo'] as string,
-    tamanho: (linha['tamanho'] as number | null) ?? null,
-    nomeOriginal: (linha['nome_original'] as string | null) ?? null,
-    duracao: (linha['duracao'] as number | null) ?? null,
-    impressao: (linha['impressao'] as string | null) ?? null,
-    presenca: linha['presenca'] as Presenca,
-    caminho: (linha['caminho'] as string | null) ?? null,
-    descartadoEm: (linha['descartado_em'] as string | null) ?? null,
-    descartadoPor: (linha['descartado_por'] as string | null) ?? null,
-    transcricao: montarTranscricao(linha),
-  };
+  return anexoDeLinha(linha);
 }
 
 export interface ParticipacaoLida {
@@ -291,9 +288,17 @@ export interface MensagemLida {
   anexos: AnexoLido[];
 }
 
+/** `m` = mensagens. A lista de ids vai como um JSON; `[]` nao casa nada. */
+export const CONDICAO_DE_AUTORES = 'm.autor_id IN (SELECT value FROM json_each(?))';
+
 export interface FiltroDeMensagem {
   conversaId?: ConversaId;
   pessoaId?: PessoaId;
+  /**
+   * Ids de Identificador AUTORES. A lista vazia e o filtro que nao casa nada, NUNCA a ausencia de
+   * filtro: remetente desconhecido devolve vazio, nao tudo. Compoe por E com `pessoaId`.
+   */
+  autorIds?: string[];
   fonte?: Fonte;
   de?: number;
   ate?: number;
@@ -368,6 +373,12 @@ export function lerMensagens(acervo: Acervo, filtro: FiltroDeMensagem): Mensagem
       `m.autor_id IN (SELECT id FROM identificadores WHERE pessoa_id IN (${SQL_FAMILIA}))`,
     );
     valores.push(filtro.pessoaId, filtro.pessoaId);
+  }
+  if (filtro.autorIds !== undefined) {
+    // `json_each` e nao uma lista de `?`: o numero de ids e do tamanho da familia de formas do
+    // endereco, mas o limite de variaveis do SQLite nao e problema nosso.
+    condicoes.push(CONDICAO_DE_AUTORES);
+    valores.push(JSON.stringify(filtro.autorIds));
   }
   if (filtro.fonte !== undefined) {
     condicoes.push('m.fonte = ?');
