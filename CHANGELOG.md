@@ -23,6 +23,10 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.29.1] — 2026-10-04
+
+Não muda a forma do Acervo nem do Registro.
+
 ### Corrigido
 
 - **`anexos --presenca` varria todos os Anexos daquela presença por Mensagem.** Na maior Conversa a consulta
