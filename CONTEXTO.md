@@ -541,6 +541,16 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 04/10/2026 — **CICLO 29 ACEITO: consulta do Envio por rede e repetição segura do `enviar`,
+  release v0.27.0 em produção** (#1117, PR #17, tag `v0.27.0`). O código 7 do `enviar` por rede
+  tem saída: o cliente gera o Identificador de Envio, manda e imprime; repetir com o mesmo
+  `--identificador` não cria segundo Envio (`200` com `repetido`; outro pedido com o mesmo
+  identificador, `409`). `GET /envios/<identificador ou id>` e `GET /envios/contagem`, e
+  `malote envio estado [<identificador>] --chave-em` por rede; `envio reprocessar` continua só
+  local, por decisão do Titular. Sem schema. Suíte 1176 para 1218. Provado em campo contra a
+  Hera: dois `enviar` com o mesmo identificador devolveram o mesmo Envio, que passou a
+  `enviado`, e a chave do Titular saiu 6. **Só com prova de teste:** o `409`, a corrida e o aviso
+  de servidor sem repetição segura.
 - 04/10/2026 — **RELEASE v0.26.0 PUBLICADA E DISTRIBUÍDA NOS TRÊS PACOTES: `malote
   enviar` fala por rede** (#1116, ciclo 28 `malote-enviar-por-rede-no-cliente`, PR #15,
   tag `v0.26.0`). Com `MALOTE_SERVIDOR` no ambiente o comando pede o Envio ao servidor
