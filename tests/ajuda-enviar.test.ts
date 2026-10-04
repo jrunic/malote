@@ -14,5 +14,8 @@ test('a ajuda lista enviar (os dois modos), envio estado, envio reprocessar e --
   assert.match(saida, /malote enviar\s+--inquilino <id> --configuracao <apelido> --para/);
   assert.match(saida, /malote enviar\s+--configuracao <apelido> --para .*--chave-em/);
   assert.match(saida, /malote envio estado/);
+  assert.match(saida, /--identificador <uuid>/);
+  assert.match(saida, /malote envio estado\s+\[<identificador>\] \[--chave-em <VARIAVEL>\]/);
+  assert.match(saida, /envio reprocessar.*so local/);
   assert.match(saida, /malote envio reprocessar/);
 });

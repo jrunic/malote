@@ -169,8 +169,13 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   despacha por rede, com despacho próprio no ponto de entrada — ele **não** entra em
   `COMANDOS_DE_REDE`, que continua sendo a allowlist de leitura. A variável de ambiente do
   servidor liga o modo; `--servidor` sozinha só troca a URL. No modo rede o Inquilino vem
-  só da chave e `--inquilino` é recusado. O código 7 desse comando diz que repetir pode
-  duplicar a mensagem.
+  só da chave e `--inquilino` é recusado. O cliente gera o Identificador de Envio e o
+  manda; o código 7 diz o identificador e que repetir com `--identificador` é seguro (o
+  servidor não cria segundo Envio). **Ordem de release:** o servidor (thinkpad) recebe a
+  versão antes de qualquer cliente — servidor antigo ignora o campo e duplicaria, e o
+  cliente só avisa em resposta que chegou. `envio estado` também é despachado por rede
+  (ciclo 29), no ponto de entrada e fora de `COMANDOS_DE_REDE`; `envio reprocessar`
+  continua só local.
 - **Cliente HTTP mora em `src/cli/`, nunca em `src/rede/`.** `src/rede/` é a zona do
   baileys e a fronteira proíbe `cli` importá-la — a guarda pegou a violação no commit em
   que nasceu (ciclo 21).
@@ -550,8 +555,8 @@ Repositório expõe services systemd. Convenções:
   escolhida foi dito e aceito: a chave da Hera está no service do cliente, então toda
   sessão do macbook a carrega. Achado do ensaio, aberto como **#1115**: `malote servir`
   derruba o processo numa requisição autenticada para Inquilino sem Acervo — **corrigido em `main`
-  (#1115): a abertura do Acervo que falha responde 503 de corpo vazio e loga em stderr; ainda NÃO
-  publicado (precisa de release patch).** `inquilino criar` continua sem criar o Acervo, de propósito:
+  (#1115): a abertura do Acervo que falha responde 503 de corpo vazio e loga em stderr; release
+  v0.26.1, PR #16, em produção em 04/10/2026.** `inquilino criar` continua sem criar o Acervo, de propósito:
   quem cria é o primeiro `abrirAcervo` do ouvinte ou do `acervo migrar`.
 - 04/10/2026 — **CICLO 27 ACEITO: o malote envia mensagem (texto, imagem,
   documento), RELEASES v0.25.0 E v0.25.1 EM PRODUÇÃO no thinkpad** (#1112, três
@@ -842,18 +847,6 @@ Repositório expõe services systemd. Convenções:
   pareamento novo, sem perder Mensagem.
 - **Sem prova de campo:** envio para **grupo**, imagem/documento **por rede** e a falha
   pós-envio (só teste, com erro injetado).
-- **O código 7 do `enviar` por rede não tem como ser resolvido pelo cliente:** faltam
-  `envio estado`/`reprocessar` e uma consulta do Envio por rede (fora do escopo do ciclo
-  28). A conferência que existe é `malote mensagens --direcao enviada`, com atraso de alguns
-  segundos e mostrando a Mensagem, não o estado do Envio. Repetir um `enviar` que deu 7
-  pode duplicar a mensagem.
-- **As skills `kn-31-acessa-malote` das mentoradas** (cópias em
-  `14-projetos/20260915-configurar-maquinas-walter/` e
-  `14-projetos/20260923-configurar-maquinas-renata/`, fora deste repo) dizem "repetir é
-  seguro" e "não existe caminho de envio". **Medido em 04/10/2026:** continuam verdadeiras
-  para o que descrevem (só comandos de consulta, em instalações que não rodam a v0.26.0).
-  Reabrir **se** o Envio for habilitado para uma mentorada: aí a tabela de códigos e a frase
-  "só leitura" precisam do `enviar` e do aviso do código 7.
 - **Staging órfão em `envios-pendentes/`** se o `ouvir` cair entre o envio e o
   eco: o mapa de bytes originados é de processo. O produto não detecta nem limpa;
   o guia de armazenamento diz que removê-lo à mão é seguro.

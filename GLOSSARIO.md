@@ -4,7 +4,7 @@ projeto: malote
 tipo: referencia
 descricao: "Linguagem universal do malote — termos do arquivo multi-inquilino de conversas, com sinônimos a evitar"
 status: aprovado
-aprovado-em: 2026-10-03
+aprovado-em: 2026-10-04
 escopo: repo:malote
 plataforma: "*"
 tags: [glossario, malote, linguagem-universal, ddd]
@@ -187,7 +187,7 @@ vez**: resultado indeterminado nunca é descartado em silêncio.
 *Evitar*: mensagem a enviar, outbox, fila de saída, post, dispatch.
 
 **Identificador de Envio**:
-Gerado e gravado antes de qualquer tentativa de envio — é o que permite decidir "já saiu"
+Gerado e gravado antes de qualquer tentativa de envio — pelo produto, ou fornecido pelo solicitante no pedido — é o que permite decidir "já saiu"
 versus "falta tentar" sob a garantia ao menos uma vez, sem reenviar às cegas.
 *Evitar*: message id, token de idempotência, nonce.
 

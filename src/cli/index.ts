@@ -16,6 +16,7 @@ import { expandirData, procurarPessoas } from '../nucleo/consulta.js';
 import { ehPontoDeEntrada } from './entrada.js';
 import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
 import { executarEnviarRede } from './enviar-rede.js';
+import { executarEnvioEstadoRede } from './envio-estado-rede.js';
 import { basename, join } from 'node:path';
 import type { Fonte } from '../nucleo/tipos.js';
 import {
@@ -296,10 +297,13 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvinte estado --conta <nome> [--json]
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
   malote enviar     --inquilino <id> --configuracao <apelido> --para <endereco> (--texto <t> | --imagem <caminho> [--texto <legenda>] | --documento <caminho> [--texto <legenda>])
-  malote enviar     --configuracao <apelido> --para <endereco> (mesmas opcoes de conteudo) [--chave-em <VARIAVEL>] [--json]
-                                        (com MALOTE_SERVIDOR no ambiente: pede o Envio por REDE; o Inquilino vem da chave)
+  malote enviar     --configuracao <apelido> --para <endereco> (mesmas opcoes de conteudo) [--identificador <uuid>] [--chave-em <VARIAVEL>] [--json]
+                                        (com MALOTE_SERVIDOR no ambiente: pede o Envio por REDE; o Inquilino vem da chave;
+                                         o identificador torna a repeticao segura: o mesmo pedido nao cria segundo Envio)
   malote envio estado       --inquilino <id> [--json]
-  malote envio reprocessar  --inquilino <id> [--json]
+  malote envio estado       [<identificador>] [--chave-em <VARIAVEL>] [--json]
+                                        (com MALOTE_SERVIDOR no ambiente: consulta por REDE a contagem, ou um Envio)
+  malote envio reprocessar  --inquilino <id> [--json]   (so local)
   malote transcricao reprocessar --inquilino <id>              (volta falhas para pendente)
   malote transcricao incluir-estoque --inquilino <id> --limite <n> [--json]  (promove estoque fora-de-escopo, em lote)
   malote transcricao solicitar --anexo <id> --inquilino <id>           (prioriza UM Anexo na fila)
@@ -2756,6 +2760,16 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
     // so troca a URL — a mesma precedencia das consultas. `enviar` NAO esta em
     // COMANDOS_DE_REDE (a allowlist de LEITURA): e uma escrita, com despacho proprio.
     void executarEnviarRede(argumentos, {
+      servidor: opcao(argumentos, 'servidor') ?? ambiente.servidor,
+      chave: ambiente.chave,
+      env: process.env,
+      escrever: (t) => console.log(t),
+    }).then((codigo) => process.exit(codigo));
+  } else if (argumentos[0] === 'envio' && argumentos[1] === 'estado' && ambiente.servidor !== undefined) {
+    // Ciclo 29: `envio estado` consulta por rede. NAO entra em COMANDOS_DE_REDE (a allowlist de
+    // leitura nao tem `--chave-em`), e `envio reprocessar` segue no executor local, que recusa
+    // com o servidor declarado.
+    void executarEnvioEstadoRede(argumentos, {
       servidor: opcao(argumentos, 'servidor') ?? ambiente.servidor,
       chave: ambiente.chave,
       env: process.env,

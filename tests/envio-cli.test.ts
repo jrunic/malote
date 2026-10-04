@@ -183,7 +183,7 @@ test('malote envio estado mostra a contagem por estado', async () => {
     );
     assert.equal(codigo, 0);
     const saida = JSON.parse(linhas.at(-1) ?? '{}');
-    assert.deepEqual(saida, { pendente: 1 });
+    assert.deepEqual(saida, { enviado: 0, falhou: 0, pendente: 1 });
   } finally {
     limpar();
   }
@@ -324,6 +324,26 @@ test('malote envio reprocessar diz quantos Envios continuam pendentes', async ()
       escrever: (l: string) => json.push(l),
     });
     assert.deepEqual(JSON.parse(json[0]!), { reenfileirados: 0, pendentes: 2 });
+  } finally {
+    limpar();
+  }
+});
+
+test('malote envio estado local lista os tres estados em texto, mesmo com o Acervo vazio (#1117)', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { inquilinoId } = comInquilinoEConfiguracao(raiz, 'padrao');
+    const linhas: string[] = [];
+    const codigo = await executar(['envio', 'estado', '--inquilino', inquilinoId], {
+      dados: raiz,
+      estado: raiz,
+      escrever: (l: string) => linhas.push(l),
+    });
+    assert.equal(codigo, 0);
+    const saida = linhas.join('\n');
+    assert.match(saida, /enviado: 0/);
+    assert.match(saida, /falhou: 0/);
+    assert.match(saida, /pendente: 0/);
   } finally {
     limpar();
   }

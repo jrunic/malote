@@ -10,7 +10,11 @@ import {
   listarEnviosFalhos,
   reenfileirarEnviosFalhos,
   contarEnviosPorEstado,
+  lerEnvio,
+  examinarRepeticao,
+  EnvioDivergenteError,
 } from '../src/nucleo/envio.js';
+import { aprenderCorrespondencia } from '../src/nucleo/correspondencia.js';
 import { registrarConversa } from '../src/nucleo/escrita.js';
 import { cenario } from './ajuda/acervo.js';
 import { CFG_WHATSAPP } from './ajuda/configuracao.js';
@@ -280,6 +284,7 @@ test('contarEnviosPorEstado agrupa por estado', () => {
     assert.deepEqual(
       contagens.sort((a, b) => a.estado.localeCompare(b.estado)),
       [
+        { estado: 'enviado', n: 0 },
         { estado: 'falhou', n: 1 },
         { estado: 'pendente', n: 1 },
       ],
@@ -369,6 +374,165 @@ test('proximoEnvioPendente devolve o conteudo de imagem com os campos certos', (
       assert.equal(proximo.conteudo.mimetype, 'image/jpeg');
       assert.equal(proximo.conteudo.legenda, undefined);
     }
+  } finally {
+    c.limpar();
+  }
+});
+
+const ID_FORNECIDO = '3f2b8c1e-5d4a-4e7b-9c10-1a2b3c4d5e6f';
+const PARA = '5511999990000@s.whatsapp.net';
+
+function entradaDeTexto(texto: string, extra: object = {}) {
+  return {
+    configuracaoId: CFG_WHATSAPP.id,
+    destino: { enderecoCru: PARA },
+    conteudo: { tipo: 'texto' as const, texto },
+    identificadorDeEnvio: ID_FORNECIDO,
+    fonte: 'whatsapp' as const,
+    ...extra,
+  };
+}
+
+function contar(acervo: { preparar: (s: string) => { get: () => unknown } }, tabela: string): number {
+  return (acervo.preparar(`SELECT COUNT(*) AS n FROM ${tabela}`).get() as { n: number }).n;
+}
+
+test('identificador fornecido e gravado como veio, e o registro nao e repeticao', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const r = registrarEnvio(acervo, entradaDeTexto('oi'));
+    assert.equal(r.identificadorDeEnvio, ID_FORNECIDO);
+    assert.equal(r.repetido, false);
+    assert.equal(lerEnvio(acervo, ID_FORNECIDO)?.envioId, r.envioId);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('o mesmo identificador e o mesmo pedido: devolve o existente, sem linha e sem Operacao novas', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const primeiro = registrarEnvio(acervo, entradaDeTexto('oi'));
+    const operacoes = contar(acervo, 'operacoes');
+    const segundo = registrarEnvio(acervo, entradaDeTexto('oi'));
+    assert.equal(segundo.repetido, true);
+    assert.equal(segundo.envioId, primeiro.envioId);
+    assert.equal(contar(acervo, 'envios'), 1);
+    assert.equal(contar(acervo, 'operacoes'), operacoes, 'a repeticao nao grava Operacao');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('o mesmo identificador com conteudo ou destino diferentes: diverge, e nada muda', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    registrarEnvio(acervo, entradaDeTexto('oi'));
+    const operacoes = contar(acervo, 'operacoes');
+    assert.throws(() => registrarEnvio(acervo, entradaDeTexto('outro texto')), EnvioDivergenteError);
+    assert.throws(
+      () => registrarEnvio(acervo, entradaDeTexto('oi', { destino: { enderecoCru: '5511888880000@s.whatsapp.net' } })),
+      EnvioDivergenteError,
+    );
+    assert.throws(
+      () => registrarEnvio(acervo, entradaDeTexto('oi', { configuracaoId: 'outra-configuracao' })),
+      EnvioDivergenteError,
+    );
+    assert.equal(contar(acervo, 'envios'), 1);
+    assert.equal(contar(acervo, 'operacoes'), operacoes);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('repeticao DEPOIS do processamento: o destino ja virou Conversa e continua sendo o mesmo pedido', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const primeiro = registrarEnvio(acervo, entradaDeTexto('oi'));
+    const conversaId = registrarConversa(acervo, {
+      fonte: 'whatsapp',
+      idExterno: PARA,
+      coletiva: false,
+      configuracao: CFG_WHATSAPP,
+      bruto: '{}',
+    });
+    atualizarConversaDoEnvio(acervo, primeiro.envioId, conversaId);
+    marcarEnvioEnviado(acervo, primeiro.envioId);
+    const repetido = registrarEnvio(acervo, entradaDeTexto('oi'));
+    assert.equal(repetido.repetido, true, 'o destino cru ja foi zerado, e o endereco da Conversa e o mesmo');
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: '999@lid', canonico: PARA });
+    const pelaFormaAlternativa = registrarEnvio(acervo, entradaDeTexto('oi', { destino: { enderecoCru: '999@lid' } }));
+    assert.equal(pelaFormaAlternativa.repetido, true, 'a forma alternativa resolve para o mesmo endereco');
+    assert.throws(
+      () => registrarEnvio(acervo, entradaDeTexto('oi', { destino: { enderecoCru: '5511888880000@s.whatsapp.net' } })),
+      EnvioDivergenteError,
+    );
+  } finally {
+    c.limpar();
+  }
+});
+
+test('identificador fornecido exige a Fonte, para comparar o endereco', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const { fonte: _fonte, ...semFonte } = entradaDeTexto('oi');
+    assert.throws(() => registrarEnvio(acervo, semFonte), /fonte/);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('examinarRepeticao distingue nova, repetido e divergente sem escrever nada', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    assert.deepEqual(examinarRepeticao(acervo, entradaDeTexto('oi')), { resultado: 'nova' });
+    const r = registrarEnvio(acervo, entradaDeTexto('oi'));
+    assert.deepEqual(examinarRepeticao(acervo, entradaDeTexto('oi')), { resultado: 'repetido', envioId: r.envioId });
+    assert.deepEqual(examinarRepeticao(acervo, entradaDeTexto('x')), { resultado: 'divergente' });
+    assert.equal(contar(acervo, 'envios'), 1);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('lerEnvio acha por id ou por identificador, e devolve undefined para o que nao existe', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const r = registrarEnvio(acervo, entradaDeTexto('oi'));
+    const porId = lerEnvio(acervo, r.envioId);
+    assert.equal(porId?.identificadorDeEnvio, ID_FORNECIDO);
+    assert.equal(porId?.estado, 'pendente');
+    assert.equal(porId?.tentativas, 0);
+    assert.equal(porId?.tipo, 'texto');
+    assert.equal(porId?.motivoFalha, null);
+    assert.equal(porId?.concluidaEm, null);
+    assert.equal(lerEnvio(acervo, 'nao-existe'), undefined);
+    marcarEnvioFalhou(acervo, r.envioId, 'destino invalido');
+    assert.equal(lerEnvio(acervo, ID_FORNECIDO)?.motivoFalha, 'destino invalido');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('contarEnviosPorEstado devolve os tres estados, com zero quando nao ha', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    assert.deepEqual(contarEnviosPorEstado(acervo), [
+      { estado: 'enviado', n: 0 },
+      { estado: 'falhou', n: 0 },
+      { estado: 'pendente', n: 0 },
+    ]);
+    registrarEnvio(acervo, entradaDeTexto('oi'));
+    const pendente = contarEnviosPorEstado(acervo).find((x) => x.estado === 'pendente');
+    assert.equal(pendente?.n, 1);
   } finally {
     c.limpar();
   }

@@ -4,7 +4,7 @@ projeto: malote
 tipo: dominio
 descricao: "Modelo do arquivo pessoal de conversas — núcleo genérico multi-inquilino (Inquilino, Conversa, Mensagem, Pessoa, Identificador, Anexo, Envio) desacoplado das fontes por Adaptador"
 status: aprovado
-aprovado-em: 2026-10-03
+aprovado-em: 2026-10-04
 escopo: repo:malote
 plataforma: "*"
 dominios: [tecnologia]
@@ -277,7 +277,7 @@ Duas regras atravessam o modelo inteiro:
 **Entidades / Objetos de Valor**
 
 - **Envio** (raiz) — um pedido para que o malote fale pela conta de uma Configuração de Adaptador: o inverso de Mensagem recebida. Aqui o malote origina o conteúdo, antes de ele existir como Mensagem confirmada.
-- **Identificador de Envio** (objeto de valor) — gerado e gravado **antes** de qualquer tentativa de envio, nunca depois. É o que permite, sob garantia **ao menos uma vez**, decidir "já saiu" versus "falta tentar" por consulta ao Acervo, sem reenviar às cegas.
+- **Identificador de Envio** (objeto de valor) — gerado e gravado **antes** de qualquer tentativa de envio, nunca depois — pelo produto, ou **fornecido pelo solicitante** no pedido. É o que permite, sob garantia **ao menos uma vez**, decidir "já saiu" versus "falta tentar" por consulta ao Acervo, sem reenviar às cegas.
 - **Conteúdo do Envio** (objeto de valor) — texto, ou um Anexo a enviar (bytes mais o mesmo Descritor que um Anexo recebido carrega: tipo, nome, tamanho).
 - **Destinatário do Envio** (objeto de valor) — sempre uma Conversa. Quando ela ainda não existe no Acervo (primeira mensagem para um endereço novo), nasce no mesmo ato, pela mesma porta que a recepção usa.
 
@@ -450,7 +450,7 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Ator:** humano ou agente, local ou por rede
 - **Entrada:** Inquilino, Configuração de Adaptador, destinatário (Conversa existente, ou o endereço na Fonte quando ela ainda não existe), Conteúdo (texto e/ou Anexo)
 - **Saída:** Envio aceito, com Identificador de Envio — ou recusado, com o motivo (Configuração inexistente ou de outro Inquilino)
-- **Regras:** solicitar sempre é aceito quando a Configuração existe, mesmo sem conexão viva no momento — fica `pendente` até o processo certo existir; recusa não é "ainda não há conexão". Grava uma Operação, com o Envio como Linha de Efeito e o Ator de quem pediu (local ou `acesso:<chaveId>` quando por rede, mesmo vocabulário de `solicitar-transcricao`). Destinatário sem Conversa correspondente faz uma nascer no mesmo ato, pela porta que a recepção já usa.
+- **Regras:** solicitar sempre é aceito quando a Configuração existe, mesmo sem conexão viva no momento — fica `pendente` até o processo certo existir; recusa não é "ainda não há conexão". Grava uma Operação, com o Envio como Linha de Efeito e o Ator de quem pediu (local ou `acesso:<chaveId>` quando por rede, mesmo vocabulário de `solicitar-transcricao`). Destinatário sem Conversa correspondente faz uma nascer no mesmo ato, pela porta que a recepção já usa. Quando o solicitante fornece o Identificador de Envio, pedir de novo o mesmo identificador, para a mesma Configuração e o mesmo conteúdo, não cria outro Envio: devolve o existente e não grava Operação. O mesmo identificador com Configuração, destinatário ou conteúdo diferente é recusado. Identificador é escopado ao Inquilino.
 - **Não-funcionais:** a rota de rede resolve o Inquilino exclusivamente pela Chave de Acesso, nunca por parâmetro — pedir Envio por Configuração de outro Inquilino é indistinguível de pedir por Configuração inexistente.
 
 ### processar-envio
