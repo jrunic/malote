@@ -23,6 +23,8 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.29.0] — 2026-10-04
+
 Não muda a forma do Acervo nem do Registro. Os campos e parâmetros novos são acréscimos: os que já existiam
 não mudam de nome nem de sentido.
 
