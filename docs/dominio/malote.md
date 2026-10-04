@@ -2,9 +2,9 @@
 id: 202608240940
 projeto: malote
 tipo: dominio
-descricao: "Modelo do arquivo pessoal de conversas — núcleo genérico multi-inquilino (Inquilino, Conversa, Mensagem, Pessoa, Identificador, Anexo) desacoplado das fontes por Adaptador"
+descricao: "Modelo do arquivo pessoal de conversas — núcleo genérico multi-inquilino (Inquilino, Conversa, Mensagem, Pessoa, Identificador, Anexo, Envio) desacoplado das fontes por Adaptador"
 status: aprovado
-aprovado-em: 2026-10-01
+aprovado-em: 2026-10-03
 escopo: repo:malote
 plataforma: "*"
 dominios: [tecnologia]
@@ -21,7 +21,7 @@ Uma instalação serve vários Inquilinos ao mesmo tempo, sem que nada atravesse
 
 ## Linguagem
 
-Termos deste contexto estão no `GLOSSARIO.md`: **Inquilino**, **Chave de Acesso**, **Conversa**, **Mensagem**, **Pessoa**, **Identificador**, **Anexo**, **Adaptador**, **Fonte**, **Participação**, **Acervo**, **Política de Retenção**.
+Termos deste contexto estão no `GLOSSARIO.md`: **Inquilino**, **Chave de Acesso**, **Conversa**, **Mensagem**, **Pessoa**, **Identificador**, **Anexo**, **Adaptador**, **Fonte**, **Participação**, **Acervo**, **Política de Retenção**, **Envio**.
 
 Duas regras atravessam o modelo inteiro:
 
@@ -272,6 +272,26 @@ Duas regras atravessam o modelo inteiro:
 
 **Ciclo de vida** — nasce junto com a Mensagem, mesmo antes de o arquivo existir em disco. Transita entre estados de Presença por operação explícita. Nunca é removido do Acervo.
 
+### Envio
+
+**Entidades / Objetos de Valor**
+
+- **Envio** (raiz) — um pedido para que o malote fale pela conta de uma Configuração de Adaptador: o inverso de Mensagem recebida. Aqui o malote origina o conteúdo, antes de ele existir como Mensagem confirmada.
+- **Identificador de Envio** (objeto de valor) — gerado e gravado **antes** de qualquer tentativa de envio, nunca depois. É o que permite, sob garantia **ao menos uma vez**, decidir "já saiu" versus "falta tentar" por consulta ao Acervo, sem reenviar às cegas.
+- **Conteúdo do Envio** (objeto de valor) — texto, ou um Anexo a enviar (bytes mais o mesmo Descritor que um Anexo recebido carrega: tipo, nome, tamanho).
+- **Destinatário do Envio** (objeto de valor) — sempre uma Conversa. Quando ela ainda não existe no Acervo (primeira mensagem para um endereço novo), nasce no mesmo ato, pela mesma porta que a recepção usa.
+
+**Invariantes**
+
+- Todo Envio pertence a exatamente um Inquilino e a exatamente uma Configuração de Adaptador — é a Configuração que tem o vínculo vivo capaz de falar pela conta; Envio não existe solto do Inquilino, como nenhuma entidade do núcleo.
+- **Envio nunca abre conexão própria.** Só é processado pelo processo que já mantém a conexão viva daquela Configuração — o mesmo invariante que já vale para o Derrame: recurso com estado exclusivo tem um dono por vez. Dois processos tentando falar pela mesma Configuração ao mesmo tempo é a classe de incidente que corrompeu sessão em 07/09 e 10/09 (#858), aplicada ao envio em vez da recepção.
+- **A Mensagem resultante de um Envio concluído nasce pelas MESMAS portas que a recepção usa** — não há forma nova no núcleo para "Mensagem que o malote mandou". Ela converge com a Direção que já existe: `enviada`.
+- Estado do Envio: `pendente` → `enviado` (aponta para a Mensagem resultante) ou `falhou` (com o motivo); falho é reenfileirável, nunca automático — mesmo padrão de Transcrição.
+- **A garantia é ao menos uma vez, por decisão do Titular (03/10/2026).** Um Envio cujo resultado ficou indeterminado (por exemplo, o processo caiu entre mandar e confirmar) permanece `pendente` e é retentado — nunca descartado em silêncio. O risco de duplicar uma mensagem para um humano é aceito e nomeado, não eliminado por desenho: é o inverso da tolerância a duplicata que já existe na recepção, onde a unicidade da Referência Externa absorve repetição sem custo.
+- Envio nunca é apagado — concluído ou falhado, permanece como peça de auditoria de que o malote falou pela conta, por qual Configuração, em que instante.
+
+**Ciclo de vida** — nasce do pedido (humano ou agente, local ou por rede); fica `pendente` até o processo com a conexão viva da Configuração o processar; termina em `enviado` (com a Mensagem) ou `falhou` (reenfileirável).
+
 ### Adaptador
 
 **Entidades / Objetos de Valor**
@@ -424,6 +444,30 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Quando o Acervo está ocupado, o evento vai para o Derrame e volta depois.** Disputa de escrita **não** é recusa: recusa é sobre dado que o modelo não aceita, e banco ocupado é infraestrutura. O evento é escrito cru, por lote, num arquivo fora do Acervo, e o receptor **continua vivo** — matá-lo perderia tudo o que viesse depois. Na primeira escrita bem-sucedida seguinte, o receptor **drena** parte do Derrame; o sinal de que a disputa passou é o sucesso, e não o relógio. Grava-se no Acervo **antes** de tirar do Derrame: invertido, morrer no meio apaga o que nunca entrou, e nesta ordem o pior caso é repetição, que a unicidade da Referência Externa descarta. Lote que falha por algo que **não** é disputa sai para um arquivo à parte, com a causa junto — sem isso ele derrubaria o receptor a cada drenagem, para sempre
 - **O Derrame é visível sem abrir o Acervo**, pela mesma operação que reporta o instante do último evento. E derramar **não** é ficar em silêncio: o instante continua avançando, porque o receptor está vivo e recebendo
 - **O que a plataforma entrega além da Mensagem entra pelas mesmas portas, com a Natureza declarada.** Nome que o Titular cadastrou e Marca do Titular chegam por eventos de estado, não na Mensagem; o receptor os grava com a Autoridade e a Natureza que o Adaptador determinar, e **a chegada do retrato é reportada junto do instante do último evento** — quem vigia precisa distinguir *não há marcação* de *o retrato não veio*
+
+### solicitar-envio
+
+- **Ator:** humano ou agente, local ou por rede
+- **Entrada:** Inquilino, Configuração de Adaptador, destinatário (Conversa existente, ou o endereço na Fonte quando ela ainda não existe), Conteúdo (texto e/ou Anexo)
+- **Saída:** Envio aceito, com Identificador de Envio — ou recusado, com o motivo (Configuração inexistente ou de outro Inquilino)
+- **Regras:** solicitar sempre é aceito quando a Configuração existe, mesmo sem conexão viva no momento — fica `pendente` até o processo certo existir; recusa não é "ainda não há conexão". Grava uma Operação, com o Envio como Linha de Efeito e o Ator de quem pediu (local ou `acesso:<chaveId>` quando por rede, mesmo vocabulário de `solicitar-transcricao`). Destinatário sem Conversa correspondente faz uma nascer no mesmo ato, pela porta que a recepção já usa.
+- **Não-funcionais:** a rota de rede resolve o Inquilino exclusivamente pela Chave de Acesso, nunca por parâmetro — pedir Envio por Configuração de outro Inquilino é indistinguível de pedir por Configuração inexistente.
+
+### processar-envio
+
+- **Ator:** o próprio produto, dentro do processo que mantém a conexão viva daquela Configuração — nunca um worker genérico
+- **Entrada:** nenhuma — consulta o Acervo por conta própria, por Configuração
+- **Saída:** o Envio transita para `enviado` (com a Mensagem criada pelas portas normais) ou `falhou`, com o motivo
+- **Regras:** nunca processa Envio de Configuração cuja conexão não está viva nesse processo — ele continua `pendente` até o processo certo existir. Sequencial por Configuração, para não disputar a mesma conexão. Resultado indeterminado (processo caiu entre mandar e confirmar) deixa o Envio `pendente`, nunca `falhou` — é o que sustenta a garantia ao menos uma vez.
+- **Não-funcionais:** comando que **não** é de decisão humana — não grava Operação por chamada, mesma classe de `receber-ao-vivo` e `transcrever-anexo`.
+
+### reprocessar-envio
+
+- **Ator:** humano ou agente, por comando explícito
+- **Entrada:** Inquilino
+- **Saída:** quantos Envios falhos voltaram a `pendente`
+- **Regras:** mesmo espírito de `reprocessar-transcricao` e `reprocessar-derrame` — falha é terminal até este ato, nunca retentada sozinha. Comando de decisão: grava uma Operação, com uma Linha de Efeito por Envio reenfileirado.
+- **Não-funcionais:** idempotente — sem falha pendente, devolve zero e não grava Operação.
 
 ### consultar-participacao-em-data
 
@@ -594,7 +638,6 @@ Nenhuma. Contexto único.
 
 ## Fora do domínio
 
-- **Enviar mensagem.** O malote lê, guarda e cruza. Não é cliente de mensageria.
 - **Alterar ou apagar conteúdo na Fonte de origem.**
 - **Interpretar conteúdo** — resumo, classificação, análise de sentimento. O malote entrega o material; quem interpreta é o agente que consulta. **Transcrição de áudio não é interpretação
   nesse sentido** (decidido em 28/09/2026): ela não julga, não resume, não classifica — resgata
@@ -635,6 +678,28 @@ Nenhuma. Contexto único.
 
 ## Premissas
 
+- **Decidido por Orlando em 03/10/2026, ao abrir o agregado Envio:** a garantia de entrega é
+  **ao menos uma vez** (risco de duplicar aceito, não eliminado); o transporte de bytes de
+  mídia por rede é **upload** (não caminho de arquivo local), o que por sua vez exige TLS de
+  verdade antes de aceitar bytes e Chave de Acesso por essa rota — nunca o `node:http` cru que
+  o servidor expõe hoje atrás de loopback/túnel.
+- **Confirmado por Orlando em 03/10/2026:** Destinatário do Envio é sempre uma Conversa,
+  **direta ou coletiva** — enviar para um grupo de WhatsApp é suportado pela mesma operação,
+  sem caminho especial. Confirmado **por leitura do código vendorizado**
+  (`sock.sendMessage` já distingue grupo internamente — `messages-send.js:259`, mesma API
+  pública usada na espiga de 03/10 — nenhuma função separada), **não por medição empírica**
+  contra um grupo real: a espiga só exercitou self-chat. Decisão de seguir sem medir essa
+  ponta é do Titular.
+- **Confirmado por Orlando em 03/10/2026:** Envio não carrega Marca do Titular nem Citação —
+  essas só fazem sentido em Mensagem já existente, e um Envio em `pendente` ainda não é uma.
+- **Confirmado por Orlando em 03/10/2026:** `processar-envio` é sequencial por Configuração
+  (como `transcrever-anexo` é sequencial no Inquilino inteiro), não por Inquilino — duas
+  Configurações do mesmo Inquilino processam Envios em paralelo, cada uma na sua própria
+  conexão, sem disputa.
+- **Confirmado por Orlando em 03/10/2026:** onde a Hera mora — Inquilino próprio versus
+  Configuração dentro de um Inquilino existente — é decisão de instalação, não de modelo; o
+  agregado Envio funciona igual nos dois casos. (A decisão de instalação em si, Inquilino
+  próprio, já tinha sido tomada em 03/10/2026, fora deste modelo.)
 - **Nota de 11/09/2026:** `importar-catalogo-de-identidade` e `propor-vinculo-por-catalogo` existiam no produto desde o ciclo 7 e **nunca tinham entrado neste modelo**. Foram acrescentadas agora, ao modelar o ciclo 16 — a lacuna apareceu porque o ciclo 16 as toca, não porque alguém auditou o modelo.
 - **Assumido, a confirmar no gate:** que uma Configuração tem **uma** Pasta de Entrada. O modelo já admite Material espalhado por mais de uma pasta dentro do mesmo lote (medido no Instagram), mas não duas pastas de entrada distintas para a mesma conta.
 - **Assumido:** que a Natureza do Material é estável por Configuração. Se um dia a mesma conta emitir ora completo, ora parcial, a declaração passa a ser por Material e este invariante muda. **Revisto em 12/09/2026:** vale para material; na recepção contínua a Natureza é do **evento**, porque a mesma Configuração entrega retrato e atualização.

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import type { Acervo } from '../nucleo/acervo.js';
 import { buscarMensagens, contarPorFonte, expandirData, fonteDaConversa, lerAnexoPorId, lerMensagens, listarConversas, procurarPessoas } from '../nucleo/consulta.js';
@@ -7,7 +8,7 @@ import { quemEstavaEm } from '../nucleo/presenca.js';
 import { codificarCursor, decodificarCursor } from '../nucleo/cursor.js';
 import { abrirRegistro } from '../registro/registro.js';
 import { listarChavesDeAcesso } from '../registro/chave-de-acesso.js';
-import { listarConfiguracoes, resolverFiltroDeConfiguracao } from '../registro/configuracao-adaptador.js';
+import { configuracaoPorApelido, listarConfiguracoes, resolverFiltroDeConfiguracao } from '../registro/configuracao-adaptador.js';
 import { conversasMarcadas } from '../nucleo/marca-do-titular.js';
 import { lerDestinoDeMidia } from '../registro/destino-midia.js';
 import type { IdentidadeDeAcesso } from '../registro/chave-de-acesso.js';
@@ -15,6 +16,7 @@ import { ehFonte } from '../nucleo/tipos.js';
 import type { ConversaId, Fonte, InquilinoId } from '../nucleo/tipos.js';
 import { abrirAcervo, versaoDoAcervoEmDisco, VERSAO_SCHEMA_ACERVO } from '../nucleo/acervo.js';
 import { solicitarTranscricao } from '../nucleo/transcricao.js';
+import { registrarEnvio, type ConteudoDeEnvio } from '../nucleo/envio.js';
 
 /**
  * As rotas. Cada uma recebe o Acervo que a Chave abriu e devolve dado.
@@ -160,6 +162,180 @@ async function responderSolicitacaoDeTranscricao(
   }
 }
 
+/**
+ * Limite maior que o das rotas de JSON puro (64 KB): o corpo pode carregar
+ * uma imagem ou documento em base64. 8 MB — nao 20 — pelo pico de memoria no
+ * processo `servir`: base64 de 8 MB em string JSON sao ~11 MB parseados, mais
+ * o `Buffer.from(..., 'base64')`, ~19 MB de pico por requisicao (20 MB de
+ * limite daria ~47 MB). `servir` tambem roda o worker de Transcricao, que
+ * mantem Buffer de audio durante a chamada ao whisper.cpp. Imagem comprimida
+ * pelo WhatsApp tem 100-300 KB e a maioria dos PDFs cabe folgado; maior que
+ * isso e recusado com 400, nunca aceito e truncado.
+ */
+const TAMANHO_MAXIMO_DO_CORPO_DE_ENVIO = 8 * 1024 * 1024;
+
+async function lerCorpoJsonGrande(req: IncomingMessage, limite: number): Promise<unknown> {
+  const pedacos: Buffer[] = [];
+  let total = 0;
+  for await (const pedaco of req as AsyncIterable<Buffer>) {
+    total += pedaco.length;
+    if (total > limite) throw new Error('corpo grande demais');
+    pedacos.push(pedaco);
+  }
+  const texto = Buffer.concat(pedacos).toString('utf8');
+  return texto.length === 0 ? undefined : JSON.parse(texto);
+}
+
+/**
+ * Segunda rota de escrita da API por rede, depois de `/transcricoes/solicitar`
+ * (#1103). Mesma disciplina: conexao propria de escrita, versao do schema
+ * checada ANTES de abrir, Inquilino so da credencial, corpo inteiro sob
+ * try/catch (excecao depois de `await` num handler `void` derrubaria o
+ * processo).
+ *
+ * Transporte de midia: JSON com o arquivo em base64 — nunca multipart (o
+ * servidor e `node:http` cru, sem parser). ~33% a mais de bytes, aceito.
+ *
+ * A Conversa NAO nasce aqui: nasce em `processarEnvios`, dentro do `ouvir`,
+ * que ja tem o privilegio de escrita. Esta rota so registra o pedido.
+ */
+async function responderSolicitacaoDeEnvio(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: ContextoDaRequisicao,
+): Promise<void> {
+  try {
+    let corpo: unknown;
+    try {
+      corpo = await lerCorpoJsonGrande(req, TAMANHO_MAXIMO_DO_CORPO_DE_ENVIO);
+    } catch {
+      json(res, 400, { erro: 'corpo invalido ou grande demais' });
+      return;
+    }
+    if (typeof corpo !== 'object' || corpo === null) {
+      json(res, 400, { erro: 'corpo invalido' });
+      return;
+    }
+    const campos = corpo as Record<string, unknown>;
+    const texto = (nome: string): string | undefined =>
+      typeof campos[nome] === 'string' ? (campos[nome] as string) : undefined;
+
+    // `fonte` opcional, default 'whatsapp' (a unica com Envio hoje): o
+    // contrato nao muda quando outra Fonte ganhar Envio.
+    const fonte = texto('fonte') ?? 'whatsapp';
+    if (fonte !== 'whatsapp') {
+      json(res, 400, { erro: `fonte "${fonte}" nao suporta Envio ainda — so whatsapp` });
+      return;
+    }
+    const apelido = texto('configuracao');
+    const para = texto('para');
+    const tipo = texto('tipo') ?? 'texto';
+    const legendaOuTexto = texto('texto');
+    const arquivoBase64 = texto('arquivoBase64');
+    const mimetype = texto('mimetype');
+    const nomeDeArquivo = texto('nomeDeArquivo');
+
+    if (apelido === undefined || para === undefined) {
+      json(res, 400, { erro: 'informe configuracao e para' });
+      return;
+    }
+    if (tipo !== 'texto' && tipo !== 'imagem' && tipo !== 'documento') {
+      json(res, 400, { erro: 'tipo precisa ser texto, imagem ou documento' });
+      return;
+    }
+    if (tipo === 'texto' && legendaOuTexto === undefined) {
+      json(res, 400, { erro: 'informe texto' });
+      return;
+    }
+    if (tipo !== 'texto' && (arquivoBase64 === undefined || mimetype === undefined)) {
+      json(res, 400, { erro: 'informe arquivoBase64 e mimetype' });
+      return;
+    }
+    if (tipo === 'documento' && nomeDeArquivo === undefined) {
+      json(res, 400, { erro: 'informe nomeDeArquivo' });
+      return;
+    }
+
+    const inquilinoId = ctx.identidade.inquilinoId as InquilinoId;
+    const pastaDeAcervos = join(ctx.dados, 'acervos');
+    const versao = versaoDoAcervoEmDisco(pastaDeAcervos, inquilinoId);
+    if (versao !== undefined && versao !== VERSAO_SCHEMA_ACERVO) {
+      res.writeHead(503, { 'content-type': 'application/json' });
+      res.end('');
+      return;
+    }
+
+    // BUSCA, NUNCA CRIA, escopada ao Inquilino da credencial: Configuracao de
+    // outro Inquilino responde igual a "nao existe em lugar nenhum".
+    const registro = abrirRegistro(ctx.dados);
+    let cfg;
+    try {
+      cfg = configuracaoPorApelido(registro, inquilinoId, fonte, apelido);
+    } finally {
+      registro.fechar();
+    }
+    if (cfg === undefined) {
+      naoEncontrado(res);
+      return;
+    }
+
+    // O Acervo abre ANTES de qualquer byte ir a disco: se `abrirAcervo`
+    // lancar, nenhum staging orfao foi criado. O staging so existe dentro do
+    // try que grava o Envio, e e removido se `registrarEnvio` nao concluir —
+    // aqui ele so existiria por uma fracao de segundo, sem Envio nenhum o
+    // referenciando, entao remover nao viola "o produto nunca apaga o que
+    // moveu" (que vale para staging JA referenciado por Envio).
+    const escrita = abrirAcervo(pastaDeAcervos, inquilinoId);
+    let stagingParaLimpar: string | undefined;
+    try {
+      let conteudo: ConteudoDeEnvio;
+      if (tipo === 'texto') {
+        conteudo = { tipo: 'texto', texto: legendaOuTexto as string };
+      } else {
+        const pastaDeStaging = join(ctx.dados, 'envios-pendentes');
+        mkdirSync(pastaDeStaging, { recursive: true });
+        const caminhoDeStaging = join(pastaDeStaging, randomUUID());
+        writeFileSync(caminhoDeStaging, Buffer.from(arquivoBase64 as string, 'base64'));
+        stagingParaLimpar = caminhoDeStaging;
+        const legenda = legendaOuTexto !== undefined ? { legenda: legendaOuTexto } : {};
+        conteudo =
+          tipo === 'imagem'
+            ? { tipo: 'imagem', caminhoArquivo: caminhoDeStaging, mimetype: mimetype as string, ...legenda }
+            : {
+                tipo: 'documento',
+                caminhoArquivo: caminhoDeStaging,
+                mimetype: mimetype as string,
+                nomeDeArquivo: nomeDeArquivo as string,
+                ...legenda,
+              };
+      }
+      const resultado = registrarEnvio(escrita, {
+        configuracaoId: cfg.id,
+        destino: { enderecoCru: para },
+        conteudo,
+      });
+      stagingParaLimpar = undefined; // o Envio agora o referencia
+      json(res, 202, { aceita: true, envioId: resultado.envioId });
+    } catch (erroDeRegistro) {
+      if (stagingParaLimpar !== undefined) {
+        try {
+          unlinkSync(stagingParaLimpar);
+        } catch {
+          // best-effort: nao mascara o erro original
+        }
+      }
+      throw erroDeRegistro;
+    } finally {
+      escrita.fechar();
+    }
+  } catch {
+    if (!res.headersSent) {
+      res.writeHead(500, { 'content-type': 'application/json' });
+      res.end('');
+    }
+  }
+}
+
 export function responder(req: IncomingMessage, res: ServerResponse, ctx: ContextoDaRequisicao): void {
   const url = new URL(req.url ?? '/', 'http://interno');
   const partes = url.pathname.split('/').filter((p) => p !== '');
@@ -171,6 +347,10 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
   // propria conexao de escrita — fechar um nao afeta o outro.
   if (req.method === 'POST' && partes.length === 2 && partes[0] === 'transcricoes' && partes[1] === 'solicitar') {
     void responderSolicitacaoDeTranscricao(req, res, ctx);
+    return;
+  }
+  if (req.method === 'POST' && partes.length === 2 && partes[0] === 'envios' && partes[1] === 'solicitar') {
+    void responderSolicitacaoDeEnvio(req, res, ctx);
     return;
   }
 

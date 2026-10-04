@@ -23,6 +23,38 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.25.0] — 2026-10-04
+
+**Muda a forma do Acervo: schema v23 → v25** (tabela nova `envios` na v24;
+colunas de mídia nela na v25). Os dois passos são aditivos e não exigem
+contexto do Registro: qualquer serviço que abrir o Acervo os aplica sozinho.
+
+### Adicionado
+
+- **O malote passa a enviar mensagem de WhatsApp** — texto, imagem e
+  documento — pela conexão que o `malote ouvir` da Configuração já mantém.
+  Antes ele só lia, guardava e cruzava.
+  - `malote enviar --inquilino <id> --configuracao <apelido> --para <endereco>`
+    com `--texto`, `--imagem <caminho>` ou `--documento <caminho>` (o texto vira
+    a legenda quando há arquivo). O arquivo é copiado para uma pasta de trabalho
+    (`envios-pendentes/`); o original não é tocado.
+  - `malote envio estado` e `malote envio reprocessar`.
+  - `POST /envios/solicitar`, a segunda rota de escrita da API por rede, com o
+    arquivo em base64 no corpo JSON (limite de 8 MB). A Chave de Acesso desta
+    rota **fala pela conta**: exponha o servidor só atrás de TLS.
+  - O pedido é gravado como um Envio pendente e processado pelo `ouvir`. A
+    garantia é de **ao menos uma vez**: uma queda entre o envio e o registro
+    pode repetir a mensagem. A Conversa só nasce depois que o envio sai.
+  - A mensagem enviada volta pelo mesmo caminho de recepção das demais, e o
+    arquivo de staging vira o arquivo do Anexo (movido para
+    `envios-pendentes/processados/`, nunca apagado).
+
+### Corrigido
+
+- A mensagem de subida do `malote servir` dizia "Somente leitura" mesmo com a
+  rota de solicitação de Transcrição, que escreve. Agora nomeia as duas rotas de
+  escrita.
+
 ## [0.24.1] — 2026-10-01
 
 ### Corrigido

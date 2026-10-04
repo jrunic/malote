@@ -466,6 +466,45 @@ Hard limits sempre relevantes durante a sessão.
   (lista de transmissão e o feed agregado `status@broadcast`) não foi tocado** —
   critério 11a nunca cobriu essa forma, e ela continua tendo Mensagem real.
 
+- **Envio nunca abre conexão própria — `Conexao.enviar` discrimina falha de
+  transporte de falha definitiva, e a diferença decide o estado.** Boom 428
+  (`connectionClosed`) e 408 (`connectionLost`) são rotina de transporte, não
+  falha de dado: `conexao.enviar` os filtra e devolve `undefined`
+  (indeterminado), nunca propaga como exceção. Qualquer outra exceção
+  (destinatário inválido, rejeição da plataforma) sobe para
+  `processarEnvios`, que marca `falhou` — nunca o contrário. Confundir os
+  dois faria toda janela de religação com um Envio pendente virar falha
+  definitiva em silêncio.
+- **A Conversa de um Envio nasce no PROCESSAMENTO (dentro do `ouvir`), nunca
+  na solicitação.** `solicitar-envio` grava só a linha do pedido, com o
+  endereço cru quando a Conversa ainda não existe; `processarEnvios` é quem
+  resolve ou cria, e só DEPOIS de confirmar sucesso do envio — destinatário
+  errado nunca deixa Conversa imortal no Acervo (Conversa nunca é apagada).
+  É o que permite a rota de rede (`/envios/solicitar`) gravar só uma linha,
+  sem precisar do mesmo mecanismo de escrita de domínio que criar Conversa
+  exigiria.
+- **A fila de Envio prioriza por `tentativas` antes de `solicitada_em`.** Um
+  Envio que já tentou e voltou indeterminado cede a vez aos que nunca
+  tentaram — sem isso, um Envio problemático trava a fila inteira daquela
+  Configuração atrás de si, porque o poller sempre pegaria o mesmo primeiro.
+- **O eco do Envio de mídia pode chegar ANTES de `aoEnviar` rodar, e o laço
+  de `anexosNuncaObtidos` espera a passada de Envio em curso.** Medido lendo
+  a biblioteca vendorizada: o `sendMessage` emite o eco num `process.nextTick`
+  atrás de um mutex, e nada garante que a continuação do `await` que chama
+  `aoEnviar` rode antes dele. Sem a espera, o eco não acharia o `keyId` no mapa
+  `bytesOriginados` e baixaria de volta do WhatsApp os bytes que o malote acabou
+  de enviar, em silêncio — o Anexo ficaria `presente` do mesmo jeito, então só
+  um teste que emite o eco **de dentro** do `sendMessage` pega. A passada é
+  publicada (`passadaDeEnvio`) ANTES de começar, porque o eco pode vir do
+  primeiro trecho síncrono dela. O staging é movido para `processados/` depois
+  de gravar o Anexo, nunca apagado; se o processo cair entre o envio e o eco,
+  o mapa de processo morre e o arquivo fica órfão em `envios-pendentes/`
+  (janela aceita e nomeada, sem detecção).
+- **Envio órfão por vínculo invalidado nunca vira `falhou`.** Quando o
+  adaptador invalida o vínculo (`loggedOut`), o poller para, mas nenhum
+  Envio `pendente` daquela Configuração é tocado — a causa é do vínculo, não
+  do Envio, e ele fica pendente até reparear.
+
 ## Decisões Herdadas (explícitas)
 
 Repetidas aqui em vez de herdadas de configuração externa ao repositório — quem lê este arquivo tem o contrato inteiro:
@@ -491,9 +530,42 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
-- 01/10/2026 — **Tarefa #1106 corrigida via `dev-05`: worker de transcrição
-  passava caminho relativo pro motor sem resolver contra o Destino de Mídia —
-  EM `main`, AINDA NÃO PUBLICADA.** Causa raiz confirmada lendo o código e
+- 03/10/2026 — **Ciclo 27 (`malote-envio-de-mensagem`, #1112) em execução:
+  Plano 1 de 3 implementado e commitado — Envio de TEXTO de ponta a ponta.**
+  Fundamentado em espiga contra a conta real da Hera (ata
+  `13-processos/manter-malote/01-discussoes/20261003-envio-de-mensagens-pelo-malote.md`):
+  `sock.sendMessage` confirmado funcionando, eco de `messages.upsert`
+  (`type: 'append'`) confirmado gravando a Mensagem pela porta de recepção
+  já existente, sem código novo. Agregado **Envio** novo (schema v23→v24):
+  `registrarEnvio`/`proximoEnvioPendente`/`marcarEnvioEnviado`/
+  `marcarEnvioFalhou`/`reenfileirarEnviosFalhos` no núcleo;
+  `Conexao.enviar` no módulo de conexão, discriminando falha de transporte
+  (Boom 428/408) de falha definitiva; `processarEnvios` no adaptador
+  WhatsApp, resolvendo/criando a Conversa só após sucesso; poller dentro de
+  `ouvir.ts`; comandos `malote enviar`/`malote envio reprocessar`/
+  `malote envio estado`. 10 commits, suíte de 1090 para **1121 testes**,
+  mesma baseline de 3 falhas pré-existentes. Duas revisões independentes
+  (`dev-10` via advisor) rodaram antes da execução — na spec e no plano —,
+  cada uma achando furos reais corrigidos antes do `dev-04`: a mais grave,
+  a Conversa do Envio nasce no **processamento** (dentro do `ouvir`), nunca
+  na solicitação, para a rota de rede não precisar abrir escrita de
+  domínio. **Planos 2 (mídia) e 3 (rede) escritos e revisados (advisor),
+  ainda não implementados.** Falta, de todo o ciclo, a Verificação de Campo
+  contra a conta real da Hera — pendente de Ação Documentada, fora de
+  código.
+
+- 01/10/2026 — **RELEASE v0.24.1 PUBLICADA E DISTRIBUÍDA NOS TRÊS PACOTES,
+  VERIFICADA POR EFEITO.** PR #12 (`main → production`, CI verde), merge
+  `6874c58`, tag `v0.24.1`. Via `upgrade-now`: `malote` (thinkpad, os dois
+  serviços reiniciados), `malote-cliente` (contabo), `malote-cliente-macbook`
+  (localhost) — os três confirmados em `6874c58`/`0.24.1`. Verificado contra
+  o host real, não só o processo: `malote --versao` responde `0.24.1` nos
+  três, os serviços do thinkpad `active` desde o restart, e o código do fix
+  (`lerDestinoDeMidia`, guarda de "Destino nao configurado") presente no
+  checkout que `malote servir` de fato executa (roda da fonte, sem build).
+  **Tarefa #1106 corrigida via `dev-05`: worker de transcrição
+  passava caminho relativo pro motor sem resolver contra o Destino de Mídia.**
+  Causa raiz confirmada lendo o código e
   reproduzida com ciclo de retorno (teste com fake ffmpeg que valida a
   entrada, igual o real): `processarUmaVez` lia `elegivel.caminho` direto da
   coluna `anexos.caminho`, que é relativo ao Destino de Mídia por desenho, e
@@ -743,7 +815,8 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
-- **#1106 corrigida via `dev-05` em `main` — AINDA NÃO PUBLICADA.** O worker de
+- **#1106 corrigida via `dev-05` — RELEASE v0.24.1 PUBLICADA E DISTRIBUÍDA** (ver
+  Estado Atual). O worker de
   transcrição (`src/cli/transcricao.ts`, `processarUmaVez`) passava `elegivel.caminho`
   (sempre RELATIVO ao Destino de Mídia) direto pro motor, sem juntar com
   `lerDestinoDeMidia` antes — toda Transcrição falhava com "No such file or directory"

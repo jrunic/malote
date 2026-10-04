@@ -15,7 +15,7 @@ tags: [adr, decisao, seguranca, multi-inquilino, criptografia, auditoria]
 
 ## Status
 
-Aprovado — 2026-08-24.
+Aprovado — 2026-08-24. **Revisado em 2026-10-03**: a decisão permanece; muda o que uma Chave de Acesso comprometida alcança.
 
 ## Contexto
 
@@ -84,3 +84,23 @@ Vale para este repositório e para o produto que ele entrega. Não é recomenda�
 
 - `docs/dominio/malote.md` — agregados Inquilino, Chave de Operador e Chave de Acesso; seção "Postura de confidencialidade"
 - `GLOSSARIO.md` — **Inquilino**, **Operador**, **Chave de Acesso**, **Chave de Operador**
+
+## Revisado em 2026-10-03
+
+O agregado Envio muda o que esta ADR descreve sobre o que o produto garante:
+a Chave de Acesso deixa de ser só de leitura. `POST /envios/solicitar` aceita
+uma Chave de Acesso e, com ela, autoriza uma escrita que **fala pela conta** do
+Inquilino: mandar texto, imagem ou documento por uma Configuração de WhatsApp
+dele.
+
+A fronteira original continua valendo: nenhuma Chave de Operador lê ou escreve
+conteúdo, e o Operador só alcança um Inquilino emitindo uma Chave de Acesso
+para ele, com rastro. O que muda é o dano de uma Chave de Acesso vazada. Antes
+ela expunha leitura; agora expõe também a capacidade de enviar mensagem em nome
+da conta.
+
+Esta ADR nunca prometeu confidencialidade de escrita. Mas a saída de `malote
+servir` anunciava "Somente leitura" mesmo depois de `/transcricoes/solicitar`
+ter aberto a primeira exceção, e ninguém a corrigiu. A mensagem foi corrigida no
+mesmo ciclo que escreveu esta seção (`src/cli/servir.ts`), e o guia de
+instalação passou a declarar que o servidor só deve ser exposto atrás de TLS.

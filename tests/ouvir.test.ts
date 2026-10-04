@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { paraDrenar } from './ajuda/drenagem.js';
 import { instalacaoTemporaria } from './ajuda/instalacao.js';
@@ -19,6 +20,8 @@ import { existsSync } from 'node:fs';
 import { resolverConfiguracao } from '../src/registro/configuracao-adaptador.js';
 import { executar } from '../src/cli/index.js';
 import { configurarDestinoDeMidia } from '../src/registro/destino-midia.js';
+import { registrarEnvio } from '../src/nucleo/envio.js';
+import { configuracaoPorApelido } from '../src/registro/configuracao-adaptador.js';
 
 /**
  * Biblioteca falsa que sobe e imediatamente diz "deslogado".
@@ -801,6 +804,285 @@ test('sem Destino de Midia configurado, o Anexo ao vivo permanece nunca-obtido',
       acervo.fechar();
     }
     assert.match(linhas.join('\n'), /AVISO: Destino de Midia nao configurado/);
+  } finally {
+    limpar();
+  }
+});
+
+/**
+ * Conecta, fica ABERTA (para o poller de Envio ter chance de rodar), e só
+ * desloga quando `fecharAgora()` for chamado — o teste controla o instante.
+ */
+function bibliotecaAbertaComEnvio(opcoes: {
+  sendMessage: (jid: string, content: unknown) => Promise<{ key?: { id?: string } } | undefined>;
+}): {
+  biblioteca: unknown;
+  abrirConexao: () => void;
+  fecharAgora: () => void;
+} {
+  const ouvintes = new Map<string, (dado: unknown) => void>();
+  const biblioteca = {
+    default: () => ({
+      ev: { on: (fluxo: string, f: (dado: unknown) => void) => ouvintes.set(fluxo, f) },
+      requestPairingCode: () => Promise.resolve('12345678'),
+      sendMessage: opcoes.sendMessage,
+    }),
+    useMultiFileAuthState: () => Promise.resolve({ state: {}, saveCreds: () => undefined }),
+    DisconnectReason: { loggedOut: 401, connectionClosed: 428, connectionLost: 408 },
+  };
+  return {
+    biblioteca,
+    abrirConexao: (): void => {
+      setImmediate(() => ouvintes.get('connection.update')?.({ connection: 'open' }));
+    },
+    fecharAgora: (): void => {
+      ouvintes.get('connection.update')?.({
+        connection: 'close',
+        lastDisconnect: { error: { output: { statusCode: 401 } } },
+      });
+    },
+  };
+}
+
+test('ouvir processa Envio pendente da propria Configuracao durante a escuta', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const registro = abrirRegistro(raiz);
+    const id = criarInquilino(registro, { titularNome: 'Leia' });
+    registro.fechar();
+    comConfiguracao(raiz, 'teste');
+    comVinculo(raiz, 'conta-envio');
+
+    const acervo = abrirAcervo(join(raiz, 'acervos'), id);
+    const cfgRegistro = abrirRegistro(raiz);
+    const cfg = configuracaoPorApelido(cfgRegistro, id, 'whatsapp', 'teste');
+    cfgRegistro.fechar();
+    registrarEnvio(acervo, {
+      configuracaoId: cfg!.id,
+      destino: { enderecoCru: '5511999990000@s.whatsapp.net' },
+      conteudo: { tipo: 'texto', texto: 'oi da fila' },
+    });
+    acervo.fechar();
+
+    const chamadasDeEnvio: string[] = [];
+    const fake = bibliotecaAbertaComEnvio({
+      sendMessage: async (jid) => {
+        chamadasDeEnvio.push(jid);
+        return { key: { id: 'ENVIADO1' } };
+      },
+    });
+
+    process.env['MALOTE_ENVIO_INTERVALO_MS'] = '10';
+    const linhas: string[] = [];
+    const promessa = ouvir(
+      ['ouvir', '--inquilino', id, '--conta', 'conta-envio', '--configuracao', 'teste'],
+      {
+        dados: raiz,
+        estado: raiz,
+        escrever: (t: string) => linhas.push(t),
+        carregarBiblioteca: () => {
+          fake.abrirConexao();
+          return Promise.resolve(fake.biblioteca as never);
+        },
+      },
+    );
+
+    // Poll ativo em vez de espera fixa: sob o test runner, concorrencia entre
+    // testes torna timing fixo nao-confiavel (medido: 80ms e 150ms fixos
+    // falharam intermitentemente). Teto de 2s, bem acima do intervalo de 10ms.
+    const limite = Date.now() + 2000;
+    while (chamadasDeEnvio.length === 0 && Date.now() < limite) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    fake.fecharAgora();
+    const codigo = await promessa;
+    delete process.env['MALOTE_ENVIO_INTERVALO_MS'];
+
+    assert.equal(codigo, 1); // logout — mesmo sinal de "nao morreu no meio"
+    assert.deepEqual(chamadasDeEnvio, ['5511999990000@s.whatsapp.net']);
+
+    const depois = abrirAcervoSomenteLeitura(join(raiz, 'acervos'), id);
+    const linha = depois
+      .preparar(`SELECT estado FROM envios WHERE configuracao_id = ?`)
+      .get(cfg!.id) as { estado: string };
+    assert.equal(linha.estado, 'enviado');
+    depois.fechar();
+  } finally {
+    limpar();
+  }
+});
+
+test('Envio pendente permanece pendente quando o vinculo e invalidado (nao vira falhou)', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const registro = abrirRegistro(raiz);
+    const id = criarInquilino(registro, { titularNome: 'Leia' });
+    registro.fechar();
+    comConfiguracao(raiz, 'teste');
+    comVinculo(raiz, 'conta-desloga');
+
+    const acervo = abrirAcervo(join(raiz, 'acervos'), id);
+    const cfgRegistro = abrirRegistro(raiz);
+    const cfg = configuracaoPorApelido(cfgRegistro, id, 'whatsapp', 'teste');
+    cfgRegistro.fechar();
+    registrarEnvio(acervo, {
+      configuracaoId: cfg!.id,
+      destino: { enderecoCru: '5511999990000@s.whatsapp.net' },
+      conteudo: { tipo: 'texto', texto: 'nunca sai' },
+    });
+    acervo.fechar();
+
+    const biblioteca = bibliotecaQueDesloga();
+    process.env['MALOTE_ENVIO_INTERVALO_MS'] = '10';
+    const codigo = await ouvir(
+      ['ouvir', '--inquilino', id, '--conta', 'conta-desloga', '--configuracao', 'teste'],
+      {
+        dados: raiz,
+        estado: raiz,
+        escrever: () => undefined,
+        carregarBiblioteca: () => {
+          biblioteca.disparar();
+          return Promise.resolve(biblioteca as never);
+        },
+      },
+    );
+    delete process.env['MALOTE_ENVIO_INTERVALO_MS'];
+
+    assert.equal(codigo, 1); // vinculo invalidado
+
+    const depois = abrirAcervoSomenteLeitura(join(raiz, 'acervos'), id);
+    const linha = depois
+      .preparar(`SELECT estado FROM envios WHERE configuracao_id = ?`)
+      .get(cfg!.id) as { estado: string };
+    assert.equal(linha.estado, 'pendente', 'vinculo cair nao e falha do Envio');
+    depois.fechar();
+  } finally {
+    limpar();
+  }
+});
+
+test('midia originada pelo proprio Envio usa o staging: downloadMediaMessage NUNCA e chamado, staging vai para processados/', async () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const registro = abrirRegistro(raiz);
+    const id = criarInquilino(registro, { titularNome: 'Leia' });
+    configurarDestinoDeMidia(registro, id, { natureza: 'local', endereco: join(raiz, 'midia-leia') });
+    registro.fechar();
+    comConfiguracao(raiz, 'teste');
+    comVinculo(raiz, 'conta-midia');
+
+    const acervo = abrirAcervo(join(raiz, 'acervos'), id);
+    const cfgRegistro = abrirRegistro(raiz);
+    const cfg = configuracaoPorApelido(cfgRegistro, id, 'whatsapp', 'teste');
+    cfgRegistro.fechar();
+
+    const pastaStaging = mkdtempSync(join(tmpdir(), 'malote-staging-'));
+    const caminhoStaging = join(pastaStaging, 'x.jpg');
+    writeFileSync(caminhoStaging, Buffer.from('bytes-originais-da-imagem'));
+    registrarEnvio(acervo, {
+      configuracaoId: cfg!.id,
+      destino: { enderecoCru: '5511999990000@s.whatsapp.net' },
+      conteudo: { tipo: 'imagem', caminhoArquivo: caminhoStaging, mimetype: 'image/jpeg' },
+    });
+    acervo.fechar();
+
+    const ouvintes = new Map<string, (dado: unknown) => void>();
+    let downloadFoiChamado = false;
+    const biblioteca = {
+      default: () => ({
+        ev: { on: (fluxo: string, f: (dado: unknown) => void) => ouvintes.set(fluxo, f) },
+        requestPairingCode: () => Promise.resolve('12345678'),
+        updateMediaMessage: (m: unknown) => Promise.resolve(m),
+        sendMessage: async (jid: string) => {
+          // O PIOR CASO, de proposito: o eco chega DE DENTRO do sendMessage,
+          // antes de ele devolver — a biblioteca real o emite num nextTick
+          // atras de um mutex, e nada garante que `aoEnviar` ja tenha rodado.
+          ouvintes.get('messages.upsert')?.({
+            type: 'append',
+            messages: [
+              {
+                key: { remoteJid: jid, id: 'IMG_ECO_1', fromMe: true },
+                messageTimestamp: Math.floor(Date.now() / 1000),
+                message: {
+                  imageMessage: {
+                    mimetype: 'image/jpeg',
+                    mediaKey: new Uint8Array([1, 2, 3]),
+                    directPath: '/sintetico',
+                  },
+                },
+              },
+            ],
+          });
+          return { key: { id: 'IMG_ECO_1' } };
+        },
+      }),
+      useMultiFileAuthState: () => Promise.resolve({ state: {}, saveCreds: () => undefined }),
+      DisconnectReason: { loggedOut: 401, connectionClosed: 428, connectionLost: 408 },
+      downloadMediaMessage: () => {
+        downloadFoiChamado = true;
+        return Promise.reject(new Error('nao deveria ter baixado — bytes ja estao no staging'));
+      },
+    };
+
+    process.env['MALOTE_ENVIO_INTERVALO_MS'] = '10';
+    const linhas: string[] = [];
+    const promessa = ouvir(
+      ['ouvir', '--inquilino', id, '--conta', 'conta-midia', '--configuracao', 'teste'],
+      {
+        dados: raiz,
+        estado: raiz,
+        escrever: (t: string) => linhas.push(t),
+        carregarBiblioteca: () => {
+          setImmediate(() => ouvintes.get('connection.update')?.({ connection: 'open' }));
+          return Promise.resolve(biblioteca as never);
+        },
+      },
+    );
+
+    // 50ms, nao 10ms: abrir/fechar Acervo somente-leitura rapido demais pode
+    // mascarar SQLITE_BUSY real. Poll ativo com teto, nunca espera fixa.
+    const limite = Date.now() + 3000;
+    let anexoPresente = false;
+    while (!anexoPresente && Date.now() < limite) {
+      await new Promise((r) => setTimeout(r, 50));
+      const verificacao = abrirAcervoSomenteLeitura(join(raiz, 'acervos'), id);
+      const linha = verificacao.preparar('SELECT presenca FROM anexos').get() as
+        | { presenca: string }
+        | undefined;
+      verificacao.fechar();
+      anexoPresente = linha?.presenca === 'presente';
+    }
+
+    ouvintes.get('connection.update')?.({
+      connection: 'close',
+      lastDisconnect: { error: { output: { statusCode: 401 } } },
+    });
+    await promessa;
+    delete process.env['MALOTE_ENVIO_INTERVALO_MS'];
+
+    assert.equal(downloadFoiChamado, false, `nao deveria ter chamado downloadMediaMessage. log: ${linhas.join(' | ')}`);
+    assert.ok(anexoPresente, `Anexo deveria estar presente, vindo do staging. log: ${linhas.join(' | ')}`);
+
+    const depois = abrirAcervoSomenteLeitura(join(raiz, 'acervos'), id);
+    const anexo = depois.preparar('SELECT caminho FROM anexos').get() as { caminho: string };
+    depois.fechar();
+    assert.equal(
+      readFileSync(join(raiz, 'midia-leia', anexo.caminho)).toString(),
+      'bytes-originais-da-imagem',
+    );
+
+    // O Envio terminou `enviado`, e nao so "o download nao foi chamado".
+    const envio = abrirAcervoSomenteLeitura(join(raiz, 'acervos'), id);
+    const estado = envio.preparar('SELECT estado FROM envios').get() as { estado: string };
+    envio.fechar();
+    assert.equal(estado.estado, 'enviado');
+
+    // MOVIDO, nunca apagado — mesmo principio da Pasta de Entrada.
+    assert.equal(existsSync(caminhoStaging), false, 'staging deveria ter saido do lugar original');
+    assert.ok(
+      existsSync(join(pastaStaging, 'processados', 'x.jpg')),
+      'staging deveria estar em processados/, nao apagado',
+    );
   } finally {
     limpar();
   }

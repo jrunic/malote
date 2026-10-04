@@ -758,6 +758,58 @@ const SOLICITACAO_DE_TRANSCRICAO_V23: PassoDeMigracao = {
   aplicar: (db) => db.exec('ALTER TABLE transcricoes ADD COLUMN solicitada_em TEXT;'),
 };
 
+/**
+ * O agregado Envio entra. Tabela nova — nenhuma linha preexistente a migrar,
+ * porque nao havia como originar envio antes deste ciclo.
+ */
+const ENVIO_V24: PassoDeMigracao = {
+  de: 23,
+  para: 24,
+  descricao: 'cria o agregado Envio (pedido para o malote falar pela conta)',
+  aplicar: (db) =>
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS envios (
+        id                     TEXT PRIMARY KEY,
+        identificador_de_envio TEXT NOT NULL UNIQUE,
+        configuracao_id        TEXT NOT NULL,
+        conversa_id            TEXT,
+        destino_cru            TEXT,
+        conteudo_tipo          TEXT NOT NULL CHECK (conteudo_tipo IN ('texto', 'imagem', 'documento')),
+        conteudo_texto         TEXT,
+        estado                 TEXT NOT NULL
+          CHECK (estado IN ('pendente', 'enviado', 'falhou')),
+        motivo_falha           TEXT,
+        tentativas             INTEGER NOT NULL DEFAULT 0,
+        solicitada_em          TEXT NOT NULL,
+        concluida_em           TEXT,
+        CHECK (conversa_id IS NOT NULL OR destino_cru IS NOT NULL),
+        CHECK (conteudo_tipo != 'texto' OR conteudo_texto IS NOT NULL),
+        FOREIGN KEY (conversa_id) REFERENCES conversas(id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_envios_fila ON envios(configuracao_id, estado, tentativas, solicitada_em);
+    `),
+  tabelasNovas: ['envios'],
+};
+
+/**
+ * Envio ganha midia: imagem e documento. ADD COLUMN, nao recriacao — mesmo
+ * precedente de SOLICITACAO_DE_TRANSCRICAO_V23 (#1103): linhas existentes
+ * (todas de texto) ficam com NULL nas colunas novas, que e o valor certo.
+ * Os CHECK de midia do schema fresco nao alcancam base migrada por aqui; a
+ * garantia real e a validacao em processarEnvios.
+ */
+const ENVIO_MIDIA_V25: PassoDeMigracao = {
+  de: 24,
+  para: 25,
+  descricao: 'acrescenta imagem e documento ao Envio (caminho, mimetype, nome de arquivo)',
+  aplicar: (db) =>
+    db.exec(`
+      ALTER TABLE envios ADD COLUMN conteudo_caminho_arquivo TEXT;
+      ALTER TABLE envios ADD COLUMN conteudo_mimetype TEXT;
+      ALTER TABLE envios ADD COLUMN conteudo_nome_arquivo TEXT;
+    `),
+};
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -772,6 +824,8 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   TRANSCRICAO_ELEGIBILIDADE_V21,
   REMOVE_STATUS_FANTASMA_V22,
   SOLICITACAO_DE_TRANSCRICAO_V23,
+  ENVIO_V24,
+  ENVIO_MIDIA_V25,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {

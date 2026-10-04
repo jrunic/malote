@@ -173,9 +173,11 @@ Regras:
 - Código de saída 3 = problema com a credencial: reporte, não tente outra rota.
   Código 7 = resultado desconhecido: repetir é seguro.
 - O Inquilino vem da chave — não existe parâmetro de inquilino.
-- A API é somente leitura, com UMA exceção nomeada: `POST /transcricoes/solicitar`
-  pede a Transcrição de um Anexo de áudio específico, na frente da fila — ver a
-  seção "Solicitar Transcrição" abaixo. Fora dela, escrita não existe no modo rede.
+- A API é somente leitura, com DUAS exceções nomeadas: `POST /transcricoes/solicitar`
+  pede a Transcrição de um Anexo de áudio específico, na frente da fila (seção
+  "Solicitar Transcrição" abaixo), e `POST /envios/solicitar` pede que o malote
+  fale pela conta de uma Configuração (seção "Solicitar Envio"). Fora delas,
+  escrita não existe no modo rede.
 ```
 
 ---
@@ -186,7 +188,7 @@ A CLI fala estas rotas — o `curl` continua válido quando não houver Node na 
 cliente. Toda consulta apresenta `Authorization: Bearer <chave>`; credencial ausente,
 inválida e revogada respondem o mesmo `401` de corpo vazio (não distingue, para não
 revelar a existência de Inquilinos alheios); rota desconhecida com chave válida responde
-`404`. Somente `GET`, com a exceção nomeada abaixo (`POST /transcricoes/solicitar`).
+`404`. Somente `GET`, com as duas exceções nomeadas abaixo (`POST /transcricoes/solicitar` e `POST /envios/solicitar`).
 
 | rota | parâmetros opcionais | resposta |
 |---|---|---|
@@ -255,3 +257,38 @@ Recusas:
 - `503`, corpo vazio — o Acervo está sendo migrado; repita depois.
 - `500`, corpo vazio — falha inesperada ao gravar (ex.: disputa de escrita
   que não liberou a tempo); seguro repetir.
+
+## Solicitar Envio
+
+`POST /envios/solicitar` — pede que o malote fale pela conta de uma
+Configuração de WhatsApp: texto, imagem ou documento. Não há comando da CLI
+para esta rota: `malote enviar` é local, e quem consome por rede chama o HTTP
+direto.
+
+Corpo (JSON):
+
+| Campo | Tipo | Obrigatório | Nota |
+|---|---|---|---|
+| `configuracao` | string | sim | apelido de uma Configuração que já existe |
+| `para` | string | sim | endereço completo (`...@s.whatsapp.net`, `...@g.us`) |
+| `tipo` | `"texto"`, `"imagem"` ou `"documento"` | não (padrão `"texto"`) | |
+| `texto` | string | se `tipo` for `"texto"` | vira a legenda quando `tipo` é mídia |
+| `arquivoBase64` | string | se `tipo` for mídia | o arquivo inteiro em base64; o corpo todo tem limite de 8 MB |
+| `mimetype` | string | se `tipo` for mídia | |
+| `nomeDeArquivo` | string | se `tipo` for `"documento"` | |
+| `fonte` | string | não (padrão `"whatsapp"`) | só `"whatsapp"` é aceito hoje |
+
+Resposta: `202` com `{"aceita": true, "envioId": "<id>"}` quando o pedido
+entrou na fila. O `202` não confirma que a mensagem saiu: o Envio fica
+`pendente` até o `malote ouvir` daquela Configuração processá-lo.
+
+Recusas:
+- `404`, corpo vazio — a Configuração não existe neste Inquilino. É a mesma
+  resposta para "não existe em lugar nenhum" e "existe em outro Inquilino".
+- `400`, com `{"erro": "<motivo>"}` — corpo inválido ou maior que o limite,
+  campo obrigatório ausente, `tipo` desconhecido ou `fonte` sem suporte.
+- `503`, corpo vazio — o Acervo está sendo migrado; repita depois.
+- `500`, corpo vazio — falha inesperada ao gravar; o pedido não foi aceito.
+
+A Chave de Acesso desta rota fala pela conta. Trate-a como credencial de
+envio, e só exponha o servidor atrás de TLS.

@@ -56,7 +56,10 @@ export async function servir(argumentos: string[], ambiente: AmbienteDeServico):
   await once(servidor, 'listening');
   const alcance = servidor.address() as { address: string; port: number };
   escrever(`Servindo em http://${alcance.address}:${alcance.port}`);
-  escrever('Somente leitura, e so com Chave de Acesso. Chave de Operador nao le acervo.');
+  escrever(
+    'Leitura por Chave de Acesso; escrita so em /transcricoes/solicitar e /envios/solicitar. ' +
+      'Chave de Operador nao le acervo.',
+  );
 
   // Log na subida do que o worker vai fazer — parte do "sinal proprio" do
   // criterio 4: quem opera sabe, sem precisar de --json, se a transcricao
