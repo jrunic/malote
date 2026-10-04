@@ -123,7 +123,7 @@ montado à mão.
 | 4 | servidor inalcançável |
 | 5 | erro do servidor |
 | 6 | uso errado da API (4xx que não 401) |
-| 7 | tempo esgotado — **resultado desconhecido**; repetir é seguro (somente leitura) |
+| 7 | tempo esgotado — **resultado desconhecido**; repetir uma consulta é seguro; repetir um `enviar` **pode duplicar a mensagem** |
 
 ## 4. Ensinar um agente
 
@@ -136,7 +136,7 @@ Use a CLI do malote, no modo rede. As variáveis `MALOTE_SERVIDOR` e
 `MALOTE_CHAVE_DE_ACESSO` já estão no ambiente — a chave é SEGREDO: nunca a
 escreva em arquivo, commit ou log, e nunca a passe adiante.
 
-Comandos (todos somente leitura):
+Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`, descrito em "Solicitar Envio"):
 - `malote conversas [--busca T] [--fonte F] [--coletiva true|false] [--configuracao A] [--fixada true] [--desde D] [--limite N]` —
   índice; comece sempre aqui. `--configuracao` sozinho filtra por apelido (`malote
   configuracao listar` mostra o que existe) e só alcança Conversa DIRETA — coletiva
@@ -171,7 +171,8 @@ Regras:
 - Paginação: quando a resposta traz `proximo`, devolva-o em `--antes` na próxima
   chamada. Não monte cursor à mão.
 - Código de saída 3 = problema com a credencial: reporte, não tente outra rota.
-  Código 7 = resultado desconhecido: repetir é seguro.
+  Código 7 = resultado desconhecido: repetir uma consulta é seguro; para `enviar`, confira antes com
+  `malote mensagens --direcao enviada` — repetir pode mandar a mensagem duas vezes.
 - O Inquilino vem da chave — não existe parâmetro de inquilino.
 - A API é somente leitura, com DUAS exceções nomeadas: `POST /transcricoes/solicitar`
   pede a Transcrição de um Anexo de áudio específico, na frente da fila (seção
@@ -261,9 +262,30 @@ Recusas:
 ## Solicitar Envio
 
 `POST /envios/solicitar` — pede que o malote fale pela conta de uma
-Configuração de WhatsApp: texto, imagem ou documento. Não há comando da CLI
-para esta rota: `malote enviar` é local, e quem consome por rede chama o HTTP
-direto.
+Configuração de WhatsApp: texto, imagem ou documento. Com `MALOTE_SERVIDOR`
+definido, **`malote enviar` fala com esta rota**; sem ele, o mesmo comando grava
+o pedido na instalação local (e aí leva `--inquilino`).
+
+```
+malote enviar --configuracao hera --para 5511999990000@s.whatsapp.net --texto "oi"
+malote enviar --configuracao hera --para <endereço> --imagem foto.png --texto "legenda"
+malote enviar --configuracao hera --para <endereço> --documento relatorio.pdf
+```
+
+- No modo rede, o Inquilino vem da Chave de Acesso: `--inquilino` é recusado (código 2).
+  Para enviar pela instalação local numa máquina que carrega o servidor, rode com
+  `env -u MALOTE_SERVIDOR`.
+- `--chave-em <VARIÁVEL>` usa a chave guardada na variável **nomeada** (nunca o valor), em
+  vez de `MALOTE_CHAVE_DE_ACESSO`. Variável ausente ou vazia recusa, sem cair na chave
+  padrão. Ex.: `malote enviar ... --chave-em MALOTE_CHAVE_DE_ACESSO_HERA`.
+- O pedido inteiro (arquivo em base64 mais o envelope) tem teto de 8 MB, o que deixa o
+  arquivo perto de 6 MB. O cliente recusa antes de abrir conexão.
+- **Código 7 (tempo esgotado) não é inofensivo aqui:** o pedido pode ter entrado, e
+  repetir pode mandar a mensagem duas vezes. Confira antes com `malote mensagens
+  --direcao enviada` (a Mensagem aparece alguns segundos depois de o `ouvir` da conta
+  processar o Envio).
+
+Quem chama o HTTP direto usa a tabela e as respostas abaixo.
 
 Corpo (JSON):
 

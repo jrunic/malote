@@ -295,6 +295,11 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvir      --inquilino <id> --conta <nome> [--numero <so digitos>]
   malote ouvinte estado --conta <nome> [--json]
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
+  malote enviar     --inquilino <id> --configuracao <apelido> --para <endereco> (--texto <t> | --imagem <caminho> [--texto <legenda>] | --documento <caminho> [--texto <legenda>])
+  malote enviar     --configuracao <apelido> --para <endereco> (mesmas opcoes de conteudo) [--chave-em <VARIAVEL>] [--json]
+                                        (com MALOTE_SERVIDOR no ambiente: pede o Envio por REDE; o Inquilino vem da chave)
+  malote envio estado       --inquilino <id> [--json]
+  malote envio reprocessar  --inquilino <id> [--json]
   malote transcricao reprocessar --inquilino <id>              (volta falhas para pendente)
   malote transcricao incluir-estoque --inquilino <id> --limite <n> [--json]  (promove estoque fora-de-escopo, em lote)
   malote transcricao solicitar --anexo <id> --inquilino <id>           (prioriza UM Anexo na fila)

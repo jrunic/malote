@@ -165,6 +165,12 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   `--servidor` recusa **antes de abrir Registro ou Acervo** — invocação errada não nasce
   `registro.db` (testado com instalação vazia). A resolução de modo é global: nunca desce
   para dentro de handler.
+  **Exceção nomeada (ciclo 28):** `enviar` é o único comando de escrita que o cliente
+  despacha por rede, com despacho próprio no ponto de entrada — ele **não** entra em
+  `COMANDOS_DE_REDE`, que continua sendo a allowlist de leitura. A variável de ambiente do
+  servidor liga o modo; `--servidor` sozinha só troca a URL. No modo rede o Inquilino vem
+  só da chave e `--inquilino` é recusado. O código 7 desse comando diz que repetir pode
+  duplicar a mensagem.
 - **Cliente HTTP mora em `src/cli/`, nunca em `src/rede/`.** `src/rede/` é a zona do
   baileys e a fronteira proíbe `cli` importá-la — a guarda pegou a violação no commit em
   que nasceu (ciclo 21).
