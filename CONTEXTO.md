@@ -162,7 +162,11 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   buffer (o `--json` e todo o modo rede); a saída em texto, linha a linha, passa. O teto de 10 s de
   `encerrar` existe para o processo não pendurar com leitor que nunca esvazia o pipe: perder a
   cauda é melhor que não sair. `tests/sem-exit-direto.test.ts` varre `src/`, e
-  `tests/saida-por-pipe.test.ts` roda o executável por pipe, nos dois modos.
+  `tests/saida-por-pipe.test.ts` roda o executável por pipe, nos dois modos. **A saída desses testes
+  tem de passar de ~1 MB**: o stdio de um filho do Node é um socketpair, não `pipe(2)`, e o buffer de envio
+  do Linux (~208 KB) engolia os 170 KB da primeira versão — o teste do teto saiu em 0,35 s na CI em 1 de 2
+  execuções do mesmo commit, e os outros dois teriam passado mesmo com o defeito. Medido no Linux com o
+  `process.exit` direto: a saída para em 146–182 KB.
 - **Processo de fundo dentro de `malote servir` (o worker de transcrição, e qualquer futuro
   análogo) NUNCA abre o Acervo para escrita sem checar a versão gravada primeiro.**
   `abrirAcervo` migra a base — e um processo que atende requisição de fora não pode ter esse
