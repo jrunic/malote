@@ -14,6 +14,8 @@ import { pedirGet, pedirGetBinario } from './cliente.js';
 import { decodificarCursor } from '../nucleo/cursor.js';
 import { expandirData, procurarPessoas } from '../nucleo/consulta.js';
 import { ehPontoDeEntrada } from './entrada.js';
+import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
+import { executarEnviarRede } from './enviar-rede.js';
 import { basename, join } from 'node:path';
 import type { Fonte } from '../nucleo/tipos.js';
 import {
@@ -293,6 +295,11 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvir      --inquilino <id> --conta <nome> [--numero <so digitos>]
   malote ouvinte estado --conta <nome> [--json]
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
+  malote enviar     --inquilino <id> --configuracao <apelido> --para <endereco> (--texto <t> | --imagem <caminho> [--texto <legenda>] | --documento <caminho> [--texto <legenda>])
+  malote enviar     --configuracao <apelido> --para <endereco> (mesmas opcoes de conteudo) [--chave-em <VARIAVEL>] [--json]
+                                        (com MALOTE_SERVIDOR no ambiente: pede o Envio por REDE; o Inquilino vem da chave)
+  malote envio estado       --inquilino <id> [--json]
+  malote envio reprocessar  --inquilino <id> [--json]
   malote transcricao reprocessar --inquilino <id>              (volta falhas para pendente)
   malote transcricao incluir-estoque --inquilino <id> --limite <n> [--json]  (promove estoque fora-de-escopo, em lote)
   malote transcricao solicitar --anexo <id> --inquilino <id>           (prioriza UM Anexo na fila)
@@ -406,24 +413,6 @@ const COMANDOS_DE_REDE = new Set([
  * formato do modo local quando ha saida em texto; o --json devolve o corpo da
  * API. O codigo de saida e o contrato do cliente (3/4/5/6/7).
  */
-const MIMETYPE_POR_EXTENSAO: Record<string, string> = {
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.pdf': 'application/pdf',
-  '.doc': 'application/msword',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  '.txt': 'text/plain',
-};
-
-function mimetypeDoCaminho(caminho: string): string {
-  const ponto = caminho.lastIndexOf('.');
-  const extensao = ponto === -1 ? '' : caminho.slice(ponto).toLowerCase();
-  return MIMETYPE_POR_EXTENSAO[extensao] ?? 'application/octet-stream';
-}
-
 export async function executarConsultaRede(
   argumentos: string[],
   rede: { servidor: string; chave: string; escrever: (t: string) => void },
@@ -2762,6 +2751,16 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
     // #1084: baixar midia de novo e I/O de rede — mesmo motivo do ouvir,
     // despachado ANTES de `executar()` para poder `await`.
     void executarMidiaReprocessar(argumentos, ambiente).then((codigo) => process.exit(codigo));
+  } else if (argumentos[0] === 'enviar' && ambiente.servidor !== undefined) {
+    // Modo REDE para o Envio (ciclo 28): a variavel de ambiente liga o modo, e `--servidor`
+    // so troca a URL — a mesma precedencia das consultas. `enviar` NAO esta em
+    // COMANDOS_DE_REDE (a allowlist de LEITURA): e uma escrita, com despacho proprio.
+    void executarEnviarRede(argumentos, {
+      servidor: opcao(argumentos, 'servidor') ?? ambiente.servidor,
+      chave: ambiente.chave,
+      env: process.env,
+      escrever: (t) => console.log(t),
+    }).then((codigo) => process.exit(codigo));
   } else if (COMANDOS_DE_REDE.has(argumentos[0] ?? '') && ambiente.servidor !== undefined) {
     // Modo REDE: a consulta e async (HTTP), e o executar e sincrono — mesmo
     // padrao do ouvir. A chave e a identidade; sem ela, recusa com o contrato

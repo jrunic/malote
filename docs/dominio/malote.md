@@ -458,7 +458,7 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Ator:** o próprio produto, dentro do processo que mantém a conexão viva daquela Configuração — nunca um worker genérico
 - **Entrada:** nenhuma — consulta o Acervo por conta própria, por Configuração
 - **Saída:** o Envio transita para `enviado` (com a Mensagem criada pelas portas normais) ou `falhou`, com o motivo
-- **Regras:** nunca processa Envio de Configuração cuja conexão não está viva nesse processo — ele continua `pendente` até o processo certo existir. Sequencial por Configuração, para não disputar a mesma conexão. Resultado indeterminado (processo caiu entre mandar e confirmar) deixa o Envio `pendente`, nunca `falhou` — é o que sustenta a garantia ao menos uma vez.
+- **Regras:** nunca processa Envio de Configuração cuja conexão não está viva nesse processo — ele continua `pendente` até o processo certo existir. Sequencial por Configuração, para não disputar a mesma conexão. Resultado indeterminado (processo caiu entre mandar e confirmar) deixa o Envio `pendente`, nunca `falhou` — é o que sustenta a garantia ao menos uma vez. O mesmo vale para falha ao gravar o resultado **depois** de a mensagem já ter saído (banco ocupado, disco): a mensagem foi, `falhou` só volta por reprocessar explícito e este reenviaria; o Envio fica `pendente` e a próxima passada tenta de novo.
 - **Não-funcionais:** comando que **não** é de decisão humana — não grava Operação por chamada, mesma classe de `receber-ao-vivo` e `transcrever-anexo`.
 
 ### reprocessar-envio

@@ -165,6 +165,12 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   `--servidor` recusa **antes de abrir Registro ou Acervo** — invocação errada não nasce
   `registro.db` (testado com instalação vazia). A resolução de modo é global: nunca desce
   para dentro de handler.
+  **Exceção nomeada (ciclo 28):** `enviar` é o único comando de escrita que o cliente
+  despacha por rede, com despacho próprio no ponto de entrada — ele **não** entra em
+  `COMANDOS_DE_REDE`, que continua sendo a allowlist de leitura. A variável de ambiente do
+  servidor liga o modo; `--servidor` sozinha só troca a URL. No modo rede o Inquilino vem
+  só da chave e `--inquilino` é recusado. O código 7 desse comando diz que repetir pode
+  duplicar a mensagem.
 - **Cliente HTTP mora em `src/cli/`, nunca em `src/rede/`.** `src/rede/` é a zona do
   baileys e a fronteira proíbe `cli` importá-la — a guarda pegou a violação no commit em
   que nasceu (ciclo 21).
@@ -530,29 +536,23 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
-- 03/10/2026 — **Ciclo 27 (`malote-envio-de-mensagem`, #1112) em execução:
-  Plano 1 de 3 implementado e commitado — Envio de TEXTO de ponta a ponta.**
-  Fundamentado em espiga contra a conta real da Hera (ata
-  `13-processos/manter-malote/01-discussoes/20261003-envio-de-mensagens-pelo-malote.md`):
-  `sock.sendMessage` confirmado funcionando, eco de `messages.upsert`
-  (`type: 'append'`) confirmado gravando a Mensagem pela porta de recepção
-  já existente, sem código novo. Agregado **Envio** novo (schema v23→v24):
-  `registrarEnvio`/`proximoEnvioPendente`/`marcarEnvioEnviado`/
-  `marcarEnvioFalhou`/`reenfileirarEnviosFalhos` no núcleo;
-  `Conexao.enviar` no módulo de conexão, discriminando falha de transporte
-  (Boom 428/408) de falha definitiva; `processarEnvios` no adaptador
-  WhatsApp, resolvendo/criando a Conversa só após sucesso; poller dentro de
-  `ouvir.ts`; comandos `malote enviar`/`malote envio reprocessar`/
-  `malote envio estado`. 10 commits, suíte de 1090 para **1121 testes**,
-  mesma baseline de 3 falhas pré-existentes. Duas revisões independentes
-  (`dev-10` via advisor) rodaram antes da execução — na spec e no plano —,
-  cada uma achando furos reais corrigidos antes do `dev-04`: a mais grave,
-  a Conversa do Envio nasce no **processamento** (dentro do `ouvir`), nunca
-  na solicitação, para a rota de rede não precisar abrir escrita de
-  domínio. **Planos 2 (mídia) e 3 (rede) escritos e revisados (advisor),
-  ainda não implementados.** Falta, de todo o ciclo, a Verificação de Campo
-  contra a conta real da Hera — pendente de Ação Documentada, fora de
-  código.
+- 04/10/2026 — **CICLO 27 ACEITO: o malote envia mensagem (texto, imagem,
+  documento), RELEASES v0.25.0 E v0.25.1 EM PRODUÇÃO no thinkpad** (#1112, três
+  planos, PRs #13 e #14, tags `v0.25.0` e `v0.25.1`). Agregado **Envio** novo
+  (Acervo v23→v25, migrou sozinho no host, `quick_check ok`): `malote enviar`
+  (`--texto`, `--imagem`, `--documento`), `malote envio estado|reprocessar` e
+  `POST /envios/solicitar` (segunda rota de escrita da API; a Chave de Acesso
+  agora **fala pela conta**, e a ADR de confidencialidade foi revisada). Quem
+  envia é o `ouvir` da Configuração, pela conexão que ele já tem; a Mensagem
+  volta pelo eco pela porta de recepção, e o staging vira o arquivo do Anexo.
+  Suíte de 1090 para **1144 testes**, baseline de 3 falhas pré-existentes.
+  Prova de campo: rodada real contra a conta da Hera em instalação descartável
+  no macbook (script `20261003-acao-perigosa-hera-verificacao-de-campo-do-envio.sh`,
+  na pasta de trabalho). **O aceite achou três lacunas e o ciclo só fechou
+  depois de corrigi-las:** falha ao gravar o resultado depois do envio virava
+  `falhou` (agora fica `pendente`), `envio reprocessar` não contava pendentes,
+  e grupo não tinha teste. Detalhe por critério: `## Resultado` da spec, na
+  pasta de trabalho.
 
 - 01/10/2026 — **RELEASE v0.24.1 PUBLICADA E DISTRIBUÍDA NOS TRÊS PACOTES,
   VERIFICADA POR EFEITO.** PR #12 (`main → production`, CI verde), merge
@@ -814,6 +814,21 @@ Repositório expõe services systemd. Convenções:
 - Modelo de domínio e glossário `aprovado` desde 2026-08-24; ciclo 1 aceito em 2026-08-26.
 
 ## Pendências
+
+- **Envio em produção, sem uso real ainda.** A Hera ainda não está no thinkpad: a
+  verificação rodou numa instalação descartável (`~/malote-hera-verificacao` no
+  macbook, vínculo copiado da espiga — pode ser descartada depois de conferir que
+  não é mais necessária). O próximo passo é Ação Documentada: Inquilino próprio,
+  Configuração e vínculo no thinkpad. Antes de assumir que o Envio funciona em
+  produção, **mandar um Envio real por lá** — a release foi verificada só por
+  versão, schema e ouvinte vivo.
+- **Sem prova de campo:** envio para **grupo** e a rota `POST /envios/solicitar`
+  contra o servidor de produção (só teste); a falha pós-envio só tem teste com
+  erro injetado.
+- **Staging órfão em `envios-pendentes/`** se o `ouvir` cair entre o envio e o
+  eco: o mapa de bytes originados é de processo. O produto não detecta nem limpa;
+  o guia de armazenamento diz que removê-lo à mão é seguro.
+
 
 - **#1106 corrigida via `dev-05` — RELEASE v0.24.1 PUBLICADA E DISTRIBUÍDA** (ver
   Estado Atual). O worker de

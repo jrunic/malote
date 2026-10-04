@@ -23,6 +23,38 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.26.0] — 2026-10-04
+
+Não muda a forma do Acervo nem do Registro, e não muda o servidor.
+
+### Adicionado
+
+- **`malote enviar` fala por rede.** Com `MALOTE_SERVIDOR` no ambiente, o comando pede o
+  Envio ao servidor (`POST /envios/solicitar`) em vez de gravar no Acervo local — texto,
+  imagem e documento, com o texto como legenda quando há arquivo. Sem a variável, o
+  comando local é o mesmo de antes.
+  - O Inquilino vem só da Chave de Acesso: `--inquilino` é **recusado** no modo rede
+    (código 2), e a mensagem diz como forçar o modo local (`env -u MALOTE_SERVIDOR`).
+  - `--chave-em <VARIÁVEL>` usa a Chave de Acesso guardada na variável **nomeada** (nunca o
+    valor na linha de comando). Variável ausente ou vazia recusa, em vez de cair na chave
+    padrão.
+  - A falha sai nos códigos do cliente: 3 credencial, 4 conexão, 5 servidor, 6 uso (o `404`
+    de Configuração diz "não existe neste Inquilino, ou a chave não o alcança"), 7 tempo
+    esgotado. **O 7 do `enviar` não é inofensivo:** o pedido pode ter entrado, e repetir
+    pode mandar a mensagem duas vezes — a mensagem indica `malote mensagens --direcao
+    enviada` como conferência antes de repetir.
+  - O pedido inteiro (arquivo em base64 mais o envelope) tem teto de 8 MB, o que deixa o
+    arquivo perto de 6 MB; o cliente recusa antes de abrir conexão.
+  - `malote --ajuda` passa a listar `enviar`, `envio estado` e `envio reprocessar`.
+
+### Alterado
+
+- O guia do cliente deixa de dizer que não há comando da CLI para o Envio por rede, e
+  corrige três afirmações que ficavam falsas: o código 7 como "repetir é seguro" e os
+  comandos como "todos somente leitura".
+- `enviar` é a única escrita que o cliente despacha por rede; a restrição "comando de
+  escrita recusa o modo rede antes de abrir base" continua valendo para todo o resto.
+
 ## [0.25.1] — 2026-10-04
 
 Não muda a forma do Acervo.
