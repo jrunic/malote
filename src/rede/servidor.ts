@@ -4,7 +4,7 @@ import { abrirRegistro } from '../registro/registro.js';
 import { verificarChaveDeAcesso } from '../registro/chave-de-acesso.js';
 import { abrirAcervoSomenteLeitura } from '../nucleo/acervo.js';
 import { atorDeAcesso, comAtor } from '../nucleo/ator.js';
-import { responder } from './rotas.js';
+import { responder, type ContextoDaRequisicao } from './rotas.js';
 import type { InquilinoId } from '../nucleo/tipos.js';
 
 /**
@@ -50,6 +50,8 @@ function chaveApresentada(req: IncomingMessage): string | null {
 export interface OpcoesDoServidor {
   dados: string;
   porta: number;
+  /** SO PARA TESTE (ver `ContextoDaRequisicao`). */
+  ganchoDeTeste?: ContextoDaRequisicao['ganchoDeTeste'];
 }
 
 export function criarServidor(opcoes: OpcoesDoServidor): Server {
@@ -106,7 +108,12 @@ export function criarServidor(opcoes: OpcoesDoServidor): Server {
       // O Ator escopa por REQUISICAO. Com estado global, a Operacao de uma
       // sairia com o Ator de outra.
       comAtor(atorDeAcesso(identidade.chaveId), () =>
-        responder(req, res, { acervo, identidade, dados: opcoes.dados }),
+        responder(req, res, {
+          acervo,
+          identidade,
+          dados: opcoes.dados,
+          ...(opcoes.ganchoDeTeste ? { ganchoDeTeste: opcoes.ganchoDeTeste } : {}),
+        }),
       );
     } finally {
       acervo.fechar();

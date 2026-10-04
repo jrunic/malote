@@ -16,7 +16,13 @@ import { ehFonte } from '../nucleo/tipos.js';
 import type { ConversaId, Fonte, InquilinoId } from '../nucleo/tipos.js';
 import { abrirAcervo, versaoDoAcervoEmDisco, VERSAO_SCHEMA_ACERVO } from '../nucleo/acervo.js';
 import { solicitarTranscricao } from '../nucleo/transcricao.js';
-import { registrarEnvio, type ConteudoDeEnvio } from '../nucleo/envio.js';
+import {
+  EnvioDivergenteError,
+  examinarRepeticao,
+  registrarEnvio,
+  type ConteudoDeEnvio,
+  type ExameDeRepeticao,
+} from '../nucleo/envio.js';
 
 /**
  * As rotas. Cada uma recebe o Acervo que a Chave abriu e devolve dado.
@@ -30,6 +36,11 @@ export interface ContextoDaRequisicao {
   acervo: Acervo;
   identidade: IdentidadeDeAcesso;
   dados: string;
+  /**
+   * SO PARA TESTE: chamado entre o exame de repeticao e o registro de um Envio, para um teste
+   * simular o outro processo que ganha a corrida. Producao nunca o define.
+   */
+  ganchoDeTeste?: { entreOExameEORegistro?: () => void };
 }
 
 function json(res: ServerResponse, status: number, corpo: unknown): void {
@@ -186,6 +197,28 @@ async function lerCorpoJsonGrande(req: IncomingMessage, limite: number): Promise
   return texto.length === 0 ? undefined : JSON.parse(texto);
 }
 
+const FORMA_DE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** O conteudo do pedido SEM arquivo em disco, so para o exame de repeticao (que ignora o caminho). */
+function conteudoParaExame(
+  tipo: 'texto' | 'imagem' | 'documento',
+  legendaOuTexto: string | undefined,
+  mimetype: string | undefined,
+  nomeDeArquivo: string | undefined,
+): ConteudoDeEnvio {
+  if (tipo === 'texto') return { tipo: 'texto', texto: legendaOuTexto as string };
+  const legenda = legendaOuTexto !== undefined ? { legenda: legendaOuTexto } : {};
+  return tipo === 'imagem'
+    ? { tipo: 'imagem', caminhoArquivo: '', mimetype: mimetype as string, ...legenda }
+    : {
+        tipo: 'documento',
+        caminhoArquivo: '',
+        mimetype: mimetype as string,
+        nomeDeArquivo: nomeDeArquivo as string,
+        ...legenda,
+      };
+}
+
 /**
  * Segunda rota de escrita da API por rede, depois de `/transcricoes/solicitar`
  * (#1103). Mesma disciplina: conexao propria de escrita, versao do schema
@@ -234,6 +267,14 @@ async function responderSolicitacaoDeEnvio(
     const arquivoBase64 = texto('arquivoBase64');
     const mimetype = texto('mimetype');
     const nomeDeArquivo = texto('nomeDeArquivo');
+    const identificadorDeEnvio = texto('identificadorDeEnvio');
+    if (
+      campos['identificadorDeEnvio'] !== undefined &&
+      (identificadorDeEnvio === undefined || !FORMA_DE_UUID.test(identificadorDeEnvio))
+    ) {
+      json(res, 400, { erro: 'identificadorDeEnvio precisa ser um UUID' });
+      return;
+    }
 
     if (apelido === undefined || para === undefined) {
       json(res, 400, { erro: 'informe configuracao e para' });
@@ -288,6 +329,32 @@ async function responderSolicitacaoDeEnvio(
     const escrita = abrirAcervo(pastaDeAcervos, inquilinoId);
     let stagingParaLimpar: string | undefined;
     try {
+      const destino = { enderecoCru: para };
+      // Repeticao: examina ANTES de mandar bytes a disco. O arbitro final e a unicidade da
+      // coluna, la no registro; aqui se evita escrever o que a repeticao nao vai usar.
+      if (identificadorDeEnvio !== undefined) {
+        const exame: ExameDeRepeticao = examinarRepeticao(escrita, {
+          configuracaoId: cfg.id,
+          destino,
+          conteudo: conteudoParaExame(
+            tipo as 'texto' | 'imagem' | 'documento',
+            legendaOuTexto,
+            mimetype,
+            nomeDeArquivo,
+          ),
+          identificadorDeEnvio,
+          fonte: 'whatsapp',
+        });
+        if (exame.resultado === 'divergente') {
+          json(res, 409, { erro: 'identificadorDeEnvio ja usado para outro pedido' });
+          return;
+        }
+        if (exame.resultado === 'repetido') {
+          json(res, 200, { aceita: true, repetido: true, envioId: exame.envioId, identificadorDeEnvio });
+          return;
+        }
+      }
+      ctx.ganchoDeTeste?.entreOExameEORegistro?.();
       let conteudo: ConteudoDeEnvio;
       if (tipo === 'texto') {
         conteudo = { tipo: 'texto', texto: legendaOuTexto as string };
@@ -311,11 +378,34 @@ async function responderSolicitacaoDeEnvio(
       }
       const resultado = registrarEnvio(escrita, {
         configuracaoId: cfg.id,
-        destino: { enderecoCru: para },
+        destino,
         conteudo,
+        ...(identificadorDeEnvio !== undefined ? { identificadorDeEnvio, fonte: 'whatsapp' as const } : {}),
       });
+      if (resultado.repetido) {
+        // Outro processo ganhou a corrida: o staging que ESTE pedido escreveu nao e de ninguem.
+        if (stagingParaLimpar !== undefined) {
+          try {
+            unlinkSync(stagingParaLimpar);
+          } catch {
+            // best-effort
+          }
+        }
+        stagingParaLimpar = undefined;
+        json(res, 200, {
+          aceita: true,
+          repetido: true,
+          envioId: resultado.envioId,
+          identificadorDeEnvio: resultado.identificadorDeEnvio,
+        });
+        return;
+      }
       stagingParaLimpar = undefined; // o Envio agora o referencia
-      json(res, 202, { aceita: true, envioId: resultado.envioId });
+      json(res, 202, {
+        aceita: true,
+        envioId: resultado.envioId,
+        identificadorDeEnvio: resultado.identificadorDeEnvio,
+      });
     } catch (erroDeRegistro) {
       if (stagingParaLimpar !== undefined) {
         try {
@@ -323,6 +413,10 @@ async function responderSolicitacaoDeEnvio(
         } catch {
           // best-effort: nao mascara o erro original
         }
+      }
+      if (erroDeRegistro instanceof EnvioDivergenteError) {
+        json(res, 409, { erro: 'identificadorDeEnvio ja usado para outro pedido' });
+        return;
       }
       throw erroDeRegistro;
     } finally {
