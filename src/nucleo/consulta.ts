@@ -464,8 +464,24 @@ export interface MensagemEncontrada extends MensagemLida {
   origemDaCorrespondencia: 'conteudo' | 'transcricao';
 }
 
+/**
+ * O termo do usuario como consulta FTS5 LITERAL: cada palavra entre aspas (a aspas interna dobra), todas
+ * por E implicito. O produto promete `--texto <termo>`, e nenhum documento, skill ou teste promete
+ * operador; cru, o texto ia direto para `MATCH`, e `a.b`, `a&b`, `AND` ou uma aspas solta lancavam
+ * excecao que derrubava o servidor inteiro (#1131 — duas quedas no log de producao). Palavra citada se
+ * comporta como a palavra solta de antes: mesma insensibilidade a caixa e a acento. Muda so o que nunca
+ * foi documentado: `AND`/`OR`/`NOT`, `*` e `NEAR` deixam de ser operadores. Sem palavra, devolve `null`.
+ */
+export function termoParaFts5(texto: string): string | null {
+  const palavras = texto.split(/\s+/).filter((p) => p !== '');
+  if (palavras.length === 0) return null;
+  return palavras.map((p) => `"${p.replace(/"/g, '""')}"`).join(' ');
+}
+
 export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): MensagemEncontrada[] {
   const limite = filtro.limite ?? 100;
+  const consulta = termoParaFts5(filtro.texto);
+  if (consulta === null) return [];
   const condicoesBase = (alias: string): { condicoes: string[]; valores: unknown[] } => {
     const condicoes: string[] = [];
     const valores: unknown[] = [];
@@ -506,7 +522,7 @@ export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): Mensagem
         WHERE mensagens_texto MATCH ? ${porConteudo.condicoes.map((c) => `AND ${c}`).join(' ')}
         ORDER BY m.ocorrida_em LIMIT ?`,
     )
-    .all(filtro.texto, ...porConteudo.valores, limite) as Array<{ id: string; ocorrida_em: number }>;
+    .all(consulta, ...porConteudo.valores, limite) as Array<{ id: string; ocorrida_em: number }>;
 
   const porTranscricao = condicoesBase('m');
   const linhasPorTranscricao = acervo
@@ -519,7 +535,7 @@ export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): Mensagem
         WHERE transcricoes_texto MATCH ? ${porTranscricao.condicoes.map((c) => `AND ${c}`).join(' ')}
         ORDER BY m.ocorrida_em LIMIT ?`,
     )
-    .all(filtro.texto, ...porTranscricao.valores, limite) as Array<{ id: string; ocorrida_em: number }>;
+    .all(consulta, ...porTranscricao.valores, limite) as Array<{ id: string; ocorrida_em: number }>;
 
   // Conteudo tem precedencia sobre transcricao quando os dois casam a mesma
   // Mensagem — a Mensagem tem texto de verdade; nao ha porque marca-la como

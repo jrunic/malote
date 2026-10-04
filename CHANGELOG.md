@@ -23,6 +23,18 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+### Corrigido
+
+- **`anexos --presenca` varria todos os Anexos daquela presença por Mensagem.** Na maior Conversa a consulta
+  passava de um minuto e, como o servidor atende uma requisição por vez, travava todos os clientes até acabar. O
+  plano agora entra em `anexos` sempre pelo índice da Mensagem.
+- **`GET /buscar` com ponto, `&`, aspas, `AND` ou `*` derrubava o servidor inteiro.** O texto do usuário ia cru
+  para a consulta de texto completo, e a sintaxe inválida lançava uma exceção que ninguém tratava. A busca agora
+  trata o texto como literal (cada palavra entre aspas, todas por E). Muda só o que nunca foi documentado:
+  `AND`, `OR`, `NOT`, `*` e `NEAR` deixam de ser operadores.
+- **Exceção em qualquer rota vira `500` de corpo vazio, e o servidor segue.** Antes derrubava o processo para
+  todos os Inquilinos; o `500` é defeito a corrigir, mas não é mais queda.
+
 ## [0.29.0] — 2026-10-04
 
 Não muda a forma do Acervo nem do Registro. Os campos e parâmetros novos são acréscimos: os que já existiam

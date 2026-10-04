@@ -48,7 +48,7 @@ export interface ContextoDaRequisicao {
    * SO PARA TESTE: chamado entre o exame de repeticao e o registro de um Envio, para um teste
    * simular o outro processo que ganha a corrida. Producao nunca o define.
    */
-  ganchoDeTeste?: { entreOExameEORegistro?: () => void };
+  ganchoDeTeste?: { entreOExameEORegistro?: () => void; antesDeResponder?: (res: ServerResponse) => void };
 }
 
 function json(res: ServerResponse, status: number, corpo: unknown): void {

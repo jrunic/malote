@@ -161,6 +161,14 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   101.527 Mensagens, 850 dos 2.200 autores (39%, e 23% das Mensagens) não constam dele, então o nome vem de
   `GET /conversas/<id>/autores`. O filtro por remetente parte do Identificador (`identificadoresDoRemetente`
   concorda com `identificarPorValor`, e um teste fixa isso), e `autorIds` vazio devolve NADA, nunca tudo.
+- **O texto que o usuário digita é TEXTO, nunca sintaxe: `buscarMensagens` o cita palavra por palavra
+  (`termoParaFts5`) antes de ir ao `MATCH` do FTS5, e o servidor tem rede de segurança para o que escapar (#1131).**
+  O termo ia cru, e `a.b`, `a&b`, `AND` ou uma aspas solta lançavam `SqliteError` dentro do manipulador: excecao ali
+  derruba o PROCESSO, que atende todos os Inquilinos, e o servidor de produção caiu duas vezes assim (o export
+  de uma Conversa de 206 mil Mensagens morreu com 502 por uma dessas). `servidor.ts` captura a exceção da rota
+  e responde `500` de corpo vazio, logando mensagem e caminho SEM a query (pode ter texto de conversa); isso não
+  substitui tratar o erro na rota, só impede que um defeito vire queda. Palavra citada se comporta como a solta
+  de antes (caixa e acento ignorados, E entre palavras); `AND`/`OR`/`NOT`, `*` e `NEAR` deixam de ser operadores.
 - **Nenhum `process.exit(` direto em `src/`: quem encerra o processo é `cli/encerrar.ts`, que espera o
   stdout e o stderr entregarem o que já foi escrito (#1125).** `process.exit` logo depois de um
   `console.log` perde o que o pipe ainda não aceitou: a escrita em pipe é assíncrona quando passa do
