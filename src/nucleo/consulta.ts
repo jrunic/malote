@@ -291,9 +291,17 @@ export interface MensagemLida {
   anexos: AnexoLido[];
 }
 
+/** `m` = mensagens. A lista de ids vai como um JSON; `[]` nao casa nada. */
+export const CONDICAO_DE_AUTORES = 'm.autor_id IN (SELECT value FROM json_each(?))';
+
 export interface FiltroDeMensagem {
   conversaId?: ConversaId;
   pessoaId?: PessoaId;
+  /**
+   * Ids de Identificador AUTORES. A lista vazia e o filtro que nao casa nada, NUNCA a ausencia de
+   * filtro: remetente desconhecido devolve vazio, nao tudo. Compoe por E com `pessoaId`.
+   */
+  autorIds?: string[];
   fonte?: Fonte;
   de?: number;
   ate?: number;
@@ -368,6 +376,12 @@ export function lerMensagens(acervo: Acervo, filtro: FiltroDeMensagem): Mensagem
       `m.autor_id IN (SELECT id FROM identificadores WHERE pessoa_id IN (${SQL_FAMILIA}))`,
     );
     valores.push(filtro.pessoaId, filtro.pessoaId);
+  }
+  if (filtro.autorIds !== undefined) {
+    // `json_each` e nao uma lista de `?`: o numero de ids e do tamanho da familia de formas do
+    // endereco, mas o limite de variaveis do SQLite nao e problema nosso.
+    condicoes.push(CONDICAO_DE_AUTORES);
+    valores.push(JSON.stringify(filtro.autorIds));
   }
   if (filtro.fonte !== undefined) {
     condicoes.push('m.fonte = ?');
