@@ -322,3 +322,89 @@ test('processarEnvios chama aoEnviar so para midia, nunca para texto — mesmo A
     c.limpar();
   }
 });
+
+// Criterio 4 da spec #1112: grupo pela MESMA operacao, sem bifurcacao. O teste
+// e de regressao sobre comportamento ja implementado (nao e RED->GREEN); o poder
+// dele foi provado por mutacao (coletiva fixada em false).
+test('processarEnvios para grupo (@g.us) cria Conversa coletiva, sem Configuracao', async () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const r = registrarEnvio(acervo, {
+      configuracaoId: CFG_WHATSAPP.id,
+      destino: { enderecoCru: '120363000000000001@g.us' },
+      conteudo: { tipo: 'texto', texto: 'oi grupo' },
+    });
+
+    const chamadas: string[] = [];
+    await processarEnvios(acervo, {
+      configuracao: CFG_WHATSAPP,
+      enviar: async (jid) => {
+        chamadas.push(jid);
+        return { keyId: 'G1' };
+      },
+    });
+    assert.deepEqual(chamadas, ['120363000000000001@g.us']);
+
+    const linha = acervo
+      .preparar(
+        `SELECT e.estado, c.coletiva, c.configuracao_id
+           FROM envios e JOIN conversas c ON c.id = e.conversa_id WHERE e.id = ?`,
+      )
+      .get(r.envioId) as { estado: string; coletiva: number; configuracao_id: string | null };
+    assert.equal(linha.estado, 'enviado');
+    assert.equal(linha.coletiva, 1);
+    assert.equal(linha.configuracao_id, null, 'coletiva pertence ao Inquilino, nao a uma Configuracao');
+  } finally {
+    c.limpar();
+  }
+});
+
+// Criterio 6: falha DEPOIS de o sendMessage ter saido nao pode virar `falhou`
+// — a mensagem ja foi; `falhou` so volta por reprocessar explicito, e o
+// reprocessar reenviaria. Fica `pendente`, e a proxima passada tenta de novo
+// (ao menos uma vez, risco nomeado na spec).
+test('falha ao gravar `enviado` DEPOIS do envio deixa o Envio pendente, nunca falhou', async () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const r = registrarEnvio(acervo, {
+      configuracaoId: CFG_WHATSAPP.id,
+      destino: { enderecoCru: '5511999990000@s.whatsapp.net' },
+      conteudo: { tipo: 'texto', texto: 'oi' },
+    });
+
+    let enviou = 0;
+    const acervoQueFalhaAoMarcarEnviado = new Proxy(acervo, {
+      get(alvo, propriedade, receptor) {
+        if (propriedade === 'preparar') {
+          return (sql: string) => {
+            if (sql.includes("estado = 'enviado'")) throw new Error('disco cheio (injetado)');
+            return alvo.preparar(sql);
+          };
+        }
+        return Reflect.get(alvo, propriedade, receptor);
+      },
+    });
+
+    await assert.rejects(
+      processarEnvios(acervoQueFalhaAoMarcarEnviado, {
+        configuracao: CFG_WHATSAPP,
+        enviar: async () => {
+          enviou += 1;
+          return { keyId: 'K1' };
+        },
+      }),
+      /disco cheio/,
+    );
+    assert.equal(enviou, 1, 'o envio saiu antes da falha injetada');
+
+    const linha = acervo
+      .preparar('SELECT estado, motivo_falha FROM envios WHERE id = ?')
+      .get(r.envioId) as { estado: string; motivo_falha: string | null };
+    assert.equal(linha.estado, 'pendente');
+    assert.equal(linha.motivo_falha, null);
+  } finally {
+    c.limpar();
+  }
+});
