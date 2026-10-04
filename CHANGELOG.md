@@ -32,6 +32,9 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
   para a consulta de texto completo, e a sintaxe inválida lançava uma exceção que ninguém tratava. A busca agora
   trata o texto como literal (cada palavra entre aspas, todas por E). Muda só o que nunca foi documentado:
   `AND`, `OR`, `NOT`, `*` e `NEAR` deixam de ser operadores.
+- **`limite` inválido derrubava o servidor, e `limite=-1` virava consulta sem limite.** `limite=abc` em `/conversas`,
+  `/mensagens`, `/conversas/<id>/mensagens` e `/buscar` virava `LIMIT NaN`, e `limite=0` em `/mensagens` lançava
+  uma exceção; as duas matavam o processo. Agora `limite` que não é inteiro maior que zero é `400`.
 - **Exceção em qualquer rota vira `500` de corpo vazio, e o servidor segue.** Antes derrubava o processo para
   todos os Inquilinos; o `500` é defeito a corrigir, mas não é mais queda.
 

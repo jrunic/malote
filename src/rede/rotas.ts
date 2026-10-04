@@ -51,6 +51,19 @@ export interface ContextoDaRequisicao {
   ganchoDeTeste?: { entreOExameEORegistro?: () => void; antesDeResponder?: (res: ServerResponse) => void };
 }
 
+/**
+ * `limite` da query: inteiro maior que zero. `limite=abc` virava `LIMIT NaN` e `limite=0` lancava
+ * `Cannot read properties of undefined` — as duas derrubavam o servidor (#1131); `-1` passava e, para o
+ * SQLite, e SEM limite. Entrada invalida e erro de uso: `400`.
+ */
+function limiteInvalido(texto: string | null | undefined): boolean {
+  if (texto === null || texto === undefined) return false;
+  const n = Number(texto);
+  return !Number.isInteger(n) || n < 1;
+}
+
+const ERRO_DE_LIMITE = { erro: 'limite precisa ser um inteiro maior que zero' };
+
 function json(res: ServerResponse, status: number, corpo: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json' });
   res.end(JSON.stringify(corpo));
@@ -538,6 +551,10 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const busca = q.get('busca') ?? undefined;
     const pessoa = q.get('pessoa') ?? undefined;
     const limite = q.get('limite') ?? undefined;
+    if (limiteInvalido(limite)) {
+      json(res, 400, ERRO_DE_LIMITE);
+      return;
+    }
     const configuracaoApelido = q.get('configuracao');
     const fixada = q.get('fixada') ?? undefined;
     const desdeParam = q.get('desde');
@@ -628,6 +645,10 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
   if (partes.length === 1 && partes[0] === 'mensagens') {
     const q = url.searchParams;
     const limite = q.get('limite');
+    if (limiteInvalido(limite)) {
+      json(res, 400, ERRO_DE_LIMITE);
+      return;
+    }
     const desde = q.get('desde');
     const ate = q.get('ate');
     const autor = q.get('autor');
@@ -793,6 +814,10 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const conversaId = partes[1] as ConversaId;
     const q = url.searchParams;
     const limite = q.get('limite');
+    if (limiteInvalido(limite)) {
+      json(res, 400, ERRO_DE_LIMITE);
+      return;
+    }
     const desde = q.get('desde');
     const ate = q.get('ate');
     const autor = q.get('autor');
@@ -923,6 +948,10 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     }
     const q = url.searchParams;
     const limite = q.get('limite');
+    if (limiteInvalido(limite)) {
+      json(res, 400, ERRO_DE_LIMITE);
+      return;
+    }
     const desde = q.get('desde');
     const ate = q.get('ate');
     const autor = q.get('autor');
