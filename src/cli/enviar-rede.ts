@@ -1,7 +1,9 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
 import { pedirPost, type CodigoDeFalha } from './cliente.js';
 import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
+import { resolverChaveEm } from './chave-em.js';
 
 /**
  * `malote enviar` no MODO REDE: pede o Envio ao servidor (`POST /envios/solicitar`) em vez
@@ -18,6 +20,7 @@ import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
  * limite do corpo JSON, nao do arquivo: o base64 incha o arquivo em 4/3.
  */
 export const LIMITE_DO_CORPO_DE_ENVIO = 8 * 1024 * 1024;
+const FORMA_DE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TIMEOUT_TEXTO_MS = 30_000;
 const TIMEOUT_ARQUIVO_MS = 120_000;
 
@@ -73,29 +76,26 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
     escrever(`--para precisa de endereco completo (ex.: 5511999990000@s.whatsapp.net), recebido "${para}".`);
     return 2;
   }
+  const fornecido = opcao(argumentos, 'identificador');
+  if (fornecido !== undefined && !FORMA_DE_UUID.test(fornecido)) {
+    escrever(`--identificador precisa ser um UUID, recebido "${fornecido}".`);
+    return 2;
+  }
+  // O Identificador de Envio nasce AQUI, antes do pedido: e o que torna a repeticao segura quando
+  // a resposta nao chega (codigo 7), porque o cliente o tem mesmo sem ter recebido o envioId.
+  const identificadorDeEnvio = fornecido ?? randomUUID();
   const caminhoDoArquivo = imagem ?? documento;
   if (caminhoDoArquivo !== undefined && !existsSync(caminhoDoArquivo)) {
     escrever(`Arquivo nao encontrado: ${caminhoDoArquivo}`);
     return 2;
   }
 
-  // A chave. `--chave-em` NOMEIA a variavel (nunca recebe o valor). Se foi pedida e nao
-  // existe, RECUSA: cair na chave padrao mandaria o pedido pelo Inquilino errado.
-  const nomeDaVariavel = opcao(argumentos, 'chave-em');
-  let chave: string | undefined;
-  if (nomeDaVariavel !== undefined) {
-    const valor = rede.env[nomeDaVariavel];
-    if (valor === undefined || valor.trim() === '') {
-      escrever(
-        `A variavel ${nomeDaVariavel} (--chave-em) nao esta definida ou esta vazia; ` +
-          'nao uso outra chave no lugar dela.',
-      );
-      return 2;
-    }
-    chave = valor.trim();
-  } else {
-    chave = rede.chave;
+  const resolvida = resolverChaveEm(argumentos, rede.env, rede.chave);
+  if ('erro' in resolvida) {
+    escrever(resolvida.erro);
+    return 2;
   }
+  const chave = resolvida.chave;
   if (chave === undefined || chave.trim() === '') {
     escrever(
       'Informe MALOTE_CHAVE_DE_ACESSO ou --chave-em <VARIAVEL>: ' +
@@ -106,7 +106,7 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
 
   let corpo: Record<string, unknown>;
   if (caminhoDoArquivo === undefined) {
-    corpo = { configuracao: apelido, para, tipo: 'texto', texto };
+    corpo = { configuracao: apelido, para, tipo: 'texto', texto, identificadorDeEnvio };
   } else {
     // Guarda de memoria: o base64 nunca e menor que a entrada, entao arquivo que sozinho ja
     // passa do limite do corpo e recusado sem ser lido. A checagem exata, pos-codificacao,
@@ -123,6 +123,7 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
     corpo = {
       configuracao: apelido,
       para,
+      identificadorDeEnvio,
       tipo: imagem !== undefined ? 'imagem' : 'documento',
       arquivoBase64: bytes.toString('base64'),
       mimetype: mimetypeDoCaminho(caminhoDoArquivo),
@@ -148,6 +149,21 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
   } catch (e) {
     const falha = e as CodigoDeFalha;
     if (typeof falha.codigoDeSaida !== 'number') throw e;
+    if (falha.status === 409) {
+      escrever(
+        `O identificador ${identificadorDeEnvio} ja foi usado para outro pedido ` +
+          '(outra Configuracao, destinatario ou conteudo). Use outro identificador.',
+      );
+      return falha.codigoDeSaida;
+    }
+    if (falha.codigoDeSaida === 7) {
+      escrever(
+        `Sem resposta do servidor: nao sei se o Envio entrou. Identificador do pedido: ${identificadorDeEnvio}. ` +
+          `Repita com --identificador ${identificadorDeEnvio}: o servidor nao cria um segundo Envio. ` +
+          `Para saber o estado: malote envio estado ${identificadorDeEnvio} --chave-em <VARIAVEL>.`,
+      );
+      return 7;
+    }
     if (falha.classe === 'uso' && falha.status === 404) {
       escrever(
         `Configuracao "${apelido}" nao existe neste Inquilino, ou a chave nao o alcanca ` +
@@ -156,17 +172,37 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
     } else {
       escrever(falha.message);
     }
+    if (falha.codigoDeSaida === 4 || falha.codigoDeSaida === 5) {
+      escrever(
+        `Identificador do pedido: ${identificadorDeEnvio} (repita com --identificador ${identificadorDeEnvio}).`,
+      );
+    }
     return falha.codigoDeSaida;
   }
 
+  // --json imprime o corpo como veio, e so ele: quem consome o --json confere o campo
+  // `identificadorDeEnvio` do corpo (o aviso de servidor antigo e do modo texto).
   if (argumentos.includes('--json')) {
     escrever(resposta.corpo);
     return 0;
   }
-  const envioId = (JSON.parse(resposta.corpo) as { envioId?: string }).envioId ?? '?';
+  const lido = JSON.parse(resposta.corpo) as {
+    envioId?: string;
+    identificadorDeEnvio?: string;
+    repetido?: boolean;
+  };
+  const envioId = lido.envioId ?? '?';
   escrever(
-    `Envio aceito: ${envioId} (pendente — o "malote ouvir" da Configuracao o processa; ` +
-      'confira com: malote mensagens --direcao enviada).',
+    lido.repetido === true
+      ? `Envio ja registrado: ${envioId} (identificador ${identificadorDeEnvio}; nenhum Envio novo foi criado).`
+      : `Envio aceito: ${envioId} (identificador ${identificadorDeEnvio}; pendente — o "malote ouvir" da ` +
+          `Configuracao o processa; confira com: malote envio estado ${identificadorDeEnvio} --chave-em <VARIAVEL>).`,
   );
+  if (lido.identificadorDeEnvio !== identificadorDeEnvio) {
+    escrever(
+      'Aviso: o servidor nao confirmou o identificador deste pedido (servidor sem repeticao segura). ' +
+        'Repetir este pedido pode DUPLICAR a mensagem.',
+    );
+  }
   return 0;
 }

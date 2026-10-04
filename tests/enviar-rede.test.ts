@@ -204,7 +204,9 @@ test('a chave nunca aparece na saida, nem em erro', async () => {
   }
 });
 
-test('timeout: codigo 7, e a mensagem diz que repetir pode duplicar', async () => {
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
+
+test('timeout: codigo 7, a saida traz o identificador e diz que repetir com ele e seguro', async () => {
   const srv = createServer(() => undefined); // aceita e nunca responde
   await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
   const porta = (srv.address() as { port: number }).port;
@@ -212,11 +214,112 @@ test('timeout: codigo 7, e a mensagem diz que repetir pode duplicar', async () =
     const r = rede(`http://127.0.0.1:${porta}`, 'k', { timeoutMs: 150 });
     const codigo = await executarEnviarRede([...BASE, '--texto', 'x'], r.rede);
     assert.equal(codigo, 7);
+    const identificador = UUID.exec(r.saida())?.[0];
+    assert.ok(identificador, 'a saida traz o identificador do pedido');
+    assert.match(r.saida(), new RegExp(`--identificador ${identificador}`));
+    assert.doesNotMatch(r.saida(), /DUPLICAR/);
+  } finally {
+    srv.closeAllConnections();
+    srv.close();
+  }
+});
+
+test('repetir com o mesmo --identificador nao cria segundo Envio (#1117)', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    const id = '3f2b8c1e-5d4a-4e7b-9c10-1a2b3c4d5e6f';
+    const a = rede(cena.url, cena.chave.valor);
+    const b = rede(cena.url, cena.chave.valor);
+    assert.equal(await executarEnviarRede([...BASE, '--texto', 'oi', '--identificador', id], a.rede), 0);
+    assert.equal(await executarEnviarRede([...BASE, '--texto', 'oi', '--identificador', id], b.rede), 0);
+    assert.equal(cena.lerEnvios().length, 1);
+    assert.match(a.saida(), /Envio aceito/);
+    assert.match(b.saida(), /Envio ja registrado/);
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('sem --identificador o cliente gera um, manda e o imprime no sucesso (#1117)', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    const r = rede(cena.url, cena.chave.valor);
+    assert.equal(await executarEnviarRede([...BASE, '--texto', 'oi'], r.rede), 0);
+    // O primeiro UUID da saida e o envioId: o identificador vem depois da palavra.
+    const impresso = /identificador ([0-9a-f-]{36})/.exec(r.saida())?.[1];
+    assert.ok(impresso, 'a saida traz o identificador');
+    assert.equal(cena.lerEnvios()[0]!.identificador_de_envio, impresso);
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('--identificador malformado: recusa local, exit 2, sem rede (#1117)', async () => {
+  const contador = await subirServidorContador();
+  try {
+    const r = rede(contador.url, 'k');
+    assert.equal(await executarEnviarRede([...BASE, '--texto', 'x', '--identificador', 'nao-e-uuid'], r.rede), 2);
+    assert.equal(contador.requisicoes(), 0);
+  } finally {
+    contador.fechar();
+  }
+});
+
+test('409: o identificador ja foi usado para outro pedido, e o texto diz isso (#1117)', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    const id = '3f2b8c1e-5d4a-4e7b-9c10-1a2b3c4d5e6f';
+    await executarEnviarRede([...BASE, '--texto', 'oi', '--identificador', id], rede(cena.url, cena.chave.valor).rede);
+    const r = rede(cena.url, cena.chave.valor);
+    const codigo = await executarEnviarRede([...BASE, '--texto', 'outro', '--identificador', id], r.rede);
+    assert.equal(codigo, 6);
+    assert.match(r.saida(), /ja foi usado para outro pedido/);
+    assert.equal(cena.lerEnvios().length, 1);
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('servidor que nao ecoa o identificador: o cliente avisa que repetir pode duplicar (#1117)', async () => {
+  const srv = createServer((_req, res) => {
+    res.writeHead(202, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ aceita: true, envioId: 'a' })); // servidor antigo: sem identificador
+  });
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+  const porta = (srv.address() as { port: number }).port;
+  try {
+    const r = rede(`http://127.0.0.1:${porta}`, 'k');
+    assert.equal(await executarEnviarRede([...BASE, '--texto', 'x'], r.rede), 0);
+    assert.match(r.saida(), /nao confirmou o identificador/);
     assert.match(r.saida(), /DUPLICAR/);
   } finally {
     srv.closeAllConnections();
     srv.close();
   }
+});
+
+test('--json com servidor antigo imprime o corpo como veio, sem aviso (#1117)', async () => {
+  const srv = createServer((_req, res) => {
+    res.writeHead(202, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ aceita: true, envioId: 'a' }));
+  });
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+  const porta = (srv.address() as { port: number }).port;
+  try {
+    const r = rede(`http://127.0.0.1:${porta}`, 'k');
+    assert.equal(await executarEnviarRede([...BASE, '--texto', 'x', '--json'], r.rede), 0);
+    assert.deepEqual(JSON.parse(r.saida()), { aceita: true, envioId: 'a' });
+  } finally {
+    srv.closeAllConnections();
+    srv.close();
+  }
+});
+
+test('falha de conexao tambem imprime o identificador do pedido (#1117)', async () => {
+  const r = rede('http://127.0.0.1:1', 'k');
+  const codigo = await executarEnviarRede([...BASE, '--texto', 'x'], r.rede);
+  assert.equal(codigo, 4);
+  assert.match(r.saida(), UUID);
 });
 
 function arquivoTemporario(nome: string, bytes: Buffer): string {
