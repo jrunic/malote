@@ -27,6 +27,7 @@ import { MENSAGEM_SEM_INQUILINO_NA_REDE } from './sem-inquilino-na-rede.js';
 import { formatarAnexos, tipoGuardado } from './anexos-texto.js';
 import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
 import { identificadoresDoRemetente } from '../nucleo/remetente.js';
+import { esperarEscoamento, executarExportarLocal, executarExportarRede, lerPedidoDeExport } from './exportar.js';
 import {
   abrirRegistro,
   criarInquilino,
@@ -330,6 +331,11 @@ Titular (nao exige chave enquanto nao houver rede):
   malote anexos     --conversa <id> [mesmas opcoes, sem --inquilino]
                                         (com MALOTE_SERVIDOR no ambiente: por REDE; os Anexos de UMA Conversa, em ordem
                                          cronologica; o id e o que se passa a 'malote midia <id> --saida <arquivo>')
+  malote exportar   --inquilino <id> --conversa <id> [--formato txt|json] [--saida <arquivo>] [--sobrescrever] [--remetente <valor>] [--desde D] [--ate D]
+  malote exportar   --conversa <id> [mesmas opcoes, sem --inquilino]
+                                        (com MALOTE_SERVIDOR no ambiente: por REDE; horarios em UTC; sem --saida escreve na
+                                         saida padrao; --json e o mesmo que --formato json; o arquivo nasce como <saida>.parcial;
+                                         Conversa grande: use --saida, o modo local sem ela acumula a saida em memoria)
   malote midia <id> --saida <arquivo>   (bytes do Anexo — SO em modo rede;
                                           local, leia 'caminho' de 'mensagens --json')
   malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--json]
@@ -2246,6 +2252,23 @@ function executarComAtor(
       return 0;
     }
 
+    if (grupo === 'exportar') {
+      const lido = lerPedidoDeExport(argumentos);
+      if ('erro' in lido) {
+        escrever(lido.erro);
+        return 2;
+      }
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino.');
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        return executarExportarLocal(acervo, precedencia, lido.pedido, { escrever, erro: escrever });
+      } finally {
+        acervo.fechar();
+      }
+    }
+
     if (grupo === 'pessoa' && sub === 'ver') {
       const inquilino = opcao(argumentos, 'inquilino');
       const pessoaId = opcao(argumentos, 'pessoa');
@@ -2970,6 +2993,16 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
       chave: ambiente.chave,
       env: process.env,
       escrever: (t) => console.log(t),
+    }).then(encerrar);
+  } else if (argumentos[0] === 'exportar' && ambiente.servidor !== undefined) {
+    // Ciclo 31: `exportar` por REDE e um laco de paginas, assincrono, e grava arquivo — NAO e uma leitura de
+    // COMANDOS_DE_REDE. Dados na saida padrao, erro e diagnostico na saida de erro.
+    void executarExportarRede(argumentos, {
+      servidor: opcao(argumentos, 'servidor') ?? ambiente.servidor,
+      chave: ambiente.chave,
+      escrever: (t) => console.log(t),
+      erro: (t) => console.error(t),
+      aguardarEscoamento: () => esperarEscoamento(process.stdout),
     }).then(encerrar);
   } else if (COMANDOS_DE_REDE.has(argumentos[0] ?? '') && ambiente.servidor !== undefined) {
     // Modo REDE: a consulta e async (HTTP), e o executar e sincrono — mesmo
