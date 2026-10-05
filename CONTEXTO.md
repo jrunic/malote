@@ -592,6 +592,12 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 04/10/2026 — **CICLO 32 ACEITO: o servidor de leitura deixa de bloquear, release v0.30.0 em produção** (#1132, PR #22, merge
+  `6dd9ad0`, tag `v0.30.0`, nos três pacotes, sem mudar schema). Leituras em workers (4) com prazo de 25 s (`504`), abandono, reserva
+  de N−1 e metade da fila por Inquilino, `503` com `retry-after`. Medido: `/relatorio` do outro Inquilino em 667 a 833 ms com três
+  consultas pesadas em andamento; custo +2,3 ms; o maior documento servível (890 MB) sai com pico de 972 MB, por transferência sem
+  cópia. O `buscar` de 4 s e o filtro de 1,2 s seguem custando o que custam. **Pendente:** #1119 (06/10), #909, limpeza do
+  nome-sentinela.
 - 04/10/2026 — **CICLO 31 ACEITO, na segunda tentativa: o modo rede lista mídia e exporta Conversa, release v0.29.1 em
   produção** (#1129, PR #20 e #21, tag `v0.29.1`). `malote anexos` e `GET /conversas/<id>/anexos`, `--remetente` (valor do
   Identificador, alcançando a forma alternativa) em `mensagens` e `anexos`, `malote exportar` (txt ou json) e
@@ -916,7 +922,7 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
-- **#1132: toda consulta lenta bloqueia todos os clientes, porque o servidor é síncrono** (filtro sem achados 1,2 s quente e 8 s frio na maior Conversa; `buscar` de palavra comum global 4 s). **Resolvido no ciclo 32 (leituras em workers com prazo duro), em `main` e ainda NÃO publicado**; spec, plano e revisões em `11-tarefas/20261004-*1132*` da pasta de trabalho. Até a release, e para medir o que o prazo não cobre, **uma consulta por vez e `curl --max-time` curto**: a que o cliente abandona continua rodando no servidor.
+- **#1132: toda consulta lenta bloqueia todos os clientes, porque o servidor é síncrono** (filtro sem achados 1,2 s quente e 8 s frio na maior Conversa; `buscar` de palavra comum global 4 s). **Resolvido no ciclo 32 (leituras em workers com prazo duro), release v0.30.0 em produção em 04/10/2026**; spec, plano e revisões em `11-tarefas/20261004-*1132*` da pasta de trabalho. O prazo (25 s) e o abandono já protegem o servidor; mesmo assim, ao medir em produção, **uma consulta pesada por vez e `curl --max-time` curto**: um Inquilino ocupa N−1 workers e a própria rajada atrasa as suas outras consultas.
 
 - **A Hera roda no thinkpad (`malote-ouvinte@hera`, Inquilino próprio) e o Envio está
   provado em produção pelos dois caminhos** — local no thinkpad e por rede do macbook
