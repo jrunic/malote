@@ -35,6 +35,18 @@ function falha(
   return e;
 }
 
+/**
+ * O codigo de saida e o mesmo (5, a classe "servidor"), e o prefixo "Erro do servidor (NNN)" tambem; so o 504 e o
+ * 503 ganham uma frase que diz o que fazer.
+ */
+function mensagemDeErroDoServidor(status: number): string {
+  if (status === 504) {
+    return 'Erro do servidor (504): a consulta passou do prazo do servidor. Restrinja os filtros, por exemplo por período ou remetente.';
+  }
+  if (status === 503) return 'Erro do servidor (503). Servidor ocupado ou indisponível: tente de novo daqui a pouco.';
+  return `Erro do servidor (${status}).`;
+}
+
 /** A classificacao por status, a mesma para leitura e escrita. Lanca; nao devolve nada. */
 function classificarResposta(status: number, corpo: string): void {
   if (status === 401) {
@@ -45,7 +57,7 @@ function classificarResposta(status: number, corpo: string): void {
         '(o servidor não distingue as três, e este cliente não adivinha).',
     );
   }
-  if (status >= 500) throw falha('servidor', 5, `Erro do servidor (${status}).`);
+  if (status >= 500) throw falha('servidor', 5, mensagemDeErroDoServidor(status));
   if (status >= 400) throw falha('uso', 6, `Invocação recusada (${status}): ${corpo}`, status);
 }
 
@@ -126,7 +138,7 @@ export async function pedirGetBinario(
     );
   }
   if (resposta.status >= 500) {
-    throw falha('servidor', 5, `Erro do servidor (${resposta.status}).`);
+    throw falha('servidor', 5, mensagemDeErroDoServidor(resposta.status));
   }
   if (resposta.status >= 400) {
     const corpo = await resposta.text();

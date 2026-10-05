@@ -1,5 +1,6 @@
 import { once } from 'node:events';
-import { criarServidor } from '../rede/servidor.js';
+import { abrirRegistro } from '../registro/registro.js';
+import { criarServidor, PRAZO_PADRAO_MS, TRABALHADORES_PADRAO } from '../rede/servidor.js';
 import { iniciarWorkerDeTranscricao } from './transcricao.js';
 import { configuracaoDoMotor } from './motor-de-transcricao.js';
 import type { Ambiente } from './index.js';
@@ -40,7 +41,17 @@ export async function servir(argumentos: string[], ambiente: AmbienteDeServico):
   const { escrever } = ambiente;
   const porta = Number(opcao(argumentos, 'porta') ?? '0');
   if (!Number.isInteger(porta) || porta < 0 || porta > 65535) {
-    escrever('Uso: malote servir --porta <n> [--endereco <ip>] [--exposto]');
+    escrever('Uso: malote servir --porta <n> [--endereco <ip>] [--exposto] [--trabalhadores <n>] [--prazo <segundos>]');
+    return 2;
+  }
+  const trabalhadores = Number(opcao(argumentos, 'trabalhadores') ?? String(TRABALHADORES_PADRAO));
+  if (!Number.isInteger(trabalhadores) || trabalhadores < 1 || trabalhadores > 16) {
+    escrever('--trabalhadores precisa ser um inteiro de 1 a 16.');
+    return 2;
+  }
+  const prazoSegundos = Number(opcao(argumentos, 'prazo') ?? String(PRAZO_PADRAO_MS / 1000));
+  if (!Number.isInteger(prazoSegundos) || prazoSegundos < 1 || prazoSegundos > 300) {
+    escrever('--prazo precisa ser um inteiro de 1 a 300 (segundos).');
     return 2;
   }
   const endereco = opcao(argumentos, 'endereco') ?? '127.0.0.1';
@@ -50,12 +61,29 @@ export async function servir(argumentos: string[], ambiente: AmbienteDeServico):
     return 2;
   }
 
-  const servidor = (ambiente.criar ?? criarServidor)({ dados: ambiente.dados, porta });
+  // O Registro e aberto UMA vez, para escrita, antes de aceitar requisicao: se a forma subiu de versao, a migracao
+  // acontece aqui, e nao na disputa entre workers. Os workers o abrem somente-leitura.
+  abrirRegistro(ambiente.dados).fechar();
+
+  const servidor = (ambiente.criar ?? criarServidor)({
+    dados: ambiente.dados,
+    porta,
+    trabalhadores,
+    prazoMs: prazoSegundos * 1000,
+  });
+  // Um worker precisa subir ANTES de aceitar pedido: se ele nao carrega (caminho, dependencia, import quebrado), toda
+  // leitura viraria 503 com o servico `active`. Recusar a subida e falhar no deploy, e nao no primeiro pedido.
+  if (!(await servidor.despachante.aquecer(5000))) {
+    escrever('Nao subi: o worker de leitura nao carregou em 5 s (veja a mensagem acima).');
+    await servidor.pararLeituras(0);
+    return 1;
+  }
   servidor.listen(porta, endereco);
   // Espera pelo EVENTO, e nunca por tempo: a porta so existe depois dele.
   await once(servidor, 'listening');
   const alcance = servidor.address() as { address: string; port: number };
   escrever(`Servindo em http://${alcance.address}:${alcance.port}`);
+  escrever(`Leituras em ${trabalhadores} workers, prazo de ${prazoSegundos} s.`);
   escrever(
     'Leitura por Chave de Acesso; escrita so em /transcricoes/solicitar e /envios/solicitar. ' +
       'Chave de Operador nao le acervo.',
@@ -80,8 +108,12 @@ export async function servir(argumentos: string[], ambiente: AmbienteDeServico):
     const parar = (sinal: string): void => {
       escrever(`[servir] ${sinal} recebido; parando.`);
       pararWorker();
-      servidor.close();
-      resolver(0);
+      servidor.close(); // para de aceitar (no Node >=19, `close` ja fecha as conexoes ociosas: `closeIdleConnections` seria redundante)
+      void (async () => {
+        await servidor.pararLeituras(5000); // espera as leituras por ate 5 s e termina os workers
+        servidor.closeAllConnections();
+        resolver(0);
+      })();
     };
     process.once('SIGTERM', () => parar('SIGTERM'));
     process.once('SIGINT', () => parar('SIGINT'));

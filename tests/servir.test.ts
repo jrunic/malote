@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { abrirRegistro, criarInquilino } from '../src/registro/registro.js';
@@ -10,6 +10,15 @@ import { registrarConversa, registrarMensagem, registrarAnexo } from '../src/nuc
 import { CFG_WHATSAPP } from './ajuda/configuracao.js';
 import { pedirGet } from '../src/cli/cliente.js';
 import { servir } from '../src/cli/servir.js';
+import { criarServidor } from '../src/rede/servidor.js';
+import { cenario } from './ajuda/acervo.js';
+import { semearIdentidade } from './ajuda/identidade.js';
+
+/** Espera POR EVENTO, com teto: o aquecimento do worker de leitura fica entre o `criar` e o `listen` (#1132). */
+async function esperarPor(condicao: () => boolean, ms = 10_000): Promise<void> {
+  const limite = Date.now() + ms;
+  while (!condicao() && Date.now() < limite) await new Promise((r) => setTimeout(r, 25));
+}
 
 test('servir sobe e desliga o worker de transcricao junto do SIGTERM', async () => {
   const dados = mkdtempSync(join(tmpdir(), 'malote-servir-'));
@@ -30,7 +39,7 @@ test('servir sobe e desliga o worker de transcricao junto do SIGTERM', async () 
       iniciarWorker: iniciarFalso,
     });
 
-    await new Promise((r) => setTimeout(r, 50)); // da tempo do listener 'listening'
+    await esperarPor(() => iniciado === 1); // o listener subiu e o worker de transcricao foi iniciado
     assert.equal(iniciado, 1);
     process.emit('SIGTERM');
     await promessa;
@@ -50,7 +59,7 @@ test('servir NAO anuncia "somente leitura": nomeia as duas rotas de escrita', as
       escrever: (l) => linhas.push(l),
       iniciarWorker: () => () => {},
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await esperarPor(() => linhas.some((l) => l.startsWith('[transcricao]')));
     process.emit('SIGTERM');
     await promessa;
 
@@ -117,6 +126,7 @@ test('requisicao HTTP responde normalmente enquanto uma transcricao esta em anda
     const promessaDoServir = servir(['--porta', '0'], { dados, estado: dados, escrever: (l) => linhas.push(l) });
     // Espera o suficiente para o listener subir E o worker pegar o elegivel
     // (intervalo de 100ms) e entrar no sleep de 2s do whisper falso.
+    await esperarPor(() => linhas.some((l) => l.startsWith('Servindo em ')));
     await new Promise((r) => setTimeout(r, 300));
 
     const linhaDoEndereco = linhas.find((l) => l.startsWith('Servindo em '));
@@ -152,5 +162,114 @@ test('requisicao HTTP responde normalmente enquanto uma transcricao esta em anda
     process.env['MALOTE_TRANSCRICAO_INTERVALO_MS'] = envAntes.MALOTE_TRANSCRICAO_INTERVALO_MS;
     rmSync(dados, { recursive: true, force: true });
     rmSync(motor.pasta, { recursive: true, force: true });
+  }
+});
+
+test('servir recusa --trabalhadores e --prazo fora da faixa (#1132)', async () => {
+  const dados = mkdtempSync(join(tmpdir(), 'malote-servir-'));
+  try {
+    for (const args of [['--trabalhadores', '0'], ['--trabalhadores', '17'], ['--trabalhadores', 'x'], ['--prazo', '0'], ['--prazo', '301'], ['--prazo', 'x']]) {
+      const linhas: string[] = [];
+      const codigo = await servir(['--porta', '0', ...args], { dados, estado: dados, escrever: (l) => linhas.push(l), iniciarWorker: () => () => {} });
+      assert.equal(codigo, 2, args.join(' '));
+      assert.match(linhas.join('\n'), /--trabalhadores|--prazo/);
+    }
+  } finally {
+    rmSync(dados, { recursive: true, force: true });
+  }
+});
+
+test('servir RECUSA subir (codigo 1) se o worker de leitura nao carrega (#1132)', async () => {
+  const dados = mkdtempSync(join(tmpdir(), 'malote-servir-'));
+  try {
+    const linhas: string[] = [];
+    const codigo = await servir(['--porta', '0'], {
+      dados,
+      estado: dados,
+      escrever: (l) => linhas.push(l),
+      iniciarWorker: () => () => {},
+      criar: (o) => criarServidor({ ...o, arquivoDoTrabalhador: new URL('file:///nao/existe/trabalhador.ts') }),
+    });
+    assert.equal(codigo, 1);
+    assert.match(linhas.join('\n'), /worker de leitura/);
+  } finally {
+    rmSync(dados, { recursive: true, force: true });
+  }
+});
+
+test('servir abre o Registro uma vez ao subir, antes de aceitar requisicao (#1132)', async () => {
+  const dados = mkdtempSync(join(tmpdir(), 'malote-servir-'));
+  try {
+    const linhas: string[] = [];
+    const promessa = servir(['--porta', '0'], { dados, estado: dados, escrever: (l) => linhas.push(l), iniciarWorker: () => () => {} });
+    await esperarPor(() => existsSync(join(dados, 'registro.db')));
+    assert.ok(existsSync(join(dados, 'registro.db')), 'o Registro existe (e migrado) antes de qualquer requisicao');
+    await esperarPor(() => linhas.some((l) => l.startsWith('Servindo em '))); // o SIGTERM so e tratado depois da subida
+    process.emit('SIGTERM');
+    await promessa;
+  } finally {
+    rmSync(dados, { recursive: true, force: true });
+  }
+});
+
+test('PARADA GRACIOSA: a leitura que cabe nos 5 s de espera termina e responde 200 antes de o servidor parar (#1132)', async () => {
+  const c = cenario();
+  const { id, acervo } = c.novoInquilino('A');
+  semearIdentidade(acervo);
+  acervo.fechar();
+  const chave = emitirChaveDeAcesso(c.registro, id).valor;
+  try {
+    const linhas: string[] = [];
+    const promessa = servir(['--porta', '0', '--prazo', '30'], {
+      dados: c.raiz,
+      estado: c.raiz,
+      escrever: (l) => linhas.push(l),
+      iniciarWorker: () => () => {},
+      criar: (o) => criarServidor({ ...o, ganchoDeTeste: { instrucaoDoTrabalhador: () => ({ dormirMs: 1500 }) } }),
+    });
+    await esperarPor(() => /http:\/\/[\d.]+:\d+/.test(linhas.join('\n')));
+    const porta = Number(/http:\/\/[\d.]+:(\d+)/.exec(linhas.join('\n'))![1]);
+    const leitura = fetch(`http://127.0.0.1:${porta}/relatorio`, { headers: { authorization: `Bearer ${chave}` } }).then(
+      (r) => r.status,
+      () => 'cortada',
+    );
+    await new Promise((r) => setTimeout(r, 400));
+    process.emit('SIGTERM');
+    assert.equal(await promessa, 0);
+    // Sem a espera (`pararLeituras`), `closeAllConnections` cortaria a leitura no meio e o cliente veria a conexao cair.
+    assert.equal(await leitura, 200);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('PARADA: SIGTERM com uma leitura lenta em andamento termina em ate 6 s, mesmo com a thread principal livre (#1132)', async () => {
+  const c = cenario();
+  const { id, acervo } = c.novoInquilino('A');
+  semearIdentidade(acervo);
+  acervo.fechar();
+  const chave = emitirChaveDeAcesso(c.registro, id).valor;
+  try {
+    const linhas: string[] = [];
+    const promessa = servir(['--porta', '0', '--prazo', '30'], {
+      dados: c.raiz,
+      estado: c.raiz,
+      escrever: (l) => linhas.push(l),
+      iniciarWorker: () => () => {},
+      criar: (o) => criarServidor({ ...o, ganchoDeTeste: { instrucaoDoTrabalhador: () => ({ dormirMs: 20_000 }) } }),
+    });
+    // O aquecimento do worker fica entre o `criar` e o `listen`: espera POR EVENTO (a linha de subida), com teto.
+    await esperarPor(() => /http:\/\/[\d.]+:\d+/.test(linhas.join('\n')));
+    const porta = Number(/http:\/\/[\d.]+:(\d+)/.exec(linhas.join('\n'))![1]);
+    void fetch(`http://127.0.0.1:${porta}/relatorio`, { headers: { authorization: `Bearer ${chave}` } }).catch(() => undefined);
+    await new Promise((r) => setTimeout(r, 400));
+    const t0 = Date.now();
+    process.emit('SIGTERM');
+    assert.equal(await promessa, 0);
+    // 5.000 ms de espera das leituras em andamento, mais o terminate e o closeAllConnections: 7.000 ms de teto (o
+    // criterio de produto e 6 s, com folga de CI Linux); sem a parada em etapas, seriam 20 s de leitura lenta.
+    assert.ok(Date.now() - t0 < 7000, `parou em ${Date.now() - t0} ms`);
+  } finally {
+    c.limpar();
   }
 });
