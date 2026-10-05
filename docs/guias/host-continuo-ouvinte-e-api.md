@@ -36,7 +36,8 @@ Operador, Inquilino e primeiro material) e do
                      ┌───────────────────── host 24/7 ─────────────────────┐
 WhatsApp ──ao vivo──►│ malote ouvir --conta A          (1 processo/conta)  │
                      │ malote ouvir --conta B          (1 processo/conta)  │
-                     │ malote servir --porta 8080      (1 processo, rede)  │
+                     │ malote servir --porta 8080      (1 processo; leituras │
+                     │                                  em workers)       │
                      └──────────┬──────────────────────────┬───────────────┘
                                 │                          │
                  XDG_DATA_HOME/malote          XDG_STATE_HOME/malote
@@ -197,10 +198,15 @@ WorkingDirectory=/opt/malote
 ExecStart=/usr/bin/node --import tsx src/cli/index.ts servir --porta 8080 --endereco 127.0.0.1
 Restart=on-failure
 RestartSec=10
+TimeoutStopSec=15
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+`TimeoutStopSec=15` cobre a parada em etapas do servidor (ver 4.3): ele espera as leituras em
+andamento por até 5 s antes de cortar as conexões, então o padrão do systemd basta, mas um valor
+explícito evita `SIGKILL` se alguém aumentar a espera.
 
 Exponha ao mundo por um proxy reverso com TLS (Caddy, nginx…). O servidor responde
 **uma recusa de corpo vazio** para credencial ausente, inválida ou revogada — não
@@ -214,6 +220,49 @@ documento, os bytes do arquivo. E a Chave deixa de ser só de leitura: quem a
 tem pode **falar pela conta** que o malote vigia. Nunca exponha a porta do
 `malote servir` sem um proxy reverso com TLS na frente, nem em rede que pareça
 confiável.
+
+### 4.3 Dimensionar e vigiar o servidor
+
+O servidor atende cada leitura (`GET`) num **worker** de um pool, e não na thread que recebe as
+conexões: uma consulta lenta ocupa um worker e os outros clientes continuam sendo atendidos. As
+escritas (`POST`) e a verificação da Chave ficam na thread principal.
+
+| flag | faixa | padrão | o que faz |
+|---|---|---|---|
+| `--trabalhadores <n>` | 1 a 16 | 4 | tamanho do pool de leituras |
+| `--prazo <segundos>` | 1 a 300 | 25 | prazo de uma leitura, **contado desde a chegada** (inclui a espera na fila) |
+
+O que o servidor responde, e o que você faz:
+
+- **`504`** (corpo vazio) — a leitura passou do prazo; o worker foi terminado e substituído. Escreve
+  `[leitura] prazo estourado: GET <caminho> (25 s)` no `stderr`. A CLI diz ao cliente para restringir
+  os filtros. Se for frequente numa Conversa grande, o problema é a consulta, e não o prazo: aumentar
+  `--prazo` só adia o sintoma.
+- **`503`** (com `retry-after: 1`) — a fila de 64 pedidos encheu, ou o servidor está subindo ou parando.
+  Um Inquilino ocupa no máximo N−1 dos workers e **metade da fila**, de modo que um consumidor com
+  muitas consultas pesadas atrasa as suas, e não as dos outros.
+- **`500`** (corpo vazio) — exceção da rota ou queda do worker; o worker é substituído e o servidor
+  segue. O `stderr` leva a mensagem e o caminho, **nunca a query** (ela pode ter texto de conversa).
+- Leitura que leva mais de 2 s escreve `[leitura] lenta: GET <caminho> <tempo>`.
+
+**Subida.** O servidor abre o Registro uma vez (migra, se for o caso) e sobe um worker **antes** de
+aceitar pedido. Se o worker não carregar em 5 s, ele escreve `Nao subi: o worker de leitura nao
+carregou` e **sai com código 1**. Com `Restart=on-failure` isso vira uma tentativa a cada 10 s: se o
+serviço não fica de pé, leia o `journalctl -u malote-servidor` e procure a causa (dependência
+ausente, `tsx` não instalado, arquivo do repositório quebrado) antes de mexer em flag.
+
+**Parada.** `SIGTERM` para de aceitar, espera as leituras em andamento por até 5 s, corta o que
+sobrar e sai com 0. O restart leva segundos.
+
+**Memória.** Medido num Acervo de 6 GB: ~110 a 140 MB em repouso e até ~230 MB com três consultas
+pesadas em paralelo, bem abaixo de 600 MB. **Servir um arquivo grande custa cerca de uma vez o tamanho
+dele** em memória residente (um documento de 890 MB levou o processo a ~970 MB), e essa memória pode
+ficar residente por um tempo depois. Dimensione o host pelo maior arquivo que `GET /midia` pode servir,
+não pela média.
+
+**O que isto não resolve.** Nenhuma consulta fica mais rápida. A verificação da Chave continua na
+thread principal e custa ~24 ms por derivação, então o teto é da ordem de 40 requisições por segundo,
+o que cobre o uso previsto (loopback atrás de um proxy).
 
 ## 5. Verificar a saúde de fora
 

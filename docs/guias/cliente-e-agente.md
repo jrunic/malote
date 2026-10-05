@@ -69,10 +69,12 @@ Duas coisas que a máquina cliente **não** precisa:
 
 ## 2. Os comandos
 
+A lista completa, com todas as flags, está na [referência do modo cliente](../referencias/comandos-modo-cliente.md). Os exemplos abaixo são os usos comuns.
+
 ```bash
 # Índice do Acervo: id, fonte, natureza, contagem, assunto, configuração
 malote conversas --limite 30
-malote conversas --busca "relatorio" --fonte whatsapp --coletiva
+malote conversas --busca "relatorio" --fonte whatsapp --coletiva true
 malote conversas --configuracao orlando        # so a Conversa daquela Configuracao
 malote conversas --configuracao orlando --fonte whatsapp  # desempata apelido repetido em Fontes diferentes
 malote conversas --fixada true --configuracao orlando  # so as fixadas NAQUELA Configuracao (marca, nao atribuicao)
