@@ -23,6 +23,11 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+### Mudado
+
+- A `--ajuda` passa a listar `pessoas`, `participantes` e `relatorio` (este só existe por rede), que existiam e não apareciam.
+- Um teste amarra as referências de comandos (`docs/referencias/`) à `--ajuda`: comando novo sem linha na referência, ou linha de comando que não existe mais, reprova a suíte.
+
 ## [0.30.1] — 2026-10-05
 
 Só documentação: não muda código, nem a forma do Acervo ou do Registro.

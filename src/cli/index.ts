@@ -341,6 +341,9 @@ Titular (nao exige chave enquanto nao houver rede):
   malote midia <id> --saida <arquivo>   (bytes do Anexo — SO em modo rede;
                                           local, leia 'caminho' de 'mensagens --json')
   malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--json]
+  malote pessoas        --inquilino <id> --texto <nome>        (resolve texto em Pessoa; com MALOTE_SERVIDOR: por REDE, sem --inquilino)
+  malote participantes  --inquilino <id> --conversa <id> [--em <AAAA-MM-DD>]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino)
+  malote relatorio                                              (SO em modo rede: totais por Fonte e natureza; local, use 'malote acervo relatar')
   malote conversas sem-endereco --inquilino <id> [--limite <n>]
   malote conversa presenca      --inquilino <id> --conversa <id> --em <AAAA-MM-DD> [--json]
   malote acervo migrar  --inquilino <id>              (sobe a forma do Acervo, e diz o que fez)
@@ -425,7 +428,7 @@ function contextoDeMigracaoDoInquilino(registro: Registro, inquilinoId: string) 
  * resto e local — comando novo de leitura que deva ir por rede ENTRA AQUI,
  * e o teste cli-modo-rede cobre a recusa do resto.
  */
-const COMANDOS_DE_REDE = new Set([
+export const COMANDOS_DE_REDE = new Set([
   'conversas',
   'mensagens',
   'buscar',
