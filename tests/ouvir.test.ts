@@ -131,9 +131,8 @@ test('configuracao criar via CLI desbloqueia o guard de Configuracao ausente do 
     );
     assert.equal(codigoCriar, 0);
 
-    // Com a Configuracao declarada, o guard de Configuracao ausente some — o
-    // proximo guard e --numero (mesmo caminho que o teste irmao 'conta nao
-    // pareada e sem numero para em vez de religar para sempre' ja prova).
+    // A Configuracao agora tem telefone (criada com --telefone): vale o dela para o pareamento, e o
+    // que falha e SO o carregamento da biblioteca (codigo 1), nao a falta de --numero.
     const linhasComConfig: string[] = [];
     const codigoComConfig = await ouvir(
       ['ouvir', '--inquilino', id, '--conta', 'nova', '--configuracao', 'teste'],
@@ -141,11 +140,11 @@ test('configuracao criar via CLI desbloqueia o guard de Configuracao ausente do 
         dados: raiz,
         estado: raiz,
         escrever: (t: string) => linhasComConfig.push(t),
-        carregarBiblioteca: () => Promise.reject(new Error('nao deveria chegar aqui')),
+        carregarBiblioteca: () => Promise.reject(new Error('sem rede no teste')),
       },
     );
-    assert.equal(codigoComConfig, 2);
-    assert.match(linhasComConfig.join('\n'), /--numero/);
+    assert.equal(codigoComConfig, 1);
+    assert.doesNotMatch(linhasComConfig.join('\n'), /--numero/);
     assert.doesNotMatch(linhasComConfig.join('\n'), /Configuracao "teste" nao existe/);
   } finally {
     limpar();

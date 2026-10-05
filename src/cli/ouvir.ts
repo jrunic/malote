@@ -23,6 +23,19 @@ import { abrirCaptura } from './captura-de-retrato.js';
 import { anotarRetrato, pareceRetrato } from './retrato.js';
 import { anotarPulos } from './pulos.js';
 import { atorDeServico, comAtor } from '../nucleo/ator.js';
+import {
+  identidadeDoVinculo,
+  mesmoTelefone,
+  type IdentidadeBrutaDoVinculo,
+} from '../adaptadores/whatsapp/identidade-da-conta.js';
+import { declararEnderecosDaConta } from '../nucleo/endereco-da-conta.js';
+import {
+  declararTelefoneDaConta,
+  lerEnderecosDaConta,
+  registrarEnderecosDoVinculo,
+  telefoneValido,
+} from '../registro/endereco-da-conta.js';
+import { configuracaoComTelefoneEquivalente } from './telefone-da-conta.js';
 import { anotarCorrespondencia } from './vigilancia.js';
 import type { Ambiente } from './index.js';
 
@@ -190,6 +203,8 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
     abrirRegistro(ambiente.dados),
   );
   let configuracao: { id: string; fonte: 'whatsapp' };
+  // O telefone que vale para PEDIR o codigo de pareamento: o --numero, ou o da Configuracao.
+  let telefoneDaConfiguracao: string | undefined;
   // Sem Destino, o Anexo ao vivo fica `nunca-obtido` (como hoje): recusar a
   // subida so por isso quebraria instalacao que nunca configurou um — a
   // mesma razao pela qual `midia trazer` RECUSA e o ouvinte so AVISA.
@@ -210,6 +225,33 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
       return 2;
     }
     configuracao = { id: cfg.id, fonte: 'whatsapp' };
+    // Regra unica de declaracao do telefone (spec #1149): a Configuracao e a
+    // fonte; o --numero nao e uma segunda declaracao concorrente. Nenhuma
+    // mensagem daqui ecoa digitos: o journal do servico e dado pessoal.
+    const numeroInformado = opcao(argumentos, 'numero');
+    telefoneDaConfiguracao = cfg.telefone ?? undefined;
+    if (numeroInformado !== undefined) {
+      if (!telefoneValido(numeroInformado)) {
+        escrever('--numero precisa ser so digitos, com codigo do pais (de 10 a 15).');
+        return 2;
+      }
+      if (cfg.telefone !== null) {
+        if (!mesmoTelefone(cfg.telefone, numeroInformado)) {
+          escrever('O --numero nao e o telefone desta Configuracao. Nada foi feito.');
+          return 2;
+        }
+      } else {
+        const outra = configuracaoComTelefoneEquivalente(registro, inquilinoId, numeroInformado, cfg.id);
+        if (outra !== undefined) {
+          escrever(`Esse numero ja pertence a Configuracao ${outra.apelido} deste Inquilino.`);
+          return 2;
+        }
+        comAtor(atorDeServico('ouvinte-whatsapp'), () =>
+          declararTelefoneDaConta(registro, cfg.id, numeroInformado),
+        );
+        telefoneDaConfiguracao = numeroInformado;
+      }
+    }
     destinoDeMidia = lerDestinoDeMidia(registro, inquilinoId)?.endereco;
   } finally {
     registro.fechar();
@@ -230,8 +272,9 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
   // tinha aprendido isso: sem vinculo, o socket sobe nao-registrado, toma 428, e
   // a religacao tenta de novo para sempre. Espera sem prazo e o que a doutrina
   // proibe — e aqui ela se disfarca de processo saudavel.
+  const numeroDoPareamento = opcao(argumentos, 'numero') ?? telefoneDaConfiguracao;
   const jaPareada = existsSync(join(caminhos.vinculo, 'creds.json'));
-  if (!jaPareada && opcao(argumentos, 'numero') === undefined) {
+  if (!jaPareada && numeroDoPareamento === undefined) {
     escrever(`Conta ${conta} ainda nao esta pareada, e nao ha o que religar.`);
     escrever('Informe --numero <so digitos, com codigo do pais> para receber o codigo.');
     return 2;
@@ -262,6 +305,51 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
   const acervo = comAtor(atorDeServico('ouvinte-whatsapp'), () =>
     abrirAcervo(join(ambiente.dados, 'acervos'), inquilinoId),
   );
+
+  // Codigo de saida quando a conexao termina para nao voltar: 1 e o vinculo
+  // invalidado pela plataforma; 2 e a conta do vinculo nao ser a da Configuracao
+  // (a mesma classe das outras recusas de configuracao deste comando).
+  let codigoDeFim = 1;
+  let recusouIdentidade = false;
+
+  // O gancho de identidade (spec #1149). Confere o vinculo contra a Configuracao
+  // e, se for a conta certa, persiste o que o vinculo mostrou e declara o par ao
+  // Acervo. O Registro REABRE aqui: `ouvir` o fechou antes de conectar.
+  const aoIdentificar = (bruta: IdentidadeBrutaDoVinculo): 'seguir' | 'recusar' => {
+    const id = identidadeDoVinculo(bruta);
+    if (id === undefined) {
+      escrever('[ouvinte] a identidade do vinculo nao e legivel; sigo sem conferir a conta.');
+      return 'seguir';
+    }
+    const registroDaConferencia = comAtor(atorDeServico('ouvinte-whatsapp'), () =>
+      abrirRegistro(ambiente.dados),
+    );
+    try {
+      const atual = lerEnderecosDaConta(registroDaConferencia, configuracao.id);
+      if (atual?.telefone != null && !mesmoTelefone(atual.telefone, id.telefone)) {
+        escrever('[ouvinte] RECUSADO: o vinculo e de outra conta que a da Configuracao. Nada foi gravado.');
+        recusouIdentidade = true;
+        codigoDeFim = 2;
+        return 'recusar';
+      }
+      comAtor(atorDeServico('ouvinte-whatsapp'), () =>
+        registrarEnderecosDoVinculo(registroDaConferencia, configuracao.id, id),
+      );
+    } finally {
+      registroDaConferencia.fechar();
+    }
+    const declarado = comAtor(atorDeServico('ouvinte-whatsapp'), () =>
+      declararEnderecosDaConta(acervo, {
+        fonte: 'whatsapp',
+        canonico: id.jid,
+        ...(id.lid !== null ? { alternativo: id.lid } : {}),
+      }),
+    );
+    if (declarado.conflito) {
+      escrever('[ouvinte] AVISO: o par de enderecos da conta ja estava gravado de outra forma; mantive o anterior.');
+    }
+    return 'seguir';
+  };
 
   // O processo tem TRES fins possiveis, e os tres passam por aqui: sinal de
   // termino, sinal de interrupcao, e a conexao dizendo que nao volta. Sem o
@@ -304,6 +392,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
     const conexao = await conectar({
       pastaDoVinculo: caminhos.vinculo,
       capturar,
+      aoIdentificar,
       aoObservar: (_fluxo, resumo) => {
         // Anota SO o que parece Retrato. A regra vive em `retrato.ts` com a
         // medicao que a sustenta, e e a mesma que o `--json` documenta.
@@ -327,7 +416,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
           });
         }
       },
-      numero: opcao(argumentos, 'numero'),
+      numero: numeroDoPareamento,
       registrar: (linha) => escrever(`[ouvinte] ${linha}`),
       aoTerminar: (motivo) => {
         escrever(`[ouvinte] encerrando: ${motivo}`);
@@ -337,7 +426,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
         fecharUmaVez();
         // Diferente de zero: o supervisor tem de saber que isto NAO foi uma
         // parada pedida. Vinculo invalidado exige pareamento humano.
-        encerrar(1);
+        encerrar(codigoDeFim);
       },
       ...(ambiente.carregarBiblioteca !== undefined
         ? { carregarBiblioteca: ambiente.carregarBiblioteca }
@@ -467,6 +556,15 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
           drenar(acervo, caminhos.derrame, configuracao, agora, escrever, caminhos.correspondencia);
         }),
     });
+
+    // Recusa de identidade ANTES do poller: o gancho pode ter recusado durante
+    // `conectar`, e nesse caso o Acervo ja foi fechado por `aoTerminar` — o
+    // poller de Envio nao pode nascer contra um Acervo fechado.
+    if (recusouIdentidade) {
+      conexao.parar();
+      fecharUmaVez();
+      return codigoDeFim;
+    }
 
     // Poller de Envio: so processa a fila DESTA Configuracao, pela conexao que
     // este processo mantem viva — nunca socket proprio (#1112). O mecanismo de
