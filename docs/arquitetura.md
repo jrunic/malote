@@ -90,7 +90,8 @@ disco (dado, estado, mídia): [guia de armazenamento](guias/instalacao-e-armazen
 Host próprio, 24/7: um serviço do ouvinte por conta e um do servidor, rodando **da fonte** com `tsx`, sem
 build. Unidades, flags do servidor (`--trabalhadores`, `--prazo`), Chave de Acesso e saúde:
 [guia do host](guias/host-continuo-ouvinte-e-api.md). Instalação: [tutorial](tutoriais/instalar.md).
-Quem consulta: [guia do cliente e do agente](guias/cliente-e-agente.md).
+Quem consulta: [guia do cliente e do agente](guias/cliente-e-agente.md). Os comandos, um por um:
+[modo servidor](referencias/comandos-modo-servidor.md) e [modo cliente](referencias/comandos-modo-cliente.md).
 
 ## Testes
 

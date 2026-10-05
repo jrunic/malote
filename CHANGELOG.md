@@ -23,6 +23,10 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+### Documentação
+
+- Referência dos comandos do modo servidor e do modo cliente (`docs/referencias/`), a seção 4.3 do guia do host (dimensionar o servidor), o mapa de arquitetura preenchido e a correção do exemplo de `--coletiva` no guia do cliente (a flag leva `true` ou `false`).
+
 ## [0.30.0] — 2026-10-04
 
 Não muda a forma do Acervo nem do Registro.
