@@ -10,6 +10,7 @@ import {
   resolverConfiguracao,
   resolverFiltroDeConfiguracao,
 } from '../src/registro/configuracao-adaptador.js';
+import { declararTelefoneDaConta, registrarEnderecosDoVinculo } from '../src/registro/endereco-da-conta.js';
 
 test('a Configuração padrão nasce por demanda e é estável', () => {
   const c = cenario();
@@ -218,5 +219,31 @@ test('configuracao criar com --inquilino desconhecido recusa nomeado', () => {
     assert.match(r.saida, /Inquilino desconhecido: nao-existe/);
   } finally {
     limpar();
+  }
+});
+
+test('a Configuração traz telefone, JID e LID, nulos ate serem declarados ou conferidos', () => {
+  const c = cenario();
+  try {
+    const { id } = c.novoInquilino('Leia Organa');
+    const cfg = resolverConfiguracao(c.registro, id, 'whatsapp', 'principal');
+    assert.deepEqual([cfg.telefone, cfg.jid, cfg.lid], [null, null, null]);
+
+    declararTelefoneDaConta(c.registro, cfg.id, '5511900000001');
+    const declarada = listarConfiguracoes(c.registro, id)[0];
+    assert.deepEqual([declarada?.telefone, declarada?.jid, declarada?.lid], ['5511900000001', null, null]);
+
+    registrarEnderecosDoVinculo(c.registro, cfg.id, {
+      telefone: '5511900000001',
+      jid: '5511900000001@s.whatsapp.net',
+      lid: '100000000000001@lid',
+    });
+    const conferida = resolverConfiguracao(c.registro, id, 'whatsapp', 'principal');
+    assert.deepEqual(
+      [conferida.telefone, conferida.jid, conferida.lid],
+      ['5511900000001', '5511900000001@s.whatsapp.net', '100000000000001@lid'],
+    );
+  } finally {
+    c.limpar();
   }
 });
