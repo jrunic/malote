@@ -4,7 +4,7 @@ projeto: malote
 tipo: dominio
 descricao: "Modelo do arquivo pessoal de conversas — núcleo genérico multi-inquilino (Inquilino, Conversa, Mensagem, Pessoa, Identificador, Anexo, Envio) desacoplado das fontes por Adaptador"
 status: aprovado
-aprovado-em: 2026-10-04
+aprovado-em: 2026-10-05
 escopo: repo:malote
 plataforma: "*"
 dominios: [tecnologia]
@@ -36,7 +36,7 @@ Duas regras atravessam o modelo inteiro:
 
 - **Inquilino** (raiz) — um mundo isolado dentro da instalação. Normalmente uma pessoa; possivelmente uma organização.
 - **Titular** (referência) — a Pessoa a quem o Acervo pertence. **Do Inquilino, sempre.** O nome pelo qual uma Fonte chama essa pessoa dentro do material é outra coisa, e mora na Configuração — ver *Nome do Titular na Fonte*.
-- **Configuração de Adaptador** (entidade) — uma conta de plataforma que este Inquilino alimenta. N por Inquilino, inclusive várias da mesma Fonte. Identificada por `(Inquilino, Fonte, apelido)`, com o **apelido informado por quem instala** — é ele que distingue `contatos/google` de `contatos/icloud`.
+- **Configuração de Adaptador** (entidade) — uma conta de plataforma que este Inquilino alimenta. N por Inquilino, inclusive várias da mesma Fonte. Identificada por `(Inquilino, Fonte, apelido)`, com o **apelido informado por quem instala** — é ele que distingue `contatos/google` de `contatos/icloud`. Numa Configuração de WhatsApp, o telefone, o endereço do telefone e o endereço opaco da conta são **Endereços da Conta**, guardados no Registro.
 - **Nome do Titular na Fonte** (objeto de valor, na Configuração) — como aquela Fonte chama o Titular dentro do material. Só existe onde a Fonte exige: o Instagram precisa dele para achar quem é "eu" na conversa direta.
 - **Pasta de Entrada** (objeto de valor, na Configuração) — o diretório local onde material novo daquela Configuração aparece.
 - **Natureza do Material** (objeto de valor, na Configuração) — **completo** ou **parcial**.
@@ -843,4 +843,25 @@ Consequências que o modelo assume por causa disso:
 - **Entrada:** a Configuração de Adaptador (por id), o nome da conta na Fonte
 - **Saída:** a Configuração atualizada com a conta declarada
 - **Regras:** opcional — uma Configuração pode existir sem conta declarada (`configuracao listar` mostra `(nao declarada)`). Sobrescreve o valor anterior, sem histórico.
+- **Não-funcionais:** Padrão
+
+### declarar-telefone-da-conta
+- **Ator:** humano, via `configuracao criar --telefone` ou `configuracao definir-telefone`; ou o serviço do ouvinte, quando `ouvir --numero` informa o telefone de uma Configuração que ainda não o tem
+- **Entrada:** a Configuração de Adaptador (por id), o telefone (só dígitos, com código do país, de 10 a 15)
+- **Saída:** a Configuração com o telefone declarado
+- **Regras:** idempotente (o mesmo telefone não escreve nem abre Operação). Numa Configuração cujo telefone o vínculo **já conferiu**, trocar por outro é recusado: conta nova é Configuração nova. Duas Configurações de WhatsApp do mesmo Inquilino não podem ter o mesmo telefone, contando o mesmo celular com e sem o nono dígito.
+- **Não-funcionais:** Padrão
+
+### conferir-conta-do-vinculo
+- **Ator:** serviço do ouvinte
+- **Entrada:** a Configuração de Adaptador e a identidade que o vínculo mostra
+- **Saída:** os Endereços da Conta gravados (endereço do telefone, endereço opaco, instante da conferência)
+- **Regras:** o vínculo **confere** a Configuração: se o telefone declarado e o do vínculo não são o mesmo (com a equivalência do nono dígito), o ouvinte não sobe, nada é gravado e a saída é o código 2. Uma Configuração sem telefone **aprende** o do vínculo. O telefone declarado nunca é sobrescrito pelo do vínculo; o endereço ausente nunca apaga o gravado. Idempotente.
+- **Não-funcionais:** Padrão
+
+### declarar-endereco-da-conta
+- **Ator:** serviço do ouvinte
+- **Entrada:** o endereço canônico da conta e, quando a Fonte tem, o alternativo
+- **Saída:** o Identificador do endereço canônico no Acervo e a correspondência alternativo para canônico
+- **Regras:** só o que muda abre Operação (a segunda conexão não escreve nada). Conflito de correspondência é relatado e a primeira permanece. O Identificador é registrado **sem** Configuração: a coluna de Configuração de um Identificador é a do catálogo que sustenta o vínculo com a Pessoa, e a relação entre a Configuração e o endereço da conta vive no Registro. Não dá autor à Mensagem enviada nem cria Participação da própria conta.
 - **Não-funcionais:** Padrão

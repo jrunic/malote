@@ -136,8 +136,13 @@ receber ao vivo (passo 8):**
 ```bash
 node --import tsx src/cli/index.ts configuracao criar \
   --inquilino d8765d15-8c83-4b8f-bec6-d33cedfb31e7 \
-  --fonte whatsapp --configuracao pessoal --conta pessoal
+  --fonte whatsapp --configuracao pessoal --conta pessoal \
+  --telefone 5511900000001
 ```
+
+O `--telefone` é o número da conta, só dígitos, com o código do país. É ele que o ouvinte confere
+quando você parear o dispositivo: se o vínculo for de outro número, o ouvinte se recusa a subir em
+vez de gravar na conta errada.
 
 Isso declara a Configuração sem exigir material — o histórico pode ser importado depois,
 pelo Caminho A, a qualquer momento.
