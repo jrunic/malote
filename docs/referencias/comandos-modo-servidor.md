@@ -69,8 +69,9 @@ exigem o apelido, sem padrão.**
 
 | comando | o que faz |
 |---|---|
-| `configuracao criar --inquilino <id> --fonte <nome> --configuracao <apelido> [--conta <nome>]` | Declara a conta, sem exigir material (para o ouvinte, por exemplo) |
-| `configuracao listar --inquilino <id>` | Lista as Configurações |
+| `configuracao criar --inquilino <id> --fonte <nome> --configuracao <apelido> [--conta <nome>] [--telefone <dígitos>]` | Declara a conta, sem exigir material. Para WhatsApp o `--telefone` (só dígitos, com código do país, de 10 a 15) é **obrigatório**; sem ele, ou com valor inválido, sai 2 |
+| `configuracao definir-telefone --inquilino <id> --configuracao <apelido> --telefone <dígitos>` | Declara o telefone de uma Configuração de WhatsApp que ainda não o tem (a que nasceu pela importação, ou a que não tem vínculo vivo). Recusa trocar o telefone de uma conta que o vínculo já conferiu |
+| `configuracao listar --inquilino <id>` | Lista as Configurações; as de WhatsApp mostram `telefone`, `jid` e `lid` (`(nao declarado)` / `(nao conferido)` até existirem) |
 | `importar --inquilino <id> --fonte whatsapp --material <caminho> --configuracao <apelido> [--conta pessoal\|business] [--reprocessar]` | Importa o backup do WhatsApp |
 | `importar --inquilino <id> --fonte instagram --material <caminho> --titular <nome> --configuracao <apelido>` | Importa o export do Instagram |
 | `importar --inquilino <id> --fonte contatos --material <arquivo.vcf> [--configuracao <apelido>] [--reprocessar]` | Importa o catálogo de contatos (vCard) |

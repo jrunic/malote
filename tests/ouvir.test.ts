@@ -126,7 +126,7 @@ test('configuracao criar via CLI desbloqueia o guard de Configuracao ausente do 
 
     // configuracao criar declara a Configuracao, sem material.
     const codigoCriar = executar(
-      ['configuracao', 'criar', '--inquilino', id, '--fonte', 'whatsapp', '--configuracao', 'teste'],
+      ['configuracao', 'criar', '--inquilino', id, '--fonte', 'whatsapp', '--configuracao', 'teste', '--telefone', '5511900000001'],
       { dados: raiz, estado: raiz, escrever: () => undefined },
     );
     assert.equal(codigoCriar, 0);
