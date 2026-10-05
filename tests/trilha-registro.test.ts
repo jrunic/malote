@@ -17,6 +17,7 @@ import {
   verificarChaveDeOperador,
 } from '../src/registro/chave-operador.js';
 import { listarOperacoesCruas, linhasDaOperacao } from '../src/nucleo/trilha.js';
+import { declararTelefoneDaConta, registrarEnderecosDoVinculo } from '../src/registro/endereco-da-conta.js';
 
 test('criar Inquilino grava Operação com o Inquilino nomeado', () => {
   const { raiz, limpar } = instalacaoTemporaria();
@@ -254,7 +255,7 @@ test('definir a conta da Configuração grava Operação com o valor anterior', 
   }
 });
 
-test('os 9 comandos de decisão do Registro gravam Operação — nem mais, nem menos', () => {
+test('os 11 comandos de decisão do Registro gravam Operação — nem mais, nem menos', () => {
   const { raiz, limpar } = instalacaoTemporaria();
   const registro = abrirRegistro(raiz);
   try {
@@ -266,6 +267,12 @@ test('os 9 comandos de decisão do Registro gravam Operação — nem mais, nem 
     definirContaDaConfiguracao(registro, cfg, 'pessoal');
     configurarDestinoDeMidia(registro, inq, { natureza: 'local', endereco: join(raiz, 'midia') });
     definirIntervaloEsperado(registro, cfg, 7);
+    declararTelefoneDaConta(registro, cfg, '5511900000001');
+    registrarEnderecosDoVinculo(registro, cfg, {
+      telefone: '5511900000001',
+      jid: '5511900000001@s.whatsapp.net',
+      lid: null,
+    });
     definirPoliticaDeRetencao(registro, inq, { maisVelhoQueDias: 365 });
     definirPrecedenciaDeNome(registro, inq, 'whatsapp', 50);
 
@@ -273,9 +280,11 @@ test('os 9 comandos de decisão do Registro gravam Operação — nem mais, nem 
     assert.deepEqual(
       [...new Set(naturezas)].sort(),
       [
+        'conferir-conta-do-vinculo',
         'configurar-destino',
         'criar-chave-operador',
         'criar-inquilino',
+        'declarar-telefone-da-conta',
         'definir-conta',
         'definir-intervalo',
         'definir-politica',
@@ -283,10 +292,10 @@ test('os 9 comandos de decisão do Registro gravam Operação — nem mais, nem 
         'resolver-configuracao',
         'revogar-chave-operador',
       ],
-      'os nove comandos de decisão do Registro',
+      'os onze comandos de decisão do Registro',
     );
-    // 10 Operações: `criar-chave-operador` foi chamado duas vezes.
-    assert.equal(naturezas.length, 10);
+    // 12 Operações: `criar-chave-operador` foi chamado duas vezes.
+    assert.equal(naturezas.length, 12);
   } finally {
     registro.fechar();
     limpar();
