@@ -161,6 +161,15 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   101.527 Mensagens, 850 dos 2.200 autores (39%, e 23% das Mensagens) não constam dele, então o nome vem de
   `GET /conversas/<id>/autores`. O filtro por remetente parte do Identificador (`identificadoresDoRemetente`
   concorda com `identificarPorValor`, e um teste fixa isso), e `autorIds` vazio devolve NADA, nunca tudo.
+- **Leitura do servidor roda em worker, com prazo; o worker nunca escreve (#1132).** O servidor era um processo e uma
+  thread, e a consulta lenta (1,2 a 8 s) bloqueava todos os clientes, e a abandonada seguia rodando. Cada `GET` vai a um
+  pool de workers (`despachante.ts`), com prazo desde a chegada, `504`, abandono pelo cliente, reserva de N−1 workers e
+  metade da fila por Inquilino. O `req` e o `res` do worker são `method`/`url` e `writeHead`/`end`/`headersSent`, e
+  LANÇAM em qualquer outro membro (`contrato-da-leitura.ts`); rota de leitura nova que precise de mais falha no teste.
+  As rotas de leitura abrem o Registro somente-leitura (`tests/rotas-registro-somente-leitura.test.ts` conta: só o POST
+  de Envio abre para escrita). O gancho de teste é serializável (`instrucaoDoTrabalhador`), e o teste de bloqueio roda o
+  servidor em PROCESSO SEPARADO: no mesmo processo, o mutante síncrono travaria o relógio do próprio teste e passaria.
+  O corpo binário atravessa por transferência (sem cópia): `GET /midia` serve até 890 MB.
 - **O texto que o usuário digita é TEXTO, nunca sintaxe: `buscarMensagens` o cita palavra por palavra
   (`termoParaFts5`) antes de ir ao `MATCH` do FTS5, e o servidor tem rede de segurança para o que escapar (#1131).**
   O termo ia cru, e `a.b`, `a&b`, `AND` ou uma aspas solta lançavam `SqliteError` dentro do manipulador: excecao ali
@@ -907,7 +916,7 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
-- **#1132: toda consulta lenta bloqueia todos os clientes, porque o servidor é síncrono** (filtro sem achados 1,2 s quente e 8 s frio na maior Conversa; `buscar` de palavra comum global 4 s). **Resolve o ciclo 32** (leituras em workers com prazo duro): spec aprovada e plano revisado, **sem código ainda**; spec, plano e revisões em `11-tarefas/20261004-*1132*` da pasta de trabalho. Até lá, ao medir em produção, **uma consulta por vez e `curl --max-time` curto**: a que o cliente abandona continua rodando no servidor.
+- **#1132: toda consulta lenta bloqueia todos os clientes, porque o servidor é síncrono** (filtro sem achados 1,2 s quente e 8 s frio na maior Conversa; `buscar` de palavra comum global 4 s). **Resolvido no ciclo 32 (leituras em workers com prazo duro), em `main` e ainda NÃO publicado**; spec, plano e revisões em `11-tarefas/20261004-*1132*` da pasta de trabalho. Até a release, e para medir o que o prazo não cobre, **uma consulta por vez e `curl --max-time` curto**: a que o cliente abandona continua rodando no servidor.
 
 - **A Hera roda no thinkpad (`malote-ouvinte@hera`, Inquilino próprio) e o Envio está
   provado em produção pelos dois caminhos** — local no thinkpad e por rede do macbook

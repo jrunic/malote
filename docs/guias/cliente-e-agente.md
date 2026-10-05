@@ -137,9 +137,18 @@ montado à mão.
 | 2 | invocação errada (flag faltando, comando de escrita com `--servidor`) |
 | 3 | **credencial** recusada — ausente, inválida ou revogada (indistinguível por desenho) |
 | 4 | servidor inalcançável |
-| 5 | erro do servidor |
+| 5 | erro do servidor (inclui `504`, a consulta passou do prazo, e `503`, servidor ocupado ou indisponível) |
 | 6 | uso errado da API (4xx que não 401) |
 | 7 | tempo esgotado — **resultado desconhecido**; repetir uma consulta é seguro; repetir um `enviar` é seguro **se usar o mesmo `--identificador`** que o comando imprimiu (sem ele, **pode duplicar a mensagem**) |
+
+**`504` e `503`** chegam com corpo vazio e a CLI os traduz com o código 5. O `504` diz que a consulta passou do
+prazo do servidor (25 s por padrão): **restrinja os filtros** (período, remetente, tipo) e não repita a mesma consulta.
+O `503` diz que o servidor está ocupado ou indisponível: tente de novo daqui a pouco. A consulta que o cliente
+abandona é cancelada no servidor, e um Inquilino ocupa no máximo N−1 workers e metade da fila: um worker e metade da
+fila ficam sempre livres para os outros.
+
+Quem opera o servidor ajusta com `malote servir --trabalhadores <n>` (1 a 16, padrão 4) e `--prazo <segundos>` (1 a 300,
+padrão 25).
 
 ## 4. Ensinar um agente
 
