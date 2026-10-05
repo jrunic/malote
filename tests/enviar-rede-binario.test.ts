@@ -15,12 +15,12 @@ function rodar(
   argumentos: string[],
 ): Promise<{ codigo: number; saida: string }> {
   return new Promise((resolver) => {
-    // O macbook carrega MALOTE_SERVIDOR/MALOTE_CHAVE_DE_ACESSO em todo shell: o filho parte
+    // A maquina cliente carrega MALOTE_SERVIDOR/MALOTE_CHAVE_DE_ACESSO em todo shell: o filho parte
     // SEM elas, e so tem as que o teste declara.
     const base = { ...process.env };
     delete base['MALOTE_SERVIDOR'];
     delete base['MALOTE_CHAVE_DE_ACESSO'];
-    delete base['MALOTE_CHAVE_DE_ACESSO_HERA'];
+    delete base['MALOTE_CHAVE_DE_ACESSO_AGENTE'];
     const filho = spawn(process.execPath, ['--import', 'tsx', INDEX, ...argumentos], {
       env: { ...base, ...env },
     });
@@ -38,7 +38,7 @@ test('o executavel, com o servidor no ambiente, envia PELA REDE e o Envio aparec
   try {
     const r = await rodar(
       { MALOTE_HOME: cena.raiz, MALOTE_SERVIDOR: cena.url, MALOTE_CHAVE_DE_ACESSO: cena.chave.valor },
-      ['enviar', '--configuracao', 'hera', '--para', PARA, '--texto', 'pelo binario'],
+      ['enviar', '--configuracao', 'agente', '--para', PARA, '--texto', 'pelo binario'],
     );
     assert.equal(r.codigo, 0, r.saida);
     assert.match(r.saida, /Envio aceito:/);
@@ -58,10 +58,10 @@ test('o executavel com --chave-em usa a chave nomeada, nao a do ambiente padrao'
       {
         MALOTE_HOME: cena.raiz,
         MALOTE_SERVIDOR: cena.url,
-        MALOTE_CHAVE_DE_ACESSO: cena.chaveDoOutro.valor, // padrao: Inquilino sem a `hera`
-        MALOTE_CHAVE_DE_ACESSO_HERA: cena.chave.valor,
+        MALOTE_CHAVE_DE_ACESSO: cena.chaveDoOutro.valor, // padrao: Inquilino sem o `agente`
+        MALOTE_CHAVE_DE_ACESSO_AGENTE: cena.chave.valor,
       },
-      ['enviar', '--configuracao', 'hera', '--para', PARA, '--texto', 'x', '--chave-em', 'MALOTE_CHAVE_DE_ACESSO_HERA'],
+      ['enviar', '--configuracao', 'agente', '--para', PARA, '--texto', 'x', '--chave-em', 'MALOTE_CHAVE_DE_ACESSO_AGENTE'],
     );
     assert.equal(r.codigo, 0, r.saida);
     assert.equal(cena.atorDoEnvio(), `acesso:${cena.chave.id}`);
@@ -75,7 +75,7 @@ test('o executavel com a chave padrao de OUTRO Inquilino sai 6 e nao grava nada'
   try {
     const r = await rodar(
       { MALOTE_HOME: cena.raiz, MALOTE_SERVIDOR: cena.url, MALOTE_CHAVE_DE_ACESSO: cena.chaveDoOutro.valor },
-      ['enviar', '--configuracao', 'hera', '--para', PARA, '--texto', 'x'],
+      ['enviar', '--configuracao', 'agente', '--para', PARA, '--texto', 'x'],
     );
     assert.equal(r.codigo, 6, r.saida);
     assert.equal(cena.lerEnvios().length, 0);
@@ -89,7 +89,7 @@ test('sem o servidor no ambiente, --servidor sozinha NAO liga o modo rede: o exe
   try {
     const r = await rodar(
       { MALOTE_HOME: cena.raiz },
-      ['enviar', '--inquilino', cena.inquilinoId, '--configuracao', 'hera', '--para', PARA, '--texto', 'local', '--servidor', cena.url],
+      ['enviar', '--inquilino', cena.inquilinoId, '--configuracao', 'agente', '--para', PARA, '--texto', 'local', '--servidor', cena.url],
     );
     assert.equal(r.codigo, 2, r.saida);
     assert.match(r.saida, /operacao LOCAL/);
@@ -104,7 +104,7 @@ test('o executavel recusa --identificador malformado: exit 2 e nenhuma requisica
   try {
     const r = await rodar(
       { MALOTE_SERVIDOR: contador.url, MALOTE_CHAVE_DE_ACESSO: 'k' },
-      ['enviar', '--configuracao', 'hera', '--para', PARA, '--texto', 'x', '--identificador', 'nao-e-uuid'],
+      ['enviar', '--configuracao', 'agente', '--para', PARA, '--texto', 'x', '--identificador', 'nao-e-uuid'],
     );
     assert.equal(r.codigo, 2, r.saida);
     assert.match(r.saida, /--identificador precisa ser um UUID/);
@@ -119,7 +119,7 @@ test('o executavel repete o mesmo --identificador e o Acervo fica com um Envio s
   try {
     const id = '3f2b8c1e-5d4a-4e7b-9c10-1a2b3c4d5e6f';
     const env = { MALOTE_HOME: cena.raiz, MALOTE_SERVIDOR: cena.url, MALOTE_CHAVE_DE_ACESSO: cena.chave.valor };
-    const args = ['enviar', '--configuracao', 'hera', '--para', PARA, '--texto', 'pelo binario', '--identificador', id];
+    const args = ['enviar', '--configuracao', 'agente', '--para', PARA, '--texto', 'pelo binario', '--identificador', id];
     const um = await rodar(env, args);
     const dois = await rodar(env, args);
     assert.equal(um.codigo, 0, um.saida);
@@ -139,14 +139,14 @@ test('o executavel consulta o estado do Envio pela rede, com a chave nomeada (#1
       MALOTE_HOME: cena.raiz,
       MALOTE_SERVIDOR: cena.url,
       MALOTE_CHAVE_DE_ACESSO: cena.chaveDoOutro.valor,
-      CHAVE_DA_HERA: cena.chave.valor,
+      CHAVE_DO_AGENTE: cena.chave.valor,
     };
     const enviado = await rodar(env, [
-      'enviar', '--configuracao', 'hera', '--para', PARA, '--texto', 'oi', '--identificador', id,
-      '--chave-em', 'CHAVE_DA_HERA',
+      'enviar', '--configuracao', 'agente', '--para', PARA, '--texto', 'oi', '--identificador', id,
+      '--chave-em', 'CHAVE_DO_AGENTE',
     ]);
     assert.equal(enviado.codigo, 0, enviado.saida);
-    const estado = await rodar(env, ['envio', 'estado', id, '--chave-em', 'CHAVE_DA_HERA']);
+    const estado = await rodar(env, ['envio', 'estado', id, '--chave-em', 'CHAVE_DO_AGENTE']);
     assert.equal(estado.codigo, 0, estado.saida);
     assert.match(estado.saida, /estado: pendente/);
     // Contraprova: com a chave padrao (a de OUTRO Inquilino) o Envio nao e alcancado.

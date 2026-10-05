@@ -167,7 +167,7 @@ test('comando administrativo grava o Ator da Chave que autenticou', () => {
     const chave = texto.match(/valor: (\S+)/)?.[1] ?? '';
     const chaveId = texto.match(/id:\s+(\S+)/)?.[1] ?? '';
 
-    executar(['inquilino', 'criar', '--chave', chave, '--titular', 'Hera'], { dados: raiz, estado: raiz, escrever });
+    executar(['inquilino', 'criar', '--chave', chave, '--titular', 'Agente'], { dados: raiz, estado: raiz, escrever });
 
     const registro = abrirRegistro(raiz);
     try {

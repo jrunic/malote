@@ -25,6 +25,7 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ### Mudado
 
+- O repositório deixa de citar caminho interno do autor, nomes de pessoas e de hosts, e nomes de produtos privados: o `CONTEXTO.md` declara que o trabalho acontece fora do repositório (sem caminho), e código, testes e documentação usam termos genéricos (apelido `principal`, agente, instalação de terceiro). Nenhum comportamento muda.
 - A `--ajuda` passa a listar `pessoas`, `participantes` e `relatorio` (este só existe por rede), que existiam e não apareciam.
 - Um teste amarra as referências de comandos (`docs/referencias/`) à `--ajuda`: comando novo sem linha na referência, ou linha de comando que não existe mais, reprova a suíte.
 

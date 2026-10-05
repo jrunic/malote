@@ -149,13 +149,13 @@ test('Atribuicao de Nome identica nos dois lados nao trava a resolucao retroativ
     registrarNome(acervo, {
       identificadorId: alt.id,
       origem: 'whatsapp',
-      nome: 'Orlando Ferreira',
+      nome: 'Pessoa Exemplo',
       autoridade: 'terceiro',
     });
     registrarNome(acervo, {
       identificadorId: canon.id,
       origem: 'whatsapp',
-      nome: 'Orlando Ferreira',
+      nome: 'Pessoa Exemplo',
       autoridade: 'terceiro',
     });
 
@@ -174,7 +174,7 @@ test('Atribuicao de Nome identica nos dois lados nao trava a resolucao retroativ
       .prepare('SELECT nome, origem FROM atribuicoes_de_nome WHERE identificador_id = ?')
       .all(canon.id) as Array<{ nome: string; origem: string }>;
     assert.equal(linhas.length, 1);
-    assert.equal(linhas[0]?.nome, 'Orlando Ferreira');
+    assert.equal(linhas[0]?.nome, 'Pessoa Exemplo');
   } finally {
     c.limpar();
   }

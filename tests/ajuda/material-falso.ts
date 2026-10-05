@@ -62,7 +62,7 @@ export interface ConversaFalsa {
   arquivada?: boolean;
   /**
    * ZSESSIONTYPE real: 0=direta, 1=grupo, 2=lista-de-transmissao, 3=status,
-   * 4=comunidade (mapeado em 21/09/2026 para o adaptador macOS do charla,
+   * 4=comunidade (mapeado em 21/09/2026 para o adaptador macOS de outro produto,
    * mesmo formato de backup). Status (3) nunca vira Conversa — a #1069;
    * os outros nao-zero continuam coletiva.
    */

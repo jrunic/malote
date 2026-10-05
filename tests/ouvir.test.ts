@@ -112,7 +112,7 @@ test('configuracao criar via CLI desbloqueia o guard de Configuracao ausente do 
   const { raiz, limpar } = instalacaoTemporaria();
   try {
     const registro = abrirRegistro(raiz);
-    const id = criarInquilino(registro, { titularNome: 'Hera' });
+    const id = criarInquilino(registro, { titularNome: 'Agente' });
     registro.fechar();
 
     // Sem Configuracao: o guard "busca, nunca cria" recusa.
@@ -244,7 +244,7 @@ test('vinculo invalidado encerra o processo, e nao o deixa pendurado', async () 
   const { raiz, limpar } = instalacaoTemporaria();
   try {
     const registro = abrirRegistro(raiz);
-    const id = criarInquilino(registro, { titularNome: 'Hera' });
+    const id = criarInquilino(registro, { titularNome: 'Agente' });
     registro.fechar();
     comVinculo(raiz, 'pessoal');
     comConfiguracao(raiz, 'teste');

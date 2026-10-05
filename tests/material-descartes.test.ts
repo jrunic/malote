@@ -235,12 +235,12 @@ test('material sem repeticao conta zero — e zero e afirmacao, nao ausencia', (
 //
 // ZWACHATSESSION guarda cinco naturezas sob ZSESSIONTYPE — 0=direta,
 // 1=grupo, 2=lista-de-transmissao, 3=status, 4=comunidade —, medidas em
-// 21/09/2026 para o adaptador macOS do charla contra o MESMO formato de
+// 21/09/2026 para o adaptador macOS de outro produto contra o MESMO formato de
 // backup. `!= 0` sozinho tratava as quatro nao-diretas como uma coisa so, e
 // isso incluia Status: o feed de acompanhamento de stories de um contato,
 // sem chat de verdade, que a importacao gravava como Conversa coletiva com o
-// NOME DO CONTATO como se fosse assunto de grupo. Medido no Acervo real da
-// Renata: 809 dessas entradas, todas com ZERO Mensagem.
+// NOME DO CONTATO como se fosse assunto de grupo. Medido no Acervo real de
+// uma instalacao de terceiro: 809 dessas entradas, todas com ZERO Mensagem.
 
 test('entrada de Status (tipo 3) nao vira Conversa, e e contada', () => {
   const b = backupFalso({

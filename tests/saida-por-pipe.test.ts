@@ -22,7 +22,7 @@ function rodar(
     const base = { ...process.env };
     delete base['MALOTE_SERVIDOR'];
     delete base['MALOTE_CHAVE_DE_ACESSO'];
-    delete base['MALOTE_CHAVE_DE_ACESSO_HERA'];
+    delete base['MALOTE_CHAVE_DE_ACESSO_AGENTE'];
     const filho = spawn(process.execPath, ['--import', 'tsx', INDEX, ...argumentos], {
       env: { ...base, ...env },
     });

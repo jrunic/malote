@@ -154,7 +154,7 @@ test('GET /conversas com configuracao filtra por apelido e a saida carrega o ape
   const c = await cenarioDeRede();
   try {
     const chave = c.emitir(c.inquilinoA);
-    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
+    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'principal');
     const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
     try {
       registrarConversa(acervo, {
@@ -165,13 +165,13 @@ test('GET /conversas com configuracao filtra por apelido e a saida carrega o ape
       acervo.fechar();
     }
 
-    const r = await c.pedir('/conversas?configuracao=orlando&fonte=whatsapp', chave.valor);
+    const r = await c.pedir('/conversas?configuracao=principal&fonte=whatsapp', chave.valor);
     assert.equal(r.status, 200);
     const corpo = JSON.parse(r.corpo) as {
       conversas: Array<{ id: string; configuracao: string | null }>;
     };
     assert.equal(corpo.conversas.length, 1);
-    assert.equal(corpo.conversas[0]!.configuracao, 'orlando');
+    assert.equal(corpo.conversas[0]!.configuracao, 'principal');
   } finally {
     await c.parar();
   }
@@ -208,10 +208,10 @@ test('GET /conversas com configuracao ambigua (mesmo apelido, Fontes diferentes)
   const c = await cenarioDeRede();
   try {
     const chave = c.emitir(c.inquilinoA);
-    resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
-    resolverConfiguracao(c.registro, c.inquilinoA, 'instagram', 'orlando');
+    resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'principal');
+    resolverConfiguracao(c.registro, c.inquilinoA, 'instagram', 'principal');
 
-    const r = await c.pedir('/conversas?configuracao=orlando', chave.valor);
+    const r = await c.pedir('/conversas?configuracao=principal', chave.valor);
     assert.equal(r.status, 400);
     const corpo = JSON.parse(r.corpo) as { erro: string };
     assert.match(corpo.erro, /ambigu/i);
@@ -235,8 +235,8 @@ test('GET /configuracoes devolve apelido e fonte, sem o id interno', async () =>
   const c = await cenarioDeRede();
   try {
     const chave = c.emitir(c.inquilinoA);
-    resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
-    resolverConfiguracao(c.registro, c.inquilinoA, 'instagram', 'orlando');
+    resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'principal');
+    resolverConfiguracao(c.registro, c.inquilinoA, 'instagram', 'principal');
 
     const r = await c.pedir('/configuracoes', chave.valor);
     assert.equal(r.status, 200);
@@ -248,7 +248,7 @@ test('GET /configuracoes devolve apelido e fonte, sem o id interno', async () =>
     }
     assert.deepEqual(
       corpo.configuracoes.map((cfg) => `${cfg.fonte}/${cfg.apelido}`).sort(),
-      ['instagram/orlando', 'whatsapp/orlando'],
+      ['instagram/principal', 'whatsapp/principal'],
     );
   } finally {
     await c.parar();
@@ -259,7 +259,7 @@ test('GET /conversas/<id>/mensagens com favorito e configuracao filtra so as fav
   const c = await cenarioDeRede();
   try {
     const chave = c.emitir(c.inquilinoA);
-    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
+    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'principal');
     const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
     let conversaId: string;
     let marcadaId: string;
@@ -285,7 +285,7 @@ test('GET /conversas/<id>/mensagens com favorito e configuracao filtra so as fav
       acervo.fechar();
     }
 
-    const r = await c.pedir(`/conversas/${conversaId}/mensagens?favorito=true&configuracao=orlando`, chave.valor);
+    const r = await c.pedir(`/conversas/${conversaId}/mensagens?favorito=true&configuracao=principal`, chave.valor);
     assert.equal(r.status, 200);
     const corpo = JSON.parse(r.corpo) as { mensagens: Array<{ id: string }> };
     assert.equal(corpo.mensagens.length, 1);
@@ -326,9 +326,9 @@ test('favorito=true com zero casos e a Conversa existe: 200 com lista vazia, nao
   const c = await cenarioDeRede();
   try {
     const chave = c.emitir(c.inquilinoA);
-    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
+    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'principal');
     const r = await c.pedir(
-      `/conversas/${c.conversaDeA}/mensagens?favorito=true&configuracao=orlando`, chave.valor,
+      `/conversas/${c.conversaDeA}/mensagens?favorito=true&configuracao=principal`, chave.valor,
     );
     assert.equal(r.status, 200);
     const corpo = JSON.parse(r.corpo) as { mensagens: unknown[] };
@@ -343,8 +343,8 @@ test('favorito=true numa Conversa que nao existe: 404 vazio, igual a hoje', asyn
   const c = await cenarioDeRede();
   try {
     const chave = c.emitir(c.inquilinoA);
-    resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
-    const r = await c.pedir('/conversas/nao-existe/mensagens?favorito=true&configuracao=orlando', chave.valor);
+    resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'principal');
+    const r = await c.pedir('/conversas/nao-existe/mensagens?favorito=true&configuracao=principal', chave.valor);
     assert.equal(r.status, 404);
     assert.equal(r.corpo, '');
   } finally {
@@ -438,7 +438,7 @@ test('GET /conversas com fixada e configuracao devolve so as marcadas naquela Co
   const c = await cenarioDeRede();
   try {
     const chave = c.emitir(c.inquilinoA);
-    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
+    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'principal');
     const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
     let marcadaId;
     try {
@@ -457,7 +457,7 @@ test('GET /conversas com fixada e configuracao devolve so as marcadas naquela Co
       acervo.fechar();
     }
 
-    const r = await c.pedir('/conversas?fixada=true&configuracao=orlando', chave.valor);
+    const r = await c.pedir('/conversas?fixada=true&configuracao=principal', chave.valor);
     assert.equal(r.status, 200);
     const corpo = JSON.parse(r.corpo) as { conversas: Array<{ id: string }> };
     assert.deepEqual(corpo.conversas.map((x) => x.id), [marcadaId]);
@@ -470,7 +470,7 @@ test('Conversa COLETIVA fixada aparece — a Marca nao depende da atribuicao', a
   const c = await cenarioDeRede();
   try {
     const chave = c.emitir(c.inquilinoA);
-    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'orlando');
+    const cfg = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'principal');
     const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
     let coletivaId;
     try {
@@ -487,7 +487,7 @@ test('Conversa COLETIVA fixada aparece — a Marca nao depende da atribuicao', a
       acervo.fechar();
     }
 
-    const r = await c.pedir('/conversas?fixada=true&configuracao=orlando', chave.valor);
+    const r = await c.pedir('/conversas?fixada=true&configuracao=principal', chave.valor);
     assert.equal(r.status, 200);
     const corpo = JSON.parse(r.corpo) as { conversas: Array<{ id: string; coletiva: boolean; configuracao: string | null }> };
     assert.deepEqual(corpo.conversas.map((x) => x.id), [coletivaId]);

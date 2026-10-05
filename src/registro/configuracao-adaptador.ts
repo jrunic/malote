@@ -182,7 +182,7 @@ export type ResultadoDoFiltroDeConfiguracao =
 /**
  * A resolucao que as rotas de LEITURA usam — nunca cria, ao contrario de
  * `resolverConfiguracao` (que e da INGESTAO). Apelido pode repetir entre
- * Fontes diferentes (medido em producao: "orlando" existe em whatsapp E
+ * Fontes diferentes (medido em producao: "principal" existe em whatsapp E
  * instagram), entao sem Fonte o resultado pode ser ambiguo — e a ambiguidade
  * vira erro nomeado, nunca escolha silenciosa.
  */

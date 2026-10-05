@@ -10,7 +10,7 @@
 
 /**
  * `mediaKey` aparece em DUAS formas no `bruto` gravado, medidas contra os dois
- * casos reais de producao (thinkpad, 29-30/09/2026): string base64 pura (a
+ * casos reais de producao (29-30/09/2026): string base64 pura (a
  * forma que os dois casos reais tinham) e `{type:'Buffer',data:[...]}` (o que
  * o round-trip de JSON do `aoReceber` produz quando o valor em memoria era um
  * `Uint8Array` de verdade — documentado na #1068, `conexao.ts`). Nenhuma das

@@ -218,10 +218,10 @@ export interface DescartesDoMaterial {
   /**
    * A #1069: `ZWACHATSESSION` guarda cinco naturezas sob `ZSESSIONTYPE`
    * (0=direta, 1=grupo, 2=lista-de-transmissao, 3=status, 4=comunidade —
-   * medido em 21/09/2026 para o adaptador macOS do charla, mesmo formato de
+   * medido em 21/09/2026 para o adaptador macOS de outro produto, mesmo formato de
    * backup). Status NAO E CONVERSA: e o feed de acompanhamento de stories de
-   * um contato, sem mensagem de chat de verdade — medido no Acervo real da
-   * Renata, 809 dessas entradas com ZERO Mensagem, poluindo a lista de
+   * um contato, sem mensagem de chat de verdade — medido no Acervo real de
+   * uma instalacao de terceiro, 809 dessas entradas com ZERO Mensagem, poluindo a lista de
    * coletivas com o nome do contato como se fosse assunto de grupo. Entram
    * aqui, contadas por `'status'`, e nunca chegam a `conversas`.
    */

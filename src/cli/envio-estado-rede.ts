@@ -93,7 +93,7 @@ export async function executarEnvioEstadoRede(argumentos: string[], rede: RedeDe
     if (falha.classe === 'uso' && falha.status === 404) {
       rede.escrever(
         `O Envio ${identificador ?? ''} nao existe neste Inquilino, ou a chave nao o alcanca ` +
-          '(o servidor nao distingue as duas; para o Envio da Hera use --chave-em com a chave dela).',
+          '(o servidor nao distingue as duas; para o Envio de outro Inquilino use --chave-em com a chave dele).',
       );
     } else {
       rede.escrever(falha.message);

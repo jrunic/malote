@@ -284,7 +284,7 @@ test('POST /envios/solicitar recusa corpo acima do limite, sem deixar staging', 
 
 const IDENT = '3f2b8c1e-5d4a-4e7b-9c10-1a2b3c4d5e6f';
 const BASE_TEXTO = {
-  configuracao: 'hera',
+  configuracao: 'agente',
   para: '5511999990000@s.whatsapp.net',
   tipo: 'texto',
   texto: 'oi',
@@ -384,7 +384,7 @@ test('repeticao de imagem: nao deixa arquivo em staging alem do primeiro (#1117)
   const cena = await subirCenaDeEnvio();
   try {
     const corpo = {
-      configuracao: 'hera',
+      configuracao: 'agente',
       para: '5511999990000@s.whatsapp.net',
       tipo: 'imagem',
       arquivoBase64: Buffer.from('bytes-da-imagem').toString('base64'),
@@ -409,14 +409,14 @@ test('o identificador e do Inquilino: outro Inquilino, com Configuracao propria,
       ...BASE_TEXTO,
       identificadorDeEnvio: IDENT,
     });
-    const dele = await postar(cena, cena.chaveDeOutroComHera.valor, {
+    const dele = await postar(cena, cena.chaveDeOutroComAgente.valor, {
       ...BASE_TEXTO,
       identificadorDeEnvio: IDENT,
     });
     assert.equal(dele.status, 202, 'o Acervo e por Inquilino: nao e repeticao do Envio alheio');
     assert.notEqual(dele.corpo['envioId'], dela.corpo['envioId']);
-    assert.equal(cena.lerEnvios().length, 1, 'o Envio da Hera segue sendo um so');
-    assert.equal(cena.lerEnviosDeOutroComHera().length, 1);
+    assert.equal(cena.lerEnvios().length, 1, 'o Envio do agente segue sendo um so');
+    assert.equal(cena.lerEnviosDeOutroComAgente().length, 1);
   } finally {
     cena.encerrar();
   }
@@ -428,7 +428,7 @@ test('o perdedor da corrida (outro processo gravou entre o exame e o registro) r
   });
   try {
     const corpo = {
-      configuracao: 'hera',
+      configuracao: 'agente',
       para: '5511999990000@s.whatsapp.net',
       tipo: 'imagem',
       arquivoBase64: Buffer.from('bytes').toString('base64'),
@@ -454,7 +454,7 @@ test('o perdedor da corrida com pedido DIFERENTE responde 409 e limpa o proprio 
   });
   try {
     const r = await postar(cena, cena.chave.valor, {
-      configuracao: 'hera',
+      configuracao: 'agente',
       para: '5511999990000@s.whatsapp.net',
       tipo: 'imagem',
       arquivoBase64: Buffer.from('bytes').toString('base64'),
@@ -488,7 +488,7 @@ test('GET /envios/<identificador> devolve o estado, sem texto nem caminho (#1117
     assert.equal(corpo['estado'], 'pendente');
     assert.equal(corpo['tentativas'], 0);
     assert.equal(corpo['tipo'], 'texto');
-    assert.equal(corpo['configuracao'], 'hera');
+    assert.equal(corpo['configuracao'], 'agente');
     assert.equal(corpo['envioId'], feito.corpo['envioId']);
     assert.equal(corpo['identificadorDeEnvio'], IDENT);
     assert.equal(corpo['motivoFalha'], null);
