@@ -23,6 +23,28 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.30.0] — 2026-10-04
+
+Não muda a forma do Acervo nem do Registro.
+
+### Adicionado
+
+- As leituras do servidor rodam em workers (4 por padrão), com prazo de 25 s desde a chegada: passou do prazo, `504`.
+  Fila de 64 lugares, e `503` com `retry-after` quando enche. `malote servir --trabalhadores <n>` e `--prazo <segundos>`.
+- A consulta que o cliente abandona é cancelada no servidor. Um Inquilino ocupa no máximo N−1 workers e metade da fila.
+
+### Mudado
+
+- O servidor para em etapas: espera as leituras em andamento por até 5 s antes de cortar as conexões.
+- O Registro é aberto uma vez ao subir, e as rotas de leitura o abrem somente-leitura. O `servir` recusa subir (código 1)
+  se o worker de leitura não carregar em 5 s.
+- A CLI traduz `504` e `503` em mensagens que dizem o que fazer, com o mesmo código de saída 5.
+
+### Limitação conhecida
+
+- A verificação da Chave continua na thread principal, e o teto de requisições por segundo segue o mesmo. Nenhuma
+  consulta fica mais rápida: só deixa de travar as outras.
+
 ## [0.29.1] — 2026-10-04
 
 Não muda a forma do Acervo nem do Registro.

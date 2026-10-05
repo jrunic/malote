@@ -161,6 +161,15 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   101.527 Mensagens, 850 dos 2.200 autores (39%, e 23% das Mensagens) não constam dele, então o nome vem de
   `GET /conversas/<id>/autores`. O filtro por remetente parte do Identificador (`identificadoresDoRemetente`
   concorda com `identificarPorValor`, e um teste fixa isso), e `autorIds` vazio devolve NADA, nunca tudo.
+- **Leitura do servidor roda em worker, com prazo; o worker nunca escreve (#1132).** O servidor era um processo e uma
+  thread, e a consulta lenta (1,2 a 8 s) bloqueava todos os clientes, e a abandonada seguia rodando. Cada `GET` vai a um
+  pool de workers (`despachante.ts`), com prazo desde a chegada, `504`, abandono pelo cliente, reserva de N−1 workers e
+  metade da fila por Inquilino. O `req` e o `res` do worker são `method`/`url` e `writeHead`/`end`/`headersSent`, e
+  LANÇAM em qualquer outro membro (`contrato-da-leitura.ts`); rota de leitura nova que precise de mais falha no teste.
+  As rotas de leitura abrem o Registro somente-leitura (`tests/rotas-registro-somente-leitura.test.ts` conta: só o POST
+  de Envio abre para escrita). O gancho de teste é serializável (`instrucaoDoTrabalhador`), e o teste de bloqueio roda o
+  servidor em PROCESSO SEPARADO: no mesmo processo, o mutante síncrono travaria o relógio do próprio teste e passaria.
+  O corpo binário atravessa por transferência (sem cópia): `GET /midia` serve até 890 MB.
 - **O texto que o usuário digita é TEXTO, nunca sintaxe: `buscarMensagens` o cita palavra por palavra
   (`termoParaFts5`) antes de ir ao `MATCH` do FTS5, e o servidor tem rede de segurança para o que escapar (#1131).**
   O termo ia cru, e `a.b`, `a&b`, `AND` ou uma aspas solta lançavam `SqliteError` dentro do manipulador: excecao ali
@@ -583,6 +592,15 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 04/10/2026 — **CICLO 31 ACEITO, na segunda tentativa: o modo rede lista mídia e exporta Conversa, release v0.29.1 em
+  produção** (#1129, PR #20 e #21, tag `v0.29.1`). `malote anexos` e `GET /conversas/<id>/anexos`, `--remetente` (valor do
+  Identificador, alcançando a forma alternativa) em `mensagens` e `anexos`, `malote exportar` (txt ou json) e
+  `GET /conversas/<id>/autores`. Sem schema; suíte 1266 para 1339. Medido em produção: `anexos` 0,4 a 1,3 s a página de
+  500, export de 271 mil Mensagens em 133 s e 123 MB (e 120 MB com consumidor lento). **Defeitos achados pelo aceite e
+  corrigidos na v0.29.1:** `--presenca` varria todos os Anexos daquela presença por Mensagem (o plano entrava por
+  `idx_anexos_presenca`; `+a.presenca = ?`); `GET /buscar` com sintaxe inválida de FTS5 e `limite` inválido derrubavam o
+  servidor (texto literal, `400`, e rede de segurança: exceção de rota vira `500`). **Só com prova de teste:** o
+  isolamento entre Inquilinos e o código de saída 7.
 - 04/10/2026 — **CICLO 30 ACEITO: identidade pelo modo rede, release v0.28.0 em produção** (#1126, PR #19,
   tag `v0.28.0`). `malote identificar <valor>` (local e `GET /identificadores?valor=`) devolve o que o Acervo
   sabe de um Identificador **com ou sem Pessoa**: os Identificadores gravados, as formas da correspondência
@@ -898,20 +916,7 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
-- **Ciclo 31 (#1129): a v0.29.0 (PR #20, merge `3c29193`) tem um defeito, corrigido em `main` (`a9bd7dd`) e AINDA NÃO
-  publicado; o ciclo NÃO está aceito.** `anexos --presenca <qualquer>` entrava em `anexos` por `idx_anexos_presenca` e,
-  por Mensagem, varria todos os Anexos daquela presenca: na maior Conversa passou de 60 s e, como o servidor é
-  síncrono, travou todos os clientes por minutos (SIGKILL no restart). Corrigido com `+a.presenca = ?`; medido no
-  Acervo real depois: `presente` 51 ms, `nunca-obtido` 17 ms. **Antes de aceitar:** publicar a v0.29.1 e repetir as
-  medições pelo servidor, **com um filtro de cada vez e um `curl --max-time` curto**: uma consulta lenta que o
-  cliente abandona continua rodando no servidor. Medido ANTES do defeito aparecer: `anexos` `image` 0,46–0,52 s e
-  `document` 1,19–1,53 s, `autores` 0,63 s quente, export da maior Conversa (271.052 Mensagens) em 133 s com 123 MB
-  (e 120 MB com consumidor lento, 456 s). Conferir antes de dar o ciclo por aceito, na maior Conversa (270.453 Mensagens), com os
-  comandos do Step 7 da Task 7 do plano: primeira página de `anexos` em até 2 s para `image` **e** para `document`
-  (o tipo raro é o caso de varredura), `GET /conversas/<id>/autores` em até 2 s, e o export em até 6 min com até
-  300 MB de memória residente, por arquivo e por `| cat > /dev/null`. Se `document` passar de 2 s, o índice é a
-  próxima conversa, e só então. O modo local do `exportar` sem `--saida` acumula a saída em memória: é limite
-  conhecido, escrito na `--ajuda`.
+- **#1132: toda consulta lenta bloqueia todos os clientes, porque o servidor é síncrono** (filtro sem achados 1,2 s quente e 8 s frio na maior Conversa; `buscar` de palavra comum global 4 s). **Resolvido no ciclo 32 (leituras em workers com prazo duro), em `main` e ainda NÃO publicado**; spec, plano e revisões em `11-tarefas/20261004-*1132*` da pasta de trabalho. Até a release, e para medir o que o prazo não cobre, **uma consulta por vez e `curl --max-time` curto**: a que o cliente abandona continua rodando no servidor.
 
 - **A Hera roda no thinkpad (`malote-ouvinte@hera`, Inquilino próprio) e o Envio está
   provado em produção pelos dois caminhos** — local no thinkpad e por rede do macbook

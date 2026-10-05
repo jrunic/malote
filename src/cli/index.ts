@@ -321,7 +321,9 @@ Titular (nao exige chave enquanto nao houver rede):
   malote transcricao solicitar --anexo <id> --inquilino <id>           (prioriza UM Anexo na fila)
   malote transcricao estado      --inquilino <id> [--json]     (contagem por estado; se o motor esta configurado)
   malote midia extrair-duracao --inquilino <id> [--json]        (extrai duração do Conteúdo Bruto já gravado)
-  malote servir     --porta <n> [--endereco <ip>] [--exposto]
+  malote servir     --porta <n> [--endereco <ip>] [--exposto] [--trabalhadores <n>] [--prazo <segundos>]
+                                        (leituras em workers, 4 por padrao, com prazo de 25 s; passou do prazo: 504;
+                                         um Inquilino ocupa no maximo N-1 workers e metade da fila; as escritas ficam na thread principal)
   malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--json]
   malote mensagens  --inquilino <id> [--conversa <id>] [--desde D] [--ate D] [--fonte <nome>] [--direcao enviada|recebida] [--remetente <valor>] [--limite <n>] [--json]
                                         (sem --conversa: atravessa todas as Conversas e Fontes,
