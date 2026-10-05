@@ -23,6 +23,10 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.30.2] — 2026-10-05
+
+Não muda a forma do Acervo nem do Registro. A única mudança de código é a `--ajuda`.
+
 ### Mudado
 
 - O repositório deixa de citar caminho interno do autor, nomes de pessoas e de hosts, e nomes de produtos privados: o `CONTEXTO.md` declara que o trabalho acontece fora do repositório (sem caminho), e código, testes e documentação usam termos genéricos (apelido `principal`, agente, instalação de terceiro). Nenhum comportamento muda.
