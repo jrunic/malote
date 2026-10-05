@@ -6,7 +6,7 @@ import type { Acervo } from '../nucleo/acervo.js';
 import { buscarMensagens, contarPorFonte, expandirData, fonteDaConversa, lerAnexoPorId, lerMensagens, listarConversas, procurarPessoas } from '../nucleo/consulta.js';
 import { quemEstavaEm } from '../nucleo/presenca.js';
 import { codificarCursor, decodificarCursor } from '../nucleo/cursor.js';
-import { abrirRegistro } from '../registro/registro.js';
+import { abrirRegistro, abrirRegistroSomenteLeitura } from '../registro/registro.js';
 import { listarChavesDeAcesso } from '../registro/chave-de-acesso.js';
 import { configuracaoPorApelido, listarConfiguracoes, resolverFiltroDeConfiguracao } from '../registro/configuracao-adaptador.js';
 import { conversasMarcadas } from '../nucleo/marca-do-titular.js';
@@ -489,7 +489,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       naoEncontrado(res);
       return;
     }
-    const registro = abrirRegistro(ctx.dados);
+    const registro = abrirRegistroSomenteLeitura(ctx.dados);
     let apelido: string | null;
     try {
       apelido =
@@ -527,7 +527,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       json(res, 400, { erro: `fonte desconhecida: ${fonteParam}` });
       return;
     }
-    const registro = abrirRegistro(ctx.dados);
+    const registro = abrirRegistroSomenteLeitura(ctx.dados);
     let precedencia: PrecedenciaDeNome;
     try {
       precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
@@ -574,7 +574,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       }
     }
 
-    const registro = abrirRegistro(ctx.dados);
+    const registro = abrirRegistroSomenteLeitura(ctx.dados);
     let configuracaoId: string | undefined;
     let apelidoPorId: Map<string, string>;
     let precedencia: PrecedenciaDeNome;
@@ -876,7 +876,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
         json(res, 400, { erro: 'favorito exige configuracao' });
         return;
       }
-      const registro = abrirRegistro(ctx.dados);
+      const registro = abrirRegistroSomenteLeitura(ctx.dados);
       let resolucao;
       try {
         resolucao = resolverFiltroDeConfiguracao(
@@ -983,7 +983,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     //
     // O Inquilino e o da credencial, entao o Titular ve as Chaves DELE,
     // inclusive as que nao pediu, e nunca as de outro.
-    const registro = abrirRegistro(ctx.dados);
+    const registro = abrirRegistroSomenteLeitura(ctx.dados);
     try {
       json(res, 200, { chaves: listarChavesDeAcesso(registro, ctx.identidade.inquilinoId) });
     } finally {
@@ -1010,7 +1010,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       naoEncontrado(res);
       return;
     }
-    const registro = abrirRegistro(ctx.dados);
+    const registro = abrirRegistroSomenteLeitura(ctx.dados);
     let precedencia: PrecedenciaDeNome;
     try {
       precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
@@ -1035,7 +1035,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     }
     // A pergunta de Presenca que o modelo ja responde; o --em e o fim do dia
     // capado ao Alcance, regra medida (CONTEXTO.md).
-    const registro = abrirRegistro(ctx.dados);
+    const registro = abrirRegistroSomenteLeitura(ctx.dados);
     let precedencia: PrecedenciaDeNome;
     try {
       precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
@@ -1054,7 +1054,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
   }
 
   if (partes.length === 1 && partes[0] === 'configuracoes') {
-    const registro = abrirRegistro(ctx.dados);
+    const registro = abrirRegistroSomenteLeitura(ctx.dados);
     try {
       const configuracoes = listarConfiguracoes(registro, ctx.identidade.inquilinoId).map((c) => ({
         apelido: c.apelido,
@@ -1082,7 +1082,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       return;
     }
 
-    const registro = abrirRegistro(ctx.dados);
+    const registro = abrirRegistroSomenteLeitura(ctx.dados);
     let destino;
     try {
       destino = lerDestinoDeMidia(registro, ctx.identidade.inquilinoId);
