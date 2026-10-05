@@ -39,13 +39,14 @@ test('o termo literal acha a Mensagem que o contem, por rede (#1131)', async () 
   }
 });
 
-test('REDE DE SEGURANCA: excecao em qualquer rota vira 500 de corpo vazio e o processo segue (#1131)', async () => {
+test('REDE DE SEGURANCA: excecao em qualquer rota vira 500 de corpo vazio e o processo segue (#1131) (#1132)', async () => {
   let chamadas = 0;
   const cena = await subirCenaDeIdentidade({
     ganchoDeTeste: {
-      antesDeResponder: () => {
+      // desde o ciclo 32 o GET roda no worker: a falha e uma instrucao serializavel, nao uma funcao sobre o `res`
+      instrucaoDoTrabalhador: () => {
         chamadas += 1;
-        if (chamadas === 1) throw new Error('falha inesperada de uma rota qualquer, com um segredo no texto');
+        return chamadas === 1 ? { lancar: 'falha inesperada de uma rota qualquer, com um segredo no texto' } : undefined;
       },
     },
   });
@@ -60,24 +61,42 @@ test('REDE DE SEGURANCA: excecao em qualquer rota vira 500 de corpo vazio e o pr
   }
 });
 
-test('REDE DE SEGURANCA: excecao DEPOIS de a rota ja ter escrito o cabecalho nao derruba o processo (#1131)', async () => {
+test('REDE DE SEGURANCA: excecao DEPOIS de a rota ja ter escrito o cabecalho vira 500, nunca resposta pela metade (#1131) (#1132)', async () => {
   let chamadas = 0;
   const cena = await subirCenaDeIdentidade({
     ganchoDeTeste: {
-      antesDeResponder: (res) => {
+      instrucaoDoTrabalhador: () => {
         chamadas += 1;
-        if (chamadas === 1) {
-          res.writeHead(200, { 'content-type': 'application/json' });
-          res.write('{"parcial":');
-          throw new Error('falha depois do cabecalho');
-        }
+        return chamadas === 1 ? { lancarDepoisDoCabecalho: 'falha depois do cabecalho' } : undefined;
       },
     },
   });
   try {
-    await cena.pedir('/relatorio', cena.chave.valor).catch(() => undefined);
+    const falha = await cena.pedir('/relatorio', cena.chave.valor);
+    assert.equal(falha.status, 500, 'o cabecalho escrito no worker nao sai: a resposta e a do erro');
+    assert.equal(falha.corpo, '');
     const depois = await cena.pedir('/relatorio', cena.chave.valor);
-    assert.equal(depois.status, 200, 'sem a guarda de cabecalho, o writeHead do catch lancaria e mataria o processo');
+    assert.equal(depois.status, 200);
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('REDE DE SEGURANCA da thread principal: excecao num POST vira 500 e o proximo GET e atendido (#1131) (#1132)', async () => {
+  let chamadas = 0;
+  const cena = await subirCenaDeIdentidade({
+    ganchoDeTeste: {
+      antesDeResponder: () => {
+        chamadas += 1;
+        if (chamadas === 1) throw new Error('falha inesperada num POST');
+      },
+    },
+  });
+  try {
+    const r = await fetch(`${cena.url}/qualquer`, { method: 'POST', headers: { authorization: `Bearer ${cena.chave.valor}` } });
+    assert.equal(r.status, 500);
+    assert.equal(await r.text(), '');
+    assert.equal((await cena.pedir('/relatorio', cena.chave.valor)).status, 200);
   } finally {
     cena.encerrar();
   }

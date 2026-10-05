@@ -6,6 +6,8 @@ import { abrirAcervoSomenteLeitura } from '../nucleo/acervo.js';
 import { atorDeAcesso, comAtor } from '../nucleo/ator.js';
 import { responder, type ContextoDaRequisicao } from './rotas.js';
 import type { InquilinoId } from '../nucleo/tipos.js';
+import { DespachanteDeLeituras, type ResultadoDoDespacho } from './despachante.js';
+import type { InstrucaoDeTeste } from './contrato-da-leitura.js';
 
 /**
  * A superficie de rede: leitura, autenticada por Chave de Acesso.
@@ -39,6 +41,52 @@ function recusar(res: ServerResponse): void {
   res.end('');
 }
 
+export const TRABALHADORES_PADRAO = 4;
+export const PRAZO_PADRAO_MS = 25_000;
+const FILA_MAXIMA_PADRAO = 64;
+
+/** O gancho de teste: o que ja existia, mais a decisao POR REQUISICAO do que o worker faz de estranho. */
+export type GanchoDeTesteDoServidor = NonNullable<ContextoDaRequisicao['ganchoDeTeste']> & {
+  instrucaoDoTrabalhador?: (url: string) => InstrucaoDeTeste | undefined;
+};
+
+export interface ServidorDeLeitura extends Server {
+  /** Para de despachar, espera as leituras em andamento por `esperaMs` e termina os workers. */
+  pararLeituras: (esperaMs: number) => Promise<void>;
+  despachante: DespachanteDeLeituras;
+}
+
+export function responderDeResultado(res: ServerResponse, r: ResultadoDoDespacho): void {
+  if (res.destroyed || res.headersSent) return;
+  switch (r.tipo) {
+    case 'resposta': {
+      res.writeHead(r.resposta.status, r.resposta.cabecalhos);
+      // Sem copia: o Buffer ENVOLVE o ArrayBuffer que chegou por transferencia (`Buffer.from(Uint8Array)` copiaria).
+      const c = r.resposta.corpo;
+      res.end(typeof c === 'string' ? c : Buffer.from(c.buffer, c.byteOffset, c.byteLength));
+      return;
+    }
+    case 'prazo':
+      res.writeHead(504, { 'content-type': 'application/json' });
+      res.end('');
+      return;
+    case 'fila-cheia':
+      res.writeHead(503, { 'content-type': 'application/json', 'retry-after': '1' });
+      res.end('');
+      return;
+    case 'indisponivel':
+      res.writeHead(503, { 'content-type': 'application/json' });
+      res.end('');
+      return;
+    case 'erro':
+      res.writeHead(500, { 'content-type': 'application/json' });
+      res.end('');
+      return;
+    case 'abandonado':
+      return; // o cliente ja foi embora
+  }
+}
+
 function chaveApresentada(req: IncomingMessage): string | null {
   const cabecalho = req.headers['authorization'];
   if (typeof cabecalho !== 'string') return null;
@@ -50,12 +98,26 @@ function chaveApresentada(req: IncomingMessage): string | null {
 export interface OpcoesDoServidor {
   dados: string;
   porta: number;
-  /** SO PARA TESTE (ver `ContextoDaRequisicao`). */
-  ganchoDeTeste?: ContextoDaRequisicao['ganchoDeTeste'];
+  /** Workers de leitura (padrao 4, de 1 a 16). */
+  trabalhadores?: number;
+  /** Prazo de uma leitura desde a chegada, em ms (padrao 25.000). */
+  prazoMs?: number;
+  filaMaxima?: number;
+  /** SO PARA TESTE: outro arquivo de worker, para provar que o `servir` recusa subir se ele nao carrega. */
+  arquivoDoTrabalhador?: URL;
+  /** SO PARA TESTE (ver `ContextoDaRequisicao` e `GanchoDeTesteDoServidor`). */
+  ganchoDeTeste?: GanchoDeTesteDoServidor;
 }
 
-export function criarServidor(opcoes: OpcoesDoServidor): Server {
-  return createServer((req, res) => {
+export function criarServidor(opcoes: OpcoesDoServidor): ServidorDeLeitura {
+  const despachante = new DespachanteDeLeituras({
+    trabalhadores: opcoes.trabalhadores ?? TRABALHADORES_PADRAO,
+    prazoMs: opcoes.prazoMs ?? PRAZO_PADRAO_MS,
+    filaMaxima: opcoes.filaMaxima ?? FILA_MAXIMA_PADRAO,
+    ...(opcoes.arquivoDoTrabalhador ? { arquivoDoTrabalhador: opcoes.arquivoDoTrabalhador } : {}),
+    aoLogar: (linha) => process.stderr.write(`${linha}\n`),
+  });
+  const servidor = createServer((req, res) => {
     const valor = chaveApresentada(req);
     if (valor === null) {
       recusar(res);
@@ -77,6 +139,35 @@ export function criarServidor(opcoes: OpcoesDoServidor): Server {
     }
     if (identidade === null) {
       recusar(res);
+      return;
+    }
+
+    // LEITURA: roda num worker. A thread principal so autenticou (acima) e despacha — o worker recebe o
+    // `chaveId` e o `inquilinoId` ja verificados, nunca a Chave. O cliente que desiste (`close` sem terminar
+    // a escrita) mata a consulta dele.
+    if (req.method === 'GET') {
+      const abandono = new AbortController();
+      // Mutante equivalente declarado (trocar `!res.writableFinished` por `true`): o `close` de uma resposta normal
+      // tambem dispara, mas o despachante ja concluiu o pedido e tirou o ouvinte de `abort` (`concluir`), entao o
+      // `abort` tardio nao faz nada. O teste do ABANDONO prova a parte que importa: o `close` ANTES da resposta.
+      res.on('close', () => {
+        if (!res.writableFinished) abandono.abort();
+      });
+      const instrucao = opcoes.ganchoDeTeste?.instrucaoDoTrabalhador?.(req.url ?? '/');
+      void despachante
+        .executar(
+          {
+            metodo: 'GET',
+            url: req.url ?? '/',
+            chaveId: identidade.chaveId,
+            inquilinoId: identidade.inquilinoId,
+            dados: opcoes.dados,
+            ...(instrucao ? { instrucao } : {}),
+          },
+          abandono.signal,
+        )
+        .then((r) => responderDeResultado(res, r))
+        .catch(() => responderDeResultado(res, { tipo: 'erro', mensagem: 'despacho' }));
       return;
     }
 
@@ -128,5 +219,9 @@ export function criarServidor(opcoes: OpcoesDoServidor): Server {
     } finally {
       acervo.fechar();
     }
-  });
+  }) as ServidorDeLeitura;
+  servidor.despachante = despachante;
+  servidor.pararLeituras = (esperaMs) => despachante.parar(esperaMs);
+  servidor.on('close', () => void despachante.parar(0));
+  return servidor;
 }
