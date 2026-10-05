@@ -907,7 +907,7 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
-- **#1132: filtro raro sem achados numa Conversa muito grande varre a Conversa inteira e, como o servidor é síncrono, bloqueia todos os clientes** (8 s para `anexos --presenca descartado` na maior). Ao medir em produção, **uma consulta por vez e `curl --max-time` curto**: a que o cliente abandona continua rodando no servidor.
+- **#1132: toda consulta lenta bloqueia todos os clientes, porque o servidor é síncrono** (filtro sem achados 1,2 s quente e 8 s frio na maior Conversa; `buscar` de palavra comum global 4 s). **Resolve o ciclo 32** (leituras em workers com prazo duro): spec aprovada e plano revisado, **sem código ainda**; spec, plano e revisões em `11-tarefas/20261004-*1132*` da pasta de trabalho. Até lá, ao medir em produção, **uma consulta por vez e `curl --max-time` curto**: a que o cliente abandona continua rodando no servidor.
 
 - **A Hera roda no thinkpad (`malote-ouvinte@hera`, Inquilino próprio) e o Envio está
   provado em produção pelos dois caminhos** — local no thinkpad e por rede do macbook
