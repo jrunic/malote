@@ -23,6 +23,8 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.30.0] — 2026-10-04
+
 Não muda a forma do Acervo nem do Registro.
 
 ### Adicionado
