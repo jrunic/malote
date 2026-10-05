@@ -1059,6 +1059,9 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       const configuracoes = listarConfiguracoes(registro, ctx.identidade.inquilinoId).map((c) => ({
         apelido: c.apelido,
         fonte: c.fonte,
+        telefone: c.telefone,
+        jid: c.jid,
+        lid: c.lid,
       }));
       json(res, 200, { configuracoes });
     } finally {
