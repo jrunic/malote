@@ -10,7 +10,7 @@ async function semear(cena: Awaited<ReturnType<typeof subirCenaDeEnvio>>) {
     method: 'POST',
     headers: { authorization: `Bearer ${cena.chave.valor}`, 'content-type': 'application/json' },
     body: JSON.stringify({
-      configuracao: 'hera',
+      configuracao: 'agente',
       para: '5511999990000@s.whatsapp.net',
       tipo: 'texto',
       texto: 'oi',
@@ -80,15 +80,15 @@ test('Envio que nao existe para a chave: exit 6 com mensagem que nao distingue a
   }
 });
 
-test('--chave-em escolhe a chave da Hera sem trocar a padrao, e o identificador vem depois dela (#1117)', async () => {
+test('--chave-em escolhe a chave do agente sem trocar a padrao, e o identificador vem depois dela (#1117)', async () => {
   const cena = await subirCenaDeEnvio();
   try {
     await semear(cena);
-    const ok = executor(cena.url, cena.chaveDoOutro.valor, { CHAVE_HERA: cena.chave.valor });
-    assert.equal(await executarEnvioEstadoRede(['envio', 'estado', '--chave-em', 'CHAVE_HERA', ID], ok.rede), 0, ok.saida());
+    const ok = executor(cena.url, cena.chaveDoOutro.valor, { CHAVE_AGENTE: cena.chave.valor });
+    assert.equal(await executarEnvioEstadoRede(['envio', 'estado', '--chave-em', 'CHAVE_AGENTE', ID], ok.rede), 0, ok.saida());
     assert.match(ok.saida(), /pendente/);
-    const antes = executor(cena.url, cena.chaveDoOutro.valor, { CHAVE_HERA: cena.chave.valor });
-    assert.equal(await executarEnvioEstadoRede(['envio', 'estado', ID, '--chave-em', 'CHAVE_HERA'], antes.rede), 0);
+    const antes = executor(cena.url, cena.chaveDoOutro.valor, { CHAVE_AGENTE: cena.chave.valor });
+    assert.equal(await executarEnvioEstadoRede(['envio', 'estado', ID, '--chave-em', 'CHAVE_AGENTE'], antes.rede), 0);
   } finally {
     cena.encerrar();
   }
@@ -97,8 +97,8 @@ test('--chave-em escolhe a chave da Hera sem trocar a padrao, e o identificador 
 test('--chave-em com variavel vazia recusa sem rede e nao cai na chave padrao (#1117)', async () => {
   const contador = await subirServidorContador();
   try {
-    const r = executor(contador.url, 'chave-padrao-valida', { CHAVE_HERA: '  ' });
-    assert.equal(await executarEnvioEstadoRede(['envio', 'estado', '--chave-em', 'CHAVE_HERA'], r.rede), 2);
+    const r = executor(contador.url, 'chave-padrao-valida', { CHAVE_AGENTE: '  ' });
+    assert.equal(await executarEnvioEstadoRede(['envio', 'estado', '--chave-em', 'CHAVE_AGENTE'], r.rede), 2);
     assert.equal(contador.requisicoes(), 0);
   } finally {
     contador.fechar();

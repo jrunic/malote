@@ -75,9 +75,9 @@ A lista completa, com todas as flags, está na [referência do modo cliente](../
 # Índice do Acervo: id, fonte, natureza, contagem, assunto, configuração
 malote conversas --limite 30
 malote conversas --busca "relatorio" --fonte whatsapp --coletiva true
-malote conversas --configuracao orlando        # so a Conversa daquela Configuracao
-malote conversas --configuracao orlando --fonte whatsapp  # desempata apelido repetido em Fontes diferentes
-malote conversas --fixada true --configuracao orlando  # so as fixadas NAQUELA Configuracao (marca, nao atribuicao)
+malote conversas --configuracao principal        # so a Conversa daquela Configuracao
+malote conversas --configuracao principal --fonte whatsapp  # desempata apelido repetido em Fontes diferentes
+malote conversas --fixada true --configuracao principal  # so as fixadas NAQUELA Configuracao (marca, nao atribuicao)
 
 # Quais Configuracoes existem (apelido + fonte) — antes de filtrar por uma
 malote configuracao listar
@@ -85,7 +85,7 @@ malote configuracao listar
 # Conteúdo de uma conversa, com janela e página
 malote mensagens --conversa <id> --limite 50
 malote mensagens --conversa <id> --desde 2026-09-01 --ate 2026-09-15
-malote mensagens --conversa <id> --favorito true --configuracao orlando  # so as favoritadas — SO EM MODO REDE (MALOTE_SERVIDOR setado)
+malote mensagens --conversa <id> --favorito true --configuracao principal  # so as favoritadas — SO EM MODO REDE (MALOTE_SERVIDOR setado)
 # Paginação: a resposta traz `proximo` quando há mais; devolva-o:
 malote mensagens --conversa <id> --antes "<cursor>"
 
@@ -193,7 +193,7 @@ Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`
 - `malote envio estado [<identificador>] [--chave-em <VARIÁVEL>] [--json]` — sem argumento, a
   contagem de Envios por estado do Inquilino da chave (`enviado`, `falhou`, `pendente`, sempre
   os três); com o identificador que o `enviar` imprimiu, o estado daquele Envio. Para o Envio
-  da Hera, use `--chave-em` com a chave dela: a chave de outro Inquilino responde `6`, igual a
+  de outro Inquilino, use `--chave-em` com a chave dele: a chave de outro Inquilino responde `6`, igual a
   Envio inexistente. `envio reprocessar` não existe por rede — só local.
 - `malote mensagens [--conversa <id>] [--desde D] [--ate D] [--limite N] [--direcao enviada|recebida] [--favorito true --configuracao A]` —
   conteúdo. Sem `--conversa`, atravessa todas as Conversas e Fontes do
@@ -288,7 +288,7 @@ Anexo do tipo `video` — a posse já foi confirmada antes desse sinal disparar,
 nomear o tipo não vaza nada que a posse já não tivesse revelado.
 
 `configuracao` em `/conversas` é o **apelido**, não o id interno — em caso de apelido
-repetido entre Fontes diferentes (ex.: `orlando` existindo em `whatsapp` e `instagram`),
+repetido entre Fontes diferentes (ex.: `principal` existindo em `whatsapp` e `instagram`),
 informe `fonte` junto ou a rota responde `400` nomeando a ambiguidade. `configuracao`
 no campo de saída é `null` para Conversa coletiva, sempre — ela não tem Configuração.
 Com `fixada=true`, `configuracao` escopa a Marca, não a atribuição — é o que permite
@@ -347,9 +347,9 @@ definido, **`malote enviar` fala com esta rota**; sem ele, o mesmo comando grava
 o pedido na instalação local (e aí leva `--inquilino`).
 
 ```
-malote enviar --configuracao hera --para 5511999990000@s.whatsapp.net --texto "oi"
-malote enviar --configuracao hera --para <endereço> --imagem foto.png --texto "legenda"
-malote enviar --configuracao hera --para <endereço> --documento relatorio.pdf
+malote enviar --configuracao agente --para 5511999990000@s.whatsapp.net --texto "oi"
+malote enviar --configuracao agente --para <endereço> --imagem foto.png --texto "legenda"
+malote enviar --configuracao agente --para <endereço> --documento relatorio.pdf
 ```
 
 - No modo rede, o Inquilino vem da Chave de Acesso: `--inquilino` é recusado (código 2).
@@ -357,7 +357,7 @@ malote enviar --configuracao hera --para <endereço> --documento relatorio.pdf
   `env -u MALOTE_SERVIDOR`.
 - `--chave-em <VARIÁVEL>` usa a chave guardada na variável **nomeada** (nunca o valor), em
   vez de `MALOTE_CHAVE_DE_ACESSO`. Variável ausente ou vazia recusa, sem cair na chave
-  padrão. Ex.: `malote enviar ... --chave-em MALOTE_CHAVE_DE_ACESSO_HERA`.
+  padrão. Ex.: `malote enviar ... --chave-em MALOTE_CHAVE_DE_ACESSO_AGENTE`.
 - O pedido inteiro (arquivo em base64 mais o envelope) tem teto de 8 MB, o que deixa o
   arquivo perto de 6 MB. O cliente recusa antes de abrir conexão.
 - **Repetição segura.** O cliente gera um Identificador de Envio para cada pedido, manda e o

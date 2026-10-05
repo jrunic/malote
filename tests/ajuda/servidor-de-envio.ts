@@ -31,14 +31,14 @@ export interface CenaDeEnvio {
   raiz: string;
   url: string;
   inquilinoId: string;
-  /** Chave de Acesso do Inquilino "Hera", dono da Configuracao `hera`. */
+  /** Chave de Acesso do Inquilino "Agente", dono da Configuracao `agente`. */
   chave: { id: string; valor: string };
-  /** Chave de Acesso de OUTRO Inquilino, que nao tem a Configuracao `hera`. */
+  /** Chave de Acesso de OUTRO Inquilino, que nao tem a Configuracao `agente`. */
   chaveDoOutro: { id: string; valor: string };
   lerEnvios: () => EnvioLido[];
-  /** Chave de Acesso de um terceiro Inquilino que TEM a Configuracao `hera` (o escopo do identificador). */
-  chaveDeOutroComHera: { id: string; valor: string };
-  lerEnviosDeOutroComHera: () => EnvioLido[];
+  /** Chave de Acesso de um terceiro Inquilino que TEM a Configuracao `agente` (o escopo do identificador). */
+  chaveDeOutroComAgente: { id: string; valor: string };
+  lerEnviosDeOutroComAgente: () => EnvioLido[];
   /** Quantas Operacoes `solicitar-envio` o Acervo do Inquilino tem. */
   operacoesDeSolicitacao: () => number;
   /** Arquivos que sobraram em `envios-pendentes/` (zero quando a pasta nem existe). */
@@ -52,20 +52,20 @@ export interface OpcoesDaCena {
   entreOExameEORegistro?: (inserirComoVencedor: (mimetype?: string) => void) => void;
 }
 
-/** Servidor de consulta REAL sobre um Acervo de fixture, com a Configuracao `hera` e duas chaves. */
+/** Servidor de consulta REAL sobre um Acervo de fixture, com a Configuracao `agente` e duas chaves. */
 export async function subirCenaDeEnvio(opcoes: OpcoesDaCena = {}): Promise<CenaDeEnvio> {
   const c = cenario();
-  const { id: inquilinoId, acervo } = c.novoInquilino('Hera');
+  const { id: inquilinoId, acervo } = c.novoInquilino('Agente');
   acervo.fechar();
   const { id: outroId, acervo: acervoDoOutro } = c.novoInquilino('Titular');
   acervoDoOutro.fechar();
   const registro = abrirRegistro(c.raiz);
-  const configuracaoDaHera = resolverConfiguracao(registro, inquilinoId, 'whatsapp', 'hera');
+  const configuracaoDoAgente = resolverConfiguracao(registro, inquilinoId, 'whatsapp', 'agente');
   const chave = emitirChaveDeAcesso(registro, inquilinoId);
   const chaveDoOutro = emitirChaveDeAcesso(registro, outroId);
   const { id: terceiroId, acervo: acervoDoTerceiro } = c.novoInquilino('Terceiro');
   acervoDoTerceiro.fechar();
-  resolverConfiguracao(registro, terceiroId, 'whatsapp', 'hera');
+  resolverConfiguracao(registro, terceiroId, 'whatsapp', 'agente');
   const chaveDoTerceiro = emitirChaveDeAcesso(registro, terceiroId);
   registro.fechar();
 
@@ -92,7 +92,7 @@ export async function subirCenaDeEnvio(opcoes: OpcoesDaCena = {}): Promise<CenaD
     const a = abrirAcervo(`${c.raiz}/acervos`, inquilinoId as never);
     try {
       registrarEnvio(a, {
-        configuracaoId: configuracaoDaHera.id,
+        configuracaoId: configuracaoDoAgente.id,
         destino: { enderecoCru: '5511999990000@s.whatsapp.net' },
         conteudo: { tipo: 'imagem', caminhoArquivo: caminho, mimetype },
         identificadorDeEnvio: '3f2b8c1e-5d4a-4e7b-9c10-1a2b3c4d5e6f',
@@ -124,8 +124,8 @@ export async function subirCenaDeEnvio(opcoes: OpcoesDaCena = {}): Promise<CenaD
     chave: { id: chave.id, valor: chave.valor },
     chaveDoOutro: { id: chaveDoOutro.id, valor: chaveDoOutro.valor },
     lerEnvios: () => lerDe(inquilinoId),
-    chaveDeOutroComHera: { id: chaveDoTerceiro.id, valor: chaveDoTerceiro.valor },
-    lerEnviosDeOutroComHera: () => lerDe(terceiroId),
+    chaveDeOutroComAgente: { id: chaveDoTerceiro.id, valor: chaveDoTerceiro.valor },
+    lerEnviosDeOutroComAgente: () => lerDe(terceiroId),
     operacoesDeSolicitacao: () => {
       const a = abrirAcervoSomenteLeitura(`${c.raiz}/acervos`, inquilinoId);
       try {

@@ -140,13 +140,13 @@ test('desfazer a fusao de Atribuicao de Nome colidente restaura a linha do alter
     registrarNome(acervo, {
       identificadorId: alt.id,
       origem: 'whatsapp',
-      nome: 'Orlando Ferreira',
+      nome: 'Pessoa Exemplo',
       autoridade: 'terceiro',
     });
     registrarNome(acervo, {
       identificadorId: canon.id,
       origem: 'whatsapp',
-      nome: 'Orlando Ferreira',
+      nome: 'Pessoa Exemplo',
       autoridade: 'terceiro',
     });
 

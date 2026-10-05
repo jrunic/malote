@@ -158,7 +158,7 @@ test('malote configuracao listar em modo rede: subprocesso consulta o servidor r
   try {
     const { id: inquilinoId } = cena.novoInquilino('Ahsoka');
     const { resolverConfiguracao } = await import('../src/registro/configuracao-adaptador.js');
-    resolverConfiguracao(cena.registro, inquilinoId, 'whatsapp', 'orlando');
+    resolverConfiguracao(cena.registro, inquilinoId, 'whatsapp', 'principal');
 
     const { criarServidor } = await import('../src/rede/servidor.js');
     const srv = criarServidor({ dados: cena.raiz, porta: 0 });
@@ -193,7 +193,7 @@ test('malote configuracao listar em modo rede: subprocesso consulta o servidor r
     );
     assert.equal(saida.codigo, 0, `stdout=${saida.stdout}\nstderr=${saida.stderr}`);
     const corpo = JSON.parse(saida.stdout) as { configuracoes: Array<{ apelido: string; fonte: string }> };
-    assert.deepEqual(corpo.configuracoes, [{ apelido: 'orlando', fonte: 'whatsapp' }]);
+    assert.deepEqual(corpo.configuracoes, [{ apelido: 'principal', fonte: 'whatsapp' }]);
     http.close();
   } finally {
     cena.limpar();
@@ -323,7 +323,7 @@ test('malote conversas --fixada em modo rede: subprocesso encaminha fixada e con
   try {
     const { id: inquilinoId, acervo } = cena.novoInquilino('Ahsoka');
     const { resolverConfiguracao } = await import('../src/registro/configuracao-adaptador.js');
-    const cfg = resolverConfiguracao(cena.registro, inquilinoId, 'whatsapp', 'orlando');
+    const cfg = resolverConfiguracao(cena.registro, inquilinoId, 'whatsapp', 'principal');
     const { registrarConversa } = await import('../src/nucleo/escrita.js');
     const { marcarConversa } = await import('../src/nucleo/marca-do-titular.js');
     const marcadaId = registrarConversa(acervo, {
@@ -357,7 +357,7 @@ test('malote conversas --fixada em modo rede: subprocesso encaminha fixada e con
         const filho = spawn(
           process.execPath,
           ['--import', 'tsx', join(import.meta.dirname, '..', 'src', 'cli', 'index.ts'),
-            'conversas', '--fixada', 'true', '--configuracao', 'orlando', '--json'],
+            'conversas', '--fixada', 'true', '--configuracao', 'principal', '--json'],
           { env: { ...process.env,
               MALOTE_HOME: cena.raiz,
               MALOTE_SERVIDOR: `http://127.0.0.1:${porta}`,

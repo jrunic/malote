@@ -13,7 +13,7 @@ import {
 import { TAMANHO_MAXIMO_DO_CORPO_DE_ENVIO } from '../src/rede/rotas.js';
 import { subirCenaDeEnvio, subirServidorContador } from './ajuda/servidor-de-envio.js';
 
-const BASE = ['enviar', '--configuracao', 'hera', '--para', '5511999990000@s.whatsapp.net'];
+const BASE = ['enviar', '--configuracao', 'agente', '--para', '5511999990000@s.whatsapp.net'];
 
 function rede(
   url: string,
@@ -68,7 +68,7 @@ test('recusas locais saem 2 e NAO abrem conexao nenhuma', async () => {
         casa: /Inquilino vem da Chave de Acesso.*env -u MALOTE_SERVIDOR/s,
       },
       { nome: 'sem --configuracao', args: ['enviar', '--para', 'a@s.whatsapp.net', '--texto', 'x'], casa: /Uso:/ },
-      { nome: 'sem --para', args: ['enviar', '--configuracao', 'hera', '--texto', 'x'], casa: /Uso:/ },
+      { nome: 'sem --para', args: ['enviar', '--configuracao', 'agente', '--texto', 'x'], casa: /Uso:/ },
       { nome: 'sem conteudo', args: [...BASE], casa: /--texto, --imagem ou --documento/ },
       {
         nome: 'imagem e documento',
@@ -77,7 +77,7 @@ test('recusas locais saem 2 e NAO abrem conexao nenhuma', async () => {
       },
       {
         nome: 'para sem @',
-        args: ['enviar', '--configuracao', 'hera', '--para', '5511999990000', '--texto', 'x'],
+        args: ['enviar', '--configuracao', 'agente', '--para', '5511999990000', '--texto', 'x'],
         casa: /endereco completo/,
       },
       { nome: 'arquivo inexistente', args: [...BASE, '--imagem', '/nao/existe.jpg'], casa: /Arquivo nao encontrado/ },
@@ -110,7 +110,7 @@ test('chave ausente sai 2 e nao abre conexao', async () => {
 test('Configuracao de outro Inquilino: 404 vira codigo 6 com a mensagem que nao adivinha', async () => {
   const cena = await subirCenaDeEnvio();
   try {
-    const r = rede(cena.url, cena.chaveDoOutro.valor); // essa chave nao alcanca a `hera`
+    const r = rede(cena.url, cena.chaveDoOutro.valor); // essa chave nao alcanca o `agente`
     const codigo = await executarEnviarRede([...BASE, '--texto', 'x'], r.rede);
     assert.equal(codigo, 6);
     assert.match(r.saida(), /nao existe neste Inquilino, ou a chave nao o alcanca/);
@@ -154,10 +154,10 @@ test('servidor inalcancavel: codigo 4', async () => {
 test('--chave-em usa a chave da variavel nomeada, e nao a padrao', async () => {
   const cena = await subirCenaDeEnvio();
   try {
-    // A padrao (sessao) e a do OUTRO Inquilino; a da Hera esta numa variavel nomeada.
-    const r = rede(cena.url, cena.chaveDoOutro.valor, { env: { MALOTE_CHAVE_DE_ACESSO_HERA: cena.chave.valor } });
+    // A padrao (sessao) e a do OUTRO Inquilino; a do agente esta numa variavel nomeada.
+    const r = rede(cena.url, cena.chaveDoOutro.valor, { env: { MALOTE_CHAVE_DE_ACESSO_AGENTE: cena.chave.valor } });
     const codigo = await executarEnviarRede(
-      [...BASE, '--texto', 'pela hera', '--chave-em', 'MALOTE_CHAVE_DE_ACESSO_HERA'],
+      [...BASE, '--texto', 'pelo agente', '--chave-em', 'MALOTE_CHAVE_DE_ACESSO_AGENTE'],
       r.rede,
     );
     assert.equal(codigo, 0, r.saida());
@@ -171,15 +171,15 @@ test('--chave-em usa a chave da variavel nomeada, e nao a padrao', async () => {
 test('--chave-em com variavel ausente ou vazia recusa SEM cair na chave padrao', async () => {
   const s = await subirServidorContador();
   try {
-    for (const env of [{}, { MALOTE_CHAVE_DE_ACESSO_HERA: '' }, { MALOTE_CHAVE_DE_ACESSO_HERA: '   ' }]) {
+    for (const env of [{}, { MALOTE_CHAVE_DE_ACESSO_AGENTE: '' }, { MALOTE_CHAVE_DE_ACESSO_AGENTE: '   ' }]) {
       // chave padrao VALIDA presente no mesmo teste: se o codigo caisse nela, tentaria a rede
       const r = rede(s.url, 'chave-padrao-valida', { env });
       const codigo = await executarEnviarRede(
-        [...BASE, '--texto', 'x', '--chave-em', 'MALOTE_CHAVE_DE_ACESSO_HERA'],
+        [...BASE, '--texto', 'x', '--chave-em', 'MALOTE_CHAVE_DE_ACESSO_AGENTE'],
         r.rede,
       );
       assert.equal(codigo, 2);
-      assert.match(r.saida(), /MALOTE_CHAVE_DE_ACESSO_HERA/);
+      assert.match(r.saida(), /MALOTE_CHAVE_DE_ACESSO_AGENTE/);
     }
     assert.equal(s.requisicoes(), 0, 'caiu na chave padrao e abriu conexao');
   } finally {

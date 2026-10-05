@@ -485,7 +485,7 @@ function desdeformarCongelado(texto: string): string {
  * Conversa DIRETA de Instagram ja carrega configuracao_id desde o #825 — usa
  * ele para achar o comparador certo, sem ambiguidade, mesmo quando o
  * Inquilino tem mais de uma Configuracao de Instagram (medido em producao
- * real em 23/09/2026: o Inquilino do Titular tem duas — orlando e freud).
+ * real em 23/09/2026: o Inquilino do Titular tem duas Configuracoes de WhatsApp).
  * Conversa COLETIVA nao tem Configuracao (pertence ao Inquilino inteiro):
  * usa a UNICA Configuracao de Instagram do Inquilino quando so existe uma;
  * havendo mais de uma, NAO ha como saber de qual conta cada Mensagem
@@ -651,7 +651,7 @@ const TRANSCRICAO_ELEGIBILIDADE_V21: PassoDeMigracao = {
  * mesma sessao, ja impedem CRIAR novas (import e ao vivo); este passo limpa o
  * que ja existia antes das duas correcoes.
  *
- * Criterio medido em 29/09/2026 contra o Acervo real do thinkpad:
+ * Criterio medido em 29/09/2026 contra o Acervo real de producao:
  * `json_extract(bruto, '$.ZSESSIONTYPE') = 3` bate EXATAMENTE com as duas
  * formas de endereco conhecidas (`@status` e `@lid.status`) — 1060 Conversas,
  * zero falso-positivo, zero perda contra o criterio ingenuo por sufixo de

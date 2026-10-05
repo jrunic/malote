@@ -78,11 +78,11 @@ test('configuracoesPorApelido devolve todas as Configuracoes com aquele apelido,
   const c = cenario();
   try {
     const { id: inquilino } = c.novoInquilino('Leia');
-    resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'orlando');
-    resolverConfiguracao(c.registro, inquilino, 'instagram', 'orlando');
-    resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'freud');
+    resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'principal');
+    resolverConfiguracao(c.registro, inquilino, 'instagram', 'principal');
+    resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'secundaria');
 
-    const achadas = configuracoesPorApelido(c.registro, inquilino, 'orlando');
+    const achadas = configuracoesPorApelido(c.registro, inquilino, 'principal');
 
     assert.equal(achadas.length, 2);
     assert.deepEqual(achadas.map((a) => a.fonte).sort(), ['instagram', 'whatsapp']);
@@ -105,9 +105,9 @@ test('resolverFiltroDeConfiguracao resolve direto quando a Fonte e informada', (
   const c = cenario();
   try {
     const { id: inquilino } = c.novoInquilino('Leia');
-    const cfg = resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'orlando');
+    const cfg = resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'principal');
 
-    const r = resolverFiltroDeConfiguracao(c.registro, inquilino, 'orlando', 'whatsapp');
+    const r = resolverFiltroDeConfiguracao(c.registro, inquilino, 'principal', 'whatsapp');
 
     assert.equal(r.ok, true);
     assert.equal(r.ok && r.configuracao.id, cfg.id);
@@ -120,9 +120,9 @@ test('resolverFiltroDeConfiguracao resolve sem Fonte quando ha SO UM candidato',
   const c = cenario();
   try {
     const { id: inquilino } = c.novoInquilino('Leia');
-    const cfg = resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'freud');
+    const cfg = resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'secundaria');
 
-    const r = resolverFiltroDeConfiguracao(c.registro, inquilino, 'freud');
+    const r = resolverFiltroDeConfiguracao(c.registro, inquilino, 'secundaria');
 
     assert.equal(r.ok, true);
     assert.equal(r.ok && r.configuracao.id, cfg.id);
@@ -135,10 +135,10 @@ test('resolverFiltroDeConfiguracao recusa apelido AMBIGUO sem Fonte, nomeando as
   const c = cenario();
   try {
     const { id: inquilino } = c.novoInquilino('Leia');
-    resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'orlando');
-    resolverConfiguracao(c.registro, inquilino, 'instagram', 'orlando');
+    resolverConfiguracao(c.registro, inquilino, 'whatsapp', 'principal');
+    resolverConfiguracao(c.registro, inquilino, 'instagram', 'principal');
 
-    const r = resolverFiltroDeConfiguracao(c.registro, inquilino, 'orlando');
+    const r = resolverFiltroDeConfiguracao(c.registro, inquilino, 'principal');
 
     assert.equal(r.ok, false);
     assert.match(!r.ok ? r.erro : '', /ambigu/i);

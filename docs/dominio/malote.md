@@ -686,25 +686,25 @@ Nenhuma. Contexto único.
 
 ## Premissas
 
-- **Decidido por Orlando em 03/10/2026, ao abrir o agregado Envio:** a garantia de entrega é
+- **Decidido pelo Titular em 03/10/2026, ao abrir o agregado Envio:** a garantia de entrega é
   **ao menos uma vez** (risco de duplicar aceito, não eliminado); o transporte de bytes de
   mídia por rede é **upload** (não caminho de arquivo local), o que por sua vez exige TLS de
   verdade antes de aceitar bytes e Chave de Acesso por essa rota — nunca o `node:http` cru que
   o servidor expõe hoje atrás de loopback/túnel.
-- **Confirmado por Orlando em 03/10/2026:** Destinatário do Envio é sempre uma Conversa,
+- **Confirmado pelo Titular em 03/10/2026:** Destinatário do Envio é sempre uma Conversa,
   **direta ou coletiva** — enviar para um grupo de WhatsApp é suportado pela mesma operação,
   sem caminho especial. Confirmado **por leitura do código vendorizado**
   (`sock.sendMessage` já distingue grupo internamente — `messages-send.js:259`, mesma API
   pública usada na espiga de 03/10 — nenhuma função separada), **não por medição empírica**
   contra um grupo real: a espiga só exercitou self-chat. Decisão de seguir sem medir essa
   ponta é do Titular.
-- **Confirmado por Orlando em 03/10/2026:** Envio não carrega Marca do Titular nem Citação —
+- **Confirmado pelo Titular em 03/10/2026:** Envio não carrega Marca do Titular nem Citação —
   essas só fazem sentido em Mensagem já existente, e um Envio em `pendente` ainda não é uma.
-- **Confirmado por Orlando em 03/10/2026:** `processar-envio` é sequencial por Configuração
+- **Confirmado pelo Titular em 03/10/2026:** `processar-envio` é sequencial por Configuração
   (como `transcrever-anexo` é sequencial no Inquilino inteiro), não por Inquilino — duas
   Configurações do mesmo Inquilino processam Envios em paralelo, cada uma na sua própria
   conexão, sem disputa.
-- **Confirmado por Orlando em 03/10/2026:** onde a Hera mora — Inquilino próprio versus
+- **Confirmado pelo Titular em 03/10/2026:** onde um agente mora — Inquilino próprio versus
   Configuração dentro de um Inquilino existente — é decisão de instalação, não de modelo; o
   agregado Envio funciona igual nos dois casos. (A decisão de instalação em si, Inquilino
   próprio, já tinha sido tomada em 03/10/2026, fora deste modelo.)

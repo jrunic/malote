@@ -17,23 +17,21 @@ Arquivo local das conversas de uma pessoa — de plataformas diferentes — num 
 
 ## Onde o trabalho acontece
 
-**O trabalho de desenvolvimento acontece fora deste repositório**, em
-`13-processos/manter-malote/` — é lá que a sessão abre
-(pasta de trabalho do autor).
+**O trabalho de desenvolvimento acontece fora deste repositório**, nos documentos internos do autor.
 
 | Artefato | Lar canônico |
 |---|---|
-| Roadmap de ciclos, spec, plano | `13-processos/manter-malote/` |
-| Arquivo de apoio de tarefa, diário de sessão | `13-processos/manter-malote/` |
-| Discussão de negócio | `13-processos/manter-malote/01-discussoes/` |
+| Roadmap de ciclos, spec, plano | fora deste repositório |
+| Arquivo de apoio de tarefa, diário de sessão | fora deste repositório |
+| Discussão de negócio | fora deste repositório |
 | **Código, testes, migrations** | **este repositório** |
 | **Documentação do produto** (Diátaxis) | **este repositório**, `docs/` |
 | **ADR de contrato** | **este repositório**, `docs/decisoes/` |
 | **Modelo de domínio** | **este repositório**, `docs/dominio/` |
 | **README, CHANGELOG, GLOSSARIO, CONTEXTO** | **este repositório**, raiz |
 
-**As skills leem esta seção** em vez de inferir por visibilidade. Repositório
-que não declara deixa a skill sem informação, e sem informação ela erra.
+**As skills leem esta seção** em vez de inferir por visibilidade. Repositório que não declara deixa a skill sem
+informação, e sem informação ela erra.
 
 ## Agente padrão
 
@@ -94,7 +92,7 @@ src/         — [descrever]
 tests/         — [descrever]
 ```
 
-Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
+Roadmap, specs, planos e diários vivem fora deste repositório.
 
 ### Testes
 
@@ -222,7 +220,7 @@ Roadmap, specs, planos e diários vivem em `13-processos/manter-malote/`.
   servidor liga o modo; `--servidor` sozinha só troca a URL. No modo rede o Inquilino vem
   só da chave e `--inquilino` é recusado. O cliente gera o Identificador de Envio e o
   manda; o código 7 diz o identificador e que repetir com `--identificador` é seguro (o
-  servidor não cria segundo Envio). **Ordem de release:** o servidor (thinkpad) recebe a
+  servidor não cria segundo Envio). **Ordem de release:** o servidor (host de produção) recebe a
   versão antes de qualquer cliente — servidor antigo ignora o campo e duplicaria, e o
   cliente só avisa em resposta que chegou. `envio estado` também é despachado por rede
   (ciclo 29), no ponto de entrada e fora de `COMANDOS_DE_REDE`; `envio reprocessar`
@@ -507,7 +505,7 @@ Hard limits sempre relevantes durante a sessão.
 
 - **`ZSESSIONTYPE` do backup de iOS tem CINCO naturezas, não duas.** 0=direta,
   1=grupo, 2=lista-de-transmissão, 3=status, 4=comunidade — medido em 21/09/2026 para
-  o adaptador macOS do charla, contra o **mesmo formato de backup**, decisão confirmada
+  o adaptador macOS de outro produto, contra o **mesmo formato de backup**, decisão confirmada
   pelo Titular. `!= 0` (coletiva) continua certo para 1/2/4; **status (3) nunca vira
   Conversa nenhuma** — não é chat de verdade, é o feed de acompanhamento de stories de
   um contato. `=== 1` seria o fix errado: demoveria lista de transmissão e comunidade a
@@ -587,7 +585,7 @@ Repositório expõe services systemd. Convenções:
 
 - **Ownership de .service units:** o script de serviço é mantido pelo repositório de infraestrutura de quem instala, não por este repo. Este repo declara o requisito.
 - **Sudo passwordless** para `systemctl restart <unit>`: configurar em `/etc/sudoers.d/` com regra por unit.
-- **Restart automático no upgrade:** se distribuído via `upgrade-fleet`, declarar
+- **Restart automático no upgrade:** se distribuído por um distribuidor automático, declarar
   `post_install: "restart:<unit1> <unit2> ..."` no entry do config.
 
 ## Estado Atual
@@ -624,8 +622,8 @@ Repositório expõe services systemd. Convenções:
   `--identificador` não cria segundo Envio (`200` com `repetido`; outro pedido com o mesmo
   identificador, `409`). `GET /envios/<identificador ou id>` e `GET /envios/contagem`, e
   `malote envio estado [<identificador>] --chave-em` por rede; `envio reprocessar` continua só
-  local, por decisão do Titular. Sem schema. Suíte 1176 para 1218. Provado em campo contra a
-  Hera: dois `enviar` com o mesmo identificador devolveram o mesmo Envio, que passou a
+  local, por decisão do Titular. Sem schema. Suíte 1176 para 1218. Provado em campo contra um
+  agente: dois `enviar` com o mesmo identificador devolveram o mesmo Envio, que passou a
   `enviado`, e a chave do Titular saiu 6. **Só com prova de teste:** o `409`, a corrida e o aviso
   de servidor sem repetição segura.
 - 04/10/2026 — **RELEASE v0.26.0 PUBLICADA E DISTRIBUÍDA NOS TRÊS PACOTES: `malote
@@ -635,18 +633,18 @@ Repositório expõe services systemd. Convenções:
   (`--inquilino` recusado), `--chave-em <VARIÁVEL>` escolhe a chave pelo **nome** da
   variável e recusa sem cair na padrão, falhas nos códigos 3/4/5/6/7 (o 7 diz que repetir
   pode duplicar). Sem mudança de schema nem de servidor. Suíte de 1144 para **1175
-  testes**, baseline de 3 falhas. **Provado em campo** do macbook contra a produção, com a
-  Chave de Acesso própria da Hera (emitida por Ação Documentada), e a contraprova — a chave
-  do Titular pedindo a Configuração `hera` — saiu 6 sem gravar nada. Veio de uma pergunta do
-  Titular ("é possível chamar o envio pela Hera a partir do macbook?"), e o custo da entrega
-  escolhida foi dito e aceito: a chave da Hera está no service do cliente, então toda
-  sessão do macbook a carrega. Achado do ensaio, aberto como **#1115**: `malote servir`
+  testes**, baseline de 3 falhas. **Provado em campo** da máquina cliente contra a produção, com a
+  Chave de Acesso própria do agente (emitida por Ação Documentada), e a contraprova — a chave
+  do Titular pedindo a Configuração de outro Inquilino — saiu 6 sem gravar nada. Veio de uma pergunta do
+  Titular ("é possível chamar o envio pelo agente a partir da máquina cliente?"), e o custo da entrega
+  escolhida foi dito e aceito: a chave do agente está no service do cliente, então toda
+  sessão da máquina cliente a carrega. Achado do ensaio, aberto como **#1115**: `malote servir`
   derruba o processo numa requisição autenticada para Inquilino sem Acervo — **corrigido em `main`
   (#1115): a abertura do Acervo que falha responde 503 de corpo vazio e loga em stderr; release
   v0.26.1, PR #16, em produção em 04/10/2026.** `inquilino criar` continua sem criar o Acervo, de propósito:
   quem cria é o primeiro `abrirAcervo` do ouvinte ou do `acervo migrar`.
 - 04/10/2026 — **CICLO 27 ACEITO: o malote envia mensagem (texto, imagem,
-  documento), RELEASES v0.25.0 E v0.25.1 EM PRODUÇÃO no thinkpad** (#1112, três
+  documento), RELEASES v0.25.0 E v0.25.1 EM PRODUÇÃO no host de produção** (#1112, três
   planos, PRs #13 e #14, tags `v0.25.0` e `v0.25.1`). Agregado **Envio** novo
   (Acervo v23→v25, migrou sozinho no host, `quick_check ok`): `malote enviar`
   (`--texto`, `--imagem`, `--documento`), `malote envio estado|reprocessar` e
@@ -655,8 +653,8 @@ Repositório expõe services systemd. Convenções:
   envia é o `ouvir` da Configuração, pela conexão que ele já tem; a Mensagem
   volta pelo eco pela porta de recepção, e o staging vira o arquivo do Anexo.
   Suíte de 1090 para **1144 testes**, baseline de 3 falhas pré-existentes.
-  Prova de campo: rodada real contra a conta da Hera em instalação descartável
-  no macbook (script `20261003-acao-perigosa-hera-verificacao-de-campo-do-envio.sh`,
+  Prova de campo: rodada real contra a conta do agente em instalação descartável
+  na máquina cliente (script da pasta de trabalho do autor,
   na pasta de trabalho). **O aceite achou três lacunas e o ciclo só fechou
   depois de corrigi-las:** falha ao gravar o resultado depois do envio virava
   `falhou` (agora fica `pendente`), `envio reprocessar` não contava pendentes,
@@ -665,11 +663,11 @@ Repositório expõe services systemd. Convenções:
 
 - 01/10/2026 — **RELEASE v0.24.1 PUBLICADA E DISTRIBUÍDA NOS TRÊS PACOTES,
   VERIFICADA POR EFEITO.** PR #12 (`main → production`, CI verde), merge
-  `6874c58`, tag `v0.24.1`. Via `upgrade-now`: `malote` (thinkpad, os dois
-  serviços reiniciados), `malote-cliente` (contabo), `malote-cliente-macbook`
+  `6874c58`, tag `v0.24.1`. Via comando de distribuição: `malote` (host de produção, os dois
+  serviços reiniciados), `malote-cliente` (host cliente), o pacote do cliente local
   (localhost) — os três confirmados em `6874c58`/`0.24.1`. Verificado contra
   o host real, não só o processo: `malote --versao` responde `0.24.1` nos
-  três, os serviços do thinkpad `active` desde o restart, e o código do fix
+  três, os serviços do host de produção `active` desde o restart, e o código do fix
   (`lerDestinoDeMidia`, guarda de "Destino nao configurado") presente no
   checkout que `malote servir` de fato executa (roda da fonte, sem build).
   **Tarefa #1106 corrigida via `dev-05`: worker de transcrição
@@ -689,7 +687,7 @@ Repositório expõe services systemd. Convenções:
   mutação nos dois sentidos — falha com o bug presente, reproduzindo a
   mensagem exata de produção; passa com o fix. Suíte: 1088 → **1090
   testes**, mesma baseline de 3 falhas pré-existentes, lint limpo. Achado
-  medindo o Acervo real de uma mentorada (bosgame) — ver Pendências para o
+  medindo o Acervo real de uma mentorada (instalação de terceiro) — ver Pendências para o
   que fica fora do escopo deste agente.
 - 01/10/2026 — **Tarefa #1103 implementada via `dev-02`→`dev-10`→`dev-03`→
   `dev-10`→`dev-04`: três entregas independentes sobre o mecanismo de
@@ -720,14 +718,14 @@ Repositório expõe services systemd. Convenções:
   real provando a correção. Detalhe completo nos 4 arquivos de revisão e nos
   3 planos (`## Resultado`), em documentos internos do autor, fora deste
   repositório.
-- 01/10/2026 — **RELEASE v0.24.0 PUBLICADA E DISTRIBUÍDA NO THINKPAD,
+- 01/10/2026 — **RELEASE v0.24.0 PUBLICADA E DISTRIBUÍDA NO HOST DE PRODUÇÃO,
   VERIFICADA POR EFEITO.** PR #11 (`main → production`), CI verde, merge
   `929054c`. **Schema do Acervo migrou v22 → v23 sozinho, via
-  `malote-ouvinte@orlando.service`** (o passo `SOLICITACAO_DE_TRANSCRICAO_V23`
+  `malote-ouvinte@<conta>.service`** (o passo `SOLICITACAO_DE_TRANSCRICAO_V23`
   não exige contexto — mesma classe segura do passo v21→v22 da release
   anterior) — sem incidente, confirmado contra o Acervo real:
   `versao_schema` → 23, coluna `transcricoes.solicitada_em` presente.
-  `malote --versao` → `0.24.0`; os dois serviços (`malote-ouvinte@orlando`,
+  `malote --versao` → `0.24.0`; os dois serviços (`malote-ouvinte@<conta>`,
   `malote-servidor`) `active` pós-restart; `malote --ajuda` confirma os três
   comandos novos no binário publicado. **Os comandos de escrita novos
   (`transcricao incluir-estoque`, `transcricao solicitar`, `midia
@@ -735,21 +733,20 @@ Repositório expõe services systemd. Convenções:
   verificação** — são comandos de decisão do operador, e rodá-los é ato à
   parte (Ação Documentada, se for para o Acervo de produção), não efeito
   colateral do deploy.
-- 30/09/2026 — **RELEASE v0.23.0 PUBLICADA E DISTRIBUÍDA NO THINKPAD, VERIFICADA
+- 30/09/2026 — **RELEASE v0.23.0 PUBLICADA E DISTRIBUÍDA NO HOST DE PRODUÇÃO, VERIFICADA
   POR EFEITO.** PR #10 (`main → production`), CI verde, merge `86a3b1d`. Leva o
   ciclo 24 inteiro (#1090, #1088, #1094, #1092, #1091), o #1084 e o ciclo 25
   (#1089), mais o bug #1101. **Muda a forma do Acervo: schema v21 → v22**
   (migração do #1088, que remove Conversa fantasma de Status) — o
-  `upgrade-fleet` (`trust: immediate`, 30 min) puxou e migrou sozinho **antes**
+  distribuidor automático (`trust: immediate`, 30 min) puxou e migrou sozinho **antes**
   de a Ação Documentada de backup manual rodar, sem incidente: o passo não
   exige contexto do Registro (diferente do #1043), então não havia corrida
   perigosa a vencer, só disciplina de backup que chegou tarde. Verificado
-  contra o host real: `malote --versao` → `0.23.0`; `malote-ouvinte@orlando` e
+  contra o host real: `malote --versao` → `0.23.0`; `malote-ouvinte@<conta>` e
   `malote-servidor` `active` pós-restart; `versao_schema` → `22`; **zero**
   Conversas fantasma de Status restantes (consulta direta contra o Acervo
   real, confirmando o critério de sucesso do #1088 em produção, não só em
-  teste). Script de backup (`91-diario/20260930-acao-perigosa-backup-acervo-
-  antes-release-v023-thinkpad.sh` da pasta de trabalho) ficou sem uso — pode
+  teste). Script de backup (script da pasta de trabalho do autor) ficou sem uso — pode
   ser descartado ou guardado como precedente para a próxima migração de
   schema.
 - 30/09/2026 — **#1089 implementada via `dev-02`→`dev-10`→`dev-03`→`dev-10`→
@@ -802,19 +799,19 @@ Repositório expõe services systemd. Convenções:
   `cli-entrada.test.ts` (confirmadas idênticas em `main` sem esta mudança,
   via `git stash`). **Só em `main` — não publicado, não distribuído.**
 - 04/10/2026 — **RELEASE v0.27.1: a saída de mais de 64 KB não é mais cortada por pipe (#1125, que
-  reabre a #1091).** O relato da Renata (`Unterminated string` ao consumir `malote conversas`/
+  reabre a #1091).** O relato de um usuário (`Unterminated string` ao consumir `malote conversas`/
   `mensagens`) tinha sido dado como "não reproduzido" em 29/09 porque a reprodução usou a CLI local
   e `fetch` direto, nunca a CLI em modo rede **por pipe**. A causa era o `process.exit` do ponto de
   entrada logo depois do `console.log` (ver a Restrição de `encerrar`): por pipe, a saída parava em
   65.536 bytes, no macOS e no Linux. PR #18, merge `0a57a91`, tag `v0.27.1`; medido depois, com o
   `malote` instalado: `participantes` por pipe 242.481 bytes (antes 65.536) e `conversas` sem filtro
   1.407.993, JSON válido pelo `jq`. A suspeita de "harness do agente truncando" estava errada.
-- 29/09/2026 — **RELEASE v0.22.0 PUBLICADA E DISTRIBUÍDA NO THINKPAD, VERIFICADA POR
+- 29/09/2026 — **RELEASE v0.22.0 PUBLICADA E DISTRIBUÍDA NO HOST DE PRODUÇÃO, VERIFICADA POR
   EFEITO** (#1068, #1069, #1070 — as três entradas abaixo, cada uma "AINDA NÃO
   LIBERADO"/"Nenhuma release publicada ainda" está desatualizada por esta linha). PR #8
   (`main → production`, CI verde) mergeado em `94728ee`; PR #9 completou bump+CHANGELOG
   (mergeado em `58feb03`); tag `v0.22.0` no commit publicado.
-  **A corrida contra o `upgrade-fleet` aconteceu de fato**: o timer (`trust: immediate`,
+  **A corrida contra o distribuidor automático aconteceu de fato**: o timer (`trust: immediate`,
   a cada 30 min) puxou e auto-migrou o Acervo sozinho — via `abrirAcervo` no restart do
   `malote-ouvinte`, sem `exigeContexto` no passo 20→21 — ANTES da Ação Documentada
   manual rodar. Sem dano: v20→v21 não precisa do Registro, então o ouvinte subiu normal
@@ -835,7 +832,7 @@ Repositório expõe services systemd. Convenções:
   comunidade numa só categoria. Status (tipo 3) não é chat de verdade — filtrado antes
   de criar Conversa, contado em `descartes.conversas['status']`, surfacado no
   relatório da importação. **A correção NÃO foi a sugerida na tarefa** (`=== 1`) —
-  medição contra o adaptador macOS do charla (mesmo formato de backup, decisão do
+  medição contra o adaptador macOS de outro produto (mesmo formato de backup, decisão do
   Titular em 21/09/2026) mapeou os 5 valores reais e provou por mutação que `=== 1`
   demoveria lista de transmissão e comunidade a Conversa direta, contradizendo a
   #825/#826. Suíte: 1000 → **1003 testes**, mesma baseline de 3 falhas
@@ -843,7 +840,7 @@ Repositório expõe services systemd. Convenções:
 - 29/09/2026 — **Mídia recebida ao vivo agora é baixada de verdade (#1068), IMPLEMENTADO
   EM `main`, AINDA NÃO LIBERADO.** Causa raiz: nenhum código chamava
   `downloadMediaMessage` — Anexo ao vivo nascia `nunca-obtido` para sempre, medido no
-  Acervo real da Renata em 94-99,8% conforme o tipo. `conexao.ts` ganhou
+  Acervo real de um usuário em 94-99,8% conforme o tipo. `conexao.ts` ganhou
   `MidiaAoVivo.baixar(indice)`, usando a mensagem CRUA (ver Restrições); `ao-vivo.ts`
   devolve `anexosNuncaObtidos` com o índice do lote; `ouvir.ts` lê o Destino de Mídia
   do Inquilino antes de conectar e baixa em segundo plano, gravando pela porta do
@@ -869,7 +866,7 @@ Repositório expõe services systemd. Convenções:
   por `tests/fronteira-de-dependencia.test.ts`, poder confirmado por mutação. Busca
   (`buscarMensagens`) passou a casar também na Transcrição, com proveniência marcada
   (`origemDaCorrespondencia`) — a Transcrição é aproximação de modelo, nunca fato.
-  **Verificação de campo feita contra binário real no thinkpad** (`whisper.cpp`/`ffmpeg`
+  **Verificação de campo feita contra binário real no host de produção** (`whisper.cpp`/`ffmpeg`
   já instalados de uma medição anterior): motor real transcreveu um Anexo de áudio real de
   produção (referenciado por caminho, nunca copiado) com texto plausível e coerente,
   exposto por `GET /mensagens`, falha real (arquivo ausente) gravou motivo sem travar o
@@ -879,7 +876,7 @@ Repositório expõe services systemd. Convenções:
   não rodou para a #1070; o aceite do ciclo 23 inteiro depende também de #1068 e #1069
   (`dev-05`, ainda não iniciadas).
 - 22/09/2026 — **`malote configuracao criar` em produção: declarar a conta sem exigir
-  material.** Achado real de uso (mentorado Walter, bloqueado por dificuldade de gerar o
+  material.** Achado real de uso (um mentorado, bloqueado por dificuldade de gerar o
   export do WhatsApp) — tarefa #1042, spec e plano com `dev-10` (0 `bloqueia` na spec, 2
   `bloqueia` corrigidos no plano antes da execução). O comando reaproveita
   `resolverConfiguracao`/`definirContaDaConfiguracao`, sem tocar no guard "busca, nunca
@@ -891,7 +888,7 @@ Repositório expõe services systemd. Convenções:
   o ouvinte. **Release v0.20.0**, PR #4 (`main → production`), CI verde, merge `945549d`,
   tag no commit publicado. `production` estava em v0.19.0 (`dbd6c66`). Suíte: 941 testes,
   937 passam (3 falhas pré-existentes, sem relação, confirmadas por `git stash` antes da
-  mudança). **Deploy nos hosts da frota (`upgrade-fleet`) não foi feito nesta sessão** —
+  mudança). **Deploy nos hosts da frota (distribuidor automático) não foi feito nesta sessão** —
   release publicada no GitHub, não distribuída; decisão do Titular quando/se propagar.
 - 16/09/2026 — **`bin/malote` corrigido: o alvo de `package.json.bin` agora roda da
   fonte, sem `dist/`.** Achado na instalação real da frota (tarefa #991): o `bin`
@@ -924,13 +921,13 @@ Repositório expõe services systemd. Convenções:
 
 - **#1132: toda consulta lenta bloqueia todos os clientes, porque o servidor é síncrono** (filtro sem achados 1,2 s quente e 8 s frio na maior Conversa; `buscar` de palavra comum global 4 s). **Resolvido no ciclo 32 (leituras em workers com prazo duro), release v0.30.0 em produção em 04/10/2026**; spec, plano e revisões em `11-tarefas/20261004-*1132*` da pasta de trabalho. O prazo (25 s) e o abandono já protegem o servidor; mesmo assim, ao medir em produção, **uma consulta pesada por vez e `curl --max-time` curto**: um Inquilino ocupa N−1 workers e a própria rajada atrasa as suas outras consultas.
 
-- **A Hera roda no thinkpad (`malote-ouvinte@hera`, Inquilino próprio) e o Envio está
-  provado em produção pelos dois caminhos** — local no thinkpad e por rede do macbook
+- **Um agente roda no host de produção (`malote-ouvinte@<conta>`, Inquilino próprio) e o Envio está
+  provado em produção pelos dois caminhos** — local no host de produção e por rede da máquina cliente
   (`malote enviar --chave-em`). Resíduos de **decisão do Titular**, não do código: a
-  instalação descartável do macbook (`~/malote-hera-verificacao`, com 4 Mensagens reais e
-  sem vínculo) e as duas cópias renomeadas do vínculo (`*.migrado-para-thinkpad-*`, no
-  macbook — credenciais de uma sessão que já avançou). E o vínculo da Hera tem **uma única
-  cópia viva**, no thinkpad, fora do `jd-backup` (tarefa #909): perdê-lo custa um
+  instalação descartável da máquina cliente (com 4 Mensagens reais e
+  sem vínculo) e as duas cópias renomeadas do vínculo (`*.migrado-para-<host>-*`, na
+  máquina cliente — credenciais de uma sessão que já avançou). E o vínculo do agente tem **uma única
+  cópia viva**, no host de produção, fora do `jd-backup` (tarefa #909): perdê-lo custa um
   pareamento novo, sem perder Mensagem.
 - **Sem prova de campo:** envio para **grupo**, imagem/documento **por rede** e a falha
   pós-envio (só teste, com erro injetado).
@@ -945,19 +942,19 @@ Repositório expõe services systemd. Convenções:
   (sempre RELATIVO ao Destino de Mídia) direto pro motor, sem juntar com
   `lerDestinoDeMidia` antes — toda Transcrição falhava com "No such file or directory"
   em qualquer instalação onde `malote servir` não rode do próprio Destino de Mídia (o
-  caso normal). Achado medindo o Acervo real da mentorada Renata (bosgame): 20 de 20
+  caso normal). Achado medindo o Acervo real de uma instalação de terceiro: 20 de 20
   falhas, mesma causa. Fix lê os Destinos de todos os Inquilinos de uma vez (fecha o
   Registro antes do `await` do motor, preservando o ciclo de vida original), resolve
   `join(destino.endereco, elegivel.caminho)` antes de chamar `transcrever`, e pula —
   sem marcar pendente — Inquilino sem Destino configurado. Suíte: **1090 testes**,
   mesma baseline de 3 falhas pré-existentes (`cli-entrada.test.ts`). Checado no
-  thinkpad (produção do Titular): `transcricoes` tem 20.199 linhas, todas
+  host de produção (produção do Titular): `transcricoes` tem 20.199 linhas, todas
   `fora-de-escopo` — o backfill do #1103 nunca rodou lá, então o Titular não foi
   afetado ainda, mas seria no primeiro `incluir-estoque`/áudio ao vivo processado.
-  **Pendente, fora do escopo deste agente:** levar o fix até o bosgame (fora do
-  `upgrade-fleet` por desenho, mesma situação do #1052/#1088) e reenfileirar as 20
+  **Pendente, fora do escopo deste agente:** levar o fix até a instalação de terceiro (fora do
+  distribuidor automático por desenho, mesma situação do #1052/#1088) e reenfileirar as 20
   falhas lá (`malote transcricao reprocessar --inquilino <id>`) depois que o código
-  chegar — ato de outro agente, por decisão do Titular de 25/09/2026 sobre o bosgame.
+  chegar — ato de outro agente, por decisão do Titular de 25/09/2026 sobre essa instalação.
 - **#1103 publicada e distribuída (v0.24.0) — três comandos de decisão do
   operador existem no binário de produção e nunca foram rodados contra o
   Acervo real: `malote midia extrair-duracao`, `malote transcricao
@@ -982,7 +979,7 @@ Repositório expõe services systemd. Convenções:
 - **#1089 (`pessoa promover-identificadores-nomeados`) não teve a medição de
   campo rodada ainda — falta saber quantos Identificadores o Acervo real
   promoveria hoje.** Adiada de propósito no `dev-04`: o checkout de
-  produção (thinkpad) está na branch `production`, que ainda não tem este
+  produção (host de produção) está na branch `production`, que ainda não tem este
   código (só `main` tem, até a release sair). Rodar em modo ensaio (sem
   `--com-efeito`) depois do release, e conferir se o número fica bem abaixo
   dos 11.043 brutos citados na spec original — a maioria era lixo do #1101,
@@ -1012,7 +1009,7 @@ Repositório expõe services systemd. Convenções:
   atribuição-lixo mais recente). Nenhuma limpeza rodou ainda — a tarefa #1101
   só impede que o problema cresça a partir de agora.
 - **#1070, #1068 e #1069 fechadas, release v0.22.0 publicada e distribuída no
-  thinkpad, verificada por efeito — o ciclo 23 (`malote-midia-ao-vivo-e-transcricao`)
+  host de produção, verificada por efeito — o ciclo 23 (`malote-midia-ao-vivo-e-transcricao`)
   está pronto para `neg-05-aceita-ciclo`.**
 - **Sem comando de retry para mídia ao vivo que falhou ao baixar (#1068) — tarefa
   #1084 aberta.** Medido em produção logo após o deploy: 2 falhas reais (`document`
@@ -1027,7 +1024,7 @@ Repositório expõe services systemd. Convenções:
   `malote midia trazer` a partir de um backup do aparelho.
 - **RESOLVIDO em 29/09/2026 (#1088): as Conversas fantasma de Status já gravadas
   agora são limpas por migração — passo `REMOVE_STATUS_FANTASMA_V22` (Acervo
-  v21→v22).** Critério final, medido contra o thinkpad e mais completo que a
+  v21→v22).** Critério final, medido contra o host de produção e mais completo que a
   suspeita original de sufixo de string: `json_extract(bruto, '$.ZSESSIONTYPE')
   = 3`, que cobre as duas formas de endereço (`@status` e `@lid.status`) —
   1060 candidatas em produção, das quais 696 com zero Mensagem (removidas) e
@@ -1038,8 +1035,8 @@ Repositório expõe services systemd. Convenções:
   caminho, porque o número de linhas removidas varia por instalação e não dá
   para declarar um `-N` fixo. `participacoes`/`metadados_de_coletiva` cascadeiam
   (`ON DELETE CASCADE`) e entram na mesma declaração. **Isto só limpa
-  instalações que rodarem a migração** — o Acervo da Renata (bosgame) continua
-  fora do `upgrade-fleet` por desenho (mesma situação da #1052), então levar
+  instalações que rodarem a migração** — o Acervo da instalação de terceiro continua
+  fora do distribuidor automático por desenho (mesma situação da #1052), então levar
   o fix até lá é ato separado, fora do escopo deste agente.
 - **Lote que cai no derrame (Acervo ocupado) perde a mídia que trouxer (#1068).** O
   reprocessamento (`malote ouvinte reprocessar`) chama `receberEvento` de novo sobre o
@@ -1049,7 +1046,7 @@ Repositório expõe services systemd. Convenções:
   limite não resolvido. Se aparecer de novo (derrame é raro — só sob disputa de
   escrita), é trabalho novo, não bug da #1068.
 - **RESOLVIDO em 23/09/2026, mas o mecanismo que quase doeu fica registrado: o
-  `upgrade-fleet` roda a cada 30 min no thinkpad (`*/30 * * * *`, `trust: "immediate"`
+  distribuidor automático roda a cada 30 min no host de produção (`*/30 * * * *`, `trust: "immediate"`
   para o pacote `malote`), e aplicou a v0.21.0 sozinho — pull + restart — cerca de 7
   minutos ANTES da Ação Documentada rodar `malote acervo migrar`.** O `malote-ouvinte`
   se recusou a subir exatamente como desenhado (`o passo 19 para 20 precisa das
@@ -1060,15 +1057,15 @@ Repositório expõe services systemd. Convenções:
   19. Não houve dano real (0 requisições no log do servidor nessa janela), mas foi
   sorte de tráfego, não garantia. **Formalizado no `ops-10-publica-release`
   (passo 4a, 23/09/2026):** release que muda a forma do Acervo checa `trust` e o
-  timer do `upgrade-fleet` no host **antes** do merge — rebaixa o `trust` para essa
+  timer do distribuidor automático no host **antes** do merge — rebaixa o `trust` para essa
   release, ou garante a Ação Documentada pronta e ensaiada antes do merge, para
-  caber na mesma janela do automático. Nenhum ajuste feito no `upgrade-fleet.json`
+  caber na mesma janela do automático. Nenhum ajuste feito no manifesto do distribuidor
   do malote ainda (segue `immediate`) — a mitigação escolhida foi a disciplina de
   timing no `ops-10`, não a mudança de `trust`; reabrir esta decisão se uma
   próxima corrida real acontecer.
 
 - **O `post_install` do malote RODA: toda release reinicia o ouvinte.** Medido em 12/09/2026
-  na release v0.10.0, o `upgrade-now` executou `restart:malote-ouvinte@<conta>.service`. Duas
+  na release v0.10.0, o comando de distribuição executou `restart:malote-ouvinte@<conta>.service`. Duas
   consequências que valem para **toda** release:
   - o ouvinte sobe com o código novo e **migra as bases sozinho** ao abri-las. Se a release
     muda a forma do Acervo ou do Registro, pare o serviço e faça backup **antes** — código

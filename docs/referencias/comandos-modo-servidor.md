@@ -164,7 +164,7 @@ etapas estão na seção 4.3 do [guia do host](../guias/host-continuo-ouvinte-e-
 ## Consulta local
 
 As mesmas consultas do modo cliente, lendo o Acervo direto, com `--inquilino <id>`:
-`conversas`, `mensagens`, `anexos`, `exportar`, `buscar`, `identificar <valor>`. Flags, formatos e o
+`conversas`, `mensagens`, `anexos`, `exportar`, `buscar`, `pessoas`, `participantes` e `identificar <valor>`. Flags, formatos e o
 significado de `--remetente` e `--autor` estão na [referência do modo cliente](comandos-modo-cliente.md); a
 diferença é o `--inquilino` e o fato de **`malote midia <id>`** (os bytes do Anexo) só existir por rede:
 local, o arquivo já está em disco, e o caminho vem no campo `caminho` de `mensagens --json`.
