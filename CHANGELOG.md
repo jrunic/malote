@@ -23,6 +23,29 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+**Muda a forma do Registro (v7 para v8).** Faça cópia do `registro.db` antes de atualizar; o servidor e cada ouvinte migram o
+Registro ao subir.
+
+### Adicionado
+- A Configuração de WhatsApp conhece o telefone, o endereço do telefone (JID) e o endereço opaco (LID) da própria conta.
+  `configuracao criar --fonte whatsapp` passa a exigir `--telefone`; `configuracao definir-telefone` completa a de uma Configuração que
+  não o tem; `configuracao listar` (local e por rede) mostra os três.
+- O ouvinte confere o vínculo contra o telefone da Configuração e se recusa a subir (código 2, sem imprimir o número) quando o vínculo
+  é de outra conta. A conferência aceita o celular brasileiro com e sem o nono dígito. Uma Configuração sem telefone aprende o do
+  vínculo na primeira conexão.
+- O ouvinte declara ao Acervo o endereço da própria conta e a correspondência entre as duas formas dele.
+
+### Mudado
+- `ouvir --numero` deixa de ser uma declaração à parte: vale o telefone da Configuração; um `--numero` diferente dele é recusado, e numa
+  Configuração sem telefone ele o declara.
+- `GET /configuracoes` ganha os campos `telefone`, `jid` e `lid` (aditivos).
+- Mensagens que chegam depois de o ouvinte parar ou recusar a conta deixam de ser processadas.
+
+### Corrigido
+- A migração do Registro e do Acervo relê a forma gravada dentro da transação e a abre em modo imediato: dois processos que abrem a base
+  de forma antiga ao mesmo tempo (o servidor e cada ouvinte reiniciam juntos) não aplicam mais o mesmo passo, e o segundo não morre com
+  `table ... already exists`.
+
 ## [0.30.2] — 2026-10-05
 
 Não muda a forma do Acervo nem do Registro. A única mudança de código é a `--ajuda`.

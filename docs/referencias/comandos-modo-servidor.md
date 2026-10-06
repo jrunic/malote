@@ -82,6 +82,9 @@ exigem o apelido, sem padrão.**
 | `material intervalo --inquilino <id> [--configuracao <apelido>] --dias <n>` | Declara de quantos em quantos dias se espera um Material novo |
 | `material atraso --inquilino <id>` | Mostra o atraso do Material em relação ao intervalo declarado |
 
+O mesmo telefone não pode pertencer a duas Configurações de WhatsApp do mesmo Inquilino, e o celular
+brasileiro com e sem o nono dígito conta como o mesmo telefone.
+
 ## Ouvinte (WhatsApp ao vivo)
 
 | comando | o que faz |

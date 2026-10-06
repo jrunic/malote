@@ -130,6 +130,12 @@ a biblioteca de recepção é não-oficial; a plataforma pode bloquear a conta; 
 não promete confidencialidade do conteúdo contra quem administra o host — o operador do
 servidor, por desenho, pode ler tudo que está no disco.
 
+Se a Configuração já tem telefone (`configuracao criar --telefone`), o `--numero` é opcional: vale o
+da Configuração, e um `--numero` diferente dele é recusado antes de pedir o código. Se a Configuração
+não tem telefone, o `--numero` o declara. Em toda partida o ouvinte confere o vínculo contra o telefone
+da Configuração e grava o que o vínculo mostra; `configuracao listar` mostra o resultado. Se o vínculo
+for de outra conta, o ouvinte sai com código 2, sem imprimir o número, e não grava nada.
+
 ### 3.3 Unidade de serviço (uma por conta)
 
 `/etc/systemd/system/malote-ouvinte@.service` — template, `%i` é o nome da conta:
@@ -150,7 +156,8 @@ RestartSec=10
 # Contrato de saída medido no produto:
 #   0  = parada pedida (sinal) — não é falha
 #   1  = vínculo invalidado pela plataforma — exige pareamento humano no aparelho
-#   2  = invocação errada (inquilino/conta/configuração) — erro de configuração
+#   2  = erro de configuração — invocação errada (inquilino/conta/configuração), ou o vínculo é de
+#        outra conta que a da Configuração (o telefone não confere): corrija o cadastro, não reinicie
 # Reiniciar em laço um vínculo invalidado não resolve e pode agravar.
 RestartPreventExitStatus=0 1 2
 StandardOutput=append:/var/log/malote/ouvinte-%i.log
@@ -347,7 +354,7 @@ linhas (ver o guia de armazenamento).
 | situação | o que fazer |
 |---|---|
 | vínculo invalidado (unit sai com código 1) | pareamento humano: rode o `ouvir` com `--numero` no terminal, confirme no aparelho, reinicie o unit |
-| trocar a versão | `git fetch && git checkout <tag-ou-branch>` + `npm ci` + `systemctl restart` dos units |
+| trocar a versão | `git fetch && git checkout <tag-ou-branch>` + `npm ci` + `systemctl restart` dos units. **Release que muda a forma do Registro** (a 0.31.0 é uma): faça cópia do `registro.db` antes — o servidor e cada ouvinte migram o Registro ao subir, com segurança entre vários abridores, mas a cópia é o que permite voltar |
 | conferir o que o ouvinte derramou | `ouvinte estado --json` (campo derrame) e `ouvinte reprocessar` — recusa se o ouvinte estiver no ar |
 | segunda conta de WhatsApp | novo material importado com Configuração própria + novo unit `malote-ouvinte@<outra-conta>` |
 | revogar quem consulta | `acesso chave revogar` |

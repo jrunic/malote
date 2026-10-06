@@ -151,3 +151,14 @@ test('definir-telefone numa Configuracao ja CONFERIDA pelo vinculo sai 2 dizendo
     limpar();
   }
 });
+
+test('a --ajuda declara --telefone em criar e o comando definir-telefone', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const { saida } = rodar(raiz, ['--ajuda']);
+    assert.match(saida, /configuracao criar[^\n]*--telefone/);
+    assert.match(saida, /configuracao definir-telefone[^\n]*--telefone/);
+  } finally {
+    limpar();
+  }
+});
