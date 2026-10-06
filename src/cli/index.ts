@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { acrescentarEtiquetas } from '../nucleo/etiqueta-de-participacao.js';
 import { execFileSync } from 'node:child_process';
 import {
   copyFileSync,
@@ -1934,7 +1935,13 @@ function executarComAtor(
         // Sem --em: agora. Com --em: fim do dia capado ao Alcance, a regra
         // medida que o CONTEXTO registra.
         const em = emParam === undefined ? Date.now() : expandirData(emParam, 'fim');
-        escrever(JSON.stringify(quemEstavaEm(acervo, { conversaId: conversa, em }), null, 2));
+        escrever(
+          JSON.stringify(
+            acrescentarEtiquetas(acervo, quemEstavaEm(acervo, { conversaId: conversa, em })),
+            null,
+            2,
+          ),
+        );
       } finally {
         acervo.fechar();
       }

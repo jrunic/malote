@@ -96,3 +96,48 @@ export function etiquetasDosIdentificadores(
   }
   return mapa;
 }
+
+/** O que `participantes` acrescenta a cada membro. */
+export interface EtiquetaDoMembro {
+  /** O texto vigente, ou `null` quando ausente OU removida. */
+  etiqueta: string | null;
+  /** O instante do ultimo evento ate a data; `null` quando NUNCA observada. */
+  etiquetaEm: number | null;
+}
+
+type ComEtiquetas<R> = {
+  [K in keyof R]: K extends 'presentes' | 'sairamAntes' | 'aindaNaoEntraram' | 'semInformacao'
+    ? Array<(R[K] extends Array<infer U> ? U : never) & EtiquetaDoMembro>
+    : R[K];
+};
+
+/**
+ * Acrescenta `etiqueta` e `etiquetaEm` a CADA membro que a resposta de presenca
+ * ja lista, com UMA consulta por Conversa. NAO muda o conjunto de membros nem a
+ * regra de Alcance: quem so tem etiqueta nao entra na lista, e fora do Alcance
+ * a lista segue como estava. A data e a MESMA que a resposta usou (`em`), entao
+ * a etiqueta herda o comportamento do resto do comando.
+ */
+export function acrescentarEtiquetas<
+  R extends {
+    conversaId: string;
+    em: number;
+    presentes: Array<{ identificadorId: string }>;
+    sairamAntes: Array<{ identificadorId: string }>;
+    aindaNaoEntraram: Array<{ identificadorId: string }>;
+    semInformacao: Array<{ identificadorId: string }>;
+  },
+>(acervo: Acervo, resposta: R): ComEtiquetas<R> {
+  const vigentes = etiquetasVigentesDaConversa(acervo, resposta.conversaId, resposta.em);
+  const acrescentar = <T extends { identificadorId: string }>(p: T): T & EtiquetaDoMembro => {
+    const v = vigentes.get(p.identificadorId);
+    return { ...p, etiqueta: v?.texto ?? null, etiquetaEm: v?.em ?? null };
+  };
+  return {
+    ...resposta,
+    presentes: resposta.presentes.map(acrescentar),
+    sairamAntes: resposta.sairamAntes.map(acrescentar),
+    aindaNaoEntraram: resposta.aindaNaoEntraram.map(acrescentar),
+    semInformacao: resposta.semInformacao.map(acrescentar),
+  } as ComEtiquetas<R>;
+}

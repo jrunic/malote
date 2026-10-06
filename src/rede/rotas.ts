@@ -30,6 +30,7 @@ import {
 } from '../nucleo/envio.js';
 import { identificarPorValor } from '../nucleo/identificar.js';
 import { enriquecerPresenca } from '../nucleo/nomes-em-lote.js';
+import { acrescentarEtiquetas } from '../nucleo/etiqueta-de-participacao.js';
 import { lerPrecedenciasDeNome, type PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
 
 /**
@@ -1043,7 +1044,10 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       registro.fechar();
     }
     json(res, 200, {
-      presenca: enriquecerPresenca(ctx.acervo, quemEstavaEm(ctx.acervo, { conversaId, em }), precedencia),
+      presenca: acrescentarEtiquetas(
+        ctx.acervo,
+        enriquecerPresenca(ctx.acervo, quemEstavaEm(ctx.acervo, { conversaId, em }), precedencia),
+      ),
     });
     return;
   }
