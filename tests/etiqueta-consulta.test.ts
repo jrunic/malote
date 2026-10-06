@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { identificarPorValor } from '../src/nucleo/identificar.js';
+import { PRECEDENCIA } from './ajuda/identidade.js';
+import { formatarIdentificacao } from '../src/cli/identificar-texto.js';
 import { cenario } from './ajuda/acervo.js';
 import { umaColetiva, umMembro } from './ajuda/etiqueta.js';
 import { registrarEtiqueta, registrarTransicao } from '../src/nucleo/escrita.js';
@@ -113,6 +116,57 @@ test('participantes faz UMA consulta de etiquetas por Conversa, nunca uma por me
     }) as typeof acervo.preparar;
     acrescentarEtiquetas(acervo, resposta);
     assert.equal(pedidos, 1, 'o enriquecimento tem de ser UMA consulta por Conversa');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('identificar: uma etiqueta vigente por Conversa onde houve evento, e a removida e nula', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Padme');
+    const g1 = umaColetiva(acervo, '120363000000000001@g.us');
+    const g2 = umaColetiva(acervo, '120363000000000002@g.us');
+    const a = umMembro(acervo, '5565911110001');
+    etiqueta(acervo, g1, a, 'v1', T0, 'EV1');
+    etiqueta(acervo, g1, a, 'v2', T0 + 1000, 'EV2');
+    etiqueta(acervo, g2, a, '', T0 + 2000, 'EV3');
+    const r = identificarPorValor(acervo, { valor: '5565911110001@s.whatsapp.net' }, PRECEDENCIA);
+    const doA = r.identificadores.find((i) => i.id === a);
+    assert.equal(doA?.etiquetas.length, 2);
+    assert.equal(doA?.etiquetas.find((e) => e.conversaId === g1)?.texto, 'v2');
+    assert.equal(doA?.etiquetas.find((e) => e.conversaId === g2)?.texto, null, 'a removida e nula, com o instante da remocao');
+    assert.equal(doA?.etiquetas.find((e) => e.conversaId === g2)?.em, T0 + 2000);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('identificar sem etiqueta devolve lista vazia, e o resto da resposta nao muda', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Padme');
+    umMembro(acervo, '5565911110001');
+    const r = identificarPorValor(acervo, { valor: '5565911110001@s.whatsapp.net' }, PRECEDENCIA);
+    assert.deepEqual(r.identificadores[0]?.etiquetas, []);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('identificar em texto: uma linha por etiqueta, a removida marcada', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Padme');
+    const g1 = umaColetiva(acervo, '120363000000000001@g.us');
+    const g2 = umaColetiva(acervo, '120363000000000002@g.us');
+    const a = umMembro(acervo, '5565911110001');
+    etiqueta(acervo, g1, a, 'Torre A', T0, 'EV1');
+    etiqueta(acervo, g2, a, 'x', T0, 'EV2');
+    etiqueta(acervo, g2, a, '', T0 + 1000, 'EV3');
+    const linhas = formatarIdentificacao(identificarPorValor(acervo, { valor: '5565911110001@s.whatsapp.net' }, PRECEDENCIA));
+    assert.ok(linhas.some((l) => l.includes(`etiqueta em ${g1}: Torre A`)));
+    assert.ok(linhas.some((l) => l.includes(`etiqueta em ${g2}: (removida)`)));
   } finally {
     c.limpar();
   }

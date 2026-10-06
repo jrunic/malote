@@ -27,6 +27,9 @@ export function formatarIdentificacao(r: Identificacao): string[] {
     }
     linhas.push(`  conversas: ${i.conversas}  mensagens: ${i.mensagens}`);
     linhas.push(`  primeira: ${quando(i.primeiraMensagemEm)}  ultima: ${quando(i.ultimaMensagemEm)}`);
+    for (const e of i.etiquetas) {
+      linhas.push(`  etiqueta em ${e.conversaId}: ${e.texto === null ? '(removida)' : e.texto}  (${quando(e.em)})`);
+    }
   }
   linhas.push('');
   linhas.push('Formas conhecidas:');
