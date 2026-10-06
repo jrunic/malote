@@ -146,12 +146,43 @@ const CATALOGO_PREFERIDO_V7: PassoDeMigracao = {
   aplicar: (db) => db.exec(CATALOGOS_PREFERIDOS_V7),
 };
 
+/**
+ * DDL CONGELADO da forma 8. Duplica o texto do schema fresco DE PROPOSITO.
+ */
+const ENDERECOS_DA_CONTA_V8 = `
+  CREATE TABLE enderecos_da_conta (
+    configuracao_id TEXT PRIMARY KEY,
+    telefone        TEXT,
+    jid             TEXT,
+    lid             TEXT,
+    declarado_em    TEXT,
+    conferido_em    TEXT,
+    FOREIGN KEY (configuracao_id) REFERENCES configuracoes_de_adaptador(id) ON DELETE CASCADE
+  );
+`;
+
+/**
+ * Os Enderecos da Conta entram em instalacao que ja existe (spec #1149).
+ *
+ * Tabela nova, e nao coluna: o passo nao recria tabela referenciada. Nasce
+ * vazia — as Configuracoes que existiam antes se completam na primeira
+ * conexao do ouvinte, ou por `configuracao definir-telefone`.
+ */
+const ENDERECOS_DA_CONTA_PASSO_V8: PassoDeMigracao = {
+  de: 7,
+  para: 8,
+  descricao: 'acrescenta os Enderecos da Conta por Configuracao',
+  tabelasNovas: ['enderecos_da_conta'],
+  aplicar: (db) => db.exec(ENDERECOS_DA_CONTA_V8),
+};
+
 export const PASSOS_DO_REGISTRO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CHAVES_DE_ACESSO,
   ATOR_V5,
   PASTA_DE_ENTRADA_V6,
   CATALOGO_PREFERIDO_V7,
+  ENDERECOS_DA_CONTA_PASSO_V8,
 ];
 
 export const PLANO_DO_REGISTRO: PlanoDeMigracao = {

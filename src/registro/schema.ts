@@ -20,7 +20,7 @@ import type { Database } from 'better-sqlite3';
  * reconstroi — o Acervo tem o material exportado como fonte. Tabela completa
  * da politica na ADR local `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_REGISTRO = 7;
+export const VERSAO_SCHEMA_REGISTRO = 8;
 
 /**
  * Forma mais antiga do Registro que a maquina de migracao alcanca.
@@ -143,6 +143,26 @@ export function aplicarSchemaRegistro(db: Database): void {
       configuracao_id TEXT PRIMARY KEY,
       dias            INTEGER NOT NULL CHECK (dias > 0),
       declarado_em    TEXT NOT NULL,
+      FOREIGN KEY (configuracao_id) REFERENCES configuracoes_de_adaptador(id) ON DELETE CASCADE
+    );
+
+    -- Telefone, JID e LID da conta que uma Configuracao de WhatsApp representa
+    -- (spec #1149). O telefone e DECLARADO pelo humano; o JID e o LID sao o que
+    -- o vinculo mostra, sem sufixo de dispositivo, e conferido_em marca que
+    -- o vinculo confirmou a conta. Tabela nova, e nao coluna, pela mesma razao
+    -- mecanica da tabela de contas: o passo de migracao acrescenta tabela.
+    --
+    -- Dado POR FONTE (como as tabelas de conta e de Pasta de Entrada), e por
+    -- isso diz jid e lid: o vocabulario neutro e do NUCLEO (o Acervo), cujo
+    -- guarda de vocabulario varre o schema dele. Escolha consciente: nao
+    -- renomear um lado para casar com o outro.
+    CREATE TABLE IF NOT EXISTS enderecos_da_conta (
+      configuracao_id TEXT PRIMARY KEY,
+      telefone        TEXT,
+      jid             TEXT,
+      lid             TEXT,
+      declarado_em    TEXT,
+      conferido_em    TEXT,
       FOREIGN KEY (configuracao_id) REFERENCES configuracoes_de_adaptador(id) ON DELETE CASCADE
     );
 

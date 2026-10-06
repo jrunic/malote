@@ -8,6 +8,7 @@ import { criarInquilino } from '../src/registro/registro.js';
 import { abrirAcervo } from '../src/nucleo/acervo.js';
 import { registrarConversa } from '../src/nucleo/escrita.js';
 import { resolverConfiguracao } from '../src/registro/configuracao-adaptador.js';
+import { declararTelefoneDaConta } from '../src/registro/endereco-da-conta.js';
 import { registrarMensagem } from '../src/nucleo/escrita.js';
 import { marcarMensagem, marcarConversa } from '../src/nucleo/marca-do-titular.js';
 import { registrarAnexo } from '../src/nucleo/escrita.js';
@@ -231,25 +232,43 @@ test('GET /conversas com configuracao desconhecida devolve 400', async () => {
   }
 });
 
-test('GET /configuracoes devolve apelido e fonte, sem o id interno', async () => {
+test('GET /configuracoes devolve apelido, fonte e os enderecos da conta, sem o id interno', async () => {
   const c = await cenarioDeRede();
   try {
     const chave = c.emitir(c.inquilinoA);
-    resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'principal');
+    const wa = resolverConfiguracao(c.registro, c.inquilinoA, 'whatsapp', 'principal');
     resolverConfiguracao(c.registro, c.inquilinoA, 'instagram', 'principal');
+    declararTelefoneDaConta(c.registro, wa.id, '5511900000001');
 
     const r = await c.pedir('/configuracoes', chave.valor);
     assert.equal(r.status, 200);
-    const corpo = JSON.parse(r.corpo) as { configuracoes: Array<{ apelido: string; fonte: string }> };
+    const corpo = JSON.parse(r.corpo) as {
+      configuracoes: Array<{ apelido: string; fonte: string; telefone: string | null; jid: string | null; lid: string | null }>;
+    };
 
     assert.equal(corpo.configuracoes.length, 2);
     for (const cfg of corpo.configuracoes) {
-      assert.equal(Object.keys(cfg).sort().join(','), 'apelido,fonte');
+      assert.equal(Object.keys(cfg).sort().join(','), 'apelido,fonte,jid,lid,telefone');
     }
-    assert.deepEqual(
-      corpo.configuracoes.map((cfg) => `${cfg.fonte}/${cfg.apelido}`).sort(),
-      ['instagram/principal', 'whatsapp/principal'],
-    );
+    const whatsapp = corpo.configuracoes.find((cfg) => cfg.fonte === 'whatsapp');
+    assert.deepEqual([whatsapp?.telefone, whatsapp?.jid, whatsapp?.lid], ['5511900000001', null, null]);
+    const instagram = corpo.configuracoes.find((cfg) => cfg.fonte === 'instagram');
+    assert.deepEqual([instagram?.telefone, instagram?.jid, instagram?.lid], [null, null, null]);
+  } finally {
+    await c.parar();
+  }
+});
+
+test('GET /configuracoes nao mostra a conta de OUTRO Inquilino', async () => {
+  const c = await cenarioDeRede();
+  try {
+    const chaveA = c.emitir(c.inquilinoA);
+    const b = resolverConfiguracao(c.registro, c.inquilinoB, 'whatsapp', 'principal');
+    declararTelefoneDaConta(c.registro, b.id, '5511900000002');
+    const r = await c.pedir('/configuracoes', chaveA.valor);
+    const corpo = JSON.parse(r.corpo) as { configuracoes: unknown[] };
+    assert.equal(corpo.configuracoes.length, 0);
+    assert.equal(r.corpo.includes('5511900000002'), false, 'o telefone do outro Inquilino vazou');
   } finally {
     await c.parar();
   }

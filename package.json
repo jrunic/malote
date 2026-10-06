@@ -1,6 +1,6 @@
 {
   "name": "malote",
-  "version": "0.30.2",
+  "version": "0.31.0",
   "description": "Arquivo local das conversas de uma pessoa, consultável por humano e por agente.",
   "type": "module",
   "license": "MIT",

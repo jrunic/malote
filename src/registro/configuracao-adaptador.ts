@@ -20,6 +20,11 @@ export interface ConfiguracaoDeAdaptador {
   apelido: string;
   /** Qual conta dentro da Fonte. Vocabulário do Adaptador; nulo até declarada. */
   conta: string | null;
+  /** Telefone declarado (so digitos). Nulo ate alguem declarar ou o vinculo mostrar. */
+  telefone: string | null;
+  /** JID e LID que o vinculo mostrou, sem sufixo de dispositivo. Nulos ate a primeira conferencia. */
+  jid: string | null;
+  lid: string | null;
   criadaEm: string;
 }
 
@@ -30,12 +35,17 @@ interface LinhaConfiguracao {
   apelido: string;
   criada_em: string;
   conta: string | null;
+  telefone: string | null;
+  jid: string | null;
+  lid: string | null;
 }
 
 const SELECAO = `
-  SELECT c.id, c.inquilino_id, c.fonte, c.apelido, c.criada_em, a.conta
+  SELECT c.id, c.inquilino_id, c.fonte, c.apelido, c.criada_em, a.conta,
+         e.telefone, e.jid, e.lid
     FROM configuracoes_de_adaptador c
-    LEFT JOIN contas_de_adaptador a ON a.configuracao_id = c.id`;
+    LEFT JOIN contas_de_adaptador a ON a.configuracao_id = c.id
+    LEFT JOIN enderecos_da_conta e ON e.configuracao_id = c.id`;
 
 function paraConfiguracao(l: LinhaConfiguracao): ConfiguracaoDeAdaptador {
   return {
@@ -44,6 +54,9 @@ function paraConfiguracao(l: LinhaConfiguracao): ConfiguracaoDeAdaptador {
     fonte: l.fonte,
     apelido: l.apelido,
     conta: l.conta,
+    telefone: l.telefone,
+    jid: l.jid,
+    lid: l.lid,
     criadaEm: l.criada_em,
   };
 }
@@ -89,7 +102,7 @@ export function resolverConfiguracao(
     },
   );
 
-  return { id, inquilinoId, fonte, apelido, conta: null, criadaEm };
+  return { id, inquilinoId, fonte, apelido, conta: null, telefone: null, jid: null, lid: null, criadaEm };
 }
 
 /** Declara qual conta da Fonte esta Configuração representa. */

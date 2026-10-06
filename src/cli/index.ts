@@ -162,6 +162,12 @@ import {
 import { lerUltimoRetrato } from './retrato.js';
 import { lerPulos } from './pulos.js';
 import { configuracaoPorApelido } from '../registro/configuracao-adaptador.js';
+import { configuracaoComTelefoneEquivalente } from './telefone-da-conta.js';
+import {
+  declararTelefoneDaConta,
+  TelefoneJaConferidoError,
+  telefoneValido,
+} from '../registro/endereco-da-conta.js';
 import { lerPastaDeEntrada } from '../registro/pasta-de-entrada.js';
 import { receberEvento } from '../adaptadores/whatsapp/ao-vivo.js';
 import { lerCorrespondencia } from './vigilancia.js';
@@ -289,7 +295,8 @@ Titular (nao exige chave enquanto nao houver rede):
   malote importar   --inquilino <id> --fonte instagram --material <caminho> --titular <nome> --configuracao <apelido>
   malote importar   --inquilino <id> --fonte contatos  --material <arquivo.vcf> [--configuracao <apelido>] [--reprocessar]
   malote configuracao listar    --inquilino <id>
-  malote configuracao criar     --inquilino <id> --fonte <nome> --configuracao <apelido> [--conta <nome>]
+  malote configuracao criar     --inquilino <id> --fonte <nome> --configuracao <apelido> [--conta <nome>] [--telefone <so digitos>]
+  malote configuracao definir-telefone --inquilino <id> --configuracao <apelido> --telefone <so digitos>
   malote entrada declarar       --inquilino <id> --fonte <nome> --configuracao <apelido> --pasta <caminho> --natureza completo|parcial [--titular-na-fonte <nome>]
   malote entrada listar         --inquilino <id>
   malote midia trazer           --inquilino <id> --material <caminho> [--conta pessoal|business]
@@ -1471,7 +1478,13 @@ function executarComAtor(
       const existe = listarInquilinos(registro).some((i) => i.id === inquilino);
       if (!existe) throw new Error(`Inquilino desconhecido: ${inquilino}`);
       for (const c of listarConfiguracoes(registro, inquilino)) {
-        escrever(`${c.fonte}/${c.apelido}  conta: ${c.conta ?? '(nao declarada)'}`);
+        const base = `${c.fonte}/${c.apelido}  conta: ${c.conta ?? '(nao declarada)'}`;
+        // So WhatsApp tem Enderecos da Conta; a linha das outras Fontes nao muda.
+        escrever(
+          c.fonte === 'whatsapp'
+            ? `${base}  telefone: ${c.telefone ?? '(nao declarado)'}  jid: ${c.jid ?? '(nao conferido)'}  lid: ${c.lid ?? '(nao conferido)'}`
+            : base,
+        );
       }
       return 0;
     }
@@ -1483,14 +1496,83 @@ function executarComAtor(
       if (inquilino === undefined || fonte === undefined || apelido === undefined) {
         escrever(
           'Uso: malote configuracao criar --inquilino <id> --fonte <nome> ' +
-            '--configuracao <apelido> [--conta <nome>]',
+            '--configuracao <apelido> [--conta <nome>] [--telefone <so digitos, com codigo do pais>]',
         );
+        return 2;
+      }
+      const telefone = opcao(argumentos, 'telefone');
+      // O telefone e conferido ANTES de criar qualquer coisa: valor errado e
+      // erro de USO (2), e nada fica gravado.
+      if (fonte === 'whatsapp') {
+        if (telefone === undefined || !telefoneValido(telefone)) {
+          escrever(
+            'Uso: malote configuracao criar --fonte whatsapp exige --telefone <so digitos, ' +
+              'com codigo do pais, de 10 a 15>, por exemplo 5511900000001.',
+          );
+          return 2;
+        }
+        const outra = configuracaoComTelefoneEquivalente(registro, inquilino, telefone);
+        if (outra !== undefined && outra.apelido !== apelido) {
+          escrever(`Esse telefone ja pertence a Configuracao ${outra.apelido} deste Inquilino.`);
+          return 2;
+        }
+      } else if (telefone !== undefined) {
+        escrever('--telefone so existe para --fonte whatsapp.');
         return 2;
       }
       const cfg = resolverConfiguracao(registro, inquilino, fonte, apelido);
       const conta = opcao(argumentos, 'conta');
       if (conta !== undefined) definirContaDaConfiguracao(registro, cfg.id, conta);
+      if (telefone !== undefined) {
+        try {
+          declararTelefoneDaConta(registro, cfg.id, telefone);
+        } catch (erro) {
+          if (erro instanceof TelefoneJaConferidoError) {
+            escrever(erro.message);
+            return 2;
+          }
+          throw erro;
+        }
+      }
       escrever(`${fonte}/${apelido}  conta: ${conta ?? cfg.conta ?? '(nao declarada)'}`);
+      return 0;
+    }
+
+    if (grupo === 'configuracao' && sub === 'definir-telefone') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      const apelido = opcao(argumentos, 'configuracao');
+      const telefone = opcao(argumentos, 'telefone');
+      if (inquilino === undefined || apelido === undefined || telefone === undefined) {
+        escrever(
+          'Uso: malote configuracao definir-telefone --inquilino <id> --configuracao <apelido> ' +
+            '--telefone <so digitos, com codigo do pais>',
+        );
+        return 2;
+      }
+      if (!telefoneValido(telefone)) {
+        escrever('Telefone invalido: use so digitos, com codigo do pais (de 10 a 15).');
+        return 2;
+      }
+      const cfg = configuracaoPorApelido(registro, inquilino, 'whatsapp', apelido);
+      if (cfg === undefined) {
+        escrever(`Configuracao desconhecida: whatsapp/${apelido}`);
+        return 2;
+      }
+      const outra = configuracaoComTelefoneEquivalente(registro, inquilino, telefone, cfg.id);
+      if (outra !== undefined) {
+        escrever(`Esse telefone ja pertence a Configuracao ${outra.apelido} deste Inquilino.`);
+        return 2;
+      }
+      try {
+        declararTelefoneDaConta(registro, cfg.id, telefone);
+      } catch (erro) {
+        if (erro instanceof TelefoneJaConferidoError) {
+          escrever(erro.message);
+          return 2;
+        }
+        throw erro;
+      }
+      escrever(`whatsapp/${apelido}  telefone: ${telefone}`);
       return 0;
     }
 

@@ -326,7 +326,19 @@ export function migrar(
     const aplicados: PassoAplicado[] = [];
     const agora = new Date().toISOString();
 
+    let outroAbridorJaMigrou = false;
     db.transaction(() => {
+      // Dois abridores que leem a forma antiga ao mesmo tempo (o servidor e cada ouvinte reiniciam
+      // juntos) chegam aqui os dois. A forma e RELIDA dentro da transacao — que e IMMEDIATE, ver abaixo —
+      // porque so entao se sabe se o outro ja migrou; reaplicar o passo quebraria com "already exists".
+      const gravadaAgora = versaoGravada(db);
+      if (gravadaAgora === plano.corrente) {
+        outroAbridorJaMigrou = true;
+        return;
+      }
+      if (gravadaAgora !== gravada) {
+        throw new Error(`${caminho}: a forma mudou durante a migracao (${gravada} para ${String(gravadaAgora)}).`);
+      }
       for (const passo of pendentes) {
         passo.aplicar(db, contexto);
         db.prepare('UPDATE versao_schema SET versao = ?').run(passo.para);
@@ -364,8 +376,9 @@ export function migrar(
         `ok: ${contagemAntes.size} tabelas conferidas`,
         agora,
       );
-    })();
+    }).immediate();
 
+    if (outroAbridorJaMigrou) return { de: gravada, para: plano.corrente, passosAplicados: [] };
     return { de: gravada, para: plano.corrente, passosAplicados: aplicados };
   } finally {
     if (precisaDesligarFk && fkEstavaLigada) db.pragma('foreign_keys = ON');
@@ -414,6 +427,8 @@ export function migrarComTrilha(
   // transacao da migracao, e e ela a contabilidade. A trilha e o segundo
   // registro, para quem audita.
   const resultado = migrar(db, caminho, plano, contexto);
+  // O abridor atrasado (outro ja migrou) nao abre Operacao vazia.
+  if (resultado.passosAplicados.length === 0) return resultado;
 
   emOperacao(
     // Sem cache aqui, e de proposito: a migracao roda UMA vez por passo, entao

@@ -4,7 +4,7 @@ projeto: malote
 tipo: referencia
 descricao: "Linguagem universal do malote — termos do arquivo multi-inquilino de conversas, com sinônimos a evitar"
 status: aprovado
-aprovado-em: 2026-10-04
+aprovado-em: 2026-10-05
 escopo: repo:malote
 plataforma: "*"
 tags: [glossario, malote, linguagem-universal, ddd]
@@ -43,9 +43,18 @@ Uma conta de plataforma que alimenta o Acervo de um Inquilino. Identificada por
 `(Inquilino, Fonte, apelido)`, e **o apelido é informado por quem instala, nunca capturado do
 material** — é ele que distingue duas contas da mesma Fonte (`contatos/google` e
 `contatos/icloud`). Carrega também, quando a Fonte exige, o *Nome do Titular na Fonte*, a
-*Pasta de Entrada* e a *Natureza do Material*.
+*Pasta de Entrada* e a *Natureza do Material* — e, numa Configuração de WhatsApp, os
+*Endereços da Conta*.
 *Evitar*: conta, account, instância, credencial, e **handle** — que é exatamente o apelido, e
 ter dois nomes para o mesmo campo foi o que gerou a dúvida de 11/09/2026.
+
+**Endereços da Conta**:
+Os endereços da própria conta que uma Configuração de Adaptador representa: o telefone, que o
+humano **declara** ao cadastrá-la, e as duas formas que a Fonte entrega para ele — no WhatsApp, o
+endereço do telefone e o endereço opaco que a plataforma usa em alguns eventos —, que o vínculo
+**mostra** e que o produto grava sem o sufixo de dispositivo. O telefone declarado e o endereço que
+a Fonte entrega podem diferir pelo nono dígito do celular brasileiro; são a mesma conta.
+*Evitar*: número da conta, identidade da conta (é vocabulário do vínculo, não do produto).
 
 **Destino de Mídia**:
 Onde os arquivos de Anexo de um Inquilino ficam — um caminho de sistema de arquivos, configurado por Inquilino. Caminho montado por rede é atendido como qualquer outro; transporte remoto próprio ficou fora do v1 (28/08/2026).

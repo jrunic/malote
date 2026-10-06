@@ -155,6 +155,7 @@ test('mensagens por rede, ponta a ponta: subprocesso consulta o servidor real', 
 test('malote configuracao listar em modo rede: subprocesso consulta o servidor real', async () => {
   const { cenario } = await import('./ajuda/acervo.js');
   const cena = cenario();
+  let fecharServidor: (() => void) | undefined;
   try {
     const { id: inquilinoId } = cena.novoInquilino('Ahsoka');
     const { resolverConfiguracao } = await import('../src/registro/configuracao-adaptador.js');
@@ -164,6 +165,7 @@ test('malote configuracao listar em modo rede: subprocesso consulta o servidor r
     const srv = criarServidor({ dados: cena.raiz, porta: 0 });
     const http = srv.listen(0, '127.0.0.1');
     await new Promise<void>((r) => http.once('listening', r));
+    fecharServidor = () => http.close();
     const porta = (http.address() as { port: number }).port;
 
     const k = rodarComEnv(cena.raiz, {}, ['operador', 'chave', 'criar']);
@@ -192,10 +194,14 @@ test('malote configuracao listar em modo rede: subprocesso consulta o servidor r
       },
     );
     assert.equal(saida.codigo, 0, `stdout=${saida.stdout}\nstderr=${saida.stderr}`);
-    const corpo = JSON.parse(saida.stdout) as { configuracoes: Array<{ apelido: string; fonte: string }> };
-    assert.deepEqual(corpo.configuracoes, [{ apelido: 'principal', fonte: 'whatsapp' }]);
-    http.close();
+    const corpo = JSON.parse(saida.stdout) as { configuracoes: unknown[] };
+    // Os enderecos da conta sao campos ADITIVOS (spec #1149): nulos ate declarados ou conferidos.
+    assert.deepEqual(corpo.configuracoes, [
+      { apelido: 'principal', fonte: 'whatsapp', telefone: null, jid: null, lid: null },
+    ]);
   } finally {
+    // Fora do caminho feliz: uma asserção que falha antes daqui deixava o servidor aberto e pendurava a suíte inteira.
+    fecharServidor?.();
     cena.limpar();
   }
 });

@@ -1,6 +1,7 @@
 import { existsSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import type { MensagemRecebida } from './ao-vivo.js';
+import type { IdentidadeBrutaDoVinculo } from './identidade-da-conta.js';
 
 /**
  * A conexao ao vivo do WhatsApp.
@@ -23,6 +24,8 @@ interface ConexaoAtualizada {
 interface Socket {
   ev: { on: (fluxo: string, ouvinte: (dado: never) => void) => void };
   requestPairingCode: (numero: string) => Promise<string>;
+  /** A identidade da PROPRIA conta, que a biblioteca preenche quando o socket abre. */
+  user?: IdentidadeBrutaDoVinculo;
   /** Pede URL nova para midia cuja referencia expirou. Usado so no reupload. */
   updateMediaMessage: (mensagem: unknown) => Promise<unknown>;
   /** Envia conteudo pelo socket corrente. Tipado largo porque o conteudo
@@ -96,6 +99,16 @@ export interface OpcoesDeConexao {
    * estourar aqui nao pode custar Mensagem.
    */
   aoEstado?: (fluxo: string, dado: unknown, resumo: ResumoDeAppState) => void;
+  /**
+   * Gancho de identidade da PROPRIA conta (spec #1149). Chamado com a identidade
+   * BRUTA do vinculo — ids com sufixo de dispositivo —, em dois momentos: antes
+   * de abrir o socket, quando o vinculo ja pareado traz a identidade salva, e
+   * quando o socket abre (primeiro pareamento e religacoes). `'recusar'` nao
+   * abre o socket (ou para de ouvir) e chama `aoTerminar`. Excecao do gancho nao
+   * derruba a conexao: vira linha de log, e so a divergencia CONFIRMADA recusa.
+   * Este modulo entrega valores brutos; quem normaliza e compara e o Adaptador.
+   */
+  aoIdentificar?: (identidade: IdentidadeBrutaDoVinculo) => 'seguir' | 'recusar';
 }
 
 export interface Conexao {
@@ -202,6 +215,30 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
     lib.DisconnectReason.connectionLost,
   ]);
 
+  // Chama o gancho de identidade do dono. Observacao nunca custa Mensagem: a
+  // excecao vira log e o ouvinte segue; so a divergencia CONFIRMADA recusa.
+  const conferirIdentidade = (bruta: IdentidadeBrutaDoVinculo | undefined): boolean => {
+    if (opcoes.aoIdentificar === undefined || bruta?.id === undefined) return true;
+    let veredito: 'seguir' | 'recusar';
+    try {
+      veredito = opcoes.aoIdentificar(bruta);
+    } catch {
+      opcoes.registrar('[identidade] falhou ao conferir a conta; sigo.');
+      return true;
+    }
+    if (veredito === 'recusar') {
+      parado = true;
+      if (agendado !== undefined) clearTimeout(agendado);
+      opcoes.aoTerminar('o vinculo e de outra conta que a da Configuracao');
+      return false;
+    }
+    return true;
+  };
+  // Vinculo JA pareado: a identidade esta no estado de autenticacao, e conferir
+  // aqui evita ate abrir o socket de uma conta que nao e a da Configuracao.
+  const meSalvo = (state as { creds?: { me?: IdentidadeBrutaDoVinculo } } | undefined)?.creds?.me;
+  const recusadaCedo = !conferirIdentidade(meSalvo);
+
   const abrir = (): void => {
     if (parado) return;
     const sock = lib.default({ auth: state });
@@ -209,6 +246,8 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
     sock.ev.on('creds.update', saveCreds as (dado: never) => void);
 
     sock.ev.on('messages.upsert', ((dado: { messages?: unknown[] }) => {
+      // Parada pedida ou conta recusada: o Acervo ja pode estar fechado.
+      if (parado) return;
       // NORMALIZACAO POR IDA E VOLTA DE JSON, e ela nao e cosmetica.
       //
       // Tudo que validou o adaptador puro passou por serializacao: a captura
@@ -306,6 +345,7 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
         // A espera se reseta AQUI, e nao a cada tentativa: religacao que
         // conecta e cai em seguida nao pode voltar a insistir de 5 em 5s.
         espera = ESPERA_INICIAL;
+        if (!conferirIdentidade(sock.user)) return;
         opcoes.registrar('conectado.');
         return;
       }
@@ -340,7 +380,9 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
     }) as (dado: never) => void);
   };
 
-  abrir();
+  // Redundante de proposito com o `if (parado) return` de `abrir` (a recusa ja marcou `parado`): tirar esta
+  // guarda nao muda nada observavel — mutante EQUIVALENTE, medido em 05/10/2026 —, e ela diz a intencao.
+  if (!recusadaCedo) abrir();
 
   return {
     parar: (): void => {

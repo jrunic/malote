@@ -59,7 +59,7 @@ Todos aceitam `--json`. As flags marcadas com `*` são obrigatórias.
 | `malote pessoas` | Resolve texto em Pessoa: texto entra, id sai | `--texto <nome>`\* |
 | `malote identificar <valor>` | O que o Acervo sabe de um Identificador, com ou sem Pessoa. O valor é comparado exato | `--fonte <fonte>` |
 | `malote participantes` | Participantes de uma Conversa coletiva, com nome e Pessoa; opcionalmente a posição numa data | `--conversa <id>`\* `--em <AAAA-MM-DD>` |
-| `malote configuracao listar` | Quais Configurações existem (apelido e fonte), antes de filtrar por uma | — |
+| `malote configuracao listar` | Quais Configurações existem (apelido, fonte e, nas de WhatsApp, telefone, jid e lid), antes de filtrar por uma | — |
 | `malote relatorio` | Totais por Fonte e natureza | — |
 | `malote exportar` | Uma Conversa para um arquivo, txt ou json, com o nome de quem falou | `--conversa <id>`\* `--formato txt\|json` `--saida <arquivo>` `--sobrescrever` `--remetente <valor>` `--desde` `--ate` |
 | `malote midia <anexoId>` | Os **bytes** de um Anexo (foto, documento, áudio). Só existe no modo rede | `--saida <arquivo>`\* |

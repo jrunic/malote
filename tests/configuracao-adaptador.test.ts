@@ -10,6 +10,7 @@ import {
   resolverConfiguracao,
   resolverFiltroDeConfiguracao,
 } from '../src/registro/configuracao-adaptador.js';
+import { declararTelefoneDaConta, registrarEnderecosDoVinculo } from '../src/registro/endereco-da-conta.js';
 
 test('a Configuração padrão nasce por demanda e é estável', () => {
   const c = cenario();
@@ -168,7 +169,7 @@ test('configuracao criar cria a Configuracao e e idempotente', () => {
 
     const r1 = rodar(raiz, [
       'configuracao', 'criar', '--inquilino', inquilinoId,
-      '--fonte', 'whatsapp', '--configuracao', 'pessoal',
+      '--fonte', 'whatsapp', '--configuracao', 'pessoal', '--telefone', '5511900000001',
     ]);
     assert.equal(r1.codigo, 0);
     assert.match(r1.saida, /whatsapp\/pessoal/);
@@ -176,7 +177,7 @@ test('configuracao criar cria a Configuracao e e idempotente', () => {
     // segunda chamada, mesmos argumentos: idempotente, nao duplica.
     const r2 = rodar(raiz, [
       'configuracao', 'criar', '--inquilino', inquilinoId,
-      '--fonte', 'whatsapp', '--configuracao', 'pessoal',
+      '--fonte', 'whatsapp', '--configuracao', 'pessoal', '--telefone', '5511900000001',
     ]);
     assert.equal(r2.codigo, 0);
 
@@ -196,7 +197,7 @@ test('configuracao criar com --conta declara a conta, reconsultavel', () => {
 
     const r = rodar(raiz, [
       'configuracao', 'criar', '--inquilino', inquilinoId, '--fonte', 'whatsapp',
-      '--configuracao', 'pessoal', '--conta', 'meu-numero',
+      '--configuracao', 'pessoal', '--conta', 'meu-numero', '--telefone', '5511900000001',
     ]);
     assert.equal(r.codigo, 0);
 
@@ -212,11 +213,37 @@ test('configuracao criar com --inquilino desconhecido recusa nomeado', () => {
   try {
     const r = rodar(raiz, [
       'configuracao', 'criar', '--inquilino', 'nao-existe',
-      '--fonte', 'whatsapp', '--configuracao', 'x',
+      '--fonte', 'whatsapp', '--configuracao', 'x', '--telefone', '5511900000001',
     ]);
     assert.equal(r.codigo, 1);
     assert.match(r.saida, /Inquilino desconhecido: nao-existe/);
   } finally {
     limpar();
+  }
+});
+
+test('a Configuração traz telefone, JID e LID, nulos ate serem declarados ou conferidos', () => {
+  const c = cenario();
+  try {
+    const { id } = c.novoInquilino('Leia Organa');
+    const cfg = resolverConfiguracao(c.registro, id, 'whatsapp', 'principal');
+    assert.deepEqual([cfg.telefone, cfg.jid, cfg.lid], [null, null, null]);
+
+    declararTelefoneDaConta(c.registro, cfg.id, '5511900000001');
+    const declarada = listarConfiguracoes(c.registro, id)[0];
+    assert.deepEqual([declarada?.telefone, declarada?.jid, declarada?.lid], ['5511900000001', null, null]);
+
+    registrarEnderecosDoVinculo(c.registro, cfg.id, {
+      telefone: '5511900000001',
+      jid: '5511900000001@s.whatsapp.net',
+      lid: '100000000000001@lid',
+    });
+    const conferida = resolverConfiguracao(c.registro, id, 'whatsapp', 'principal');
+    assert.deepEqual(
+      [conferida.telefone, conferida.jid, conferida.lid],
+      ['5511900000001', '5511900000001@s.whatsapp.net', '100000000000001@lid'],
+    );
+  } finally {
+    c.limpar();
   }
 });
