@@ -34,6 +34,7 @@ test('pessoa conferir MEDE a etiqueta do mesmo evento sob duas formas, e a medic
     const r = rodar(raiz, ['pessoa', 'conferir', '--inquilino', id]);
     assert.equal(r.codigo, 0, 'medicao de consequencia conhecida nao reprova o gate');
     assert.match(r.saida, /Etiquetas do mesmo evento sob duas formas de endereco: 1/);
+    assert.match(r.saida, /identidade resolver-enderecos/, 'a linha tem de dizer o que consertar');
   } finally {
     limpar();
   }

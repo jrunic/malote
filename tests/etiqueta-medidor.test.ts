@@ -47,3 +47,21 @@ test('membros DISTINTOS com o mesmo texto no mesmo instante nao sao contados com
     c.limpar();
   }
 });
+
+test('eventos DIFERENTES do mesmo membro nas duas formas nao sao o mesmo evento', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Padme');
+    const conversa = umaColetiva(acervo);
+    const lid = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: LID }).id;
+    const tel = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: TEL }).id;
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: LID, canonico: TEL });
+    // O membro mudou a etiqueta duas vezes: um evento chegou pelo LID, outro pelo telefone.
+    // Sao DOIS eventos (ids diferentes), e contar isso como repeticao acusaria duplicacao que nao existe.
+    registrarEtiqueta(acervo, evento(conversa, lid, 'Torre A', 'EV1'));
+    registrarEtiqueta(acervo, evento(conversa, tel, 'Torre B', 'EV2'));
+    assert.equal(conferirEtiquetasRepetidas(acervo), 0);
+  } finally {
+    c.limpar();
+  }
+});
