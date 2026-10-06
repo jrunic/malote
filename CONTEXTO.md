@@ -140,6 +140,10 @@ Roadmap, specs, planos e diários vivem fora deste repositório.
 
 ## Restrições
 
+- **A Etiqueta de Participação é evento que a Fonte declara, e o ramo da recepção vem ANTES do descarte por tipo, com o tipo aceito por nome E por número.** O evento chega como `protocolMessage`, que a recepção ignora e conta; sem o ramo próprio ele some. Medido em campo (05/10/2026, três rodadas de uma conta de teste): o tipo chega como o **nome** do enum depois do round-trip de JSON, e `label` e `labelTimestamp` chegam string; a captura diagnóstica que filtrava só o número perdeu todos os eventos reais. Remover é um evento de `label` vazio, nunca a ausência do campo, e a etiqueta própria só se grava quando o Acervo já conhece o LID da conta (Endereço da Conta conferido). Etiqueta não é Participação, não é Atribuição de Nome e nunca entra na precedência de nome (há teste que o fixa, e outro que fixa o filtro de nome em bloco de `contacts.upsert`).
+- **O texto da etiqueta é dado pessoal declarado: aparece na saída dos comandos de consulta e NUNCA em log, mensagem de erro ou relatório de recepção.** O relatório e o log do ouvinte só contam (`N gravada(s), M removida(s)`); há teste que procura o texto de uma etiqueta sintética na saída do ouvinte e não o acha. O derrame em arquivo guarda o evento cru, como guarda toda mensagem.
+- **`participantes` faz UMA consulta de etiquetas por Conversa, e a leitura da vigente é por janela (`ROW_NUMBER`), nunca por membro.** Há teste com espião em `preparar` (30 membros, 1 pedido). A etiqueta herda o `em` do próprio comando e **não** muda o conjunto de membros nem a regra de Alcance. O desempate de instantes iguais é pela identidade do evento (a plataforma declara o instante em segundos). Medido em produção antes de implementar: `participantes` na maior Conversa coletiva (275 mil Mensagens) levou 0,77 a 1,12 s por consulta, dispersão maior que o teto de +10% que a spec pedia; o teto não é verificável por relógio e a estrutura é a garantia.
+
 - **A migração relê a forma gravada DENTRO da transação, e a transação é `IMMEDIATE`.** O servidor e cada ouvinte abrem o
   Registro para escrita no boot e reiniciam juntos: lendo a forma fora da transação deferida, dois abridores aplicavam o mesmo
   passo e o segundo morria com `table ... already exists` (código de saída 1, que o unit não reinicia). Reproduzido em
@@ -606,6 +610,7 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 06/10/2026 — **Etiqueta de Participação em `main`, ainda sem release** (Acervo v25 para v26, sem exigir o Registro). Recepção ao vivo, `participantes`, `identificar`, o comando `etiquetas` (local e `GET /etiquetas`) e o medidor em `pessoa conferir`. Só há etiqueta observada depois de o ouvinte entrar.
 - 2026-10-06 — **v0.31.0: a Configuração de WhatsApp conhece a própria conta.** Telefone declarado no cadastro (`configuracao criar --telefone`, obrigatório
   para WhatsApp; `definir-telefone` completa a que não o tem), JID e LID aprendidos do vínculo, conferência na subida e declaração do par ao Acervo. Registro
   **v7 para v8** (tabela `enderecos_da_conta`), com a correção da migração com vários abridores. Suíte 1389 para 1455. Em produção, os três serviços reiniciaram

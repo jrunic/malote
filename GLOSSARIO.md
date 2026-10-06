@@ -4,7 +4,7 @@ projeto: malote
 tipo: referencia
 descricao: "Linguagem universal do malote — termos do arquivo multi-inquilino de conversas, com sinônimos a evitar"
 status: aprovado
-aprovado-em: 2026-10-05
+aprovado-em: 2026-10-06
 escopo: repo:malote
 plataforma: "*"
 tags: [glossario, malote, linguagem-universal, ddd]

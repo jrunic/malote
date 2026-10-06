@@ -23,7 +23,21 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
-**Muda a forma do Acervo (v25 para v26), ainda sem release própria.** A tabela da Etiqueta de Participação já está em `main`; a release que a levar exige cópia do Acervo antes de atualizar.
+**Muda a forma do Acervo (v25 para v26).** Faça cópia do Acervo antes de atualizar; o servidor e cada ouvinte
+migram o Acervo ao subir. O passo só cria uma tabela e um índice e não exige o Registro.
+
+### Adicionado
+
+- **Etiqueta de Participação:** o texto que cada membro põe em si em cada grupo, capturado ao vivo e guardado como
+  evento datado (a remoção é um evento de texto vazio). `participantes` traz `etiqueta` e `etiquetaEm` de cada membro
+  (e, com `--em`, a vigente naquela data); `identificar` traz as etiquetas do Identificador; o comando novo `etiquetas`
+  lista, busca e mostra o histórico, local e por rede (`GET /etiquetas`).
+- `pessoa conferir` mede etiquetas do mesmo evento sob duas formas de endereço (só relata).
+
+### Limites
+
+- Só há etiqueta observada depois de o ouvinte entrar; o backup do aparelho não as traz.
+- O texto da etiqueta é dado pessoal: aparece na saída dos comandos de consulta e nunca em log nem em relatório.
 
 ## [0.31.0] — 2026-10-06
 

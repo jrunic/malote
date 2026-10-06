@@ -4,7 +4,7 @@ projeto: malote
 tipo: dominio
 descricao: "Modelo do arquivo pessoal de conversas — núcleo genérico multi-inquilino (Inquilino, Conversa, Mensagem, Pessoa, Identificador, Anexo, Envio) desacoplado das fontes por Adaptador"
 status: aprovado
-aprovado-em: 2026-10-05
+aprovado-em: 2026-10-06
 escopo: repo:malote
 plataforma: "*"
 dominios: [tecnologia]
