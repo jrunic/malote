@@ -1,4 +1,6 @@
 import type { Acervo } from './acervo.js';
+import type { PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
+import { nomesEmLote } from './nomes-em-lote.js';
 
 /**
  * A etiqueta VIGENTE de um membro numa Conversa: a do evento de maior instante.
@@ -140,4 +142,118 @@ export function acrescentarEtiquetas<
     aindaNaoEntraram: resposta.aindaNaoEntraram.map(acrescentar),
     semInformacao: resposta.semInformacao.map(acrescentar),
   } as ComEtiquetas<R>;
+}
+
+export const LIMITE_DE_ETIQUETAS = { padrao: 100, maximo: 1000 } as const;
+
+export interface FiltroDeEtiquetas {
+  conversaId?: string;
+  /** Identificadores GRAVADOS que o remetente alcanca (`identificadoresDoRemetente`); vazio devolve NADA. */
+  autorIds?: readonly string[];
+  /** Texto LITERAL. */
+  busca?: string;
+  /** Todos os eventos do membro na Conversa; exige `conversaId` e `autorIds`. */
+  historico?: boolean;
+  limite?: number;
+}
+
+export interface EtiquetaListada {
+  conversaId: string;
+  identificadorId: string;
+  /** O valor do Identificador (com a Fonte implicita na Conversa). */
+  valor: string;
+  nome: string | null;
+  origemDoNome: string | null;
+  /** `null` e a remocao (so aparece no historico). */
+  texto: string | null;
+  em: number;
+}
+
+/**
+ * Lista e busca etiquetas. NAO depende de Alcance: e a superficie de quem
+ * procura um texto (o numero de um registro profissional, por exemplo).
+ * Ordem: do mais novo ao mais antigo, e o limite padrao (100) corta o resto;
+ * quem precisa de mais refina por Conversa ou remetente.
+ */
+export function listarEtiquetas(
+  acervo: Acervo,
+  filtro: FiltroDeEtiquetas,
+  precedencia: PrecedenciaDeNome,
+): EtiquetaListada[] {
+  const limite = filtro.limite ?? LIMITE_DE_ETIQUETAS.padrao;
+  if (!Number.isInteger(limite) || limite < 1 || limite > LIMITE_DE_ETIQUETAS.maximo) {
+    throw new Error(`limite precisa ser um inteiro de 1 a ${LIMITE_DE_ETIQUETAS.maximo}`);
+  }
+  if (filtro.historico === true && (filtro.conversaId === undefined || filtro.autorIds === undefined)) {
+    throw new Error('--historico exige conversa e remetente');
+  }
+  // Remetente sem nenhum Identificador devolve NADA, nunca tudo. Mutante que sobrevive por
+  // EQUIVALENCIA (medido em 06/10/2026): sem esta linha, `IN (SELECT value FROM json_each('[]'))` ja
+  // devolve zero linhas; a guarda so poupa a consulta, e nenhum teste a separa.
+  if (filtro.autorIds !== undefined && filtro.autorIds.length === 0) return [];
+
+  const condicoes: string[] = [];
+  const valores: Array<string | number> = [];
+  if (filtro.conversaId !== undefined) {
+    condicoes.push('conversa_id = ?');
+    valores.push(filtro.conversaId);
+  }
+  if (filtro.autorIds !== undefined) {
+    condicoes.push('identificador_id IN (SELECT value FROM json_each(?))');
+    valores.push(JSON.stringify(filtro.autorIds));
+  }
+  const onde = condicoes.length === 0 ? '' : `WHERE ${condicoes.join(' AND ')}`;
+
+  let busca = '';
+  const valoresDaBusca: string[] = [];
+  if (filtro.busca !== undefined) {
+    // Termo do usuario e LITERAL: % e _ escapados, como em `conversas --busca`.
+    const termo = filtro.busca.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+    busca = `LOWER(texto) LIKE LOWER(?) ESCAPE '\\'`;
+    valoresDaBusca.push(`%${termo}%`);
+  }
+
+  const sql =
+    filtro.historico === true
+      ? `SELECT conversa_id AS conversaId, identificador_id AS identificadorId, texto, ocorrida_em AS em
+           FROM etiquetas_de_participacao ${onde}
+          ${busca === '' ? '' : `${onde === '' ? 'WHERE' : 'AND'} ${busca}`}
+          ORDER BY ocorrida_em DESC, id_externo DESC LIMIT ?`
+      : `SELECT conversaId, identificadorId, texto, em FROM (
+           SELECT conversa_id AS conversaId, identificador_id AS identificadorId, texto, ocorrida_em AS em,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY conversa_id, identificador_id
+                    ORDER BY ocorrida_em DESC, id_externo DESC
+                  ) AS posicao
+             FROM etiquetas_de_participacao ${onde}
+         )
+          WHERE posicao = 1 AND texto <> '' ${busca === '' ? '' : `AND ${busca}`}
+          ORDER BY em DESC, conversaId, identificadorId LIMIT ?`;
+
+  const linhas = acervo.preparar(sql).all(...valores, ...valoresDaBusca, limite) as Array<{
+    conversaId: string;
+    identificadorId: string;
+    texto: string;
+    em: number;
+  }>;
+
+  const ids = [...new Set(linhas.map((l) => l.identificadorId))];
+  const nomes = nomesEmLote(acervo, ids, precedencia);
+  const valoresDoId = new Map<string, string>();
+  if (ids.length > 0) {
+    for (const l of acervo
+      .preparar('SELECT id, valor FROM identificadores WHERE id IN (SELECT value FROM json_each(?))')
+      .all(JSON.stringify(ids)) as Array<{ id: string; valor: string }>) {
+      valoresDoId.set(l.id, l.valor);
+    }
+  }
+  return linhas.map((l) => ({
+    conversaId: l.conversaId,
+    identificadorId: l.identificadorId,
+    valor: valoresDoId.get(l.identificadorId) ?? '',
+    nome: nomes.get(l.identificadorId)?.nome ?? null,
+    origemDoNome: nomes.get(l.identificadorId)?.origem ?? null,
+    texto: l.texto === '' ? null : l.texto,
+    em: l.em,
+  }));
 }

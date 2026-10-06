@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { identificarPorValor } from '../src/nucleo/identificar.js';
 import { PRECEDENCIA } from './ajuda/identidade.js';
 import { formatarIdentificacao } from '../src/cli/identificar-texto.js';
+import { listarEtiquetas, LIMITE_DE_ETIQUETAS } from '../src/nucleo/etiqueta-de-participacao.js';
 import { cenario } from './ajuda/acervo.js';
 import { umaColetiva, umMembro } from './ajuda/etiqueta.js';
 import { registrarEtiqueta, registrarTransicao } from '../src/nucleo/escrita.js';
@@ -167,6 +168,126 @@ test('identificar em texto: uma linha por etiqueta, a removida marcada', () => {
     const linhas = formatarIdentificacao(identificarPorValor(acervo, { valor: '5565911110001@s.whatsapp.net' }, PRECEDENCIA));
     assert.ok(linhas.some((l) => l.includes(`etiqueta em ${g1}: Torre A`)));
     assert.ok(linhas.some((l) => l.includes(`etiqueta em ${g2}: (removida)`)));
+  } finally {
+    c.limpar();
+  }
+});
+
+
+function duasConversas() {
+  const c = cenario();
+  const { acervo } = c.novoInquilino('Padme');
+  const g1 = umaColetiva(acervo, '120363000000000001@g.us');
+  const g2 = umaColetiva(acervo, '120363000000000002@g.us');
+  const a = umMembro(acervo, '5565911110001');
+  const b = umMembro(acervo, '5565911110002');
+  return { c, acervo, g1, g2, a, b };
+}
+
+test('sem filtro, so as correntes NAO vazias: a removida e a antiga nao aparecem', () => {
+  const { c, acervo, g1, a, b } = duasConversas();
+  try {
+    etiqueta(acervo, g1, a, 'antiga', T0, 'EV1');
+    etiqueta(acervo, g1, a, 'nova', T0 + 1000, 'EV2');
+    etiqueta(acervo, g1, b, 'x', T0, 'EV3');
+    etiqueta(acervo, g1, b, '', T0 + 500, 'EV4'); // removida
+    const r = listarEtiquetas(acervo, {}, PRECEDENCIA);
+    assert.deepEqual(r.map((e) => e.texto), ['nova']);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('a lista traz Conversa, Identificador (valor), nome corrente, texto e instante', () => {
+  const { c, acervo, g1, a } = duasConversas();
+  try {
+    etiqueta(acervo, g1, a, 'Torre A', T0, 'EV1');
+    const [e] = listarEtiquetas(acervo, {}, PRECEDENCIA);
+    assert.equal(e?.conversaId, g1);
+    assert.equal(e?.identificadorId, a);
+    assert.equal(e?.valor, '5565911110001@s.whatsapp.net');
+    assert.equal(e?.nome, null, 'sem Atribuicao de Nome, nome nulo');
+    assert.equal(e?.texto, 'Torre A');
+    assert.equal(e?.em, T0);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('filtros: por Conversa, por remetente (com a forma alternativa) e por texto', () => {
+  const { c, acervo, g1, g2, a, b } = duasConversas();
+  try {
+    etiqueta(acervo, g1, a, 'Torre A', T0, 'EV1');
+    etiqueta(acervo, g2, a, 'Torre B', T0, 'EV2');
+    etiqueta(acervo, g1, b, 'Equipe', T0, 'EV3');
+    assert.deepEqual(
+      listarEtiquetas(acervo, { conversaId: g2 }, PRECEDENCIA).map((e) => e.texto),
+      ['Torre B'],
+    );
+    assert.deepEqual(
+      listarEtiquetas(acervo, { autorIds: [b] }, PRECEDENCIA).map((e) => e.texto),
+      ['Equipe'],
+    );
+    assert.deepEqual(
+      listarEtiquetas(acervo, { busca: 'torre' }, PRECEDENCIA).map((e) => e.texto).sort(),
+      ['Torre A', 'Torre B'],
+      'a caixa e ignorada so para ASCII',
+    );
+    assert.deepEqual(listarEtiquetas(acervo, { autorIds: [] }, PRECEDENCIA), [], 'autorIds vazio devolve NADA, nunca tudo');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('a busca e literal: % e _ nao sao curinga, e acento nao e normalizado', () => {
+  const { c, acervo, g1, a, b } = duasConversas();
+  try {
+    etiqueta(acervo, g1, a, 'CRS 100%', T0, 'EV1');
+    etiqueta(acervo, g1, b, 'CRS 1000', T0, 'EV2');
+    assert.deepEqual(
+      listarEtiquetas(acervo, { busca: '100%' }, PRECEDENCIA).map((e) => e.texto),
+      ['CRS 100%'],
+      'o % casou como curinga',
+    );
+    assert.equal(listarEtiquetas(acervo, { busca: 'CRS_' }, PRECEDENCIA).length, 0, 'o _ casou como curinga');
+    etiqueta(acervo, g1, a, 'Médico', T0 + 1, 'EV3');
+    assert.equal(listarEtiquetas(acervo, { busca: 'medico' }, PRECEDENCIA).length, 0, 'acento nao e normalizado');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('--historico: todos os eventos do membro naquela Conversa, a remocao como nula, do mais novo ao mais antigo', () => {
+  const { c, acervo, g1, g2, a } = duasConversas();
+  try {
+    etiqueta(acervo, g1, a, 'v1', T0, 'EV1');
+    etiqueta(acervo, g1, a, 'v2', T0 + 1000, 'EV2');
+    etiqueta(acervo, g1, a, '', T0 + 2000, 'EV3');
+    etiqueta(acervo, g2, a, 'outra conversa', T0, 'EV4');
+    const h = listarEtiquetas(acervo, { conversaId: g1, autorIds: [a], historico: true }, PRECEDENCIA);
+    assert.deepEqual(h.map((e) => e.texto), [null, 'v2', 'v1']);
+    assert.throws(
+      () => listarEtiquetas(acervo, { historico: true }, PRECEDENCIA),
+      /conversa e remetente/i,
+    );
+  } finally {
+    c.limpar();
+  }
+});
+
+test('o limite padrao e o maximo valem, e limite invalido e recusado', () => {
+  const { c, acervo, g1 } = duasConversas();
+  try {
+    for (let i = 0; i < 150; i += 1) {
+      const m = umMembro(acervo, `55659111${String(30000 + i)}`);
+      etiqueta(acervo, g1, m, `t${i}`, T0 + i, `EV-${i}`);
+    }
+    assert.equal(listarEtiquetas(acervo, {}, PRECEDENCIA).length, LIMITE_DE_ETIQUETAS.padrao);
+    assert.equal(listarEtiquetas(acervo, { limite: 7 }, PRECEDENCIA).length, 7);
+    assert.equal(listarEtiquetas(acervo, { limite: 150 }, PRECEDENCIA).length, 150);
+    for (const ruim of [0, -1, 1.5, LIMITE_DE_ETIQUETAS.maximo + 1]) {
+      assert.throws(() => listarEtiquetas(acervo, { limite: ruim }, PRECEDENCIA), /limite/i);
+    }
   } finally {
     c.limpar();
   }
