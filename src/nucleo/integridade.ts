@@ -127,3 +127,31 @@ export function conferirConversasEmFormaAlternativa(acervo: Acervo): number {
     .get() as { n: number };
   return linha.n;
 }
+
+/**
+ * Quantas Etiquetas registram o MESMO evento sob as duas formas de endereco do
+ * mesmo membro. Molde de `conferirTransicoesEmDuasFormas`, e so relata.
+ *
+ * O identificador do evento de etiqueta converge (e o da Mensagem de protocolo),
+ * entao o angulo de risco e a forma do endereco, nao a identidade do evento: um
+ * evento recebido com o par ainda desconhecido grava a forma alternativa, e a
+ * correspondencia que chega depois nao volta atras sozinha.
+ */
+export function conferirEtiquetasRepetidas(acervo: Acervo): number {
+  const linha = acervo
+    .preparar(
+      `SELECT COUNT(*) AS n
+         FROM etiquetas_de_participacao e1
+         JOIN identificadores i1 ON i1.id = e1.identificador_id
+         JOIN correspondencias_de_endereco c
+           ON c.fonte = e1.fonte AND c.alternativo = i1.valor
+         JOIN identificadores i2
+           ON i2.fonte = e1.fonte AND i2.valor = c.canonico
+         JOIN etiquetas_de_participacao e2
+           ON e2.fonte = e1.fonte
+          AND e2.id_externo = e1.id_externo
+          AND e2.identificador_id = i2.id`,
+    )
+    .get() as { n: number };
+  return linha.n;
+}

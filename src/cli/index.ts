@@ -69,6 +69,7 @@ import {
   conferirMesclagem,
   conferirTransicoes,
   conferirTransicoesRepetidas,
+  conferirEtiquetasRepetidas,
   conferirTransicoesEmDuasFormas,
   conferirConversasEmFormaAlternativa,
 } from '../nucleo/integridade.js';
@@ -2644,6 +2645,11 @@ function executarComAtor(
         // — o endereco e resolvido antes de virar Referencia Externa desde o
         // ciclo 10 —, e enquanto for, fundir Conversa nao precisa existir.
         const conversasAlt = conferirConversasEmFormaAlternativa(acervo);
+        const etiquetasRepetidas = conferirEtiquetasRepetidas(acervo);
+        escrever(
+          `Etiquetas do mesmo evento sob duas formas de endereco: ${etiquetasRepetidas}` +
+            (etiquetasRepetidas > 0 ? ' — o par chegou depois do evento; `identidade resolver-enderecos` conserta.' : ''),
+        );
         escrever(`Transicoes da mesma pessoa em duas formas de endereco: ${duasFormas}`);
         escrever(
           `Conversas com Referencia Externa na forma alternativa: ${conversasAlt}` +
