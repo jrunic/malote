@@ -610,7 +610,7 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
-- 06/10/2026 — **Etiqueta de Participação em `main`, ainda sem release** (Acervo v25 para v26, sem exigir o Registro). Recepção ao vivo, `participantes`, `identificar`, o comando `etiquetas` (local e `GET /etiquetas`) e o medidor em `pessoa conferir`. Só há etiqueta observada depois de o ouvinte entrar.
+- 06/10/2026 — **v0.32.0 EM PRODUÇÃO: Etiqueta de Participação** (PR #26, `production` em `f5a80bb`; Acervo v25 para v26, sem exigir o Registro; migrou sozinho ao subir, `quick_check ok`, nenhuma tabela com menos linhas que a cópia de antes). Recepção ao vivo, `participantes`, `identificar`, o comando `etiquetas` (local e `GET /etiquetas`) e o medidor em `pessoa conferir`. Só há etiqueta observada depois de o ouvinte entrar. Campo: remoção em 4 s e duas trocas em até ~3 s; a primeira troca levou ~104 s, sem causa determinada.
 - 2026-10-06 — **v0.31.0: a Configuração de WhatsApp conhece a própria conta.** Telefone declarado no cadastro (`configuracao criar --telefone`, obrigatório
   para WhatsApp; `definir-telefone` completa a que não o tem), JID e LID aprendidos do vínculo, conferência na subida e declaração do par ao Acervo. Registro
   **v7 para v8** (tabela `enderecos_da_conta`), com a correção da migração com vários abridores. Suíte 1389 para 1455. Em produção, os três serviços reiniciaram
@@ -944,6 +944,8 @@ Repositório expõe services systemd. Convenções:
 
 ## Pendências
 
+- **Etiqueta: latência da primeira troca.** Em campo, a primeira troca de etiqueta de uma conta de teste levou ~104 s entre o instante declarado (relógio do telefone) e a aparição por rede; as três seguintes, até ~3 s, e do ouvinte à rede são 2 s. Se voltar a aparecer, comparar o `ultimo-evento` do ouvinte com o instante declarado antes de culpar o código.
+- **Recepção: evento sem `remoteJid` derrubaria o ouvinte.** A contagem inicial do lote e o descarte de `status` leem `m.key.remoteJid` fora do `try` por evento, então um evento assim lança antes de qualquer tratamento, e a saída 1 não é reiniciada pelo unit. Não foi medido que a plataforma entregue esse evento; se um dia aparecer, mover essas leituras para dentro do tratamento por evento.
 - **#1132: toda consulta lenta bloqueia todos os clientes, porque o servidor é síncrono** (filtro sem achados 1,2 s quente e 8 s frio na maior Conversa; `buscar` de palavra comum global 4 s). **Resolvido no ciclo 32 (leituras em workers com prazo duro), release v0.30.0 em produção em 04/10/2026**; spec, plano e revisões em `11-tarefas/20261004-*1132*` da pasta de trabalho. O prazo (25 s) e o abandono já protegem o servidor; mesmo assim, ao medir em produção, **uma consulta pesada por vez e `curl --max-time` curto**: um Inquilino ocupa N−1 workers e a própria rajada atrasa as suas outras consultas.
 
 - **Um agente roda no host de produção (`malote-ouvinte@<conta>`, Inquilino próprio) e o Envio está
