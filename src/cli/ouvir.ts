@@ -485,6 +485,16 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
           // efeito que so avanca com escrita nova o declararia morto.
           marcarUltimoEvento(caminhos.ultimoEvento, agora());
           if (r.recusados.length > 0) escrever(`[ouvinte] recusados: ${r.recusados.length}`);
+          // So CONTAGENS: o texto da etiqueta e dado pessoal declarado e nunca
+          // entra em log, mensagem de erro nem relatorio.
+          if (r.etiquetas > 0 || r.etiquetasDaContaSemEndereco > 0) {
+            escrever(
+              `[ouvinte] etiquetas: ${r.etiquetas} gravada(s), ${r.etiquetasRemovidas} removida(s)` +
+                (r.etiquetasDaContaSemEndereco > 0
+                  ? `, ${r.etiquetasDaContaSemEndereco} da propria conta sem endereco conferido`
+                  : ''),
+            );
+          }
           // A #1068: cada Anexo que nasceu `nunca-obtido` NESTE lote baixa em
           // segundo plano — fire-and-forget de proposito, porque `aoReceber` e
           // sincrono por construcao (o Ator acima depende disso) e esperar o
