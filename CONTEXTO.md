@@ -140,6 +140,22 @@ Roadmap, specs, planos e diários vivem fora deste repositório.
 
 ## Restrições
 
+- **A migração relê a forma gravada DENTRO da transação, e a transação é `IMMEDIATE`.** O servidor e cada ouvinte abrem o
+  Registro para escrita no boot e reiniciam juntos: lendo a forma fora da transação deferida, dois abridores aplicavam o mesmo
+  passo e o segundo morria com `table ... already exists` (código de saída 1, que o unit não reinicia). Reproduzido em
+  `tests/migracao-concorrente.test.ts` (a leitura de forma velha por um segundo abridor) e em `tests/registro-abertura-concorrente.test.ts`
+  (três processos; reprova em 5 de 5 rodadas sem o `.immediate()`). `migrarComTrilha` não abre Operação `migrar-base` vazia para quem chega atrasado.
+- **O telefone, o JID e o LID da própria conta são dado pessoal: nenhuma saída de recusa nem linha de log os imprime.** O `ouvir` recusa com **2** e
+  diz só que o vínculo é de outra conta; há teste que procura os dígitos na saída. O telefone **declarado** nunca é sobrescrito pelo do vínculo, o
+  endereço ausente nunca apaga o gravado, e a comparação aceita o celular brasileiro com e sem o nono dígito (predicado no Adaptador de WhatsApp,
+  não no núcleo). Identidade que o produto não sabe ler **segue sem conferir** e avisa: só a divergência confirmada recusa.
+- **O Identificador do endereço da própria conta é registrado SEM Configuração.** A coluna de Configuração de `identificadores` é a do **catálogo que
+  sustenta o vínculo com a Pessoa**; a relação "este endereço é o da Configuração X" vive no Registro (`enderecos_da_conta`). Misturar os dois
+  significados foi um achado errado de revisão, retificado ao medir o schema.
+- **Teste que abre servidor, socket ou timer fecha tudo num `finally`.** Uma asserção que falha antes do `close` deixa o recurso vivo e o processo de
+  teste não termina: a suíte foi de ~50 s para mais de 10 minutos, sem saída (`tests/cli-modo-rede.test.ts`, 05/10/2026). O retorno antecipado do
+  `ouvir` depois da recusa de identidade é guardado contando os timers ativos antes e depois, e não por prazo.
+
 - **`identificar` parte do Identificador gravado e lista as formas da correspondência à parte; nome em
   lote, nunca por linha (#1126).** O Acervo grava o endereço na forma canônica e guarda a alternativa só
   como correspondência (valor contra valor, sem id); parte das alternativas existe também como linha, por
@@ -590,6 +606,10 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
+- 2026-10-06 — **v0.31.0: a Configuração de WhatsApp conhece a própria conta.** Telefone declarado no cadastro (`configuracao criar --telefone`, obrigatório
+  para WhatsApp; `definir-telefone` completa a que não o tem), JID e LID aprendidos do vínculo, conferência na subida e declaração do par ao Acervo. Registro
+  **v7 para v8** (tabela `enderecos_da_conta`), com a correção da migração com vários abridores. Suíte 1389 para 1455. Em produção, os três serviços reiniciaram
+  no mesmo segundo e o passo 7 para 8 ficou registrado uma só vez. **Não provado em campo:** a segunda conexão não escrever (provado em teste).
 - 04/10/2026 — **CICLO 32 ACEITO: o servidor de leitura deixa de bloquear, release v0.30.0 em produção** (#1132, PR #22, merge
   `6dd9ad0`, tag `v0.30.0`, nos três pacotes, sem mudar schema). Leituras em workers (4) com prazo de 25 s (`504`), abandono, reserva
   de N−1 e metade da fila por Inquilino, `503` com `retry-after`. Medido: `/relatorio` do outro Inquilino em 667 a 833 ms com três
