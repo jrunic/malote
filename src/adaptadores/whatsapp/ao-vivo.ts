@@ -13,7 +13,9 @@ import {
   registrarMensagem,
   registrarParticipacao,
   registrarTransicao,
+  registrarEtiqueta,
 } from '../../nucleo/escrita.js';
+import { lerMudancaDeEtiqueta, type MudancaDeEtiqueta } from './etiqueta-ao-vivo.js';
 import { nomeRepeteONumeroBrasileiro } from './nome-repete-numero-br.js';
 import { registrarNome } from '../../nucleo/identidade.js';
 import { ehCifrada, naturezaDoStub, textoDoStub } from './stubs-ao-vivo.js';
@@ -86,6 +88,17 @@ export interface RelatoDeRecepcao {
   ignorados: Record<string, number>;
   /** Transicoes de Participacao que NASCERAM nesta recepcao. */
   transicoes: number;
+  /** Etiquetas de Participacao que NASCERAM nesta recepcao (nunca o texto delas). */
+  etiquetas: number;
+  /** Destas, as que sao REMOCAO (texto vazio). */
+  etiquetasRemovidas: number;
+  /**
+   * Etiquetas da PROPRIA conta cujo endereco a Configuracao ainda nao conferiu:
+   * contadas e NAO gravadas. O autor proprio chega em LID, e sem o Endereco da
+   * Conta o LID nao resolve para o JID; gravar sob o LID criaria uma identidade
+   * a parte para a propria conta.
+   */
+  etiquetasDaContaSemEndereco: number;
   /**
    * Nomes recusados por apenas repetirem o PROPRIO endereco.
    *
@@ -281,6 +294,9 @@ export function receberEvento(
     conflitos: [],
     ignorados: {},
     transicoes: 0,
+    etiquetas: 0,
+    etiquetasRemovidas: 0,
+    etiquetasDaContaSemEndereco: 0,
     nomesQueRepetemOEndereco: 0,
     correspondencia: {
       coletivaOpaca: 0,
@@ -390,8 +406,27 @@ export function receberEvento(
       continue;
     }
 
+    // A Etiqueta de Participacao e um ramo PROPRIO e vem ANTES do descarte por tipo:
+    // ela chega como protocolMessage, que o descarte abaixo ignora e conta.
+    // Decide LENDO (sem Operacao) e so abre a Operacao se for gravar, como o
+    // resto da recepcao faz por evento.
+    const mudanca = lerMudancaDeEtiqueta(m);
+    let aGravar: EtiquetaDecidida | null = null;
+    if (mudanca !== null) {
+      // Dentro de try, como o resto da recepcao: falha de leitura que nao e banco ocupado vira
+      // `recusado` e nao derruba o lote (banco ocupado sobe, para o derrame).
+      try {
+        aGravar = decidirEtiqueta(acervo, m, relato);
+      } catch (erro) {
+        if (ehBancoOcupado(erro)) throw erro;
+        relato.recusados.push({ idExterno: m.key.id, causa: String(erro) });
+        continue;
+      }
+      if (aGravar === null) continue;
+    }
+
     const tipo = tipoDeConteudo(m.message);
-    if (tipo !== null && !VIRAM_MENSAGEM.has(tipo)) {
+    if (mudanca === null && tipo !== null && !VIRAM_MENSAGEM.has(tipo)) {
       relato.ignorados[tipo] = (relato.ignorados[tipo] ?? 0) + 1;
       continue;
     }
@@ -410,7 +445,10 @@ export function receberEvento(
       emOperacao(
         acervo,
         { natureza: 'receber-ao-vivo', reversibilidade: 'irreversivel', registraEfeito: false },
-        () => gravarUma(acervo, m, indice, opcoes, relato),
+        () =>
+          mudanca !== null && aGravar !== null
+            ? gravarEtiqueta(acervo, m, mudanca, aGravar, relato)
+            : gravarUma(acervo, m, indice, opcoes, relato),
       );
     } catch (erro) {
       // O catch e POR EVENTO, e sem ele o adaptador PERDE mensagem.
@@ -594,5 +632,71 @@ function gravarUma(
       codigoDaFonte: textoDoStub(m.messageStubType) ?? '',
     });
     if (nasceu) relato.transicoes += 1;
+  }
+}
+
+interface EtiquetaDecidida {
+  enderecoDaConversa: string;
+  enderecoDoMembro: string;
+}
+
+/**
+ * Decide, SO LENDO, se a etiqueta se grava: conta o que descarta e devolve
+ * `null`. Quem decide fora da Operacao evita abrir uma Operacao vazia por
+ * evento descartado.
+ */
+function decidirEtiqueta(
+  acervo: Acervo,
+  m: MensagemRecebida,
+  relato: RelatoDeRecepcao,
+): EtiquetaDecidida | null {
+  const enderecoDaConversa = resolverEndereco(acervo, FONTE, m.key.remoteJid);
+  if (!enderecoEhColetivo(enderecoDaConversa)) {
+    relato.ignorados['etiqueta-fora-de-coletiva'] = (relato.ignorados['etiqueta-fora-de-coletiva'] ?? 0) + 1;
+    return null;
+  }
+  if (m.key.participant === undefined) {
+    relato.ignorados['etiqueta-sem-autor'] = (relato.ignorados['etiqueta-sem-autor'] ?? 0) + 1;
+    return null;
+  }
+  const enderecoDoMembro = resolverEndereco(acervo, FONTE, m.key.participant);
+  // O autor PROPRIO chega em LID, sem telefone. So grava se o Acervo ja sabe
+  // quem esse LID e (o Endereco da Conta, conferido pela Configuracao).
+  if (m.key.fromMe && ehOpaco(enderecoDoMembro)) {
+    relato.etiquetasDaContaSemEndereco += 1;
+    return null;
+  }
+  return { enderecoDaConversa, enderecoDoMembro };
+}
+
+function gravarEtiqueta(
+  acervo: Acervo,
+  m: MensagemRecebida,
+  mudanca: MudancaDeEtiqueta,
+  alvo: EtiquetaDecidida,
+  relato: RelatoDeRecepcao,
+): void {
+  const conversaId = registrarConversa(acervo, {
+    fonte: FONTE,
+    idExterno: alvo.enderecoDaConversa,
+    coletiva: true,
+    bruto: JSON.stringify(m.key),
+  });
+  const { id } = registrarIdentificador(acervo, { fonte: FONTE, valor: alvo.enderecoDoMembro });
+  const nasceu = registrarEtiqueta(acervo, {
+    conversaId,
+    identificadorId: id,
+    texto: mudanca.texto,
+    ocorridaEm: mudanca.instante,
+    fonte: FONTE,
+    // O id da Mensagem de protocolo que carrega o evento: unico por evento e
+    // estavel na reentrega.
+    idExterno: m.key.id,
+    bruto: mudanca.bruto,
+  });
+  // Conta pelo RETORNO da porta, nunca por chamada.
+  if (nasceu) {
+    relato.etiquetas += 1;
+    if (mudanca.texto === '') relato.etiquetasRemovidas += 1;
   }
 }
