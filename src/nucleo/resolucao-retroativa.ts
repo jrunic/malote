@@ -28,6 +28,7 @@ import { chaveDeNome } from './chave-de-nome.js';
 export const TABELAS_QUE_APONTAM_PARA_IDENTIFICADOR = [
   'atribuicoes_de_nome',
   'cartoes_de_catalogo',
+  'etiquetas_de_participacao',
   'mensagens',
   'participacoes',
   'transicoes_de_participacao',
@@ -88,7 +89,8 @@ const TABELA_ATRIBUICOES = { tabela: 'atribuicoes_de_nome', campo: 'identificado
  *
  * Em `participacoes` e `cartoes_de_catalogo` o Identificador esta DENTRO da
  * chave primaria, entao a colisao e possivel sempre; em
- * `transicoes_de_participacao` ela vem da restricao de unicidade.
+ * `transicoes_de_participacao` e `etiquetas_de_participacao` ela vem da
+ * restricao de unicidade.
  *
  * Havendo colisao, prevalece a linha do CANONICO — e a que o resto do Acervo
  * ja alcanca. Escolher pela data faria o resultado depender da ordem de
@@ -100,6 +102,7 @@ const COM_COLISAO: ReadonlyArray<{
   irmas: readonly string[];
 }> = [
   { tabela: 'transicoes_de_participacao', pk: ['id'], irmas: ['fonte', 'id_externo'] },
+  { tabela: 'etiquetas_de_participacao', pk: ['id'], irmas: ['fonte', 'id_externo'] },
   { tabela: 'participacoes', pk: ['conversa_id', 'identificador_id'], irmas: ['conversa_id'] },
   { tabela: 'cartoes_de_catalogo', pk: ['identificador_id', 'cartao'], irmas: ['cartao'] },
 ];
