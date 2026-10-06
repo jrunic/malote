@@ -23,6 +23,8 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.31.0] — 2026-10-06
+
 **Muda a forma do Registro (v7 para v8).** Faça cópia do `registro.db` antes de atualizar; o servidor e cada ouvinte migram o
 Registro ao subir.
 
