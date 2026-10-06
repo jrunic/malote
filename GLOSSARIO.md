@@ -100,6 +100,10 @@ A presença de uma Pessoa numa Conversa, com início e fim quando a Fonte os inf
 Um evento datado, declarado pela Fonte, que afirma que alguém entrou ou saiu de uma Conversa. Nunca nasce da comparação entre dois retratos de participantes.
 *Evitar*: evento de grupo, entrada/saída, movimentação, log de membros.
 
+**Etiqueta de Participação**:
+O texto que um Identificador passou a ter como etiqueta em uma Conversa coletiva, declarado pela Fonte como evento datado. A etiqueta corrente é a do evento de maior instante; remover é um evento de texto vazio. Não é Participação, não é Atribuição de Nome e nunca entra na precedência de nome.
+*Evitar*: etiqueta de membro, rótulo, recado, label, cargo.
+
 **Alcance**:
 A janela de tempo em que uma Conversa tem evento declarado. Fora dela o produto não sabe — e Conversa sem evento algum não tem Alcance.
 *Evitar*: cobertura, janela, período, range, histórico disponível.
