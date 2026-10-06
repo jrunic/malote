@@ -23,6 +23,8 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.32.0] — 2026-10-06
+
 **Muda a forma do Acervo (v25 para v26).** Faça cópia do Acervo antes de atualizar; o servidor e cada ouvinte
 migram o Acervo ao subir. O passo só cria uma tabela e um índice e não exige o Registro.
 
