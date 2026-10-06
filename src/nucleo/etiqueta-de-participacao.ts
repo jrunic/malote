@@ -54,3 +54,45 @@ export function etiquetasVigentesDaConversa(
   }
   return mapa;
 }
+
+export interface EtiquetaDeIdentificador {
+  conversaId: string;
+  texto: string | null;
+  em: number;
+}
+
+/** Vigentes de um CONJUNTO de Identificadores, por Conversa, numa consulta so. */
+export function etiquetasDosIdentificadores(
+  acervo: Acervo,
+  identificadorIds: readonly string[],
+): Map<string, EtiquetaDeIdentificador[]> {
+  const mapa = new Map<string, EtiquetaDeIdentificador[]>();
+  if (identificadorIds.length === 0) return mapa;
+  const linhas = acervo
+    .preparar(
+      `SELECT identificador_id AS identificadorId, conversa_id AS conversaId, texto, ocorrida_em AS em
+         FROM (
+           SELECT identificador_id, conversa_id, texto, ocorrida_em,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY identificador_id, conversa_id
+                    ORDER BY ocorrida_em DESC, id_externo DESC
+                  ) AS posicao
+             FROM etiquetas_de_participacao
+            WHERE identificador_id IN (SELECT value FROM json_each(?))
+         )
+        WHERE posicao = 1
+        ORDER BY em DESC, conversaId`,
+    )
+    .all(JSON.stringify(identificadorIds)) as Array<{
+    identificadorId: string;
+    conversaId: string;
+    texto: string;
+    em: number;
+  }>;
+  for (const l of linhas) {
+    const lista = mapa.get(l.identificadorId) ?? [];
+    lista.push({ conversaId: l.conversaId, texto: l.texto === '' ? null : l.texto, em: l.em });
+    mapa.set(l.identificadorId, lista);
+  }
+  return mapa;
+}

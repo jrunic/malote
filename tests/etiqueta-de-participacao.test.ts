@@ -4,7 +4,7 @@ import { cenario } from './ajuda/acervo.js';
 import { umaColetiva, umMembro } from './ajuda/etiqueta.js';
 import { registrarConversa, registrarEtiqueta } from '../src/nucleo/escrita.js';
 import { CFG_WHATSAPP } from './ajuda/configuracao.js';
-import { etiquetasVigentesDaConversa } from '../src/nucleo/etiqueta-de-participacao.js';
+import { etiquetasDosIdentificadores, etiquetasVigentesDaConversa } from '../src/nucleo/etiqueta-de-participacao.js';
 
 const T0 = Date.parse('2026-10-05T15:00:00Z');
 
@@ -192,6 +192,35 @@ test('a leitura devolve 30 membros numa chamada so — uma consulta por Conversa
     const mapa = etiquetasVigentesDaConversa(acervo, conversa);
     assert.equal(mapa.size, 30);
     assert.equal(pedidos, 1, 'a leitura de uma Conversa tem de ser UMA consulta');
+  } finally {
+    c.limpar();
+  }
+});
+
+
+test('por Identificador: uma etiqueta vigente por Conversa onde houve evento, em uma consulta', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Padme');
+    const a = umaColetiva(acervo, '120363000000000001@g.us');
+    const b = umaColetiva(acervo, '120363000000000002@g.us');
+    const x = umMembro(acervo, '5565911110001');
+    const y = umMembro(acervo, '5565911110002');
+    registrarEtiqueta(acervo, evento(a, x, 'v1', T0, 'EV1'));
+    registrarEtiqueta(acervo, evento(a, x, 'v2', T0 + 1000, 'EV2'));
+    registrarEtiqueta(acervo, evento(b, x, '', T0 + 2000, 'EV3'));
+    registrarEtiqueta(acervo, evento(a, y, 'so y', T0, 'EV4'));
+
+    const mapa = etiquetasDosIdentificadores(acervo, [x, y]);
+    const doX = mapa.get(x) ?? [];
+    assert.equal(doX.length, 2, 'uma por Conversa');
+    const emA = doX.find((e) => e.conversaId === a);
+    const emB = doX.find((e) => e.conversaId === b);
+    assert.equal(emA?.texto, 'v2');
+    assert.equal(emB?.texto, null, 'a removida aparece como nula, com o instante da remocao');
+    assert.equal(emB?.em, T0 + 2000);
+    assert.equal((mapa.get(y) ?? []).length, 1);
+    assert.deepEqual(etiquetasDosIdentificadores(acervo, []).size, 0);
   } finally {
     c.limpar();
   }
