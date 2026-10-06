@@ -4,7 +4,7 @@ projeto: malote
 tipo: dominio
 descricao: "Modelo do arquivo pessoal de conversas — núcleo genérico multi-inquilino (Inquilino, Conversa, Mensagem, Pessoa, Identificador, Anexo, Envio) desacoplado das fontes por Adaptador"
 status: aprovado
-aprovado-em: 2026-10-05
+aprovado-em: 2026-10-06
 escopo: repo:malote
 plataforma: "*"
 dominios: [tecnologia]
@@ -150,6 +150,26 @@ Duas regras atravessam o modelo inteiro:
 - **Conversa sem Transição não tem Alcance**, e aí o produto recusa responder por data passada em vez de devolver o quadro de hoje.
 
 **Ciclo de vida** — nasce da importação de material ou, quando existir, da recepção contínua. Nunca é editada nem removida.
+
+### Etiqueta de Participação
+
+**Entidades / Objetos de Valor**
+
+- Etiqueta de Participação (raiz) — o evento datado em que a Fonte declarou o texto que um Identificador passou a ter em uma Conversa coletiva
+- Texto — o que a Fonte entregou; vazio é a remoção
+- Identidade do evento — o identificador do evento na Fonte, que dá a idempotência
+- Conteúdo Bruto — o evento inteiro, como a Fonte o entregou
+
+**Invariantes**
+
+- **Todo evento tem o instante que a Fonte declarou.** Nenhum é derivado, nem do recebimento.
+- **Nunca é editada nem removida.** Remover a etiqueta é outro evento, de texto vazio; a etiqueta corrente é a do evento de maior instante, e o desempate de instantes iguais é pela identidade do evento.
+- **Pertence a uma Conversa coletiva** e a um Identificador do mesmo Inquilino.
+- Receber o mesmo evento duas vezes não duplica: a unicidade é `(Fonte, identidade do evento, Identificador)`.
+- **Não é Participação nem Atribuição de Nome**, e nunca entra na precedência de nome. Quem declara etiqueta pode nem constar do retrato de participantes.
+- **Não há fonte retroativa.** O material exportado não a traz; só existe etiqueta observada depois de a recepção contínua entrar. Sem evento, "nunca observada" se distingue de "sem etiqueta" (a última etiqueta foi removida).
+
+**Ciclo de vida** — nasce da recepção contínua. Nunca é editada nem removida.
 - Metadados de Coletiva só existem em Conversa coletiva; Conversa direta não carrega campo de coletiva nulo.
 - Conversa nunca é apagada por política de espaço.
 

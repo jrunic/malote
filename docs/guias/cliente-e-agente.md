@@ -123,6 +123,11 @@ malote identificar 5511999990000@s.whatsapp.net
 malote participantes --conversa <id>
 malote participantes --conversa <id> --em 2026-09-15
 
+# Etiquetas que os membros põem em si em cada grupo (a busca é de texto literal)
+malote etiquetas --busca "texto"
+malote etiquetas --conversa <id>
+malote etiquetas --conversa <id> --remetente 5511999990000@s.whatsapp.net --historico
+
 # Totais por fonte e natureza
 malote relatorio
 ```
@@ -189,7 +194,8 @@ Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`
   a **origem** de cada um (plataforma, catálogo), o nome corrente pela precedência do Inquilino, a Pessoa
   quando há, e em quantas Conversas e Mensagens aparece. O valor é comparado **exato** — com o sufixo da
   plataforma (`...@s.whatsapp.net`) —, e valor que o Acervo nunca viu devolve lista vazia, não erro. Por
-  rede, `--inquilino` é recusado (o Inquilino vem da chave).
+  rede, `--inquilino` é recusado (o Inquilino vem da chave). Traz também `etiquetas`: a vigente em cada
+  Conversa coletiva em que houve evento (`texto` nulo é a remoção, com o instante dela).
 - `malote envio estado [<identificador>] [--chave-em <VARIÁVEL>] [--json]` — sem argumento, a
   contagem de Envios por estado do Inquilino da chave (`enviado`, `falhou`, `pendente`, sempre
   os três); com o identificador que o `enviar` imprimiu, o estado daquele Envio. Para o Envio
@@ -229,7 +235,16 @@ Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`
 - `malote participantes --conversa <id> [--em AAAA-MM-DD]` — quem estava na conversa. Cada
   participante traz `valor` (o endereço), `nome`, `origemDoNome` e `pessoaId` (`null` onde
   não há), além do `identificadorId` e da situação de sempre. O nome é o do próprio
-  Identificador, pela precedência do Inquilino.
+  Identificador, pela precedência do Inquilino. Traz também `etiqueta` (o texto vigente, ou `null`
+  quando ausente ou removida) e `etiquetaEm` (o instante do último evento; `null` quando **nunca
+  observada**). Com `--em`, a etiqueta é a vigente naquela data.
+- `malote etiquetas [--conversa <id>] [--remetente <valor>] [--busca <texto>] [--historico] [--limite N]
+  [--json]` — as etiquetas que os membros põem em si em cada grupo. Sem filtro, só as **correntes não
+  vazias** (as removidas e as anteriores não aparecem), as mais novas primeiro, até 100 por padrão e 1000 no
+  máximo. `--busca` é literal (`%` e `_` não são curinga; a caixa é ignorada só para ASCII e o acento não é
+  normalizado). `--historico` devolve todos os eventos de **um** membro numa Conversa, a remoção como
+  `(removida)`, e exige `--conversa` e `--remetente`. Flag sem valor é erro de uso (código 2). Não depende de
+  Alcance. Em rede, `--inquilino` é recusado.
 - `malote relatorio` — totais por fonte e natureza.
 - `malote midia <anexoId> --saida <arquivo>` — grava os bytes do Anexo (foto/documento)
   no caminho local dado. Só existe em modo rede. **Não imprime** os bytes — não há
@@ -255,6 +270,23 @@ Regras:
 
 ---
 
+## Etiquetas de Participação
+
+No WhatsApp, cada membro pode pôr um texto curto em si mesmo em cada grupo (aparece sob o nome na lista
+de participantes). O malote guarda isso como **Etiqueta de Participação**: um evento datado que a
+plataforma declara, capturado ao vivo pelo ouvinte. Três coisas a saber:
+
+- **É um evento, não um nome.** A etiqueta corrente é a do evento de maior instante; remover é um evento
+  de texto vazio, e o histórico guarda a anterior. Ela nunca entra na precedência de nome e não é a
+  Participação (o retrato de quem está no grupo).
+- **Só existe o que o ouvinte viu.** O material exportado e o backup do aparelho não trazem etiquetas, e
+  não há como pedi-las retroativamente. Por isso `etiquetaEm` nulo quer dizer **nunca observada**, e é
+  diferente de "sem etiqueta" (`etiqueta` nula com `etiquetaEm` preenchido: o membro removeu a dele).
+- **O texto é dado pessoal declarado.** Aparece na saída dos comandos de consulta, e nunca em log, em
+  mensagem de erro nem no relatório do ouvinte, que só conta quantas gravou.
+
+---
+
 ## Referência: a API HTTP por trás
 
 A CLI fala estas rotas — o `curl` continua válido quando não houver Node na máquina
@@ -272,7 +304,8 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 | `GET /conversas/<id>/autores` | — | `{ autores: [{ identificadorId, valor, nome, origemDoNome, pessoaId }] }` — quem escreveu na Conversa, uma vez cada (participante ou não) |
 | `GET /buscar?texto=` | `conversa`, `autor`, `desde`, `ate`, `limite` | `{ mensagens: [...] }` |
 | `GET /pessoas?texto=` | — | `{ pessoas: [{ id, nome, identificadores }] }` |
-| `GET /conversas/<id>/participantes` | `em` | `{ presenca: {...} }` — cada participante com `valor`, `nome`, `origemDoNome`, `pessoaId` |
+| `GET /conversas/<id>/participantes` | `em` | `{ presenca: {...} }` — cada participante com `valor`, `nome`, `origemDoNome`, `pessoaId`, `etiqueta` e `etiquetaEm` |
+| `GET /etiquetas` | `conversa`, `remetente`, `busca`, `historico` (`1`), `limite` | `{ etiquetas: [{ conversaId, identificadorId, valor, nome, origemDoNome, texto, em }] }` — `texto` nulo é a remoção (só no histórico); `historico` exige `conversa` e `remetente`; `400` por uso errado e `404` só por Conversa inexistente |
 | `GET /identificadores?valor=` | `fonte` | `{ consultado, identificadores: [...], formas: [...] }` — vazio quando o Acervo nunca viu o valor |
 | `GET /relatorio` | — | `{ relatorio: { conversas, mensagens } }` |
 | `GET /chaves` | — | `{ chaves: [...] }` — as chaves do próprio Inquilino |

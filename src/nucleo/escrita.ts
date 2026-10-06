@@ -372,6 +372,71 @@ export function registrarTransicao(acervo: Acervo, entrada: EntradaTransicao): b
   return info.changes === 1;
 }
 
+export interface EntradaEtiqueta {
+  conversaId: ConversaId;
+  identificadorId: string;
+  /** O texto que a Fonte entregou. Vazio e a REMOCAO da etiqueta, nao um erro. */
+  texto: string;
+  /** O instante que a FONTE declarou, em milissegundos. Nunca derivado. */
+  ocorridaEm: number;
+  fonte: Fonte;
+  /** Identificador externo do evento na Fonte. E ele que da a idempotencia. */
+  idExterno: string;
+  /** O evento inteiro como a Fonte o entregou (o Adaptador nao escolhe colunas). */
+  bruto?: string;
+}
+
+export class EtiquetaForaDeColetivaError extends Error {
+  constructor(conversaId: string) {
+    super(`Etiqueta de Participacao so existe em Conversa coletiva (Conversa ${conversaId}).`);
+  }
+}
+
+export class InstanteDeEtiquetaInvalidoError extends Error {
+  constructor(instante: number) {
+    super(`Etiqueta sem instante declarado pela Fonte (instante ${String(instante)}).`);
+  }
+}
+
+/**
+ * Registra o evento de etiqueta que a Fonte DECLAROU. Devolve `true` quando a
+ * linha NASCEU aqui e `false` quando o evento ja existia: o chamador conta pelo
+ * retorno, nunca por chamada (o relatorio da reentrega nao pode afirmar que
+ * criou o que ja estava la).
+ *
+ * Nao ha caminho que derive `ocorridaEm`: quem nao tem o instante da Fonte nao
+ * tem etiqueta. Texto vazio PASSA, porque remover a etiqueta e um evento.
+ */
+export function registrarEtiqueta(acervo: Acervo, entrada: EntradaEtiqueta): boolean {
+  if (!Number.isFinite(entrada.ocorridaEm) || entrada.ocorridaEm <= 0) {
+    throw new InstanteDeEtiquetaInvalidoError(entrada.ocorridaEm);
+  }
+  const conversa = acervo.preparar('SELECT coletiva FROM conversas WHERE id = ?').get(entrada.conversaId) as
+    | { coletiva: number }
+    | undefined;
+  if (conversa === undefined || conversa.coletiva !== 1) {
+    throw new EtiquetaForaDeColetivaError(entrada.conversaId);
+  }
+  const info = acervo
+    .preparar(
+      `INSERT INTO etiquetas_de_participacao
+         (id, conversa_id, identificador_id, texto, ocorrida_em, fonte, id_externo, bruto)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (fonte, id_externo, identificador_id) DO NOTHING`,
+    )
+    .run(
+      randomUUID(),
+      entrada.conversaId,
+      entrada.identificadorId,
+      entrada.texto,
+      entrada.ocorridaEm,
+      entrada.fonte,
+      entrada.idExterno,
+      entrada.bruto ?? null,
+    );
+  return info.changes === 1;
+}
+
 export interface EntradaMensagem {
   conversaId: ConversaId;
   fonte: Fonte;

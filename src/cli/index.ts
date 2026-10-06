@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { lerPedidoDeEtiquetas, formatarEtiquetas } from './etiquetas.js';
+import { acrescentarEtiquetas, listarEtiquetas } from '../nucleo/etiqueta-de-participacao.js';
 import { execFileSync } from 'node:child_process';
 import {
   copyFileSync,
@@ -69,6 +71,7 @@ import {
   conferirMesclagem,
   conferirTransicoes,
   conferirTransicoesRepetidas,
+  conferirEtiquetasRepetidas,
   conferirTransicoesEmDuasFormas,
   conferirConversasEmFormaAlternativa,
 } from '../nucleo/integridade.js';
@@ -350,6 +353,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--json]
   malote pessoas        --inquilino <id> --texto <nome>        (resolve texto em Pessoa; com MALOTE_SERVIDOR: por REDE, sem --inquilino)
   malote participantes  --inquilino <id> --conversa <id> [--em <AAAA-MM-DD>]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino)
+  malote etiquetas      --inquilino <id> [--conversa <id>] [--remetente <valor>] [--busca <texto>] [--historico] [--limite <n>] [--json]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino; --historico exige --conversa e --remetente; sem filtro, so as correntes nao vazias, ate 100 por padrao e 1000 no maximo)
   malote relatorio                                              (SO em modo rede: totais por Fonte e natureza; local, use 'malote acervo relatar')
   malote conversas sem-endereco --inquilino <id> [--limite <n>]
   malote conversa presenca      --inquilino <id> --conversa <id> --em <AAAA-MM-DD> [--json]
@@ -446,6 +450,7 @@ export const COMANDOS_DE_REDE = new Set([
   'midia',
   'identificar',
   'anexos',
+  'etiquetas',
 ]);
 
 /**
@@ -542,6 +547,38 @@ export async function executarConsultaRede(
         const corpo = JSON.parse(r.corpo) as { anexos: Parameters<typeof formatarAnexos>[0]; proximo?: string };
         for (const l of formatarAnexos(corpo.anexos)) rede.escrever(l);
         if (corpo.proximo !== undefined) rede.escrever(`proximo: ${corpo.proximo}  (use --antes)`);
+      }
+      return 0;
+    } catch (e) {
+      rede.escrever((e as Error).message);
+      return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
+    }
+  }
+  else if (grupo === 'etiquetas') {
+    if (argumentos.includes('--inquilino')) {
+      rede.escrever(MENSAGEM_SEM_INQUILINO_NA_REDE);
+      return 2;
+    }
+    const leitura = lerPedidoDeEtiquetas(argumentos);
+    if (!leitura.ok) {
+      rede.escrever(leitura.erro);
+      return 2;
+    }
+    const { pedido } = leitura;
+    const qe = new URLSearchParams();
+    if (pedido.conversa !== undefined) qe.set('conversa', pedido.conversa);
+    if (pedido.remetente !== undefined) qe.set('remetente', pedido.remetente);
+    if (pedido.busca !== undefined) qe.set('busca', pedido.busca);
+    if (pedido.historico) qe.set('historico', '1');
+    if (pedido.limite !== undefined) qe.set('limite', String(pedido.limite));
+    const sufixo = qe.toString();
+    try {
+      const r = await pedirGet(rede.servidor, rede.chave, `/etiquetas${sufixo ? `?${sufixo}` : ''}`);
+      if (argumentos.includes('--json')) {
+        rede.escrever(JSON.stringify(JSON.parse(r.corpo), null, 2));
+      } else {
+        const corpo = JSON.parse(r.corpo) as { etiquetas: Parameters<typeof formatarEtiquetas>[0] };
+        for (const l of formatarEtiquetas(corpo.etiquetas)) rede.escrever(l);
       }
       return 0;
     } catch (e) {
@@ -1933,7 +1970,13 @@ function executarComAtor(
         // Sem --em: agora. Com --em: fim do dia capado ao Alcance, a regra
         // medida que o CONTEXTO registra.
         const em = emParam === undefined ? Date.now() : expandirData(emParam, 'fim');
-        escrever(JSON.stringify(quemEstavaEm(acervo, { conversaId: conversa, em }), null, 2));
+        escrever(
+          JSON.stringify(
+            acrescentarEtiquetas(acervo, quemEstavaEm(acervo, { conversaId: conversa, em })),
+            null,
+            2,
+          ),
+        );
       } finally {
         acervo.fechar();
       }
@@ -2260,6 +2303,52 @@ function executarComAtor(
         );
         if (temBandeira(argumentos, 'json')) escrever(JSON.stringify(r, null, 2));
         else for (const l of formatarIdentificacao(r)) escrever(l);
+      } finally {
+        acervo.fechar();
+      }
+      return 0;
+    }
+
+    if (grupo === 'etiquetas') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino.');
+      const leitura = lerPedidoDeEtiquetas(argumentos);
+      if (!leitura.ok) {
+        escrever(leitura.erro);
+        return 2;
+      }
+      const { pedido } = leitura;
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        let fonteDoRemetente: Fonte | undefined;
+        if (pedido.conversa !== undefined) {
+          fonteDoRemetente = fonteDaConversa(acervo, pedido.conversa);
+          if (fonteDoRemetente === undefined) {
+            escrever(`Conversa desconhecida: ${pedido.conversa}`);
+            return 2;
+          }
+        }
+        const autorIds =
+          pedido.remetente === undefined
+            ? undefined
+            : identificadoresDoRemetente(acervo, {
+                valor: pedido.remetente,
+                ...(fonteDoRemetente !== undefined ? { fonte: fonteDoRemetente } : {}),
+              });
+        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const lista = listarEtiquetas(
+          acervo,
+          {
+            ...(pedido.conversa !== undefined ? { conversaId: pedido.conversa } : {}),
+            ...(autorIds !== undefined ? { autorIds } : {}),
+            ...(pedido.busca !== undefined ? { busca: pedido.busca } : {}),
+            historico: pedido.historico,
+            ...(pedido.limite !== undefined ? { limite: pedido.limite } : {}),
+          },
+          precedencia,
+        );
+        if (temBandeira(argumentos, 'json')) escrever(JSON.stringify({ etiquetas: lista }, null, 2));
+        else for (const l of formatarEtiquetas(lista)) escrever(l);
       } finally {
         acervo.fechar();
       }
@@ -2644,6 +2733,11 @@ function executarComAtor(
         // — o endereco e resolvido antes de virar Referencia Externa desde o
         // ciclo 10 —, e enquanto for, fundir Conversa nao precisa existir.
         const conversasAlt = conferirConversasEmFormaAlternativa(acervo);
+        const etiquetasRepetidas = conferirEtiquetasRepetidas(acervo);
+        escrever(
+          `Etiquetas do mesmo evento sob duas formas de endereco: ${etiquetasRepetidas}` +
+            (etiquetasRepetidas > 0 ? ' — o par chegou depois do evento; `identidade resolver-enderecos` conserta.' : ''),
+        );
         escrever(`Transicoes da mesma pessoa em duas formas de endereco: ${duasFormas}`);
         escrever(
           `Conversas com Referencia Externa na forma alternativa: ${conversasAlt}` +

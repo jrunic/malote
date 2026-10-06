@@ -1,6 +1,7 @@
 import type { Acervo } from './acervo.js';
 import type { Fonte } from './tipos.js';
 import type { PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
+import { etiquetasDosIdentificadores, type EtiquetaDeIdentificador } from './etiqueta-de-participacao.js';
 import { nomeDaPessoa, nomeEscolhido, nomesDoIdentificador } from './identidade.js';
 
 export type PapelDaForma = 'consultado' | 'canonico' | 'alternativo';
@@ -38,6 +39,8 @@ export interface IdentificadorIdentificado {
   mensagens: number;
   primeiraMensagemEm: number | null;
   ultimaMensagemEm: number | null;
+  /** Uma por Conversa coletiva em que houve evento; `texto` nulo e a remocao, com o instante dela. */
+  etiquetas: EtiquetaDeIdentificador[];
 }
 
 export interface Identificacao {
@@ -124,6 +127,7 @@ export function identificarPorValor(
     'SELECT COUNT(*) AS n, MIN(ocorrida_em) AS primeira, MAX(ocorrida_em) AS ultima FROM mensagens WHERE autor_id = ?',
   );
 
+  const etiquetas = etiquetasDosIdentificadores(acervo, [...gravados.keys()]);
   const identificadores: IdentificadorIdentificado[] = [...gravados.values()].map((g) => {
     const nomes = nomesDoIdentificador(acervo, g.id);
     const escolhido = nomeEscolhido(nomes, precedencia);
@@ -147,6 +151,7 @@ export function identificarPorValor(
       mensagens: mensagens.n,
       primeiraMensagemEm: mensagens.primeira,
       ultimaMensagemEm: mensagens.ultima,
+      etiquetas: etiquetas.get(g.id) ?? [],
     };
   });
   identificadores.sort((a, b) => ORDEM_DO_PAPEL[a.papel] - ORDEM_DO_PAPEL[b.papel] || a.valor.localeCompare(b.valor));

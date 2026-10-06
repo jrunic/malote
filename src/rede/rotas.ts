@@ -30,6 +30,7 @@ import {
 } from '../nucleo/envio.js';
 import { identificarPorValor } from '../nucleo/identificar.js';
 import { enriquecerPresenca } from '../nucleo/nomes-em-lote.js';
+import { acrescentarEtiquetas, LIMITE_DE_ETIQUETAS, listarEtiquetas } from '../nucleo/etiqueta-de-participacao.js';
 import { lerPrecedenciasDeNome, type PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
 
 /**
@@ -727,6 +728,76 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     return;
   }
 
+  if (partes.length === 1 && partes[0] === 'etiquetas') {
+    const q = url.searchParams;
+    let limite: number | undefined;
+    const limiteTexto = q.get('limite');
+    if (limiteTexto !== null) {
+      limite = Number(limiteTexto);
+      if (!Number.isInteger(limite) || limite < 1 || limite > LIMITE_DE_ETIQUETAS.maximo) {
+        json(res, 400, { erro: `limite precisa ser um inteiro de 1 a ${LIMITE_DE_ETIQUETAS.maximo}` });
+        return;
+      }
+    }
+    const busca = q.get('busca');
+    if (busca === '') {
+      json(res, 400, { erro: 'busca vazia — informe o texto procurado' });
+      return;
+    }
+    const remetente = q.get('remetente');
+    if (remetente === '') {
+      json(res, 400, { erro: 'remetente vazio — informe o valor do Identificador' });
+      return;
+    }
+    const conversaParam = q.get('conversa');
+    const historico = q.get('historico') === '1';
+    if (historico && (conversaParam === null || remetente === null)) {
+      json(res, 400, { erro: 'historico exige conversa e remetente' });
+      return;
+    }
+    // A Conversa existir e a UNICA coisa que decide 404 (a regra da #1090): lista vazia por filtro
+    // que nao casa e resposta legitima. Os 400 acima vem ANTES e nao revelam existencia.
+    let fonteDoRemetente: Fonte | undefined;
+    if (conversaParam !== null) {
+      fonteDoRemetente = fonteDaConversa(ctx.acervo, conversaParam as ConversaId);
+      if (fonteDoRemetente === undefined) {
+        naoEncontrado(res);
+        return;
+      }
+    }
+    const autorIds =
+      remetente === null
+        ? undefined
+        : identificadoresDoRemetente(ctx.acervo, {
+            valor: remetente,
+            ...(fonteDoRemetente !== undefined ? { fonte: fonteDoRemetente } : {}),
+          });
+    const registro = abrirRegistroSomenteLeitura(ctx.dados);
+    let precedencia: PrecedenciaDeNome;
+    try {
+      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+    } finally {
+      registro.fechar();
+    }
+    // Mutante que sobrevive por EQUIVALENCIA: ctx.acervo e o Acervo do Inquilino da credencial, um por
+    // Inquilino; o teste de dois Inquilinos (etiqueta-rede.test.ts) e regressao do comportamento (o
+    // parametro ?inquilino= e ignorado), nao prova de poder.
+    json(res, 200, {
+      etiquetas: listarEtiquetas(
+        ctx.acervo,
+        {
+          ...(conversaParam !== null ? { conversaId: conversaParam } : {}),
+          ...(autorIds !== undefined ? { autorIds } : {}),
+          ...(busca !== null ? { busca } : {}),
+          historico,
+          ...(limite !== undefined ? { limite } : {}),
+        },
+        precedencia,
+      ),
+    });
+    return;
+  }
+
   if (partes.length === 3 && partes[0] === 'conversas' && partes[2] === 'anexos') {
     const conversaId = partes[1] as ConversaId;
     const q = url.searchParams;
@@ -1043,7 +1114,10 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       registro.fechar();
     }
     json(res, 200, {
-      presenca: enriquecerPresenca(ctx.acervo, quemEstavaEm(ctx.acervo, { conversaId, em }), precedencia),
+      presenca: acrescentarEtiquetas(
+        ctx.acervo,
+        enriquecerPresenca(ctx.acervo, quemEstavaEm(ctx.acervo, { conversaId, em }), precedencia),
+      ),
     });
     return;
   }

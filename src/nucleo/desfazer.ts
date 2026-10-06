@@ -225,7 +225,7 @@ function desfazerLinha(acervo: Acervo, l: LinhaDeEfeito, todas: LinhaDeEfeito[])
     return NAO_SE_DESFAZ['criar-pessoa'] as string;
   }
 
-  // Resolucao retroativa de endereco: as cinco tabelas do inventario.
+  // Resolucao retroativa de endereco: as seis tabelas do inventario.
   if ((TABELAS_QUE_APONTAM_PARA_IDENTIFICADOR as readonly string[]).includes(l.tabela)) {
     // Linha que a fusao apagou: reinsere inteira, a partir das linhas irmas.
     if (l.depois === null && l.antes !== null) {
