@@ -450,6 +450,7 @@ export const COMANDOS_DE_REDE = new Set([
   'midia',
   'identificar',
   'anexos',
+  'etiquetas',
 ]);
 
 /**
@@ -546,6 +547,38 @@ export async function executarConsultaRede(
         const corpo = JSON.parse(r.corpo) as { anexos: Parameters<typeof formatarAnexos>[0]; proximo?: string };
         for (const l of formatarAnexos(corpo.anexos)) rede.escrever(l);
         if (corpo.proximo !== undefined) rede.escrever(`proximo: ${corpo.proximo}  (use --antes)`);
+      }
+      return 0;
+    } catch (e) {
+      rede.escrever((e as Error).message);
+      return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
+    }
+  }
+  else if (grupo === 'etiquetas') {
+    if (argumentos.includes('--inquilino')) {
+      rede.escrever(MENSAGEM_SEM_INQUILINO_NA_REDE);
+      return 2;
+    }
+    const leitura = lerPedidoDeEtiquetas(argumentos);
+    if (!leitura.ok) {
+      rede.escrever(leitura.erro);
+      return 2;
+    }
+    const { pedido } = leitura;
+    const qe = new URLSearchParams();
+    if (pedido.conversa !== undefined) qe.set('conversa', pedido.conversa);
+    if (pedido.remetente !== undefined) qe.set('remetente', pedido.remetente);
+    if (pedido.busca !== undefined) qe.set('busca', pedido.busca);
+    if (pedido.historico) qe.set('historico', '1');
+    if (pedido.limite !== undefined) qe.set('limite', String(pedido.limite));
+    const sufixo = qe.toString();
+    try {
+      const r = await pedirGet(rede.servidor, rede.chave, `/etiquetas${sufixo ? `?${sufixo}` : ''}`);
+      if (argumentos.includes('--json')) {
+        rede.escrever(JSON.stringify(JSON.parse(r.corpo), null, 2));
+      } else {
+        const corpo = JSON.parse(r.corpo) as { etiquetas: Parameters<typeof formatarEtiquetas>[0] };
+        for (const l of formatarEtiquetas(corpo.etiquetas)) rede.escrever(l);
       }
       return 0;
     } catch (e) {
