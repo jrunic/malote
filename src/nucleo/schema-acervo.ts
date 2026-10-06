@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3';
  * Politica completa das duas bases na ADR local
  * `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_ACERVO = 25;
+export const VERSAO_SCHEMA_ACERVO = 26;
 
 /**
  * Forma mais antiga que a maquina de migracao alcanca.
@@ -563,6 +563,28 @@ export function aplicarSchemaAcervo(db: Database): void {
 
     CREATE INDEX IF NOT EXISTS transicao_por_conversa
       ON transicoes_de_participacao (conversa_id, ocorrida_em);
+
+    -- Etiqueta de Participacao: o texto que um membro poe em si mesmo em um
+    -- grupo, como evento DECLARADO pela Fonte. Irma da Transicao, fora da
+    -- Participacao: o retrato nunca e evento, e quem declara pode nem constar
+    -- do retrato. Remover a etiqueta e um evento de texto vazio, nunca a
+    -- ausencia de linha. Imutavel: a etiqueta corrente e a do maior instante.
+    CREATE TABLE IF NOT EXISTS etiquetas_de_participacao (
+      id               TEXT PRIMARY KEY,
+      conversa_id      TEXT NOT NULL,
+      identificador_id TEXT NOT NULL,
+      texto            TEXT NOT NULL,
+      ocorrida_em      INTEGER NOT NULL,
+      fonte            TEXT NOT NULL,
+      id_externo       TEXT NOT NULL,
+      bruto            TEXT,
+      UNIQUE (fonte, id_externo, identificador_id),
+      FOREIGN KEY (conversa_id) REFERENCES conversas(id) ON DELETE CASCADE,
+      FOREIGN KEY (identificador_id) REFERENCES identificadores(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS etiqueta_por_conversa_e_membro
+      ON etiquetas_de_participacao (conversa_id, identificador_id, ocorrida_em);
 
     CREATE INDEX IF NOT EXISTS linhas_por_operacao
       ON linhas_de_efeito (operacao_id, ordem);

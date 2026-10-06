@@ -810,6 +810,37 @@ const ENVIO_MIDIA_V25: PassoDeMigracao = {
     `),
 };
 
+/**
+ * A Etiqueta de Participacao entra. Tabela nova e indice, sem linha
+ * preexistente a migrar: nenhuma Fonte entregava o evento antes. Nao exige
+ * contexto do Registro, entao qualquer abridor pode migrar (mesma classe dos
+ * passos 23 e 24). O DDL e fotografia congelada.
+ */
+const ETIQUETA_V26: PassoDeMigracao = {
+  de: 25,
+  para: 26,
+  descricao: 'cria a Etiqueta de Participacao (evento datado do texto que o membro poe em si no grupo)',
+  aplicar: (db) =>
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS etiquetas_de_participacao (
+        id               TEXT PRIMARY KEY,
+        conversa_id      TEXT NOT NULL,
+        identificador_id TEXT NOT NULL,
+        texto            TEXT NOT NULL,
+        ocorrida_em      INTEGER NOT NULL,
+        fonte            TEXT NOT NULL,
+        id_externo       TEXT NOT NULL,
+        bruto            TEXT,
+        UNIQUE (fonte, id_externo, identificador_id),
+        FOREIGN KEY (conversa_id) REFERENCES conversas(id) ON DELETE CASCADE,
+        FOREIGN KEY (identificador_id) REFERENCES identificadores(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS etiqueta_por_conversa_e_membro
+        ON etiquetas_de_participacao (conversa_id, identificador_id, ocorrida_em);
+    `),
+  tabelasNovas: ['etiquetas_de_participacao'],
+};
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -826,6 +857,7 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   SOLICITACAO_DE_TRANSCRICAO_V23,
   ENVIO_V24,
   ENVIO_MIDIA_V25,
+  ETIQUETA_V26,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {
