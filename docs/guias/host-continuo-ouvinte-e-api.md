@@ -358,3 +358,22 @@ linhas (ver o guia de armazenamento).
 | conferir o que o ouvinte derramou | `ouvinte estado --json` (campo derrame) e `ouvinte reprocessar` — recusa se o ouvinte estiver no ar |
 | segunda conta de WhatsApp | novo material importado com Configuração própria + novo unit `malote-ouvinte@<outra-conta>` |
 | revogar quem consulta | `acesso chave revogar` |
+
+## Notas de operação do host
+
+- **O `post_install` do malote RODA: toda release reinicia o ouvinte.** Medido em 12/09/2026
+  na release v0.10.0, o comando de distribuição executou `restart:malote-ouvinte@<conta>.service`. Duas
+  consequências que valem para **toda** release:
+  - o ouvinte sobe com o código novo e **migra as bases sozinho** ao abri-las. Se a release
+    muda a forma do Acervo ou do Registro, pare o serviço e faça backup **antes** — código
+    velho escrevendo em tabela recém-reconstruída perde dado em silêncio, pelo `catch` por
+    evento. Release que não muda forma não precisa disso: confira comparando
+    `VERSAO_SCHEMA_ACERVO` e `VERSAO_SCHEMA_REGISTRO` entre `main` e `origin/production`;
+  - o restart **zera a janela contínua** do ouvinte. Medição que exija janela sem reinício
+    (paridade por identificador, por exemplo) roda **antes** da release, nunca depois.
+- **O unit do ouvinte é de SISTEMA**, em `/etc/systemd/system/`, não de usuário. `systemctl
+  --user` responde `inactive` para um unit que nem existe naquele barramento, e isso já
+  produziu três diagnósticos errados numa sessão. Reiniciar exige `sudo`.
+- **`malote material varrer` não tem gatilho.** As três Pastas de Entrada estão declaradas em
+  produção e o comando funciona, mas nada o chama: o timer fica **fora do produto**, por
+  decisão de quem instala, e nasce na infraestrutura de quem instala.

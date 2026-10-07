@@ -450,3 +450,7 @@ Duas leituras, `GET`, pelo Inquilino da Chave (nunca por parâmetro), que não g
   Envio. Inexistente, ou de outro Inquilino: `404` de corpo vazio, igual nos dois casos.
 - `GET /envios/contagem` — `200` com `{"pendente": n, "enviado": n, "falhou": n}`, os três
   sempre presentes.
+
+## Consultar como outro Inquilino
+
+- **`--chave-em` só troca a chave em `enviar` e `envio estado`.** Em `conversas`, `mensagens` e as demais leituras ele é ignorado: a consulta segue com a chave do ambiente. Para consultar como outro Inquilino, troque a variável `MALOTE_CHAVE_DE_ACESSO` na mesma chamada. Antes de interpretar, compare com a chave padrão: se as duas devolvem o mesmo dado, a troca não aconteceu.
