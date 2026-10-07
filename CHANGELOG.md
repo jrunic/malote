@@ -23,6 +23,10 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.33.0] — 2026-10-06
+
+Não muda a forma do Acervo nem do Registro. **Atualize o servidor antes dos clientes:** um servidor antigo ignora `--ordem` e não devolve `truncado`, e o cliente novo funciona contra ele.
+
 ### Corrigido
 
 - **Flag que pede valor e vem sem ele agora é erro de uso (código 2).** Antes, `malote conversas --coletiva` devolvia todas as
