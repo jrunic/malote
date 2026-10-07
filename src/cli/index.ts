@@ -21,6 +21,7 @@ import { executarEnviarRede } from './enviar-rede.js';
 import { executarEnvioEstadoRede } from './envio-estado-rede.js';
 import { encerrar } from './encerrar.js';
 import { primeiroPosicional } from './posicional.js';
+import { opcao, temBandeira, todasAsOpcoes } from './bandeiras.js';
 import { formatarIdentificacao } from './identificar-texto.js';
 import { identificarPorValor } from '../nucleo/identificar.js';
 import { basename, join } from 'node:path';
@@ -252,29 +253,6 @@ export interface Ambiente {
    * fronteira, e teste nao sobe servico.
    */
   ouvinteEscrevendo?: (conta: string) => boolean;
-}
-
-/** Lê `--nome valor` de uma lista de argumentos. */
-function opcao(argumentos: string[], nome: string): string | undefined {
-  const i = argumentos.indexOf(`--${nome}`);
-  if (i === -1) return undefined;
-  return argumentos[i + 1];
-}
-
-/** Todas as ocorrencias de uma bandeira repetida, na ordem em que aparecem. */
-function todasAsOpcoes(argumentos: string[], nome: string): string[] {
-  const achados: string[] = [];
-  for (let i = 0; i < argumentos.length; i += 1) {
-    if (argumentos[i] === `--${nome}`) {
-      const valor = argumentos[i + 1];
-      if (valor !== undefined) achados.push(valor);
-    }
-  }
-  return achados;
-}
-
-function temBandeira(argumentos: string[], nome: string): boolean {
-  return argumentos.includes(`--${nome}`);
 }
 
 const AJUDA = `malote — arquivo local das suas conversas

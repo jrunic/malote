@@ -7,6 +7,7 @@ import type { CursorDePaginacao } from '../nucleo/cursor.js';
 import { identificadoresDoRemetente } from '../nucleo/remetente.js';
 import type { PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
 import { pedirGet } from './cliente.js';
+import { opcao } from './bandeiras.js';
 import { MENSAGEM_SEM_INQUILINO_NA_REDE } from './sem-inquilino-na-rede.js';
 
 /**
@@ -25,25 +26,20 @@ export interface PedidoDeExport {
   ate: string | undefined;
 }
 
-const valorDe = (argumentos: string[], nome: string): string | undefined => {
-  const i = argumentos.indexOf(`--${nome}`);
-  return i === -1 ? undefined : argumentos[i + 1];
-};
-
 /** Le e valida a linha de comando. Valor errado na linha de comando e erro de uso (codigo 2). */
 export function lerPedidoDeExport(argumentos: string[]): { pedido: PedidoDeExport } | { erro: string } {
-  const conversaId = valorDe(argumentos, 'conversa');
+  const conversaId = opcao(argumentos, 'conversa');
   if (conversaId === undefined || conversaId === '') return { erro: 'Informe --conversa <id>.' };
-  const formatoOpcao = valorDe(argumentos, 'formato');
+  const formatoOpcao = opcao(argumentos, 'formato');
   const json = argumentos.includes('--json');
   if (formatoOpcao !== undefined && formatoOpcao !== 'txt' && formatoOpcao !== 'json') {
     return { erro: '--formato aceita txt ou json.' };
   }
   if (json && formatoOpcao === 'txt') return { erro: '--json e --formato txt se contradizem.' };
-  const remetente = valorDe(argumentos, 'remetente');
+  const remetente = opcao(argumentos, 'remetente');
   if (remetente === '') return { erro: '--remetente precisa do valor do Identificador.' };
-  const desde = valorDe(argumentos, 'desde');
-  const ate = valorDe(argumentos, 'ate');
+  const desde = opcao(argumentos, 'desde');
+  const ate = opcao(argumentos, 'ate');
   try {
     if (desde !== undefined) expandirData(desde, 'inicio');
     if (ate !== undefined) expandirData(ate, 'fim');
@@ -54,7 +50,7 @@ export function lerPedidoDeExport(argumentos: string[]): { pedido: PedidoDeExpor
     pedido: {
       conversaId,
       formato: json || formatoOpcao === 'json' ? 'json' : 'txt',
-      saida: valorDe(argumentos, 'saida'),
+      saida: opcao(argumentos, 'saida'),
       sobrescrever: argumentos.includes('--sobrescrever'),
       remetente,
       desde,

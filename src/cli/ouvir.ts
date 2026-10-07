@@ -38,6 +38,7 @@ import {
 import { configuracaoComTelefoneEquivalente } from './telefone-da-conta.js';
 import { anotarCorrespondencia } from './vigilancia.js';
 import type { Ambiente } from './index.js';
+import { opcao } from './bandeiras.js';
 
 export interface CaminhosDaConta {
   vinculo: string;
@@ -70,12 +71,6 @@ export function caminhosDaConta(raiz: string, conta: string): CaminhosDaConta {
       retrato: join(pasta, 'retrato.json'),
       pulos: join(pasta, 'pulos.json'),
   };
-}
-
-function opcao(argumentos: string[], nome: string): string | undefined {
-  const i = argumentos.indexOf(`--${nome}`);
-  if (i === -1) return undefined;
-  return argumentos[i + 1];
 }
 
 function descreverIntervalo(de: number, ate: number): string {
