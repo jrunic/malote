@@ -7,7 +7,7 @@ import type { CursorDePaginacao } from '../nucleo/cursor.js';
 import { identificadoresDoRemetente } from '../nucleo/remetente.js';
 import type { PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
 import { pedirGet } from './cliente.js';
-import { opcao } from './bandeiras.js';
+import { opcao, recusarBandeiras } from './bandeiras.js';
 import { MENSAGEM_SEM_INQUILINO_NA_REDE } from './sem-inquilino-na-rede.js';
 
 /**
@@ -200,6 +200,8 @@ export async function esperarEscoamento(fluxo: NodeJS.WriteStream): Promise<void
  * decrescente com), e uma pagina 1 ascendente seguida de uma 2 descendente repete e pula.
  */
 export async function executarExportarRede(argumentos: string[], rede: RedeDeExport): Promise<number> {
+  const recusaDeBandeira = recusarBandeiras(argumentos, rede.erro);
+  if (recusaDeBandeira !== undefined) return recusaDeBandeira;
   if (argumentos.includes('--inquilino')) {
     rede.erro(MENSAGEM_SEM_INQUILINO_NA_REDE);
     return 2;

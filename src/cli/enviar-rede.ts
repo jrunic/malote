@@ -4,7 +4,7 @@ import { basename } from 'node:path';
 import { pedirPost, type CodigoDeFalha } from './cliente.js';
 import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
 import { resolverChaveEm } from './chave-em.js';
-import { opcao } from './bandeiras.js';
+import { opcao, recusarBandeiras } from './bandeiras.js';
 
 /**
  * `malote enviar` no MODO REDE: pede o Envio ao servidor (`POST /envios/solicitar`) em vez
@@ -38,6 +38,8 @@ export interface RedeDeEnvio {
 
 export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio): Promise<number> {
   const escrever = rede.escrever;
+  const recusaDeBandeira = recusarBandeiras(argumentos, escrever);
+  if (recusaDeBandeira !== undefined) return recusaDeBandeira;
 
   if (opcao(argumentos, 'inquilino') !== undefined) {
     escrever(

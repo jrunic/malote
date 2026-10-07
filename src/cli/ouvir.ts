@@ -38,7 +38,7 @@ import {
 import { configuracaoComTelefoneEquivalente } from './telefone-da-conta.js';
 import { anotarCorrespondencia } from './vigilancia.js';
 import type { Ambiente } from './index.js';
-import { opcao } from './bandeiras.js';
+import { opcao, recusarBandeiras } from './bandeiras.js';
 
 export interface CaminhosDaConta {
   vinculo: string;
@@ -169,6 +169,8 @@ export function drenar(
 
 export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): Promise<number> {
   const { escrever } = ambiente;
+  const recusaDeBandeira = recusarBandeiras(argumentos, escrever);
+  if (recusaDeBandeira !== undefined) return recusaDeBandeira;
   const agora = ambiente.agora ?? ((): number => Date.now());
   const inquilinoId = opcao(argumentos, 'inquilino');
   const conta = opcao(argumentos, 'conta');

@@ -21,7 +21,7 @@ import { executarEnviarRede } from './enviar-rede.js';
 import { executarEnvioEstadoRede } from './envio-estado-rede.js';
 import { encerrar } from './encerrar.js';
 import { primeiroPosicional } from './posicional.js';
-import { opcao, temBandeira, todasAsOpcoes } from './bandeiras.js';
+import { opcao, recusarBandeiras, temBandeira, todasAsOpcoes } from './bandeiras.js';
 import { formatarIdentificacao } from './identificar-texto.js';
 import { identificarPorValor } from '../nucleo/identificar.js';
 import { basename, join } from 'node:path';
@@ -440,6 +440,8 @@ export async function executarConsultaRede(
   argumentos: string[],
   rede: { servidor: string; chave: string; escrever: (t: string) => void },
 ): Promise<number> {
+  const recusaDeBandeira = recusarBandeiras(argumentos, rede.escrever);
+  if (recusaDeBandeira !== undefined) return recusaDeBandeira;
   const grupo = argumentos[0];
   const q = new URLSearchParams();
   for (const nome of ['busca', 'fonte', 'coletiva', 'pessoa', 'limite', 'conversa',
@@ -616,6 +618,8 @@ export async function executarMidiaReprocessar(
   argumentos: string[],
   ambiente: Ambiente,
 ): Promise<number> {
+  const recusaDeBandeira = recusarBandeiras(argumentos, ambiente.escrever);
+  if (recusaDeBandeira !== undefined) return recusaDeBandeira;
   const { escrever } = ambiente;
   const chave = opcao(argumentos, 'chave');
   const registro = comAtor(LOCAL, () => abrirRegistro(ambiente.dados));
@@ -657,6 +661,8 @@ export async function executarMidiaReprocessar(
  * para que o teste rode o caminho real sem tocar no processo nem no HOME.
  */
 export function executar(argumentos: string[], ambiente: Ambiente): number {
+  const recusaDeBandeira = recusarBandeiras(argumentos, ambiente.escrever);
+  if (recusaDeBandeira !== undefined) return recusaDeBandeira;
   const { escrever } = ambiente;
   const chave = opcao(argumentos, 'chave');
 

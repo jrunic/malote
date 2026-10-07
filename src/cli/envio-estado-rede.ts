@@ -1,4 +1,5 @@
 import { primeiroPosicional } from './posicional.js';
+import { recusarBandeiras } from './bandeiras.js';
 import { pedirGet, type CodigoDeFalha } from './cliente.js';
 import { resolverChaveEm } from './chave-em.js';
 
@@ -15,6 +16,8 @@ export interface RedeDeEstado {
  * O Inquilino vem so da Chave de Acesso — por isso `--inquilino` e RECUSADO, nao ignorado.
  */
 export async function executarEnvioEstadoRede(argumentos: string[], rede: RedeDeEstado): Promise<number> {
+  const recusaDeBandeira = recusarBandeiras(argumentos, rede.escrever);
+  if (recusaDeBandeira !== undefined) return recusaDeBandeira;
   if (argumentos.includes('--inquilino')) {
     rede.escrever(
       '--inquilino nao existe no modo rede: o Inquilino vem da Chave de Acesso. ' +
