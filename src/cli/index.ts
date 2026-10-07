@@ -21,6 +21,8 @@ import { executarEnviarRede } from './enviar-rede.js';
 import { executarEnvioEstadoRede } from './envio-estado-rede.js';
 import { encerrar } from './encerrar.js';
 import { primeiroPosicional } from './posicional.js';
+import { avisoDeCorte } from './aviso-de-corte.js';
+import type { OrdemDaBusca } from '../nucleo/consulta.js';
 import { opcao, recusarBandeiras, temBandeira, todasAsOpcoes } from './bandeiras.js';
 import { formatarIdentificacao } from './identificar-texto.js';
 import { identificarPorValor } from '../nucleo/identificar.js';
@@ -44,7 +46,7 @@ import { versaoDoAcervoEmDisco } from '../nucleo/acervo.js';
 import { passosAplicados } from '../nucleo/migracao.js';
 import {
   listarConversas,
-  buscarMensagens,
+  buscarMensagensComCorte,
   lerMensagens,
   listarSemEndereco,
   conversaExiste,
@@ -248,6 +250,8 @@ export interface Ambiente {
   servidor?: string;
   chave?: string;
   escrever: (texto: string) => void;
+  /** Saida de erro e de aviso: nunca a saida de dados. Opcional (os testes nao a passam). */
+  erro?: (texto: string) => void;
   /**
    * Se ha alguem escutando esta conta. Injetavel porque perguntar ao sistema e
    * fronteira, e teste nao sobe servico.
@@ -2132,16 +2136,22 @@ function executarComAtor(
         const desde = opcao(argumentos, 'desde');
         const ate = opcao(argumentos, 'ate');
         const limite = opcao(argumentos, 'limite');
-        const achadas = buscarMensagens(acervo, {
+        const ordemOpcao = opcao(argumentos, 'ordem') as OrdemDaBusca | undefined;
+        const ordem: OrdemDaBusca = ordemOpcao ?? 'recentes';
+        const limiteEfetivo = limite === undefined ? 100 : Number(limite);
+        const { mensagens: achadas, truncado } = buscarMensagensComCorte(acervo, {
           texto,
           ...(pessoa === undefined ? {} : { pessoaId: pessoa }),
           ...(conversa === undefined ? {} : { conversaId: conversa }),
           ...(desde === undefined ? {} : { de: expandirData(desde, 'inicio') }),
           ...(ate === undefined ? {} : { ate: expandirData(ate, 'fim') }),
-          ...(limite === undefined ? {} : { limite: Number(limite) }),
+          limite: limiteEfetivo,
+          ordem,
         });
         if (temBandeira(argumentos, 'json')) {
           escrever(JSON.stringify(achadas, null, 2));
+          // A lista local e pura: o aviso vai para a saida de erro, para nao quebrar quem a le.
+          if (truncado) ambiente.erro?.(avisoDeCorte(limiteEfetivo, ordem));
         } else {
           for (const m of achadas) {
             escrever(`${new Date(m.ocorridaEm).toISOString()}  ${m.conteudo ?? '(sem texto)'}`);
@@ -2153,6 +2163,7 @@ function executarComAtor(
               escrever(`    [${a.tipo}, ${tamanho}] ${a.presenca}`);
             }
           }
+          if (truncado) escrever(avisoDeCorte(limiteEfetivo, ordem));
         }
       } finally {
         acervo.fechar();
@@ -3128,6 +3139,7 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
       ? { chave: process.env['MALOTE_CHAVE_DE_ACESSO'] }
       : {}),
     escrever: (texto) => console.log(texto),
+    erro: (texto) => console.error(texto),
   };
   // O ouvinte e o unico comando assincrono: ele nao termina sozinho. Despacha-lo
   // aqui e o que permite `executar()` continuar sincrona, do jeito que os testes

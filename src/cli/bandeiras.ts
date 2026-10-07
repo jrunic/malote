@@ -29,6 +29,7 @@ export const BANDEIRAS: ReadonlySet<string> = new Set([
 export const VALORES_FECHADOS: Readonly<Record<string, readonly string[]>> = {
   coletiva: ['true', 'false'],
   fixada: ['true', 'false'],
+  ordem: ['recentes', 'cronologica'],
 };
 
 /**
