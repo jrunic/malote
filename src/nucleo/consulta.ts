@@ -439,6 +439,15 @@ export function lerMensagens(acervo: Acervo, filtro: FiltroDeMensagem): Mensagem
   return montarMensagens(acervo, linhas);
 }
 
+/** A ordem da busca; o MESMO vocabulario de `mensagens`. */
+export type OrdemDaBusca = 'recentes' | 'cronologica';
+
+export interface ResultadoDaBusca {
+  mensagens: MensagemEncontrada[];
+  /** Havia mais resultados que o limite. */
+  truncado: boolean;
+}
+
 export interface FiltroDeBusca {
   texto: string;
   limite?: number;
@@ -448,6 +457,8 @@ export interface FiltroDeBusca {
   /** Instantes, na mesma semântica de `--desde`/`--ate` (inclusivos). */
   de?: number;
   ate?: number;
+  /** `recentes` (padrao) ou `cronologica`. Vale nas duas consultas internas e no corte final. */
+  ordem?: OrdemDaBusca;
 }
 
 /**
@@ -479,9 +490,15 @@ export function termoParaFts5(texto: string): string | null {
 }
 
 export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): MensagemEncontrada[] {
+  return buscarMensagensComCorte(acervo, filtro).mensagens;
+}
+
+export function buscarMensagensComCorte(acervo: Acervo, filtro: FiltroDeBusca): ResultadoDaBusca {
   const limite = filtro.limite ?? 100;
+  const ordem = filtro.ordem ?? 'recentes';
+  const direcao = ordem === 'recentes' ? 'DESC' : 'ASC';
   const consulta = termoParaFts5(filtro.texto);
-  if (consulta === null) return [];
+  if (consulta === null) return { mensagens: [], truncado: false };
   const condicoesBase = (alias: string): { condicoes: string[]; valores: unknown[] } => {
     const condicoes: string[] = [];
     const valores: unknown[] = [];
@@ -507,12 +524,12 @@ export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): Mensagem
     return { condicoes, valores };
   };
 
-  // LIMIT em CADA consulta, nao so no resultado final: sem ele, um termo
-  // comum contra um Acervo grande traria todas as linhas para memoria antes
-  // de cortar — era limitado no SQL antes desta mudanca, e um caminho quente
-  // de rede nao pode ficar sem teto. Os `limite` mais antigos de CADA lado
-  // cobrem o `limite` mais antigo da uniao — a ordenacao final ainda corta
-  // para o tamanho certo.
+  // LIMIT em CADA consulta, nao so no resultado final: sem ele, um termo comum contra um Acervo
+  // grande traria todas as linhas para memoria antes de cortar. E `limite + 1`, para saber se HA
+  // mais: os `limite` primeiros (na ordem pedida) de CADA lado cobrem os `limite` primeiros da
+  // uniao, e um resultado a mais em qualquer lado significa que a uniao tem mais que `limite`.
+  // A direcao vale nas DUAS consultas: so na final, cada uma traria as N mais antigas e o corte
+  // as inverteria.
   const porConteudo = condicoesBase('m');
   const linhasPorConteudo = acervo
     .preparar(
@@ -520,9 +537,9 @@ export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): Mensagem
          FROM mensagens_texto tx
          JOIN mensagens m ON m.rowid = tx.rowid
         WHERE mensagens_texto MATCH ? ${porConteudo.condicoes.map((c) => `AND ${c}`).join(' ')}
-        ORDER BY m.ocorrida_em LIMIT ?`,
+        ORDER BY m.ocorrida_em ${direcao} LIMIT ?`,
     )
-    .all(consulta, ...porConteudo.valores, limite) as Array<{ id: string; ocorrida_em: number }>;
+    .all(consulta, ...porConteudo.valores, limite + 1) as Array<{ id: string; ocorrida_em: number }>;
 
   const porTranscricao = condicoesBase('m');
   const linhasPorTranscricao = acervo
@@ -533,9 +550,9 @@ export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): Mensagem
          JOIN anexos a ON a.id = t.anexo_id
          JOIN mensagens m ON m.id = a.mensagem_id
         WHERE transcricoes_texto MATCH ? ${porTranscricao.condicoes.map((c) => `AND ${c}`).join(' ')}
-        ORDER BY m.ocorrida_em LIMIT ?`,
+        ORDER BY m.ocorrida_em ${direcao} LIMIT ?`,
     )
-    .all(consulta, ...porTranscricao.valores, limite) as Array<{ id: string; ocorrida_em: number }>;
+    .all(consulta, ...porTranscricao.valores, limite + 1) as Array<{ id: string; ocorrida_em: number }>;
 
   // Conteudo tem precedencia sobre transcricao quando os dois casam a mesma
   // Mensagem — a Mensagem tem texto de verdade; nao ha porque marca-la como
@@ -544,13 +561,15 @@ export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): Mensagem
   for (const l of linhasPorTranscricao) origemPorId.set(l.id, 'transcricao');
   for (const l of linhasPorConteudo) origemPorId.set(l.id, 'conteudo');
 
-  const idsOrdenados = [...linhasPorConteudo, ...linhasPorTranscricao]
-    .sort((a, b) => a.ocorrida_em - b.ocorrida_em)
+  const unicos = [...linhasPorConteudo, ...linhasPorTranscricao]
+    .sort((a, b) => (ordem === 'recentes' ? b.ocorrida_em - a.ocorrida_em : a.ocorrida_em - b.ocorrida_em))
     .map((l) => l.id)
-    .filter((id, i, todos) => todos.indexOf(id) === i)
-    .slice(0, limite);
+    .filter((id, i, todos) => todos.indexOf(id) === i);
+  // `truncado` se deriva DEPOIS da uniao e da deduplicacao: a mesma Mensagem nos dois lados conta uma vez.
+  const truncado = unicos.length > limite;
+  const idsOrdenados = unicos.slice(0, limite);
 
-  if (idsOrdenados.length === 0) return [];
+  if (idsOrdenados.length === 0) return { mensagens: [], truncado: false };
 
   const marcador = idsOrdenados.map(() => '?').join(',');
   const linhas = acervo
@@ -562,10 +581,13 @@ export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): Mensagem
 
   const mensagens = montarMensagens(acervo, linhas);
   const porId = new Map(mensagens.map((m) => [m.id, m]));
-  return idsOrdenados
-    .map((id) => porId.get(id))
-    .filter((m): m is MensagemLida => m !== undefined)
-    .map((m) => ({ ...m, origemDaCorrespondencia: origemPorId.get(m.id) as 'conteudo' | 'transcricao' }));
+  return {
+    mensagens: idsOrdenados
+      .map((id) => porId.get(id))
+      .filter((m): m is MensagemLida => m !== undefined)
+      .map((m) => ({ ...m, origemDaCorrespondencia: origemPorId.get(m.id) as 'conteudo' | 'transcricao' })),
+    truncado,
+  };
 }
 
 export interface ContagemDoAcervo {
