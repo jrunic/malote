@@ -212,9 +212,32 @@ const COM_ANEXO = [
  */
 const ACOMPANHAM = new Set(['messageContextInfo', 'senderKeyDistributionMessage']);
 
-function tipoDeConteudo(message: Record<string, unknown> | undefined | null): string | null {
+/**
+ * Desembrulha o documento com legenda: a plataforma o entrega como
+ * `documentWithCaptionMessage.message.documentMessage`. Medido em 06/10/2026
+ * (documento real de uma Conversa direta ausente do Acervo) e provado com o
+ * evento sintético pela própria `receberEvento`.
+ *
+ * SO este embrulho. Os outros que a biblioteca desembrulha (`ephemeralMessage`,
+ * `viewOnce*`, `editedMessage`) nao foram medidos contra captura real, e a
+ * classificacao e medida, nunca deduzida: `editedMessage` e edicao de Mensagem
+ * ja gravada, e tratá-lo como nova duplicaria. Seguem ignorados e contados. So
+ * para classificar e ler texto/Anexo: o Conteudo Bruto grava o evento inteiro.
+ */
+function desembrulhar(
+  message: Record<string, unknown> | undefined | null,
+): Record<string, unknown> | undefined | null {
+  const embrulho = message?.['documentWithCaptionMessage'];
+  if (embrulho === null || typeof embrulho !== 'object') return message;
+  const interna = (embrulho as Record<string, unknown>)['message'];
+  if (interna === null || typeof interna !== 'object') return message;
+  return interna as Record<string, unknown>;
+}
+
+function tipoDeConteudo(rotulada: Record<string, unknown> | undefined | null): string | null {
   // `== null` de proposito: apanha ausente E nulo de uma vez. A Fonte entrega
   // os dois, e tratar so um foi o defeito.
+  const message = desembrulhar(rotulada);
   if (message == null) return null;
   const chaves = Object.keys(message);
   const principal = chaves.find((k) => !ACOMPANHAM.has(k));
@@ -229,7 +252,8 @@ function tipoDeConteudo(message: Record<string, unknown> | undefined | null): st
   return null;
 }
 
-function textoDe(message: Record<string, unknown> | undefined | null): string | undefined {
+function textoDe(rotulada: Record<string, unknown> | undefined | null): string | undefined {
+  const message = desembrulhar(rotulada);
   if (message == null) return undefined;
   const direto = message['conversation'];
   if (typeof direto === 'string') return direto;
@@ -237,6 +261,12 @@ function textoDe(message: Record<string, unknown> | undefined | null): string | 
   if (estendido !== null && typeof estendido === 'object') {
     const t = (estendido as Record<string, unknown>)['text'];
     if (typeof t === 'string') return t;
+  }
+  // A legenda do documento e o texto da Mensagem (so vem embrulhada).
+  const documento = message['documentMessage'];
+  if (documento !== null && typeof documento === 'object') {
+    const legenda = (documento as Record<string, unknown>)['caption'];
+    if (typeof legenda === 'string' && legenda !== '') return legenda;
   }
   return undefined;
 }
@@ -568,7 +598,7 @@ function gravarUma(
   //    entrega referencia de download — 54 em 288 —, e e ela que o comando de
   //    trazer midia vai usar. O bruto guarda a referencia inteira.
   for (const tipo of COM_ANEXO) {
-    const conteudo = m.message?.[tipo];
+    const conteudo = desembrulhar(m.message)?.[tipo];
     if (conteudo === undefined || conteudo === null) continue;
     const tipoDoAnexo = tipo.replace('Message', '');
     // `seconds` é o campo que audioMessage/videoMessage declaram — a mesma
