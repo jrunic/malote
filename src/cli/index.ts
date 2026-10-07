@@ -333,7 +333,8 @@ Titular (nao exige chave enquanto nao houver rede):
                                          Conversa grande: use --saida, o modo local sem ela acumula a saida em memoria)
   malote midia <id> --saida <arquivo>   (bytes do Anexo — SO em modo rede;
                                           local, leia 'caminho' de 'mensagens --json')
-  malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--json]
+  malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--conversa <id>] [--desde <data>] [--ate <data>] [--limite <n>] [--ordem recentes|cronologica] [--json]
+                    (sem --ordem, as mais recentes; diz quando o limite cortou resultados — padrao 100)
   malote pessoas        --inquilino <id> --texto <nome>        (resolve texto em Pessoa; com MALOTE_SERVIDOR: por REDE, sem --inquilino)
   malote participantes  --inquilino <id> --conversa <id> [--em <AAAA-MM-DD>]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino)
   malote etiquetas      --inquilino <id> [--conversa <id>] [--remetente <valor>] [--busca <texto>] [--historico] [--limite <n>] [--json]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino; --historico exige --conversa e --remetente; sem filtro, so as correntes nao vazias, ate 100 por padrao e 1000 no maximo)

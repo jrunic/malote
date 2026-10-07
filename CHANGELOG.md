@@ -23,6 +23,21 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+### Corrigido
+
+- **Flag que pede valor e vem sem ele agora é erro de uso (código 2).** Antes, `malote conversas --coletiva` devolvia todas as
+  Conversas, `conversas --coletiva --json` lia o `--json` como o valor de `--coletiva` e devolvia só as diretas, e
+  `--coletiva banana` virava `false`; o mesmo valia para as outras flags. A validação roda antes de qualquer consulta, nos
+  dois modos. `--coletiva` e `--fixada` só aceitam `true` ou `false`, e `--ordem` só `recentes` ou `cronologica`
+  (em `mensagens` e `buscar`).
+
+### Alterado
+
+- **`buscar` devolve as mais recentes primeiro** (antes, as mais antigas do Acervo), aceita `--ordem cronologica` para o
+  comportamento antigo, e diz quando o limite cortou resultados: `truncado` no JSON da rede e uma linha de aviso na saída
+  de texto (no `--json` local, que é uma lista, o aviso vai para a saída de erro). `--desde`, `--ate`, `--limite` e `--ordem`
+  passam a constar da ajuda e da documentação.
+
 ## [0.32.0] — 2026-10-06
 
 **Muda a forma do Acervo (v25 para v26).** Faça cópia do Acervo antes de atualizar; o servidor e cada ouvinte

@@ -226,9 +226,12 @@ Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`
   pareça completo**, e `--saida` que já existe é recusada. Sem `--saida` escreve na saída padrão, e então o
   **código de saída** é o único sinal de truncamento. Conversa grande: use `--saida` (o modo local sem ela
   acumula a saída em memória). Pagina `mensagens` de 500 em 500, mandando `ordem=cronologica` em toda página.
-- `malote buscar --texto T [--conversa <id>] [--desde D] [--ate D]` — busca no conteúdo. O texto é **literal**: cada
-  palavra entre aspas e todas por E, sem caixa e sem acento. Ponto, `&`, aspas, `AND`, `OR`, `NOT`, `*` e `NEAR` são
-  texto, não operador (`roc*` não acha `rock`; `a.b` acha a Mensagem que tem `a.b`).
+- `malote buscar --texto T [--conversa <id>] [--desde D] [--ate D] [--limite <n>] [--ordem recentes|cronologica]` — busca
+  no conteúdo e na transcrição. O texto é **literal**: cada palavra entre aspas e todas por E, sem caixa e sem acento.
+  Ponto, `&`, aspas, `AND`, `OR`, `NOT`, `*` e `NEAR` são texto, não operador (`roc*` não acha `rock`; `a.b` acha a
+  Mensagem que tem `a.b`). Devolve até 100 (`--limite`), **as mais recentes primeiro**; `--ordem cronologica` traz as mais
+  antigas. Quando há mais resultados que o limite, o JSON da rede traz `"truncado": true` e a saída de texto termina com um
+  aviso; no `--json` local, que é uma lista pura, o aviso vai para a saída de erro.
 - `malote pessoas --texto T` — resolve nome/endereço para `id`; os outros comandos
   pedem o id, nunca o nome. Só acha **Pessoa**: endereço que ninguém ligou a uma Pessoa
   não aparece aqui — para ele, `malote identificar`.
@@ -302,7 +305,7 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 | `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `remetente`, `antes`, `ordem`, `direcao`, `favorito`, `configuracao` | `{ mensagens: [...], proximo? }` |
 | `GET /conversas/<id>/anexos` | `tipo`, `remetente`, `desde`, `ate`, `presenca`, `limite`, `antes` | `{ anexos: [{ id, tipo, presenca, tamanho, nomeOriginal, mensagemId, autorId, ocorridaEm, ... }], proximo? }` — uma só ordem; `ordem` é `400` |
 | `GET /conversas/<id>/autores` | — | `{ autores: [{ identificadorId, valor, nome, origemDoNome, pessoaId }] }` — quem escreveu na Conversa, uma vez cada (participante ou não) |
-| `GET /buscar?texto=` | `conversa`, `autor`, `desde`, `ate`, `limite` | `{ mensagens: [...] }` |
+| `GET /buscar?texto=` | `conversa`, `autor`, `desde`, `ate`, `limite`, `ordem` (`recentes`, o padrão, ou `cronologica`) | `{ mensagens: [...], truncado }` |
 | `GET /pessoas?texto=` | — | `{ pessoas: [{ id, nome, identificadores }] }` |
 | `GET /conversas/<id>/participantes` | `em` | `{ presenca: {...} }` — cada participante com `valor`, `nome`, `origemDoNome`, `pessoaId`, `etiqueta` e `etiquetaEm` |
 | `GET /etiquetas` | `conversa`, `remetente`, `busca`, `historico` (`1`), `limite` | `{ etiquetas: [{ conversaId, identificadorId, valor, nome, origemDoNome, texto, em }] }` — `texto` nulo é a remoção (só no histórico); `historico` exige `conversa` e `remetente`; `400` por uso errado e `404` só por Conversa inexistente |

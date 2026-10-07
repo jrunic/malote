@@ -171,7 +171,7 @@ As mesmas consultas do modo cliente, lendo o Acervo direto, com `--inquilino <id
 `conversas`, `mensagens`, `anexos`, `exportar`, `buscar`, `pessoas`, `participantes`, `etiquetas` e `identificar <valor>`. Flags, formatos e o
 significado de `--remetente` e `--autor` estão na [referência do modo cliente](comandos-modo-cliente.md); a
 diferença é o `--inquilino` e o fato de **`malote midia <id>`** (os bytes do Anexo) só existir por rede:
-local, o arquivo já está em disco, e o caminho vem no campo `caminho` de `mensagens --json`.
+local, o arquivo já está em disco, e o caminho vem no campo `caminho` de `mensagens --json`. A resposta de `buscar` traz `truncado`, e `ordem` aceita `recentes` (padrão) ou `cronologica`.
 
 Além delas, só existem locais:
 

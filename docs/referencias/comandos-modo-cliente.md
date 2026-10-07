@@ -45,6 +45,7 @@ local (veja a referência do servidor).
 - **Flag sem valor:** uma flag que pede valor e vem sem ele, no fim da linha ou seguida de outra flag, é erro de uso (código 2, antes de qualquer requisição). Não existe `--flag=valor`, então um valor que comece com `--` não pode ser passado.
 - **`--json`:** devolve o corpo da API. Sem ele, a saída é texto, no mesmo formato do modo local.
 - **`--limite <n>`:** o servidor valida; valor que não é inteiro positivo é erro (código 6).
+- **`buscar`:** devolve as **mais recentes** primeiro (`--ordem cronologica` inverte), até `--limite` (padrão 100). A resposta traz **`truncado`** (`true` quando havia mais). Uma busca de termo comum sem `--desde` já não devolve só as mais antigas do Acervo.
 - Um único `--limite` pesado por vez: o servidor dá prazo de 25 s a cada leitura (veja `504` abaixo).
 
 ## Comandos de leitura
@@ -56,7 +57,7 @@ Todos aceitam `--json`. As flags marcadas com `*` são obrigatórias.
 | `malote conversas` | Índice do Acervo: id, fonte, natureza, contagem, assunto, Configuração | `--busca <texto>` `--fonte <nome>` `--coletiva true\|false` `--pessoa <id>` `--configuracao <apelido>` `--fixada true` `--desde <data>` `--limite <n>` |
 | `malote mensagens` | Mensagens de uma Conversa, ou de todas (sem `--conversa`, as últimas por recência) | `--conversa <id>` `--desde` `--ate` `--autor <id-de-pessoa>` `--remetente <valor>` `--fonte` `--direcao enviada\|recebida` `--favorito true` `--configuracao` `--ordem` `--limite` `--antes` |
 | `malote anexos` | Os Anexos de **uma** Conversa, em ordem cronológica, com a presença de cada um | `--conversa <id>`\* `--tipo image\|video\|audio\|document\|sticker\|other\|imagem\|documento` `--remetente <valor>` `--desde` `--ate` `--presenca presente\|nunca-obtido\|descartado` `--limite` `--antes` |
-| `malote buscar` | Busca no conteúdo, e também na Transcrição de áudio (com a proveniência marcada) | `--texto <termo>`\* `--conversa` `--autor` `--desde` `--ate` `--limite` |
+| `malote buscar` | Busca no conteúdo, e também na Transcrição de áudio (com a proveniência marcada) | `--texto <termo>`\* `--conversa` `--autor` `--desde` `--ate` `--limite` `--ordem` |
 | `malote pessoas` | Resolve texto em Pessoa: texto entra, id sai | `--texto <nome>`\* |
 | `malote identificar <valor>` | O que o Acervo sabe de um Identificador, com ou sem Pessoa. O valor é comparado exato | `--fonte <fonte>` |
 | `malote participantes` | Participantes de uma Conversa coletiva, com nome e Pessoa; opcionalmente a posição numa data | `--conversa <id>`\* `--em <AAAA-MM-DD>` |
