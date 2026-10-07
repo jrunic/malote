@@ -1,7 +1,4 @@
-function opcao(argumentos: string[], nome: string): string | undefined {
-  const i = argumentos.indexOf(`--${nome}`);
-  return i === -1 ? undefined : argumentos[i + 1];
-}
+import { opcao } from './bandeiras.js';
 
 /**
  * `--chave-em` NOMEIA a variavel de ambiente (nunca recebe o valor). Pedida e ausente ou vazia,

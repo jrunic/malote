@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import type { Acervo } from '../nucleo/acervo.js';
-import { buscarMensagens, contarPorFonte, expandirData, fonteDaConversa, lerAnexoPorId, lerMensagens, listarConversas, procurarPessoas } from '../nucleo/consulta.js';
+import { buscarMensagensComCorte, contarPorFonte, expandirData, fonteDaConversa, lerAnexoPorId, lerMensagens, listarConversas, procurarPessoas } from '../nucleo/consulta.js';
 import { quemEstavaEm } from '../nucleo/presenca.js';
 import { codificarCursor, decodificarCursor } from '../nucleo/cursor.js';
 import { abrirRegistro, abrirRegistroSomenteLeitura } from '../registro/registro.js';
@@ -1023,6 +1023,11 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       json(res, 400, ERRO_DE_LIMITE);
       return;
     }
+    const ordemParam = q.get('ordem');
+    if (ordemParam !== null && ordemParam !== 'recentes' && ordemParam !== 'cronologica') {
+      json(res, 400, { erro: 'ordem precisa ser recentes ou cronologica' });
+      return;
+    }
     const desde = q.get('desde');
     const ate = q.get('ate');
     const autor = q.get('autor');
@@ -1036,14 +1041,15 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       json(res, 400, { erro: (e as Error).message });
       return;
     }
-    json(res, 200, { mensagens: buscarMensagens(ctx.acervo, {
+    json(res, 200, buscarMensagensComCorte(ctx.acervo, {
       texto,
       ...(autor !== null ? { pessoaId: autor } : {}),
       ...(conversa !== null ? { conversaId: conversa } : {}),
       ...(filtroDe !== undefined ? { de: filtroDe } : {}),
       ...(filtroAte !== undefined ? { ate: filtroAte } : {}),
       ...(limite !== null ? { limite: Number(limite) } : {}),
-    }) });
+      ...(ordemParam !== null ? { ordem: ordemParam } : {}),
+    }));
     return;
   }
 

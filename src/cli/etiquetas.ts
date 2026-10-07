@@ -1,3 +1,4 @@
+import { opcao, validarBandeiras } from './bandeiras.js';
 import type { EtiquetaListada } from '../nucleo/etiqueta-de-participacao.js';
 import { LIMITE_DE_ETIQUETAS } from '../nucleo/etiqueta-de-participacao.js';
 
@@ -20,15 +21,12 @@ const COM_VALOR = ['conversa', 'remetente', 'busca', 'limite'] as const;
  * nunca ignorada em silencio — `conversas --coletiva` devolvia TUDO por isso.
  */
 export function lerPedidoDeEtiquetas(argumentos: string[]): LeituraDoPedido {
+  const erroDeBandeira = validarBandeiras(argumentos);
+  if (erroDeBandeira !== undefined) return { ok: false, erro: erroDeBandeira };
   const valores: Partial<Record<(typeof COM_VALOR)[number], string>> = {};
   for (const nome of COM_VALOR) {
-    const i = argumentos.indexOf(`--${nome}`);
-    if (i === -1) continue;
-    const valor = argumentos[i + 1];
-    if (valor === undefined || valor.startsWith('--')) {
-      return { ok: false, erro: `A flag --${nome} pede um valor.` };
-    }
-    valores[nome] = valor;
+    const valor = opcao(argumentos, nome);
+    if (valor !== undefined) valores[nome] = valor;
   }
   if (valores.busca === '') return { ok: false, erro: 'A flag --busca pede um valor.' };
   const pedido: PedidoDeEtiquetas = { historico: argumentos.includes('--historico') };

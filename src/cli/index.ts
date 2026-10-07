@@ -21,6 +21,9 @@ import { executarEnviarRede } from './enviar-rede.js';
 import { executarEnvioEstadoRede } from './envio-estado-rede.js';
 import { encerrar } from './encerrar.js';
 import { primeiroPosicional } from './posicional.js';
+import { avisoDeCorte } from './aviso-de-corte.js';
+import type { OrdemDaBusca } from '../nucleo/consulta.js';
+import { opcao, recusarBandeiras, temBandeira, todasAsOpcoes } from './bandeiras.js';
 import { formatarIdentificacao } from './identificar-texto.js';
 import { identificarPorValor } from '../nucleo/identificar.js';
 import { basename, join } from 'node:path';
@@ -43,7 +46,7 @@ import { versaoDoAcervoEmDisco } from '../nucleo/acervo.js';
 import { passosAplicados } from '../nucleo/migracao.js';
 import {
   listarConversas,
-  buscarMensagens,
+  buscarMensagensComCorte,
   lerMensagens,
   listarSemEndereco,
   conversaExiste,
@@ -247,6 +250,8 @@ export interface Ambiente {
   servidor?: string;
   chave?: string;
   escrever: (texto: string) => void;
+  /** Saida de erro e de aviso: nunca a saida de dados. Opcional (os testes nao a passam). */
+  erro?: (texto: string) => void;
   /**
    * Se ha alguem escutando esta conta. Injetavel porque perguntar ao sistema e
    * fronteira, e teste nao sobe servico.
@@ -254,33 +259,11 @@ export interface Ambiente {
   ouvinteEscrevendo?: (conta: string) => boolean;
 }
 
-/** Lê `--nome valor` de uma lista de argumentos. */
-function opcao(argumentos: string[], nome: string): string | undefined {
-  const i = argumentos.indexOf(`--${nome}`);
-  if (i === -1) return undefined;
-  return argumentos[i + 1];
-}
-
-/** Todas as ocorrencias de uma bandeira repetida, na ordem em que aparecem. */
-function todasAsOpcoes(argumentos: string[], nome: string): string[] {
-  const achados: string[] = [];
-  for (let i = 0; i < argumentos.length; i += 1) {
-    if (argumentos[i] === `--${nome}`) {
-      const valor = argumentos[i + 1];
-      if (valor !== undefined) achados.push(valor);
-    }
-  }
-  return achados;
-}
-
-function temBandeira(argumentos: string[], nome: string): boolean {
-  return argumentos.includes(`--${nome}`);
-}
-
 const AJUDA = `malote — arquivo local das suas conversas
 
   malote --versao    versao publicada (nao exige instalacao)
   malote --ajuda     esta tela
+  Flag que pede valor e vem sem ele (no fim da linha, ou seguida de outra flag) e erro de uso: codigo 2.
 
 Administracao (exige --chave a partir da primeira Chave criada):
   malote operador chave criar   [--chave <valor>]
@@ -350,7 +333,8 @@ Titular (nao exige chave enquanto nao houver rede):
                                          Conversa grande: use --saida, o modo local sem ela acumula a saida em memoria)
   malote midia <id> --saida <arquivo>   (bytes do Anexo — SO em modo rede;
                                           local, leia 'caminho' de 'mensagens --json')
-  malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--json]
+  malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--conversa <id>] [--desde <data>] [--ate <data>] [--limite <n>] [--ordem recentes|cronologica] [--json]
+                    (sem --ordem, as mais recentes; diz quando o limite cortou resultados — padrao 100)
   malote pessoas        --inquilino <id> --texto <nome>        (resolve texto em Pessoa; com MALOTE_SERVIDOR: por REDE, sem --inquilino)
   malote participantes  --inquilino <id> --conversa <id> [--em <AAAA-MM-DD>]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino)
   malote etiquetas      --inquilino <id> [--conversa <id>] [--remetente <valor>] [--busca <texto>] [--historico] [--limite <n>] [--json]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino; --historico exige --conversa e --remetente; sem filtro, so as correntes nao vazias, ate 100 por padrao e 1000 no maximo)
@@ -462,6 +446,8 @@ export async function executarConsultaRede(
   argumentos: string[],
   rede: { servidor: string; chave: string; escrever: (t: string) => void },
 ): Promise<number> {
+  const recusaDeBandeira = recusarBandeiras(argumentos, rede.escrever);
+  if (recusaDeBandeira !== undefined) return recusaDeBandeira;
   const grupo = argumentos[0];
   const q = new URLSearchParams();
   for (const nome of ['busca', 'fonte', 'coletiva', 'pessoa', 'limite', 'conversa',
@@ -638,6 +624,8 @@ export async function executarMidiaReprocessar(
   argumentos: string[],
   ambiente: Ambiente,
 ): Promise<number> {
+  const recusaDeBandeira = recusarBandeiras(argumentos, ambiente.escrever);
+  if (recusaDeBandeira !== undefined) return recusaDeBandeira;
   const { escrever } = ambiente;
   const chave = opcao(argumentos, 'chave');
   const registro = comAtor(LOCAL, () => abrirRegistro(ambiente.dados));
@@ -679,6 +667,8 @@ export async function executarMidiaReprocessar(
  * para que o teste rode o caminho real sem tocar no processo nem no HOME.
  */
 export function executar(argumentos: string[], ambiente: Ambiente): number {
+  const recusaDeBandeira = recusarBandeiras(argumentos, ambiente.escrever);
+  if (recusaDeBandeira !== undefined) return recusaDeBandeira;
   const { escrever } = ambiente;
   const chave = opcao(argumentos, 'chave');
 
@@ -2147,16 +2137,22 @@ function executarComAtor(
         const desde = opcao(argumentos, 'desde');
         const ate = opcao(argumentos, 'ate');
         const limite = opcao(argumentos, 'limite');
-        const achadas = buscarMensagens(acervo, {
+        const ordemOpcao = opcao(argumentos, 'ordem') as OrdemDaBusca | undefined;
+        const ordem: OrdemDaBusca = ordemOpcao ?? 'recentes';
+        const limiteEfetivo = limite === undefined ? 100 : Number(limite);
+        const { mensagens: achadas, truncado } = buscarMensagensComCorte(acervo, {
           texto,
           ...(pessoa === undefined ? {} : { pessoaId: pessoa }),
           ...(conversa === undefined ? {} : { conversaId: conversa }),
           ...(desde === undefined ? {} : { de: expandirData(desde, 'inicio') }),
           ...(ate === undefined ? {} : { ate: expandirData(ate, 'fim') }),
-          ...(limite === undefined ? {} : { limite: Number(limite) }),
+          limite: limiteEfetivo,
+          ordem,
         });
         if (temBandeira(argumentos, 'json')) {
           escrever(JSON.stringify(achadas, null, 2));
+          // A lista local e pura: o aviso vai para a saida de erro, para nao quebrar quem a le.
+          if (truncado) ambiente.erro?.(avisoDeCorte(limiteEfetivo, ordem));
         } else {
           for (const m of achadas) {
             escrever(`${new Date(m.ocorridaEm).toISOString()}  ${m.conteudo ?? '(sem texto)'}`);
@@ -2168,6 +2164,7 @@ function executarComAtor(
               escrever(`    [${a.tipo}, ${tamanho}] ${a.presenca}`);
             }
           }
+          if (truncado) escrever(avisoDeCorte(limiteEfetivo, ordem));
         }
       } finally {
         acervo.fechar();
@@ -3143,6 +3140,7 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
       ? { chave: process.env['MALOTE_CHAVE_DE_ACESSO'] }
       : {}),
     escrever: (texto) => console.log(texto),
+    erro: (texto) => console.error(texto),
   };
   // O ouvinte e o unico comando assincrono: ele nao termina sozinho. Despacha-lo
   // aqui e o que permite `executar()` continuar sincrona, do jeito que os testes

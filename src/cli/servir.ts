@@ -1,4 +1,5 @@
 import { once } from 'node:events';
+import { opcao, recusarBandeiras } from './bandeiras.js';
 import { abrirRegistro } from '../registro/registro.js';
 import { criarServidor, PRAZO_PADRAO_MS, TRABALHADORES_PADRAO } from '../rede/servidor.js';
 import { iniciarWorkerDeTranscricao } from './transcricao.js';
@@ -31,14 +32,10 @@ export interface AmbienteDeServico extends Ambiente {
   iniciarWorker?: typeof iniciarWorkerDeTranscricao;
 }
 
-function opcao(argumentos: string[], nome: string): string | undefined {
-  const i = argumentos.indexOf(`--${nome}`);
-  if (i === -1) return undefined;
-  return argumentos[i + 1];
-}
-
 export async function servir(argumentos: string[], ambiente: AmbienteDeServico): Promise<number> {
   const { escrever } = ambiente;
+  const recusaDeBandeira = recusarBandeiras(argumentos, escrever);
+  if (recusaDeBandeira !== undefined) return recusaDeBandeira;
   const porta = Number(opcao(argumentos, 'porta') ?? '0');
   if (!Number.isInteger(porta) || porta < 0 || porta > 65535) {
     escrever('Uso: malote servir --porta <n> [--endereco <ip>] [--exposto] [--trabalhadores <n>] [--prazo <segundos>]');

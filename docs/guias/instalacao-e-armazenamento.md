@@ -89,3 +89,24 @@ atualizar essas linhas — o procedimento seguro é: parar o ouvinte, mover, atu
 conferir que nenhuma linha aponta para caminho que não existe, subir. O dado em
 `XDG_DATA_HOME/malote/` pode mudar de lugar da mesma forma; o estado em
 `XDG_STATE_HOME/malote/` é o que o produto espera encontrar ali.
+
+## Notas de armazenamento e execução
+
+- **`anexos.caminho` é RELATIVO ao Destino de Mídia do Inquilino, por desenho — o
+  Destino nunca entra no Acervo (mesma razão de `midia trazer`/`midia reprocessar`).
+  Todo consumidor que toca o arquivo em disco resolve via `lerDestinoDeMidia` + `join`
+  ANTES de abrir o arquivo.** Medido em 01/10/2026 (#1106), Acervo real: 20 de 20
+  Transcrições falhavam com "No such file or directory" apesar do arquivo existir — o
+  worker de transcrição era o único consumidor de disco que pulava esse join, porque
+  `malote servir` roda do diretório do checkout, nunca do Destino de Mídia. A guarda
+  de teste é não deixar `caminho` de fixture nascer absoluto por conveniência — foi
+  assim, em `tests/transcricao-worker.test.ts`, que o defeito ficou invisível por um
+  ciclo inteiro (#1070/#1068/#1069).
+- **`bin/malote` resolve o próprio diretório por `import.meta.url`, nunca por CWD.**
+  `node --import tsx` resolve o pacote `tsx` pelo CWD do **processo**, não pelo
+  caminho do script — medido em 16/09/2026: invocar `node --import tsx <caminho
+  absoluto>/src/cli/index.ts` de fora do repositório falha com
+  `ERR_MODULE_NOT_FOUND: Cannot find package 'tsx'`, mesmo com o caminho do script
+  correto. `bin/malote` contorna isso fixando `cwd` do processo filho na raiz do
+  repositório antes de invocar. `tests/bin-malote.test.ts` guarda o efeito de fora:
+  spawna `bin/malote` com `cwd` em `os.tmpdir()`.
