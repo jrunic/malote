@@ -52,3 +52,16 @@ test('recusarBandeiras escreve a mensagem e devolve 2; sem erro, nao escreve e d
   assert.equal(recusarBandeiras(['conversas', '--json'], (t) => linhas.push(t)), undefined);
   assert.equal(linhas.length, 1, 'uso valido nao escreve nada');
 });
+
+import { primeiroPosicional } from '../src/cli/posicional.js';
+
+test('o posicional nao e engolido por uma bandeira que vem antes dele', () => {
+  // hoje: so `--json` e bandeira, entao `--com-efeito` pula o argumento seguinte e o posicional some
+  assert.equal(primeiroPosicional(['identificar', '--com-efeito', '5565911110001'], 1), '5565911110001');
+  assert.equal(primeiroPosicional(['identificar', '--json', '5565911110001'], 1), '5565911110001');
+});
+
+test('o posicional pula o valor de uma flag com valor', () => {
+  assert.equal(primeiroPosicional(['identificar', '--fonte', 'whatsapp', '5565911110001'], 1), '5565911110001');
+  assert.equal(primeiroPosicional(['identificar', '--fonte', 'whatsapp'], 1), undefined);
+});

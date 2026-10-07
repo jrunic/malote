@@ -1,3 +1,4 @@
+import { primeiroPosicional } from './posicional.js';
 import { pedirGet, type CodigoDeFalha } from './cliente.js';
 import { resolverChaveEm } from './chave-em.js';
 
@@ -35,20 +36,8 @@ export async function executarEnvioEstadoRede(argumentos: string[], rede: RedeDe
     return 2;
   }
 
-  // O identificador e o primeiro argumento depois de `envio estado` que nao e opcao nem valor de
-  // opcao: `--json` e bandeira (sem valor); qualquer outra `--opcao` leva um valor, que se pula.
-  const resto = argumentos.slice(2);
-  let identificador: string | undefined;
-  for (let i = 0; i < resto.length; i += 1) {
-    const a = resto[i] as string;
-    if (a === '--json') continue;
-    if (a.startsWith('--')) {
-      i += 1;
-      continue;
-    }
-    identificador = a;
-    break;
-  }
+  // O identificador e o primeiro argumento depois de `envio estado` que nao e opcao nem valor de opcao.
+  const identificador = primeiroPosicional(argumentos, 2);
   const json = argumentos.includes('--json');
 
   try {
