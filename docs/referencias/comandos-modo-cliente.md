@@ -42,6 +42,7 @@ local (veja a referência do servidor).
   `--ate` são inclusivos.
 - **Paginação:** a resposta traz **`proximo`** quando há mais. Devolva-o em `--antes <cursor>`. O cursor é
   opaco: nunca monte um à mão, e um cursor inválido é erro (código 6), não primeira página.
+- **Flag sem valor:** uma flag que pede valor e vem sem ele, no fim da linha ou seguida de outra flag, é erro de uso (código 2, antes de qualquer requisição). Não existe `--flag=valor`, então um valor que comece com `--` não pode ser passado.
 - **`--json`:** devolve o corpo da API. Sem ele, a saída é texto, no mesmo formato do modo local.
 - **`--limite <n>`:** o servidor valida; valor que não é inteiro positivo é erro (código 6).
 - Um único `--limite` pesado por vez: o servidor dá prazo de 25 s a cada leitura (veja `504` abaixo).

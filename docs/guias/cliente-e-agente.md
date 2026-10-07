@@ -141,7 +141,7 @@ montado à mão.
 | código | significado |
 |---|---|
 | 0 | consulta respondida |
-| 2 | invocação errada (flag faltando, comando de escrita com `--servidor`) |
+| 2 | invocação errada: flag que pede valor e vem sem ele (no fim da linha, ou seguida de outra flag), valor fora do conjunto aceito (`--coletiva` e `--fixada` só aceitam `true` ou `false`), flag obrigatória faltando, comando de escrita com `--servidor` |
 | 3 | **credencial** recusada — ausente, inválida ou revogada (indistinguível por desenho) |
 | 4 | servidor inalcançável |
 | 5 | erro do servidor (inclui `504`, a consulta passou do prazo, e `503`, servidor ocupado ou indisponível) |

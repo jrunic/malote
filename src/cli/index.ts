@@ -259,6 +259,7 @@ const AJUDA = `malote — arquivo local das suas conversas
 
   malote --versao    versao publicada (nao exige instalacao)
   malote --ajuda     esta tela
+  Flag que pede valor e vem sem ele (no fim da linha, ou seguida de outra flag) e erro de uso: codigo 2.
 
 Administracao (exige --chave a partir da primeira Chave criada):
   malote operador chave criar   [--chave <valor>]
