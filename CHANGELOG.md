@@ -23,6 +23,19 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+### Adicionado
+
+- **Guarda do evento cru que a recepção não grava como Mensagem.** Cada evento descartado ou recusado que não seja ruído de
+  protocolo conhecido (conteúdo cifrado, feed de status, distribuição de chave sozinha) fica guardado, com o instante e o
+  motivo, em `descartados.jsonl` na pasta de estado da conta. Tipo novo e embrulho desconhecido são guardados por padrão.
+  É texto de conversa em claro, fora do Acervo e fora do backup, com modo 0600, e nunca vai para log. O arquivo tem teto
+  (`MALOTE_TETO_DA_GUARDA_BYTES`, padrão 50 MiB, provisório) e, ao passar dele, o atual vira o anterior e o anterior mais
+  antigo é apagado. `ouvinte estado --json` traz `guarda` (`eventos` e `bytes`).
+- **`malote ouvinte reprocessar-descartados`:** reprocessa a guarda depois de uma correção na classificação, um evento por
+  vez e sem escrever na guarda. Sai o que passou a ser gravado; fica o que continua descartado. Recusa com o ouvinte no ar.
+  O reprocessar não baixa mídia: o Anexo nasce `nunca-obtido`, e `malote midia reprocessar` traz os bytes dentro dos cerca de
+  30 dias em que a referência de download vale.
+
 ## [0.34.0] — 2026-10-07
 
 Não muda a forma do Acervo nem do Registro. Ao atualizar, o ouvinte reinicia, como em toda versão.
