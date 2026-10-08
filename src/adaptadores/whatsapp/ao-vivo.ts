@@ -70,6 +70,62 @@ export interface MensagemRecebida {
   messageStubParameters?: string[];
 }
 
+/**
+ * Um evento que a recepcao NAO gravou como Mensagem, com o porque.
+ *
+ * `motivo` e o mesmo rotulo que `ignorados` usa (o tipo do conteudo, `cifrada`,
+ * `status`, os rotulos das Etiquetas), mais `recusado`; `protocolMessage` leva o
+ * tipo do protocolo. `ruido` marca o que a recepcao sabe ser protocolo sem dado:
+ * e CONTADO, nunca guardado.
+ */
+export interface EventoDescartado {
+  motivo: string;
+  /** So para `recusado`: a causa da recusa. Nunca texto de conversa. */
+  causa?: string;
+  ruido: boolean;
+  evento: MensagemRecebida;
+}
+
+/**
+ * O ruido de protocolo conhecido, num so lugar. Cifrada e reenviada decifrada pela
+ * biblioteca (90 de 4.167 eventos, 02/09/2026); status e decisao do Titular (#1094);
+ * distribuicao de chave SOZINHA nao tem dado (6.231 no Acervo real). Atencao: a
+ * distribuicao de chave que ACOMPANHA conteudo nao chega aqui, e `tipoDeConteudo`.
+ */
+const MOTIVOS_DE_RUIDO: ReadonlySet<string> = new Set([
+  'cifrada',
+  'status',
+  'senderKeyDistributionMessage',
+]);
+
+/**
+ * O motivo de um tipo ignorado. `protocolMessage` esconde varias coisas
+ * (revogacao, material de chave de estado, historico), e um balde so nao mede
+ * nada: leva o `type` do protocolo, a mesma leitura que a Etiqueta ja faz. Os
+ * demais tipos seguem pelo nome.
+ */
+function motivoDoTipo(tipo: string, message: Record<string, unknown> | null | undefined): string {
+  if (tipo !== 'protocolMessage') return tipo;
+  const protocolo = message?.['protocolMessage'];
+  if (protocolo === null || typeof protocolo !== 'object') return tipo;
+  const subtipo = (protocolo as Record<string, unknown>)['type'];
+  return typeof subtipo === 'string' || typeof subtipo === 'number' ? `${tipo}:${String(subtipo)}` : tipo;
+}
+
+function descartar(
+  relato: RelatoDeRecepcao,
+  evento: MensagemRecebida,
+  motivo: string,
+  causa?: string,
+): void {
+  relato.descartados.push({
+    motivo,
+    ruido: MOTIVOS_DE_RUIDO.has(motivo),
+    evento,
+    ...(causa !== undefined ? { causa } : {}),
+  });
+}
+
 export interface OpcoesDeRecepcao {
   agora: number;
   /**
@@ -87,6 +143,11 @@ export interface RelatoDeRecepcao {
   conflitos: { alternativo: string; gravado: string; novo: string }[];
   /** Tipos ignorados por nao serem Mensagem, contados por tipo. */
   ignorados: Record<string, number>;
+  /**
+   * Cada evento que NAO virou Mensagem (descartado ou recusado), com o motivo.
+   * Nao inclui `parametro-sem-endereco`: la o evento ja e Mensagem.
+   */
+  descartados: EventoDescartado[];
   /** Transicoes de Participacao que NASCERAM nesta recepcao. */
   transicoes: number;
   /** Etiquetas de Participacao que NASCERAM nesta recepcao (nunca o texto delas). */
@@ -324,6 +385,7 @@ export function receberEvento(
     recusados: [],
     conflitos: [],
     ignorados: {},
+    descartados: [],
     transicoes: 0,
     etiquetas: 0,
     etiquetasRemovidas: 0,
@@ -425,6 +487,7 @@ export function receberEvento(
     // dos 4.167 eventos de 11h23 de captura.
     if (ehCifrada(m.messageStubType)) {
       relato.ignorados['cifrada'] = (relato.ignorados['cifrada'] ?? 0) + 1;
+      descartar(relato, m, 'cifrada');
       continue;
     }
 
@@ -434,6 +497,7 @@ export function receberEvento(
     // Mensagem, para nenhuma das duas formas conhecidas.
     if (enderecoEhFeedDeStatus(m.key.remoteJid)) {
       relato.ignorados['status'] = (relato.ignorados['status'] ?? 0) + 1;
+      descartar(relato, m, 'status');
       continue;
     }
 
@@ -451,6 +515,7 @@ export function receberEvento(
       } catch (erro) {
         if (ehBancoOcupado(erro)) throw erro;
         relato.recusados.push({ idExterno: m.key.id, causa: String(erro) });
+        descartar(relato, m, 'recusado', String(erro));
         continue;
       }
       if (aGravar === null) continue;
@@ -459,6 +524,7 @@ export function receberEvento(
     const tipo = tipoDeConteudo(m.message);
     if (mudanca === null && tipo !== null && !VIRAM_MENSAGEM.has(tipo)) {
       relato.ignorados[tipo] = (relato.ignorados[tipo] ?? 0) + 1;
+      descartar(relato, m, motivoDoTipo(tipo, m.message));
       continue;
     }
 
@@ -502,6 +568,7 @@ export function receberEvento(
       // em arquivo. Tarefa #824.
       if (ehBancoOcupado(erro)) throw erro;
       relato.recusados.push({ idExterno: m.key.id, causa: String(erro) });
+      descartar(relato, m, 'recusado', String(erro));
     }
   }
 
@@ -693,10 +760,12 @@ function decidirEtiqueta(
   const enderecoDaConversa = resolverEndereco(acervo, FONTE, m.key.remoteJid);
   if (!enderecoEhColetivo(enderecoDaConversa)) {
     relato.ignorados['etiqueta-fora-de-coletiva'] = (relato.ignorados['etiqueta-fora-de-coletiva'] ?? 0) + 1;
+    descartar(relato, m, 'etiqueta-fora-de-coletiva');
     return null;
   }
   if (m.key.participant === undefined) {
     relato.ignorados['etiqueta-sem-autor'] = (relato.ignorados['etiqueta-sem-autor'] ?? 0) + 1;
+    descartar(relato, m, 'etiqueta-sem-autor');
     return null;
   }
   const enderecoDoMembro = resolverEndereco(acervo, FONTE, m.key.participant);
@@ -704,6 +773,7 @@ function decidirEtiqueta(
   // quem esse LID e (o Endereco da Conta, conferido pela Configuracao).
   if (m.key.fromMe && ehOpaco(enderecoDoMembro)) {
     relato.etiquetasDaContaSemEndereco += 1;
+    descartar(relato, m, 'etiqueta-da-conta-sem-endereco');
     return null;
   }
   return { enderecoDaConversa, enderecoDoMembro };
