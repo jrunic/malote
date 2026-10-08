@@ -58,6 +58,8 @@ export interface CaminhosDaConta {
   pulos: string;
   /** Serie diaria do que a recepcao nao grava como Mensagem (#1159). Ver `descartes.ts`. */
   descartes: string;
+  /** Guarda do evento cru que a recepcao nao grava (#1159). Ver `guarda-de-descartes.ts`. */
+  guarda: string;
 }
 
 /**
@@ -78,6 +80,7 @@ export function caminhosDaConta(raiz: string, conta: string): CaminhosDaConta {
       retrato: join(pasta, 'retrato.json'),
       pulos: join(pasta, 'pulos.json'),
       descartes: join(pasta, 'descartes.json'),
+      guarda: join(pasta, 'descartados.jsonl'),
   };
 }
 
