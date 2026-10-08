@@ -167,7 +167,7 @@ import {
 } from './derrame.js';
 import { lerUltimoRetrato } from './retrato.js';
 import { lerDescartes, registrarDescartes } from './descartes.js';
-import { estadoDaGuarda } from './guarda-de-descartes.js';
+import { estadoDaGuarda, reprocessarDescartados } from './guarda-de-descartes.js';
 import { lerPulos } from './pulos.js';
 import { configuracaoPorApelido } from '../registro/configuracao-adaptador.js';
 import { configuracaoComTelefoneEquivalente } from './telefone-da-conta.js';
@@ -301,6 +301,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvir      --inquilino <id> --conta <nome> [--numero <so digitos>]
   malote ouvinte estado --conta <nome> [--json]
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
+  malote ouvinte reprocessar-descartados --inquilino <id> --conta <nome> --configuracao <apelido>   (recusa com o ouvinte no ar)
   malote enviar     --inquilino <id> --configuracao <apelido> --para <endereco> (--texto <t> | --imagem <caminho> [--texto <legenda>] | --documento <caminho> [--texto <legenda>])
   malote enviar     --configuracao <apelido> --para <endereco> (mesmas opcoes de conteudo) [--identificador <uuid>] [--chave-em <VARIAVEL>] [--json]
                                         (com MALOTE_SERVIDOR no ambiente: pede o Envio por REDE; o Inquilino vem da chave;
@@ -873,6 +874,56 @@ function executarComAtor(
         return 0;
       }
       escrever(new Date(instante).toISOString());
+      return 0;
+    }
+
+    if (grupo === 'ouvinte' && sub === 'reprocessar-descartados') {
+      const conta = opcao(argumentos, 'conta');
+      const inquilino = opcao(argumentos, 'inquilino');
+      const apelido = opcao(argumentos, 'configuracao');
+      if (conta === undefined || inquilino === undefined || apelido === undefined) {
+        escrever(
+          'Uso: malote ouvinte reprocessar-descartados --inquilino <id> --conta <nome> --configuracao <apelido>',
+        );
+        return 2;
+      }
+      const cfgDaGuarda = configuracaoPorApelido(registro, inquilino, 'whatsapp', apelido);
+      if (cfgDaGuarda === undefined) {
+        throw new Error(
+          `Configuracao "${apelido}" nao existe no Inquilino ${inquilino}. ` +
+            'Reprocessar NAO cria: o evento guardado pertence a conta que o recebeu.',
+        );
+      }
+      // UM DONO POR VEZ: o ouvinte tambem grava na guarda, e a reescrita entre a
+      // leitura e a troca apagaria o que ele acrescentasse.
+      if ((ambiente.ouvinteEscrevendo ?? ouvinteEscrevendoNoSistema)(conta)) {
+        escrever(
+          `Ha um ouvinte escrevendo na conta ${conta}, e ele tambem grava na guarda. ` +
+            'Pare o servico antes de reprocessar: o que ele guardar entre a leitura e a troca some.',
+        );
+        return 2;
+      }
+      const caminhoDaGuarda = caminhosDaConta(ambiente.estado, conta).guarda;
+      if (estadoDaGuarda(caminhoDaGuarda).eventos === 0) {
+        escrever(`Conta ${conta}: nada guardado. Nada a fazer.`);
+        return 0;
+      }
+      const acervoDaGuarda = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const r = reprocessarDescartados(acervoDaGuarda, caminhoDaGuarda, {
+          id: cfgDaGuarda.id,
+          fonte: 'whatsapp',
+        }, Date.now());
+        escrever(
+          `Conta ${conta}: ${r.lidos} evento(s) lido(s), ${r.gravados} gravado(s), ` +
+            `${r.mantidos} mantido(s) na guarda.`,
+        );
+      } finally {
+        // MUTANTE EQUIVALENTE OBSERVAVEL (medido em 08/10/2026): tirar este `fechar` nao derruba
+        // teste algum, porque o comando e o processo terminam logo em seguida. Fica por higiene,
+        // como no reprocessar do derrame; nao gastar um teste tentando mata-lo.
+        acervoDaGuarda.fechar();
+      }
       return 0;
     }
 
