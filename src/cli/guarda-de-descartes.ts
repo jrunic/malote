@@ -1,6 +1,20 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname } from 'node:path';
-import type { EventoDescartado } from '../adaptadores/whatsapp/ao-vivo.js';
+import {
+  receberEvento,
+  type EventoDescartado,
+  type MensagemRecebida,
+} from '../adaptadores/whatsapp/ao-vivo.js';
+import type { Acervo } from '../nucleo/acervo.js';
+import { descartarDerrame } from './derrame.js';
 
 /**
  * A GUARDA DO QUE A RECEPCAO NAO GRAVA COMO MENSAGEM (#1159).
@@ -94,4 +108,81 @@ export function estadoDaGuarda(caminho: string): { eventos: number; bytes: numbe
     }
   }
   return { eventos, bytes };
+}
+
+export interface ResultadoDoReprocesso {
+  lidos: number;
+  gravados: number;
+  mantidos: number;
+}
+
+/** Troca atomica do arquivo (temporario e renomeacao); sem linhas, esvazia. */
+export function substituirAtomico(caminho: string, linhas: readonly string[]): void {
+  if (linhas.length === 0) {
+    descartarDerrame(caminho);
+    return;
+  }
+  const parcial = `${caminho}.parcial`;
+  writeFileSync(parcial, `${linhas.join('\n')}\n`, { mode: 0o600 });
+  renameSync(parcial, caminho);
+}
+
+function eventoDaLinha(texto: string): MensagemRecebida | undefined {
+  try {
+    const lido = JSON.parse(texto) as { evento?: { key?: { remoteJid?: unknown; id?: unknown } } };
+    const chave = lido.evento?.key;
+    if (typeof chave?.remoteJid !== 'string' || typeof chave.id !== 'string') return undefined;
+    return lido.evento as MensagemRecebida;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Leva a guarda por `receberEvento`, UM EVENTO POR VEZ — o relato devolve
+ * `gravados` como contagem, e e o evento isolado que diz se deixou de ser
+ * descartado. Sai da guarda o que o relato nao descarta mais; fica, na linha
+ * ORIGINAL, o que continua descartado, e a linha ilegivel (perder dado ja
+ * guardado por causa da forma do arquivo seria trocar o pequeno pelo grande).
+ *
+ * NAO ESCREVE NA GUARDA. Passar por `registrarDescartes` reanexaria o que ainda
+ * e descartado a cada rodada, e o arquivo cresceria sem fim.
+ *
+ * ORDEM: grava no Acervo ANTES de reescrever. Morrer no meio deixa o evento nos
+ * dois lugares, e a unicidade `(fonte, id_externo)` descarta a repeticao. Disputa
+ * de escrita (banco ocupado) SOBE sem tocar no arquivo.
+ *
+ * `substituir` e costura de teste: provar a ordem exige morrer entre as duas etapas.
+ */
+export function reprocessarDescartados(
+  acervo: Acervo,
+  caminho: string,
+  configuracao: { id: string; fonte: 'whatsapp' },
+  agora: number,
+  substituir: (caminho: string, linhas: readonly string[]) => void = substituirAtomico,
+): ResultadoDoReprocesso {
+  const resultado: ResultadoDoReprocesso = { lidos: 0, gravados: 0, mantidos: 0 };
+  for (const arquivo of [caminhoDaGuardaAnterior(caminho), caminho]) {
+    const linhas = linhasDoArquivo(arquivo);
+    if (linhas.length === 0) continue;
+    const restantes: string[] = [];
+    for (const texto of linhas) {
+      resultado.lidos += 1;
+      const evento = eventoDaLinha(texto);
+      if (evento === undefined) {
+        restantes.push(texto);
+        resultado.mantidos += 1;
+        continue;
+      }
+      const r = receberEvento(acervo, [evento], { agora, configuracao });
+      if (r.descartados.length === 0) {
+        resultado.gravados += 1;
+      } else {
+        restantes.push(texto);
+        resultado.mantidos += 1;
+      }
+    }
+    substituir(arquivo, restantes);
+  }
+  return resultado;
 }
