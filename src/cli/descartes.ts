@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { RelatoDeRecepcao } from '../adaptadores/whatsapp/ao-vivo.js';
 import { DIAS_GUARDADOS } from './vigilancia.js';
+import { guardarDescartes, tetoDaGuarda } from './guarda-de-descartes.js';
 
 /**
  * A SERIE DIARIA DO QUE A RECEPCAO NAO GRAVA COMO MENSAGEM (#1159).
@@ -101,23 +102,41 @@ export function falhasDeDescartes(): number {
   return falhasNoProcesso;
 }
 
+function registrarFalha(o_que: string, erro: unknown, avisar: (texto: string) => void): void {
+  falhasNoProcesso += 1;
+  // So o codigo do erro: a mensagem de sistema carrega caminho.
+  const codigo = (erro as NodeJS.ErrnoException).code ?? 'erro';
+  avisar(`[ouvinte] descartes: falha ao gravar ${o_que} (${codigo}); a Mensagem seguiu gravada`);
+}
+
 /**
- * O ponto unico que a recepcao, a drenagem e o reprocessar do derrame chamam.
- * Falha de escrita NUNCA propaga: a Mensagem do mesmo lote ja foi gravada, e
- * derrubar o ouvinte por causa de um contador seria trocar o pequeno pelo grande.
+ * O ponto unico que a recepcao, a drenagem e o reprocessar do derrame chamam:
+ * soma ao contador e guarda o evento cru do que nao e ruido. Devolve quantos
+ * eventos guardou. Cada escrita tem a sua propria falha, e NENHUMA propaga: a
+ * Mensagem do mesmo lote ja foi gravada.
+ *
+ * JANELA ACEITA: o adaptador classifica dentro de `receberEvento` e a guarda so
+ * escreve depois que o relato volta; o processo que morre nesse intervalo perde
+ * os descartes daquele lote. E sincrona e curta.
  */
 export function registrarDescartes(
-  caminhos: { descartes: string },
+  caminhos: { descartes: string; guarda: string },
   r: RelatoDeRecepcao,
   agora: number,
   avisar: (texto: string) => void,
-): void {
+): number {
   try {
     anotarDescartes(caminhos.descartes, contagemDosDescartes(r), agora);
   } catch (erro) {
-    falhasNoProcesso += 1;
-    // So o codigo do erro: a mensagem de sistema carrega caminho.
-    const codigo = (erro as NodeJS.ErrnoException).code ?? 'erro';
-    avisar(`[ouvinte] descartes: falha ao gravar o contador (${codigo}); a Mensagem seguiu gravada`);
+    registrarFalha('o contador', erro, avisar);
   }
+  let guardados = 0;
+  try {
+    guardados = guardarDescartes(caminhos.guarda, r.descartados, agora, tetoDaGuarda());
+  } catch (erro) {
+    registrarFalha('a guarda', erro, avisar);
+  }
+  // So a CONTAGEM: o conteudo guardado nunca vai para log.
+  if (guardados > 0) avisar(`[ouvinte] descartes guardados: ${guardados}`);
+  return guardados;
 }

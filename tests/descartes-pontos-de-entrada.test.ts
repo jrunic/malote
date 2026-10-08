@@ -173,11 +173,19 @@ test('falha ao gravar o contador NAO propaga e e contada no processo', () => {
     writeFileSync(bloqueio, 'x');
     const avisos: string[] = [];
     const antes = falhasDeDescartes();
-    registrarDescartes({ descartes: join(bloqueio, 'descartes.json') }, r, AGORA, (t) => avisos.push(t));
+    registrarDescartes(
+      { descartes: join(bloqueio, 'descartes.json'), guarda: join(raiz, 'guarda.jsonl') },
+      r,
+      AGORA,
+      (t) => avisos.push(t),
+    );
     assert.equal(falhasDeDescartes(), antes + 1);
-    assert.equal(avisos.length, 1);
-    assert.equal(avisos[0]?.includes(SEGREDO), false);
-    assert.equal(avisos[0]?.includes(bloqueio), false, 'o aviso carrega caminho');
+    // Com a guarda ligada, `registrarDescartes` tambem avisa `descartes guardados: N`.
+    assert.equal(avisos.filter((t) => t.includes('falha')).length, 1);
+    for (const t of avisos) {
+      assert.equal(t.includes(SEGREDO), false);
+      assert.equal(t.includes(bloqueio), false, 'o aviso carrega caminho');
+    }
   } finally {
     limpar();
     c.limpar();
