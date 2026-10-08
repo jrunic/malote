@@ -7,6 +7,7 @@ import {
   CorrespondenciaEmConflitoError,
 } from '../../nucleo/correspondencia.js';
 import {
+  anexoJaExiste,
   registrarAnexo,
   registrarConversa,
   registrarIdentificador,
@@ -597,7 +598,16 @@ function gravarUma(
   // 5. O Anexo nasce `nunca-obtido`, como na importacao. Ao vivo a plataforma
   //    entrega referencia de download — 54 em 288 —, e e ela que o comando de
   //    trazer midia vai usar. O bruto guarda a referencia inteira.
-  for (const tipo of COM_ANEXO) {
+  //    A Mensagem e idempotente por (fonte, id_externo) e devolve o id que ja
+  //    existe; o Anexo nao tem restricao de unicidade. Sem esta conferencia, o
+  //    MESMO evento passando de novo (reentrega offline, lote drenado do
+  //    derrame, `ouvinte reprocessar`, reprocessar a guarda) gravava mais um
+  //    Anexo `nunca-obtido` e pedia outro download — medido em 07/10/2026 (#1186):
+  //    1 Mensagem, 2 Anexos. A importacao ja se protege com `anexoJaExiste`.
+  //    Mensagem que ja tem Anexo (inclusive o `presente` que veio por backup)
+  //    nao ganha outro; a que existia sem nenhum ganha o da reentrega.
+  const tiposComAnexo = anexoJaExiste(acervo, mensagemId) ? [] : COM_ANEXO;
+  for (const tipo of tiposComAnexo) {
     const conteudo = desembrulhar(m.message)?.[tipo];
     if (conteudo === undefined || conteudo === null) continue;
     const tipoDoAnexo = tipo.replace('Message', '');

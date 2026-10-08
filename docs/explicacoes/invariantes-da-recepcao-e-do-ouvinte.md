@@ -152,6 +152,8 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   Envio `pendente` daquela Configuração é tocado — a causa é do vínculo, não
   do Envio, e ele fica pendente até reparear.
 
+- **A recepção ao vivo é idempotente também no Anexo.** A Mensagem é idempotente por `(fonte, id_externo)` e devolve o id que já existe; o Anexo não tem restrição de unicidade, então `gravarUma` confere `anexoJaExiste` antes do laço de Anexo (a importação já fazia). Sem isso, o mesmo evento passando de novo (reentrega offline, lote drenado do derrame, `ouvinte reprocessar`) gravava outro Anexo `nunca-obtido` e pedia outro download: medido em 07/10/2026, uma Mensagem e dois Anexos. A Mensagem que já tem Anexo, inclusive o `presente` vindo de backup, não ganha outro; a reentrega continua contada como gravada em `relato.gravados`.
+
 ## Pontos conhecidos
 
 - **O oráculo de classificação depende da NATUREZA que se testa, e confundi-los custou quase 8.323 eventos.** Para estabelecer que um código da Fonte é **saída**, a fração de membros que escreveu **antes** dele tem de ser alta e a que escreveu depois, baixa. Para **entrada**, o inverso — e a fração que escreveu antes tem de ser quase zero, porque ninguém escreve num grupo antes de ser adicionado. Em 30/08/2026 o mapa nasceu usando só os oráculos de saída e aplicando-os a todos os códigos; num código de entrada eles medem outra coisa (se a pessoa saiu depois) e devolvem um valor intermediário sem significado. O código 15 ficou de fora com "10,5%" e a spec chegou a afirmar que a Fonte não declarava entrada. **Ao acrescentar código ao mapa em `src/adaptadores/whatsapp/codigos-de-evento.ts`, escolher o oráculo pela natureza que se hipotetiza — e rodar os dois.**
