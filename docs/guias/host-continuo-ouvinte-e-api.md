@@ -356,6 +356,7 @@ linhas (ver o guia de armazenamento).
 | vínculo invalidado (unit sai com código 1) | pareamento humano: rode o `ouvir` com `--numero` no terminal, confirme no aparelho, reinicie o unit |
 | trocar a versão | `git fetch && git checkout <tag-ou-branch>` + `npm ci` + `systemctl restart` dos units. **Release que muda a forma do Registro** (a 0.31.0 é uma): faça cópia do `registro.db` antes — o servidor e cada ouvinte migram o Registro ao subir, com segurança entre vários abridores, mas a cópia é o que permite voltar |
 | conferir o que o ouvinte derramou | `ouvinte estado --json` (campo derrame) e `ouvinte reprocessar` — recusa se o ouvinte estiver no ar |
+| ver o que a recepção não gravou como Mensagem | `ouvinte estado --json` (campo `descartes`): contagem por dia e por tipo, sem conteúdo. Serve para decidir com número se um tipo merece virar Mensagem. `protocolMessage` aparece por tipo do protocolo (`protocolMessage:REVOKE`, e assim por diante) |
 | segunda conta de WhatsApp | novo material importado com Configuração própria + novo unit `malote-ouvinte@<outra-conta>` |
 | revogar quem consulta | `acesso chave revogar` |
 

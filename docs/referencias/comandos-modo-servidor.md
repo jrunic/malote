@@ -90,7 +90,7 @@ brasileiro com e sem o nono dígito conta como o mesmo telefone.
 | comando | o que faz |
 |---|---|
 | `ouvir --inquilino <id> --conta <nome> [--numero <so digitos>]` | O ouvinte: recebe do WhatsApp e grava. **Um processo por conta**; roda como serviço (`malote-ouvinte@<conta>`). No **primeiro pareamento**, `--numero` (só dígitos, com o código do país) é obrigatório para receber o código |
-| `ouvinte estado --conta <nome> [--json]` | O instante do último evento recebido, lido de um arquivo, **sem abrir o Acervo**. É o que a vigilância de silêncio lê; a saída padrão é contrato com ela |
+| `ouvinte estado --conta <nome> [--json]` | O instante do último evento recebido, lido de um arquivo, **sem abrir o Acervo**. É o que a vigilância de silêncio lê; a saída padrão é contrato com ela. O `--json` traz também `descartes`: a série diária, por tipo, do que a recepção não gravou como Mensagem (últimos 30 dias, só tipos e números, nunca conteúdo) |
 | `ouvinte reprocessar --inquilino <id> --conta <nome> --configuracao <apelido>` | Grava o que caiu no derrame (Acervo ocupado). **Recusa com o ouvinte no ar** |
 
 ## Envio de mensagem
