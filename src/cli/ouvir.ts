@@ -3,7 +3,11 @@ import { basename, dirname, join } from 'node:path';
 import { abrirRegistro, listarInquilinos } from '../registro/registro.js';
 import { configuracaoPorApelido } from '../registro/configuracao-adaptador.js';
 import { abrirAcervo, type Acervo } from '../nucleo/acervo.js';
-import { receberEvento, type MensagemRecebida } from '../adaptadores/whatsapp/ao-vivo.js';
+import {
+  receberEvento,
+  type MensagemRecebida,
+  type RelatoDeRecepcao,
+} from '../adaptadores/whatsapp/ao-vivo.js';
 import { processarEstadoDeConversa } from '../adaptadores/whatsapp/estado-ao-vivo.js';
 import { processarEnvios } from '../adaptadores/whatsapp/enviar.js';
 import { conectar } from '../adaptadores/whatsapp/conexao.js';
@@ -21,6 +25,7 @@ import {
 } from './derrame.js';
 import { abrirCaptura } from './captura-de-retrato.js';
 import { anotarRetrato, pareceRetrato } from './retrato.js';
+import { registrarDescartes } from './descartes.js';
 import { anotarPulos } from './pulos.js';
 import { atorDeServico, comAtor } from '../nucleo/ator.js';
 import {
@@ -51,6 +56,8 @@ export interface CaminhosDaConta {
   retrato: string;
   /** Contadores de pulo visiveis no --json. Ver `pulos.ts`. */
   pulos: string;
+  /** Serie diaria do que a recepcao nao grava como Mensagem (#1159). Ver `descartes.ts`. */
+  descartes: string;
 }
 
 /**
@@ -70,6 +77,7 @@ export function caminhosDaConta(raiz: string, conta: string): CaminhosDaConta {
     correspondencia: join(pasta, 'correspondencia.json'),
       retrato: join(pasta, 'retrato.json'),
       pulos: join(pasta, 'pulos.json'),
+      descartes: join(pasta, 'descartes.json'),
   };
 }
 
@@ -119,6 +127,7 @@ export function drenar(
   agora: () => number,
   escrever: (texto: string) => void,
   caminhoDaCorrespondencia?: string,
+  aoDescartar?: (relato: RelatoDeRecepcao) => void,
 ): void {
   for (let i = 0; i < LOTES_POR_DRENAGEM; i += 1) {
     const lote = lerDerrame(caminho)[0];
@@ -138,6 +147,13 @@ export function drenar(
       if (caminhoDaCorrespondencia !== undefined) {
         anotarCorrespondencia(caminhoDaCorrespondencia, r.correspondencia, agora());
       }
+      // O que a drenagem descartou tambem entra no contador: o lote so e visto aqui.
+      //
+      // MUTANTE EQUIVALENTE OBSERVAVEL (medido em 07/10/2026): chamar o gancho depois de
+      // `removerPrimeiroLote` nao derruba teste algum; o contador e anotado dos dois jeitos.
+      // A ordem importa so numa morte entre as duas linhas: aqui, morrer no meio DUPLICA a
+      // contagem do lote (barato); invertido, PERDERIA (nao tem volta).
+      aoDescartar?.(r);
       // GRAVA PRIMEIRO, REMOVE DEPOIS. Ver `removerPrimeiroLote`: invertido,
       // morrer no meio apaga o que nunca entrou no Acervo.
       removerPrimeiroLote(caminho);
@@ -559,8 +575,11 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
           // sucedido, porque so aqui o relato existe — no caminho do derrame a
           // excecao sobe antes, e aquele lote e contado quando drenar.
           anotarCorrespondencia(caminhos.correspondencia, r.correspondencia, agora());
+          registrarDescartes(caminhos, r, agora(), escrever);
           // A escrita passou: e o sinal de que a disputa acabou.
-          drenar(acervo, caminhos.derrame, configuracao, agora, escrever, caminhos.correspondencia);
+          drenar(acervo, caminhos.derrame, configuracao, agora, escrever, caminhos.correspondencia, (relato) =>
+            registrarDescartes(caminhos, relato, agora(), escrever),
+          );
         }),
     });
 

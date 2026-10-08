@@ -166,6 +166,7 @@ import {
   lerDerrame,
 } from './derrame.js';
 import { lerUltimoRetrato } from './retrato.js';
+import { lerDescartes, registrarDescartes } from './descartes.js';
 import { lerPulos } from './pulos.js';
 import { configuracaoPorApelido } from '../registro/configuracao-adaptador.js';
 import { configuracaoComTelefoneEquivalente } from './telefone-da-conta.js';
@@ -175,7 +176,7 @@ import {
   telefoneValido,
 } from '../registro/endereco-da-conta.js';
 import { lerPastaDeEntrada } from '../registro/pasta-de-entrada.js';
-import { receberEvento } from '../adaptadores/whatsapp/ao-vivo.js';
+import { receberEvento, type RelatoDeRecepcao } from '../adaptadores/whatsapp/ao-vivo.js';
 import { lerCorrespondencia } from './vigilancia.js';
 
 /**
@@ -861,6 +862,8 @@ function executarComAtor(
             // uma vez em nove dias — reiniciar o processo nao o provoca.
             ultimoRetrato: lerUltimoRetrato(caminhosDoEstado.retrato),
             pulos: lerPulos(caminhosDoEstado.pulos),
+            // O que a recepcao nao gravou como Mensagem, por dia e por tipo (#1159): so tipos e numeros.
+            descartes: lerDescartes(caminhosDoEstado.descartes),
           }),
         );
         return 0;
@@ -904,6 +907,7 @@ function executarComAtor(
       const acervoDoDerrame = acervoDoInquilino(registro, ambiente.dados, inquilino);
       let gravados = 0;
       let lotesFeitos = 0;
+      const relatos: RelatoDeRecepcao[] = [];
       try {
         // Um lote de cada vez, e PARA no primeiro que nao passar. Seguir em
         // frente deixaria buraco no meio do arquivo, e o arquivo e a ordem em
@@ -914,6 +918,7 @@ function executarComAtor(
             configuracao: { id: cfgDoDerrame.id, fonte: 'whatsapp' },
           });
           gravados += r.gravados;
+          relatos.push(r);
           lotesFeitos += 1;
         }
       } finally {
@@ -922,6 +927,11 @@ function executarComAtor(
       // So descarta com TUDO reprocessado. Descartar parcial perderia
       // exatamente o que o derrame existe para nao perder.
       if (lotesFeitos === lotes.length) {
+        // O contador so anota a rodada COMPLETA: o reprocessar e tudo-ou-nada, e se um lote
+        // falhar a rodada seguinte refaz os anteriores. Anotar por lote contaria duas vezes.
+        for (const r of relatos) {
+          registrarDescartes(caminhosDaConta(ambiente.estado, conta), r, Date.now(), escrever);
+        }
         descartarDerrame(caminhoDoDerrame);
         escrever(`Conta ${conta}: ${lotesFeitos} lote(s) reprocessado(s), ${gravados} gravada(s).`);
         escrever('Derrame esvaziado.');
