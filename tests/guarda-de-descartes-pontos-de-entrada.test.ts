@@ -172,3 +172,25 @@ test('falha ao gravar a GUARDA nao perde a Mensagem e nao derruba o ouvinte', { 
     r.limpar();
   }
 });
+
+test('ouvinte estado --json traz o que esta guardado; a saida DEFAULT nao muda', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const caminhos = caminhosDaConta(raiz, 'c');
+    mkdirSync(join(raiz, 'ouvinte', 'c'), { recursive: true });
+    writeFileSync(caminhos.ultimoEvento, '2026-10-07T12:00:00.000Z\n');
+    writeFileSync(caminhos.guarda, `${JSON.stringify({ evento: descartavel('G1') })}\n${JSON.stringify({ evento: descartavel('G2') })}\n`);
+
+    const padrao: string[] = [];
+    executar(['ouvinte', 'estado', '--conta', 'c'], { dados: raiz, estado: raiz, escrever: (t: string) => padrao.push(t) });
+    assert.deepEqual(padrao, ['2026-10-07T12:00:00.000Z']);
+
+    const json: string[] = [];
+    executar(['ouvinte', 'estado', '--conta', 'c', '--json'], { dados: raiz, estado: raiz, escrever: (t: string) => json.push(t) });
+    const lido = JSON.parse(json.join('')) as { guarda: { eventos: number; bytes: number } };
+    assert.equal(lido.guarda.eventos, 2);
+    assert.ok(lido.guarda.bytes > 0);
+  } finally {
+    limpar();
+  }
+});

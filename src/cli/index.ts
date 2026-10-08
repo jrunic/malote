@@ -167,6 +167,7 @@ import {
 } from './derrame.js';
 import { lerUltimoRetrato } from './retrato.js';
 import { lerDescartes, registrarDescartes } from './descartes.js';
+import { estadoDaGuarda } from './guarda-de-descartes.js';
 import { lerPulos } from './pulos.js';
 import { configuracaoPorApelido } from '../registro/configuracao-adaptador.js';
 import { configuracaoComTelefoneEquivalente } from './telefone-da-conta.js';
@@ -864,6 +865,9 @@ function executarComAtor(
             pulos: lerPulos(caminhosDoEstado.pulos),
             // O que a recepcao nao gravou como Mensagem, por dia e por tipo (#1159): so tipos e numeros.
             descartes: lerDescartes(caminhosDoEstado.descartes),
+            // Quanto esta guardado (eventos e bytes), nunca o conteudo. Le o arquivo para contar: o custo
+            // cresce com o teto (medido: 2 x 50 MiB custam ~92 ms e ~392 MB de RSS), e so o --json paga.
+            guarda: estadoDaGuarda(caminhosDoEstado.guarda),
           }),
         );
         return 0;
