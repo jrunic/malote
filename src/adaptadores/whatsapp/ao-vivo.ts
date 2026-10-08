@@ -7,6 +7,7 @@ import {
   CorrespondenciaEmConflitoError,
 } from '../../nucleo/correspondencia.js';
 import {
+  anexoJaExiste,
   registrarAnexo,
   registrarConversa,
   registrarIdentificador,
@@ -69,6 +70,62 @@ export interface MensagemRecebida {
   messageStubParameters?: string[];
 }
 
+/**
+ * Um evento que a recepcao NAO gravou como Mensagem, com o porque.
+ *
+ * `motivo` e o mesmo rotulo que `ignorados` usa (o tipo do conteudo, `cifrada`,
+ * `status`, os rotulos das Etiquetas), mais `recusado`; `protocolMessage` leva o
+ * tipo do protocolo. `ruido` marca o que a recepcao sabe ser protocolo sem dado:
+ * e CONTADO, nunca guardado.
+ */
+export interface EventoDescartado {
+  motivo: string;
+  /** So para `recusado`: a causa da recusa. Nunca texto de conversa. */
+  causa?: string;
+  ruido: boolean;
+  evento: MensagemRecebida;
+}
+
+/**
+ * O ruido de protocolo conhecido, num so lugar. Cifrada e reenviada decifrada pela
+ * biblioteca (90 de 4.167 eventos, 02/09/2026); status e decisao do Titular (#1094);
+ * distribuicao de chave SOZINHA nao tem dado (6.231 no Acervo real). Atencao: a
+ * distribuicao de chave que ACOMPANHA conteudo nao chega aqui, e `tipoDeConteudo`.
+ */
+const MOTIVOS_DE_RUIDO: ReadonlySet<string> = new Set([
+  'cifrada',
+  'status',
+  'senderKeyDistributionMessage',
+]);
+
+/**
+ * O motivo de um tipo ignorado. `protocolMessage` esconde varias coisas
+ * (revogacao, material de chave de estado, historico), e um balde so nao mede
+ * nada: leva o `type` do protocolo, a mesma leitura que a Etiqueta ja faz. Os
+ * demais tipos seguem pelo nome.
+ */
+function motivoDoTipo(tipo: string, message: Record<string, unknown> | null | undefined): string {
+  if (tipo !== 'protocolMessage') return tipo;
+  const protocolo = message?.['protocolMessage'];
+  if (protocolo === null || typeof protocolo !== 'object') return tipo;
+  const subtipo = (protocolo as Record<string, unknown>)['type'];
+  return typeof subtipo === 'string' || typeof subtipo === 'number' ? `${tipo}:${String(subtipo)}` : tipo;
+}
+
+function descartar(
+  relato: RelatoDeRecepcao,
+  evento: MensagemRecebida,
+  motivo: string,
+  causa?: string,
+): void {
+  relato.descartados.push({
+    motivo,
+    ruido: MOTIVOS_DE_RUIDO.has(motivo),
+    evento,
+    ...(causa !== undefined ? { causa } : {}),
+  });
+}
+
 export interface OpcoesDeRecepcao {
   agora: number;
   /**
@@ -86,6 +143,11 @@ export interface RelatoDeRecepcao {
   conflitos: { alternativo: string; gravado: string; novo: string }[];
   /** Tipos ignorados por nao serem Mensagem, contados por tipo. */
   ignorados: Record<string, number>;
+  /**
+   * Cada evento que NAO virou Mensagem (descartado ou recusado), com o motivo.
+   * Nao inclui `parametro-sem-endereco`: la o evento ja e Mensagem.
+   */
+  descartados: EventoDescartado[];
   /** Transicoes de Participacao que NASCERAM nesta recepcao. */
   transicoes: number;
   /** Etiquetas de Participacao que NASCERAM nesta recepcao (nunca o texto delas). */
@@ -212,9 +274,32 @@ const COM_ANEXO = [
  */
 const ACOMPANHAM = new Set(['messageContextInfo', 'senderKeyDistributionMessage']);
 
-function tipoDeConteudo(message: Record<string, unknown> | undefined | null): string | null {
+/**
+ * Desembrulha o documento com legenda: a plataforma o entrega como
+ * `documentWithCaptionMessage.message.documentMessage`. Medido em 06/10/2026
+ * (documento real de uma Conversa direta ausente do Acervo) e provado com o
+ * evento sintético pela própria `receberEvento`.
+ *
+ * SO este embrulho. Os outros que a biblioteca desembrulha (`ephemeralMessage`,
+ * `viewOnce*`, `editedMessage`) nao foram medidos contra captura real, e a
+ * classificacao e medida, nunca deduzida: `editedMessage` e edicao de Mensagem
+ * ja gravada, e tratá-lo como nova duplicaria. Seguem ignorados e contados. So
+ * para classificar e ler texto/Anexo: o Conteudo Bruto grava o evento inteiro.
+ */
+function desembrulhar(
+  message: Record<string, unknown> | undefined | null,
+): Record<string, unknown> | undefined | null {
+  const embrulho = message?.['documentWithCaptionMessage'];
+  if (embrulho === null || typeof embrulho !== 'object') return message;
+  const interna = (embrulho as Record<string, unknown>)['message'];
+  if (interna === null || typeof interna !== 'object') return message;
+  return interna as Record<string, unknown>;
+}
+
+function tipoDeConteudo(rotulada: Record<string, unknown> | undefined | null): string | null {
   // `== null` de proposito: apanha ausente E nulo de uma vez. A Fonte entrega
   // os dois, e tratar so um foi o defeito.
+  const message = desembrulhar(rotulada);
   if (message == null) return null;
   const chaves = Object.keys(message);
   const principal = chaves.find((k) => !ACOMPANHAM.has(k));
@@ -229,7 +314,8 @@ function tipoDeConteudo(message: Record<string, unknown> | undefined | null): st
   return null;
 }
 
-function textoDe(message: Record<string, unknown> | undefined | null): string | undefined {
+function textoDe(rotulada: Record<string, unknown> | undefined | null): string | undefined {
+  const message = desembrulhar(rotulada);
   if (message == null) return undefined;
   const direto = message['conversation'];
   if (typeof direto === 'string') return direto;
@@ -237,6 +323,12 @@ function textoDe(message: Record<string, unknown> | undefined | null): string | 
   if (estendido !== null && typeof estendido === 'object') {
     const t = (estendido as Record<string, unknown>)['text'];
     if (typeof t === 'string') return t;
+  }
+  // A legenda do documento e o texto da Mensagem (so vem embrulhada).
+  const documento = message['documentMessage'];
+  if (documento !== null && typeof documento === 'object') {
+    const legenda = (documento as Record<string, unknown>)['caption'];
+    if (typeof legenda === 'string' && legenda !== '') return legenda;
   }
   return undefined;
 }
@@ -293,6 +385,7 @@ export function receberEvento(
     recusados: [],
     conflitos: [],
     ignorados: {},
+    descartados: [],
     transicoes: 0,
     etiquetas: 0,
     etiquetasRemovidas: 0,
@@ -394,6 +487,7 @@ export function receberEvento(
     // dos 4.167 eventos de 11h23 de captura.
     if (ehCifrada(m.messageStubType)) {
       relato.ignorados['cifrada'] = (relato.ignorados['cifrada'] ?? 0) + 1;
+      descartar(relato, m, 'cifrada');
       continue;
     }
 
@@ -403,6 +497,7 @@ export function receberEvento(
     // Mensagem, para nenhuma das duas formas conhecidas.
     if (enderecoEhFeedDeStatus(m.key.remoteJid)) {
       relato.ignorados['status'] = (relato.ignorados['status'] ?? 0) + 1;
+      descartar(relato, m, 'status');
       continue;
     }
 
@@ -420,6 +515,7 @@ export function receberEvento(
       } catch (erro) {
         if (ehBancoOcupado(erro)) throw erro;
         relato.recusados.push({ idExterno: m.key.id, causa: String(erro) });
+        descartar(relato, m, 'recusado', String(erro));
         continue;
       }
       if (aGravar === null) continue;
@@ -428,6 +524,7 @@ export function receberEvento(
     const tipo = tipoDeConteudo(m.message);
     if (mudanca === null && tipo !== null && !VIRAM_MENSAGEM.has(tipo)) {
       relato.ignorados[tipo] = (relato.ignorados[tipo] ?? 0) + 1;
+      descartar(relato, m, motivoDoTipo(tipo, m.message));
       continue;
     }
 
@@ -471,6 +568,7 @@ export function receberEvento(
       // em arquivo. Tarefa #824.
       if (ehBancoOcupado(erro)) throw erro;
       relato.recusados.push({ idExterno: m.key.id, causa: String(erro) });
+      descartar(relato, m, 'recusado', String(erro));
     }
   }
 
@@ -567,8 +665,17 @@ function gravarUma(
   // 5. O Anexo nasce `nunca-obtido`, como na importacao. Ao vivo a plataforma
   //    entrega referencia de download — 54 em 288 —, e e ela que o comando de
   //    trazer midia vai usar. O bruto guarda a referencia inteira.
-  for (const tipo of COM_ANEXO) {
-    const conteudo = m.message?.[tipo];
+  //    A Mensagem e idempotente por (fonte, id_externo) e devolve o id que ja
+  //    existe; o Anexo nao tem restricao de unicidade. Sem esta conferencia, o
+  //    MESMO evento passando de novo (reentrega offline, lote drenado do
+  //    derrame, `ouvinte reprocessar`, reprocessar a guarda) gravava mais um
+  //    Anexo `nunca-obtido` e pedia outro download — medido em 07/10/2026 (#1186):
+  //    1 Mensagem, 2 Anexos. A importacao ja se protege com `anexoJaExiste`.
+  //    Mensagem que ja tem Anexo (inclusive o `presente` que veio por backup)
+  //    nao ganha outro; a que existia sem nenhum ganha o da reentrega.
+  const tiposComAnexo = anexoJaExiste(acervo, mensagemId) ? [] : COM_ANEXO;
+  for (const tipo of tiposComAnexo) {
+    const conteudo = desembrulhar(m.message)?.[tipo];
     if (conteudo === undefined || conteudo === null) continue;
     const tipoDoAnexo = tipo.replace('Message', '');
     // `seconds` é o campo que audioMessage/videoMessage declaram — a mesma
@@ -653,10 +760,12 @@ function decidirEtiqueta(
   const enderecoDaConversa = resolverEndereco(acervo, FONTE, m.key.remoteJid);
   if (!enderecoEhColetivo(enderecoDaConversa)) {
     relato.ignorados['etiqueta-fora-de-coletiva'] = (relato.ignorados['etiqueta-fora-de-coletiva'] ?? 0) + 1;
+    descartar(relato, m, 'etiqueta-fora-de-coletiva');
     return null;
   }
   if (m.key.participant === undefined) {
     relato.ignorados['etiqueta-sem-autor'] = (relato.ignorados['etiqueta-sem-autor'] ?? 0) + 1;
+    descartar(relato, m, 'etiqueta-sem-autor');
     return null;
   }
   const enderecoDoMembro = resolverEndereco(acervo, FONTE, m.key.participant);
@@ -664,6 +773,7 @@ function decidirEtiqueta(
   // quem esse LID e (o Endereco da Conta, conferido pela Configuracao).
   if (m.key.fromMe && ehOpaco(enderecoDoMembro)) {
     relato.etiquetasDaContaSemEndereco += 1;
+    descartar(relato, m, 'etiqueta-da-conta-sem-endereco');
     return null;
   }
   return { enderecoDaConversa, enderecoDoMembro };
