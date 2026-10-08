@@ -23,6 +23,30 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.34.0] — 2026-10-07
+
+Não muda a forma do Acervo nem do Registro. Ao atualizar, o ouvinte reinicia, como em toda versão.
+
+### Adicionado
+
+- **`malote ouvinte estado --json` traz `descartes`:** a série diária, por tipo, do que a recepção ao vivo não gravou como
+  Mensagem (últimos 30 dias). Só tipos e números, nunca conteúdo, endereço nem identificador; o arquivo da conta guarda no
+  máximo 64 tipos distintos por dia e soma o excedente em `outros`. `protocolMessage` aparece pelo tipo do protocolo
+  (`protocolMessage:REVOKE` e assim por diante). A saída padrão do comando não muda. O contador é alimentado pela recepção, pela
+  drenagem do lote que caiu em disputa de escrita e pelo `ouvinte reprocessar`, e falhar ao gravá-lo nunca derruba o ouvinte
+  nem a Mensagem do mesmo lote.
+
+### Corrigido
+
+- **Documento com legenda deixava de ser gravado.** O WhatsApp entrega o documento com legenda embrulhado em
+  `documentWithCaptionMessage`, que a recepção descartava em silêncio. Agora ele vira Mensagem, com o Anexo e a legenda como
+  texto, e o Conteúdo Bruto guarda o evento inteiro. Os demais embrulhos (mensagem temporária, visualização única, mensagem
+  editada) seguem ignorados e contados até serem medidos.
+- **O mesmo evento de mídia recebido duas vezes gravava dois Anexos.** A Mensagem era idempotente e o Anexo não: a reentrega
+  offline, o lote drenado depois de uma disputa de escrita e o `ouvinte reprocessar` acrescentavam outro Anexo
+  `nunca-obtido` e pediam outro download. A recepção passa a conferir se a Mensagem já tem Anexo, como a importação já fazia.
+  Anexos duplicados que já existam não são removidos por esta versão.
+
 ## [0.33.0] — 2026-10-06
 
 Não muda a forma do Acervo nem do Registro. **Atualize o servidor antes dos clientes:** um servidor antigo ignora `--ordem` e não devolve `truncado`, e o cliente novo funciona contra ele.
