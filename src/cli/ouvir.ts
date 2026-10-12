@@ -26,6 +26,7 @@ import {
 import { abrirCaptura } from './captura-de-retrato.js';
 import { anotarRetrato, pareceRetrato } from './retrato.js';
 import { registrarDescartes } from './descartes.js';
+import { criarMarcadorDoSinal } from './sinal-da-conexao.js';
 import { anotarPulos } from './pulos.js';
 import { atorDeServico, comAtor } from '../nucleo/ator.js';
 import {
@@ -60,6 +61,8 @@ export interface CaminhosDaConta {
   descartes: string;
   /** Guarda do evento cru que a recepcao nao grava (#1159). Ver `guarda-de-descartes.ts`. */
   guarda: string;
+  /** O instante do ultimo frame que a Conexao recebeu (#1162). Ver `sinal-da-conexao.ts`. */
+  sinal: string;
 }
 
 /**
@@ -81,6 +84,7 @@ export function caminhosDaConta(raiz: string, conta: string): CaminhosDaConta {
       pulos: join(pasta, 'pulos.json'),
       descartes: join(pasta, 'descartes.json'),
       guarda: join(pasta, 'descartados.jsonl'),
+      sinal: join(pasta, 'ultimo-sinal.txt'),
   };
 }
 
@@ -451,6 +455,10 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
   // espera a passada terminar antes de decidir entre staging e download.
   let passadaDeEnvio: Promise<unknown> | undefined;
 
+  // O sinal de vida da Conexao (#1162): o instante do ultimo frame do transporte, estrangulado, em
+  // arquivo ao lado do `ultimo-evento`. Falha dele nunca derruba a recepcao.
+  const marcarSinal = criarMarcadorDoSinal({ caminho: caminhos.sinal, agora, avisar: escrever });
+
   try {
     const conexao = await conectar({
       pastaDoVinculo: caminhos.vinculo,
@@ -465,6 +473,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
           itens: resumo.itens,
         });
       },
+      aoFrame: marcarSinal,
       aoEstado: (fluxo, dado) => {
         const r = processarEstadoDeConversa(acervo, {
           fluxo,

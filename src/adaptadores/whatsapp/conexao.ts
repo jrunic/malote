@@ -28,6 +28,12 @@ interface Socket {
   user?: IdentidadeBrutaDoVinculo;
   /** Pede URL nova para midia cuja referencia expirou. Usado so no reupload. */
   updateMediaMessage: (mensagem: unknown) => Promise<unknown>;
+  /**
+   * O emissor de TRANSPORTE da biblioteca (`WebSocketClient`). OPCIONAL no tipo: as
+   * bibliotecas falsas dos testes nao o tem, e uma versao futura pode nao o expor.
+   * Distinto de `ev`, o emissor de dominio, que e bufferizado enquanto a Conexao sincroniza.
+   */
+  ws?: { on?: (evento: string, ouvinte: () => void) => unknown };
   /** Envia conteudo pelo socket corrente. Tipado largo porque o conteudo
    *  (texto, imagem, documento) e vocabulario da biblioteca, nao do nucleo. */
   sendMessage: (
@@ -99,6 +105,13 @@ export interface OpcoesDeConexao {
    * estourar aqui nao pode custar Mensagem.
    */
   aoEstado?: (fluxo: string, dado: unknown, resumo: ResumoDeAppState) => void;
+  /**
+   * Chamado a cada FRAME que o transporte recebe do WhatsApp (#1162): o sinal de vida da
+   * Conexao, que anda mesmo em conta sem Mensagem. A biblioteca manda um `ping` a cada 30 s
+   * e encerra a Conexao se passam 35 s sem frame. Excecao daqui e engolida: o frame e
+   * processado DENTRO da biblioteca, e o que o gancho lancar pode custar o frame.
+   */
+  aoFrame?: () => void;
   /**
    * Gancho de identidade da PROPRIA conta (spec #1149). Chamado com a identidade
    * BRUTA do vinculo — ids com sufixo de dispositivo —, em dois momentos: antes
@@ -244,6 +257,22 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
     const sock = lib.default({ auth: state });
     sockAtual = sock;
     sock.ev.on('creds.update', saveCreds as (dado: never) => void);
+
+    // O SINAL DE VIDA (#1162). Assina no TRANSPORTE (`ws`), e nao em `ev`: `ev` e bufferizado enquanto a
+    // Conexao sincroniza, e o sinal tem de contar frame mesmo assim. Assinado de forma SINCRONA aqui, a
+    // cada `abrir`: o socket e recriado a cada religacao, e o `ws` tambem. So assina se o emissor existir
+    // e tiver `on` — versao da biblioteca que nao o expoe deixa o sinal ausente, nunca derruba a subida.
+    const aoFrame = opcoes.aoFrame;
+    const ws = sock.ws;
+    if (aoFrame !== undefined && typeof ws?.on === 'function') {
+      ws.on('frame', () => {
+        try {
+          aoFrame();
+        } catch {
+          // Estourar aqui nao pode custar frame nem Mensagem.
+        }
+      });
+    }
 
     sock.ev.on('messages.upsert', ((dado: { messages?: unknown[] }) => {
       // Parada pedida ou conta recusada: o Acervo ja pode estar fechado.

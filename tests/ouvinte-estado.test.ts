@@ -7,7 +7,7 @@ import { marcarUltimoEvento } from '../src/cli/ultimo-evento.js';
 import { derramar } from '../src/cli/derrame.js';
 import { anotarRetrato } from '../src/cli/retrato.js';
 import { anotarPulos } from '../src/cli/pulos.js';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 /**
@@ -257,6 +257,58 @@ test('o Retrato anotado NAO vaza para a saida default — contrato com a frota',
     });
     assert.equal(linhas.length, 1, 'sinal novo na saida default quebra o watchdog');
     assert.equal(Date.parse(linhas.join('\n')), QUANDO);
+  } finally {
+    limpar();
+  }
+});
+
+test('--json traz ultimoSinalDaConexao quando o sinal existe, e a saida default NAO muda', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    comPastaDaConta(raiz, 'c');
+    const caminhos = caminhosDaConta(raiz, 'c');
+    marcarUltimoEvento(caminhos.ultimoEvento, QUANDO);
+    marcarUltimoEvento(caminhos.sinal, QUANDO + 90_000);
+
+    const padrao: string[] = [];
+    executar(['ouvinte', 'estado', '--conta', 'c'], { dados: raiz, estado: raiz, escrever: (t: string) => padrao.push(t) });
+    assert.deepEqual(padrao, [new Date(QUANDO).toISOString()], 'o sinal NAO vai para a saida default: contrato com a frota');
+
+    const json: string[] = [];
+    executar(['ouvinte', 'estado', '--conta', 'c', '--json'], { dados: raiz, estado: raiz, escrever: (t: string) => json.push(t) });
+    const lido = JSON.parse(json[0] ?? '{}') as { ultimoEvento?: string; ultimoSinalDaConexao?: string | null };
+    assert.equal(lido.ultimoEvento, new Date(QUANDO).toISOString());
+    assert.equal(lido.ultimoSinalDaConexao, new Date(QUANDO + 90_000).toISOString());
+  } finally {
+    limpar();
+  }
+});
+
+test('--json: sem arquivo de sinal o campo e null (indisponivel), nao zero nem ausente', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    comPastaDaConta(raiz, 'c');
+    marcarUltimoEvento(caminhosDaConta(raiz, 'c').ultimoEvento, QUANDO);
+    const json: string[] = [];
+    executar(['ouvinte', 'estado', '--conta', 'c', '--json'], { dados: raiz, estado: raiz, escrever: (t: string) => json.push(t) });
+    const lido = JSON.parse(json[0] ?? '{}') as Record<string, unknown>;
+    assert.ok('ultimoSinalDaConexao' in lido, 'a chave existe');
+    assert.equal(lido['ultimoSinalDaConexao'], null);
+  } finally {
+    limpar();
+  }
+});
+
+test('--json: arquivo de sinal ilegivel tambem e null', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    comPastaDaConta(raiz, 'c');
+    const caminhos = caminhosDaConta(raiz, 'c');
+    marcarUltimoEvento(caminhos.ultimoEvento, QUANDO);
+    writeFileSync(caminhos.sinal, 'isto nao e um instante\n');
+    const json: string[] = [];
+    executar(['ouvinte', 'estado', '--conta', 'c', '--json'], { dados: raiz, estado: raiz, escrever: (t: string) => json.push(t) });
+    assert.equal((JSON.parse(json[0] ?? '{}') as Record<string, unknown>)['ultimoSinalDaConexao'], null);
   } finally {
     limpar();
   }
