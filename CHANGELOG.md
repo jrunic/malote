@@ -23,6 +23,8 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.35.0] — 2026-10-12
+
 ### Adicionado
 
 - **Guarda do evento cru que a recepção não grava como Mensagem.** Cada evento descartado ou recusado que não seja ruído de
