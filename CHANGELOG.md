@@ -23,6 +23,8 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.35.1] — 2026-10-12
+
 ### Corrigido
 
 - **O ouvinte não fica mais fora do ar quando a biblioteca de recepção deixa escapar uma exceção.** Uma rejeição não tratada
