@@ -23,6 +23,8 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.35.2] — 2026-10-12
+
 ### Adicionado
 
 - **`ouvinte estado --json` traz `ultimoSinalDaConexao`.** O ouvinte registra, no máximo a cada 15 s, o instante do último frame
