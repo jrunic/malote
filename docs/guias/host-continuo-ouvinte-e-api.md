@@ -349,6 +349,17 @@ O disparo da varredura é **seu** (cron, timer): o produto não agenda nada sozi
 pastas gravam caminho absoluto no Registro — mover a instalação exige atualizar essas
 linhas (ver o guia de armazenamento).
 
+### 3.4 O que a recepção não grava como Mensagem
+
+A recepção descarta o que não vira Mensagem: protocolo sem dado, conteúdo cifrado, o feed de status, e o que ainda não foi classificado. Em vez de deixar isso se perder em silêncio, o ouvinte **conta** (`ouvinte estado --json`, campo `descartes`) e **guarda o evento cru** do que não é ruído conhecido.
+
+- **Onde fica:** na pasta de estado da conta, `descartados.jsonl` e, depois da rotação, `descartados.anterior.jsonl`. Uma linha por evento, com o instante, o motivo e o evento cru.
+- **O que é, e o que não promete:** **texto de conversa em claro**, fora do Acervo e **fora do backup**, com modo 0600. O produto não promete confidencialidade contra quem opera a instalação. Nunca vai para log: a saída do ouvinte só diz quantos foram guardados.
+- **Teto e rotação:** `MALOTE_TETO_DA_GUARDA_BYTES` (padrão 50 MiB por arquivo, valor provisório). Ao passar do teto o arquivo atual vira o anterior e **o anterior mais antigo é apagado**: é a única exceção à regra de que o produto não apaga, escolhida porque o disco é finito e este arquivo não está no backup.
+- **Reprocessar:** depois de uma correção na classificação, pare o ouvinte, rode `ouvinte reprocessar-descartados --inquilino <id> --conta <nome> --configuracao <apelido>` e suba o ouvinte de novo. Sai da guarda o que passou a ser gravado; fica o que ainda é descartado. O comando recusa com o ouvinte no ar.
+- **Mídia:** o reprocessar não baixa mídia, e o Anexo de um evento reprocessado nasce sempre `nunca-obtido`. Para trazer os bytes, rode `malote midia reprocessar` logo depois, **dentro dos cerca de 30 dias** em que a referência de download vale.
+- **Ver quanto há:** `ouvinte estado --json`, campo `guarda` (`eventos` e `bytes`). O comando lê o arquivo para contar, então o custo cresce com o teto.
+
 ## 9. Operações que voltam com frequência
 
 | situação | o que fazer |
