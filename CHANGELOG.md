@@ -23,6 +23,13 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+### Adicionado
+
+- **`ouvinte estado --json` traz `ultimoSinalDaConexao`.** O ouvinte registra, no máximo a cada 15 s, o instante do último frame
+  que a Conexão recebeu do WhatsApp. O instante anda mesmo em conta sem Mensagem, então separa a conta quieta do ouvinte sem
+  Conexão, coisa que o instante do último evento não faz. `null` é sinal indisponível, nunca Conexão morta. A saída default não
+  muda.
+
 ## [0.35.1] — 2026-10-12
 
 ### Corrigido

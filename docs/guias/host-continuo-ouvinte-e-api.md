@@ -285,6 +285,14 @@ por mais que o intervalo tolerado é o sinal de alarme (cair e religar é rotina
 o que vigia é o instante andar). Com `--json` vêm derrame acumulado, série de
 correspondência e o último retrato — para painel, não para alarme de silêncio.
 
+O `--json` traz também `ultimoSinalDaConexao`: o instante do último frame que a Conexão recebeu
+do WhatsApp, gravado no máximo a cada 15 s. A biblioteca manda um `ping` a cada 30 s e encerra a
+Conexão se passam 35 s sem frame, então numa Conexão aberta o sinal anda mesmo sem Mensagem
+nenhuma. Ele separa a conta **quieta** (sinal novo, evento velho) do ouvinte **sem Conexão** (os
+dois velhos). `null` quer dizer **sinal indisponível** (arquivo ausente, ou biblioteca sem o
+gancho), nunca Conexão morta: alarme só por sinal presente e velho. O sinal **não prova** que
+Mensagem está sendo gravada; Conexão viva com Mensagem parada continua sem detector.
+
 Do servidor, bata na porta e confira que sem credencial a resposta é a recusa de corpo
 vazio.
 
