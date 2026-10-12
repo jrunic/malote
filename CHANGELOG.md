@@ -23,6 +23,15 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+## [0.35.1] — 2026-10-12
+
+### Corrigido
+
+- **O ouvinte não fica mais fora do ar quando a biblioteca de recepção deixa escapar uma exceção.** Uma rejeição não tratada
+  (`Connection Closed` ao responder a uma retentativa sobre socket já fechado) derrubava o processo com o código 1, que o
+  supervisor lê como vínculo invalidado e não reinicia. Agora o `ouvir` loga a causa, fecha o Acervo e sai por 70, que o
+  supervisor reinicia. Vínculo invalidado segue saindo 1, e a queda de rotina segue religando por dentro.
+
 ## [0.35.0] — 2026-10-12
 
 ### Adicionado

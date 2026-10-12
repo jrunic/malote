@@ -158,7 +158,8 @@ RestartSec=10
 #   1  = vínculo invalidado pela plataforma — exige pareamento humano no aparelho
 #   2  = erro de configuração — invocação errada (inquilino/conta/configuração), ou o vínculo é de
 #        outra conta que a da Configuração (o telefone não confere): corrija o cadastro, não reinicie
-# Reiniciar em laço um vínculo invalidado não resolve e pode agravar.
+#   70 = exceção que a biblioteca deixou escapar — o ouvinte loga a causa e sai para ser reiniciado
+# Reiniciar em laço um vínculo invalidado não resolve e pode agravar. O 70 NÃO entra na lista.
 RestartPreventExitStatus=0 1 2
 StandardOutput=append:/var/log/malote/ouvinte-%i.log
 StandardError=append:/var/log/malote/ouvinte-%i.log

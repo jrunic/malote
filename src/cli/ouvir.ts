@@ -92,6 +92,17 @@ function descreverIntervalo(de: number, ate: number): string {
   return `${Math.floor(horas / 24)} dias`;
 }
 
+/**
+ * Codigo de saida de uma excecao que a biblioteca de recepcao deixou escapar (#1173).
+ *
+ * E contrato com o supervisor: o unit reserva `0 1 2 78` em `RestartPreventExitStatus` e reinicia
+ * qualquer outro. O 1 e vinculo invalidado e pede pareamento humano, entao uma excecao nao pode sair
+ * por ele (30/09/2026: `Connection Closed` rejeitada pela biblioteca em `sendRetryRequest` derrubou
+ * o ouvinte com 1, o unit nao reiniciou e ele ficou 9h24 fora, sem alarme). 70 e `EX_SOFTWARE`
+ * (sysexits), fora da lista reservada e de qualquer codigo que o ouvinte use.
+ */
+export const CODIGO_DE_EXCECAO_NAO_TRATADA = 70;
+
 export interface AmbienteDeEscuta extends Ambiente {
   carregarBiblioteca?: () => Promise<unknown>;
   agora?: () => number;
@@ -390,6 +401,42 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
   // referencia-la antes de o poller existir (ver atribuicao logo apos
   // `conectar` retornar).
   let pararPollerDeEnvio: (() => void) | undefined;
+  // Parar a conexao so existe depois de `conectar` retornar.
+  let pararConexao: (() => void) | undefined;
+
+  // EXCECAO QUE ESCAPA DA BIBLIOTECA (#1173). Sem tratador o Node sai com 1, que o unit le como
+  // "vinculo invalidado" e NAO reinicia. Aqui a saida e por um codigo que o supervisor reinicia, e a
+  // linha diz que foi excecao, para nao se confundir com o vinculo invalidado no log. A queda de
+  // rotina (428, 515) nao passa por aqui: a conexao a trata por dentro e religa.
+  let saiuPorExcecao = false;
+  const aoEscaparExcecao =
+    (origem: string) =>
+    (causa: unknown): void => {
+      if (saiuPorExcecao) return;
+      saiuPorExcecao = true;
+      // So o nome, a mensagem e o comeco da pilha: a pilha localiza a chamada (foi ela que achou
+      // `messages-recv` em 30/09) e a mensagem de erro da biblioteca nao carrega texto de conversa.
+      const descricao =
+        causa instanceof Error
+          ? (causa.stack ?? `${causa.name}: ${causa.message}`).split('\n').slice(0, 6).join(' | ')
+          : String(causa);
+      escrever(
+        `[ouvinte] EXCECAO NAO TRATADA (${origem}): ${descricao}; ` +
+          `saindo com ${CODIGO_DE_EXCECAO_NAO_TRATADA} para o supervisor reiniciar.`,
+      );
+      pararPollerDeEnvio?.();
+      try {
+        pararConexao?.();
+      } catch {
+        // A conexao ja pode estar morta, que e justamente o caso: o que importa e sair.
+      }
+      fecharUmaVez();
+      encerrar(CODIGO_DE_EXCECAO_NAO_TRATADA);
+    };
+  const aoRejeitarSemTratamento = aoEscaparExcecao('rejeicao');
+  const aoLancarSemTratamento = aoEscaparExcecao('excecao');
+  process.on('unhandledRejection', aoRejeitarSemTratamento);
+  process.on('uncaughtException', aoLancarSemTratamento);
 
   // keyId -> caminho de staging. Alimentado por `aoEnviar` quando um Envio de
   // MIDIA sai com sucesso; consumido no laco de `anexosNuncaObtidos` quando o
@@ -586,6 +633,10 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
         }),
     });
 
+    pararConexao = (): void => conexao.parar();
+    // Uma excecao durante `conectar` ja fechou o Acervo e resolveu o fim: nao sobe poller sobre ele.
+    if (saiuPorExcecao) return CODIGO_DE_EXCECAO_NAO_TRATADA;
+
     // Recusa de identidade ANTES do poller: o gancho pode ter recusado durante
     // `conectar`, e nesse caso o Acervo ja foi fechado por `aoTerminar` — o
     // poller de Envio nao pode nascer contra um Acervo fechado.
@@ -648,5 +699,9 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
     escrever(`[ouvinte] nao consegui conectar: ${(causa as Error).message}`);
     fecharUmaVez();
     return 1;
+  } finally {
+    // Processo vivo depois do `ouvir` (os testes chamam em processo): tratador que sobra vaza.
+    process.off('unhandledRejection', aoRejeitarSemTratamento);
+    process.off('uncaughtException', aoLancarSemTratamento);
   }
 }
