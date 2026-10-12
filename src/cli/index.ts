@@ -147,6 +147,7 @@ import { conferirSeDesfazivel, desfazerOperacao } from '../nucleo/desfazer.js';
 import { caminhosDaConta, ouvir } from './ouvir.js';
 import { enderecoRecusado, servir } from './servir.js';
 import { lerUltimoEvento } from './ultimo-evento.js';
+import { lerSinalDaConexao } from './sinal-da-conexao.js';
 import {
   reenfileirarFalhas,
   incluirEstoqueEmTranscricao,
@@ -374,6 +375,10 @@ acesso a maquina. A partir dela, todo comando administrativo exige --chave.`;
  * erro de formatacao, e a diferenca entre "nao havia campo" e "ninguem
  * declarou" e justamente o que o criterio 18 pede que seja visivel.
  */
+function instanteOuNulo(instante: number | null): string | null {
+  return instante === null ? null : new Date(instante).toISOString();
+}
+
 function quemOrdenou(ator: string | null): string {
   return ator ?? '(anterior ao registro de Ator)';
 }
@@ -869,6 +874,11 @@ function executarComAtor(
             // Quanto esta guardado (eventos e bytes), nunca o conteudo. Le o arquivo para contar: o custo
             // cresce com o teto (medido: 2 x 50 MiB custam ~92 ms e ~392 MB de RSS), e so o --json paga.
             guarda: estadoDaGuarda(caminhosDoEstado.guarda),
+            // O instante do ultimo frame que a Conexao recebeu (#1162), ou `null`. `null` e SINAL
+            // INDISPONIVEL (arquivo ausente ou ilegivel, ou biblioteca sem o gancho), NUNCA "Conexao
+            // morta": quem consome alarma por sinal PRESENTE e velho, jamais por ausencia. So o --json:
+            // a saida default e contrato com o watchdog.
+            ultimoSinalDaConexao: instanteOuNulo(lerSinalDaConexao(caminhosDoEstado.sinal)),
           }),
         );
         return 0;
