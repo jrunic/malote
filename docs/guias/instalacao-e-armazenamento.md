@@ -76,7 +76,10 @@ Duas propriedades do encerramento que valem para o supervisor:
 
 - saída **0** = parada pedida (sinal) — não é caso de reiniciar;
 - saída **1** = vínculo invalidado pela plataforma — exige pareamento humano; reiniciar em
-  laço não resolve e pode agravar.
+  laço não resolve e pode agravar;
+- saída **70** = exceção que a biblioteca de recepção deixou escapar — o ouvinte loga a causa
+  (`EXCECAO NAO TRATADA`), fecha o Acervo e sai por um código que o supervisor **reinicia**. Não
+  a coloque em `RestartPreventExitStatus`.
 
 A pasta `~/.local/state/malote/ouvinte/<conta>/` (com o vínculo dentro) é **pré-condição**:
 crie-a antes de subir o serviço. O ouvinte não cria pasta na partida.

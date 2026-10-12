@@ -165,7 +165,7 @@ Hard limits sempre relevantes durante a sessão. O motivo e a medição de cada 
 
 **Regras por subsistema** (motivo e medição em `docs/explicacoes/`; leia antes de mexer no assunto). Entre parênteses, as mais perigosas de cada uma:
 
-- [Recepção ao vivo, mídia e Envio](docs/explicacoes/invariantes-da-recepcao-e-do-ouvinte.md): a classificação de conteúdo é **medida, nunca deduzida**; a saída default de `ouvinte estado` é contrato com quem vigia a instalação; trabalho de disco na subida do ouvinte pode travá-la.
+- [Recepção ao vivo, mídia e Envio](docs/explicacoes/invariantes-da-recepcao-e-do-ouvinte.md): a classificação de conteúdo é **medida, nunca deduzida**; a saída default de `ouvinte estado` é contrato com quem vigia a instalação; trabalho de disco na subida do ouvinte pode travá-la; o código de saída do ouvinte é contrato com o supervisor (1 é vínculo invalidado e NÃO reinicia, exceção que escapa da biblioteca sai por 70 e reinicia, #1173).
 - [Identidade, nome e catálogo](docs/explicacoes/invariantes-de-identidade-nome-e-catalogo.md): vazio conta como ausente (`??` não serve); o nono dígito brasileiro fica no adaptador; nome-sentinela de biblioteca não é nome.
 - [Rede e servidor](docs/explicacoes/invariantes-da-rede-e-do-servidor.md): o modo rede é fail-closed e a guarda morre antes de qualquer I/O; a leitura roda em worker, com prazo, e nunca escreve; o texto do usuário é texto, nunca sintaxe.
 - [Acervo, migração e trilha](docs/explicacoes/invariantes-do-acervo-migracao-e-trilha.md): passo que precisa de contexto declara `exigeContexto` e recusa sem ele; a trilha de uma migração se escreve depois dela; verificação contra alvo que se move usa contenção.
