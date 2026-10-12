@@ -60,6 +60,8 @@ export interface CaminhosDaConta {
   descartes: string;
   /** Guarda do evento cru que a recepcao nao grava (#1159). Ver `guarda-de-descartes.ts`. */
   guarda: string;
+  /** O instante do ultimo frame que a Conexao recebeu (#1162). Ver `sinal-da-conexao.ts`. */
+  sinal: string;
 }
 
 /**
@@ -81,6 +83,7 @@ export function caminhosDaConta(raiz: string, conta: string): CaminhosDaConta {
       pulos: join(pasta, 'pulos.json'),
       descartes: join(pasta, 'descartes.json'),
       guarda: join(pasta, 'descartados.jsonl'),
+      sinal: join(pasta, 'ultimo-sinal.txt'),
   };
 }
 

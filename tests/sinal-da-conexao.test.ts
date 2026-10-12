@@ -10,6 +10,7 @@ import {
   falhasDoSinal,
   lerSinalDaConexao,
 } from '../src/cli/sinal-da-conexao.js';
+import { caminhosDaConta } from '../src/cli/ouvir.js';
 
 const T0 = Date.parse('2026-10-12T12:00:00Z');
 
@@ -134,4 +135,11 @@ test('a escrita nao deixa temporario para tras', () => {
   } finally {
     limpar();
   }
+});
+
+
+test('o sinal mora ao lado do ultimo-evento, na pasta de estado da conta', () => {
+  const c = caminhosDaConta('/raiz', 'minha');
+  assert.equal(c.sinal, join('/raiz', 'ouvinte', 'minha', 'ultimo-sinal.txt'));
+  assert.notEqual(c.sinal, c.ultimoEvento, 'o sinal e o ultimo evento sao arquivos diferentes');
 });
