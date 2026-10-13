@@ -518,6 +518,14 @@ export function digitosDoTermo(texto: string): string | null {
   return digitos.length >= 6 ? digitos : null;
 }
 
+/** O termo como trecho de e-mail: uma palavra so, com 3 ou mais caracteres, em minusculas. */
+export function trechoDeEmail(texto: string): string | null {
+  const t = texto.trim();
+  return /\s/.test(t) || t.length < 3 ? null : t.toLowerCase();
+}
+
+const escaparLike = (t: string): string => t.replace(/[\\%_]/g, (c) => `\\${c}`);
+
 export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): MensagemEncontrada[] {
   return buscarMensagensComCorte(acervo, filtro).mensagens;
 }
@@ -605,6 +613,13 @@ export function buscarMensagensComCorte(acervo: Acervo, filtro: FiltroDeBusca): 
   if (digitos !== null) {
     trechos.push(`v.digitos LIKE ? ESCAPE '\\'`);
     valoresDoTrecho.push(`%${digitos}%`);
+  }
+  const email = trechoDeEmail(filtro.texto);
+  if (email !== null) {
+    // O LIKE do SQLite ignora a caixa em ASCII, entao nao ha LOWER aqui (um mutante que o recolocasse
+    // sobreviveria por equivalencia: nenhum e-mail do Acervo real tem letra fora de ASCII).
+    trechos.push(`(v.tipo = 'email' AND v.texto LIKE ? ESCAPE '\\')`);
+    valoresDoTrecho.push(`%${escaparLike(email)}%`);
   }
   const porContatoValor = condicoesBase('m');
   // O `LIMIT limite + 1` daqui e so TETO DE CUSTO, como nas outras consultas: com ele maior, a uniao
