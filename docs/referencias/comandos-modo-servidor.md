@@ -112,6 +112,7 @@ O ouvinte processa a fila de Envios. O mesmo `enviar` e `envio estado`, sem `--i
 | `midia trazer --inquilino <id> --material <caminho> [--conta pessoal\|business]` | Traz para o Destino de Mídia os arquivos de um backup do aparelho |
 | `midia reprocessar --inquilino <id>` | Tenta de novo os Anexos recebidos ao vivo que falharam ao baixar. Tenta **todos** os elegíveis |
 | `midia extrair-duracao --inquilino <id> [--json]` | Extrai a duração dos Anexos do Conteúdo Bruto já gravado |
+| `contato-compartilhado extrair --inquilino <id> [--com-efeito --confirmo] [--json]` | Preenche os contatos enviados dentro de Mensagens já gravadas, a partir do Conteúdo Bruto. Ensaio por padrão; `desfazer` remove o que criou |
 | `retencao definir --inquilino <id> [--mais-velho-que-dias <n>] [--maior-que-mb <n>] [--tipos video,audio]` | Define a Política de Retenção. Não há como removê-la, só sobrescrever |
 | `retencao ver --inquilino <id>` | Mostra a Política |
 | `retencao aplicar --inquilino <id> [--com-efeito --confirmo]` | Descarta os arquivos que a Política alcança. **Sem volta** |

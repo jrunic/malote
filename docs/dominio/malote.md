@@ -4,7 +4,7 @@ projeto: malote
 tipo: dominio
 descricao: "Modelo do arquivo pessoal de conversas — núcleo genérico multi-inquilino (Inquilino, Conversa, Mensagem, Pessoa, Identificador, Anexo, Envio) desacoplado das fontes por Adaptador"
 status: aprovado
-aprovado-em: 2026-10-06
+aprovado-em: 2026-10-13
 escopo: repo:malote
 plataforma: "*"
 dominios: [tecnologia]
@@ -547,6 +547,14 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Saída:** uma Pessoa nova por Identificador, vinculada por Procedência `material`
 - **Regras:** não resolve correspondência entre Identificadores — cada um vira sua própria Pessoa, sozinho. Nunca sobrescreve vínculo de Procedência maior (`catálogo` ou `humano`) já existente. Nunca roda embutida em importação nem em recepção ao vivo — é decisão explícita sobre identidade, separada de "material chegou". Toda a invocação grava uma única Operação, reentrante sobre `criar-pessoa` e `vincular`.
 - **Não-funcionais:** idempotente por construção — Identificador já vinculado nunca é elegível de novo, então repetir a operação sobre o mesmo Acervo não cria Pessoa duplicada.
+
+### extrair-contatos-compartilhados
+
+- **Ator:** humano ou agente
+- **Entrada:** Inquilino; ensaio por padrão, `--com-efeito` com `--confirmo` para gravar
+- **Saída:** um Contato Compartilhado novo por cartão que o Conteúdo Bruto de uma Mensagem ainda sem cartão gravado traz; o relatório conta as Mensagens que ganhariam cartão, os cartões criados, os recusados (ilegíveis ou sem nome) e de onde veio o nome de cada um. Nunca traz nome, telefone nem e-mail
+- **Regras:** lê o Anexo `contact` do backup e o `contactMessage` do **topo** do evento ao vivo, e nunca a citação de outra Mensagem. A Mensagem que está nos dois lados sai uma vez, pelo backup. Só alcança Mensagem sem cartão gravado: não substitui nem apaga cartão. Nunca altera o Conteúdo Bruto. Nunca cria Pessoa nem Identificador
+- **Não-funcionais:** idempotente (a segunda passada não acha candidata). Com efeito, grava uma única Operação, com um efeito por cartão criado, que `desfazer` remove (os valores saem em cascata e a linha da busca pelo gatilho); sem nada a gravar, não abre Operação. O ensaio lê o bruto das Mensagens do Acervo inteiro: em Acervo grande, medir o tempo do ensaio antes de gravar.
 
 ### vincular-identificador
 
