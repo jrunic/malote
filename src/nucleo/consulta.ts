@@ -457,6 +457,14 @@ export interface ResultadoDaBusca {
   truncado: boolean;
 }
 
+/**
+ * Onde a busca casou. `transcricao` e `contato-compartilhado` sao APROXIMACAO ou dado de
+ * terceiro, nunca texto que a pessoa escreveu: nenhuma consulta os apresenta como o mesmo que
+ * `conteudo`. Quando mais de uma origem casa a mesma Mensagem, vale a de maior fe:
+ * conteudo, depois transcricao, depois contato-compartilhado.
+ */
+export type OrigemDaCorrespondencia = 'conteudo' | 'transcricao' | 'contato-compartilhado';
+
 export interface FiltroDeBusca {
   texto: string;
   limite?: number;
@@ -481,7 +489,7 @@ export interface MensagemEncontrada extends MensagemLida {
    * Anexos dela — a Transcricao e aproximacao de modelo, nunca fato, e quem
    * le a busca precisa saber a diferenca.
    */
-  origemDaCorrespondencia: 'conteudo' | 'transcricao';
+  origemDaCorrespondencia: OrigemDaCorrespondencia;
 }
 
 /**
@@ -563,14 +571,29 @@ export function buscarMensagensComCorte(acervo: Acervo, filtro: FiltroDeBusca): 
     )
     .all(consulta, ...porTranscricao.valores, limite + 1) as Array<{ id: string; ocorrida_em: number }>;
 
+  // O Contato Compartilhado (#1135): nome, organizacao e nome comercial vao pela busca de texto,
+  // como a Transcricao, e a Mensagem sai com a origem marcada.
+  const porContatoNome = condicoesBase('m');
+  const linhasPorContatoNome = acervo
+    .preparar(
+      `SELECT DISTINCT m.id, m.ocorrida_em
+         FROM contatos_compartilhados_texto tx
+         JOIN contatos_compartilhados c ON c.rowid = tx.rowid
+         JOIN mensagens m ON m.id = c.mensagem_id
+        WHERE contatos_compartilhados_texto MATCH ? ${porContatoNome.condicoes.map((c) => `AND ${c}`).join(' ')}
+        ORDER BY m.ocorrida_em ${direcao} LIMIT ?`,
+    )
+    .all(consulta, ...porContatoNome.valores, limite + 1) as Array<{ id: string; ocorrida_em: number }>;
+
   // Conteudo tem precedencia sobre transcricao quando os dois casam a mesma
   // Mensagem — a Mensagem tem texto de verdade; nao ha porque marca-la como
-  // aproximada so porque o audio ao lado TAMBEM contem o termo.
-  const origemPorId = new Map<string, 'conteudo' | 'transcricao'>();
+  // aproximada so porque o audio ao lado TAMBEM contem o termo. O cartao vem por ultimo.
+  const origemPorId = new Map<string, OrigemDaCorrespondencia>();
+  for (const l of linhasPorContatoNome) origemPorId.set(l.id, 'contato-compartilhado');
   for (const l of linhasPorTranscricao) origemPorId.set(l.id, 'transcricao');
   for (const l of linhasPorConteudo) origemPorId.set(l.id, 'conteudo');
 
-  const unicos = [...linhasPorConteudo, ...linhasPorTranscricao]
+  const unicos = [...linhasPorConteudo, ...linhasPorTranscricao, ...linhasPorContatoNome]
     .sort((a, b) => (ordem === 'recentes' ? b.ocorrida_em - a.ocorrida_em : a.ocorrida_em - b.ocorrida_em))
     .map((l) => l.id)
     .filter((id, i, todos) => todos.indexOf(id) === i);
@@ -594,7 +617,7 @@ export function buscarMensagensComCorte(acervo: Acervo, filtro: FiltroDeBusca): 
     mensagens: idsOrdenados
       .map((id) => porId.get(id))
       .filter((m): m is MensagemLida => m !== undefined)
-      .map((m) => ({ ...m, origemDaCorrespondencia: origemPorId.get(m.id) as 'conteudo' | 'transcricao' })),
+      .map((m) => ({ ...m, origemDaCorrespondencia: origemPorId.get(m.id) as OrigemDaCorrespondencia })),
     truncado,
   };
 }
