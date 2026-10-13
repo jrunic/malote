@@ -23,6 +23,13 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+### Corrigido
+
+- **Importar um backup agora atualiza o assunto e a descrição de um grupo que já está no Acervo.** Até aqui só a Conversa nova
+  recebia os Metadados de Coletiva: um grupo criado pela recepção ao vivo, que não os traz, ficava sem nome para sempre, e um
+  grupo renomeado ficava com o nome velho. Agora cada campo atualiza sozinho, vazio da Fonte nunca apaga o que já está gravado,
+  e um retrato mais velho (instante anterior ao gravado) não sobrescreve o mais novo.
+
 ## [0.35.2] — 2026-10-12
 
 ### Adicionado

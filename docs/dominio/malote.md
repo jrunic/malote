@@ -105,7 +105,7 @@ Duas regras atravessam o modelo inteiro:
 - **Conversa** (raiz) — o fio de mensagens.
 - **Referência Externa** (objeto de valor) — o que amarra a Conversa ao que ela é lá fora. Em Conversa **coletiva** é o par `(Fonte, identificador na origem)`; em Conversa **direta** é a tripla `(Fonte, Configuração de Adaptador, identificador na origem)`.
 - **Participação** (entidade) — a presença de uma Pessoa na Conversa, com início e fim **quando a Fonte os informa**, e com o instante em que o malote a observou.
-- **Metadados de Coletiva** (objeto de valor, opcional) — assunto, descrição, imagem, quem alterou e quando. Só existe quando a Conversa é coletiva.
+- **Metadados de Coletiva** (objeto de valor, opcional) — assunto, descrição, imagem, quem alterou e quando. Só existe quando a Conversa é coletiva. Registrar de novo uma coletiva já existente atualiza cada campo que a Fonte entrega; valor vazio não apaga o gravado, e retrato com instante anterior ao gravado é ignorado.
 - **Marca do Titular** (objeto de valor, opcional) — uma afirmação do **dono da conta** sobre um objeto do Acervo, com tipo, procedência e data. Pendura em **Mensagem ou em Conversa**, exatamente um dos dois, pelo mesmo critério da Atribuição de Nome. Tipos: `favorito` em Mensagem; `fixada` e `arquivada` em Conversa.
 
 **Invariantes**

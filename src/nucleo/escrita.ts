@@ -149,6 +149,73 @@ export interface EntradaConversa {
   bruto?: string;
 }
 
+interface LinhaDeMetadados {
+  assunto: string | null;
+  descricao: string | null;
+  imagem: string | null;
+  alterado_por: string | null;
+  alterado_em: string | null;
+}
+
+/**
+ * Grava os metadados de uma coletiva: cria a linha se nao ha, atualiza campo a
+ * campo se ha. Tres regras, todas de #1160:
+ *
+ * - VAZIO NAO APAGA. A Fonte entrega `''` ou nada para dizer "nao sei"; o valor
+ *   que ja esta gravado vale mais que o silencio dela. Remocao de verdade da
+ *   descricao seria outro evento, ainda sem modelo.
+ * - RETRATO VELHO NAO VENCE O NOVO. Quando os dois instantes existem e o gravado
+ *   e mais novo que o entregue, a entrada inteira e ignorada: um backup antigo
+ *   reimportado depois do ao vivo nao desfaz a troca de nome.
+ * - Sem instante, vale o mais recente a chegar (mesma regra do `bruto`).
+ */
+function gravarMetadadosDeColetiva(acervo: Acervo, conversaId: string, m: MetadadosDeColetiva): void {
+  const preenchido = (v: string | undefined): v is string => v !== undefined && v !== '';
+  const atual = acervo
+    .preparar(
+      `SELECT assunto, descricao, imagem, alterado_por, alterado_em
+         FROM metadados_de_coletiva WHERE conversa_id = ?`,
+    )
+    .get(conversaId) as LinhaDeMetadados | undefined;
+
+  if (atual === undefined) {
+    acervo
+      .preparar(
+        `INSERT INTO metadados_de_coletiva
+           (conversa_id, assunto, descricao, imagem, alterado_por, alterado_em)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        conversaId,
+        preenchido(m.assunto) ? m.assunto : null,
+        preenchido(m.descricao) ? m.descricao : null,
+        preenchido(m.imagem) ? m.imagem : null,
+        m.alteradoPor ?? null,
+        m.alteradoEm ?? null,
+      );
+    return;
+  }
+
+  if (m.alteradoEm !== undefined && atual.alterado_em !== null) {
+    const entregue = Date.parse(m.alteradoEm);
+    const gravado = Date.parse(atual.alterado_em);
+    if (!Number.isNaN(entregue) && !Number.isNaN(gravado) && gravado > entregue) return;
+  }
+
+  const assunto = preenchido(m.assunto) ? m.assunto : atual.assunto;
+  const descricao = preenchido(m.descricao) ? m.descricao : atual.descricao;
+  const imagem = preenchido(m.imagem) ? m.imagem : atual.imagem;
+  const alteradoPor = m.alteradoPor ?? atual.alterado_por;
+  const alteradoEm = m.alteradoEm ?? atual.alterado_em;
+  acervo
+    .preparar(
+      `UPDATE metadados_de_coletiva
+          SET assunto = ?, descricao = ?, imagem = ?, alterado_por = ?, alterado_em = ?
+        WHERE conversa_id = ?`,
+    )
+    .run(assunto, descricao, imagem, alteradoPor, alteradoEm, conversaId);
+}
+
 /** Registra uma Conversa. Idempotente por (fonte, idExterno). */
 export function registrarConversa(acervo: Acervo, entrada: EntradaConversa): ConversaId {
   // As guardas vem ANTES de qualquer leitura ou escrita: recusar depois de ter
@@ -217,6 +284,11 @@ export function registrarConversa(acervo: Acervo, entrada: EntradaConversa): Con
     if (entrada.bruto !== undefined) {
       acervo.preparar('UPDATE conversas SET bruto = ? WHERE id = ?').run(entrada.bruto, existente.id);
     }
+    // O mesmo vale para o assunto e a descricao: a Conversa pode ter nascido sem
+    // metadados (a recepcao ao vivo nao os traz) ou o grupo ter sido renomeado.
+    if (entrada.coletiva && entrada.metadadosDeColetiva !== undefined) {
+      gravarMetadadosDeColetiva(acervo, existente.id, entrada.metadadosDeColetiva);
+    }
     return existente.id;
   }
 
@@ -236,20 +308,7 @@ export function registrarConversa(acervo: Acervo, entrada: EntradaConversa): Con
     );
 
   if (entrada.coletiva && entrada.metadadosDeColetiva !== undefined) {
-    const m = entrada.metadadosDeColetiva;
-    acervo.preparar(
-        `INSERT INTO metadados_de_coletiva
-           (conversa_id, assunto, descricao, imagem, alterado_por, alterado_em)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        id,
-        m.assunto ?? null,
-        m.descricao ?? null,
-        m.imagem ?? null,
-        m.alteradoPor ?? null,
-        m.alteradoEm ?? null,
-      );
+    gravarMetadadosDeColetiva(acervo, id, entrada.metadadosDeColetiva);
   }
 
   return id;
