@@ -203,3 +203,8 @@ export function listarMensagensSemCartao(acervo: Acervo): {
     .all() as MensagemComOrigemDeCartao[];
   return { doBackup, aoVivo };
 }
+
+/** Remove UM cartao (e, em cascata, os valores e a linha da busca). Usado por `desfazer`. */
+export function removerContatoCompartilhado(acervo: Acervo, id: string): boolean {
+  return acervo.preparar('DELETE FROM contatos_compartilhados WHERE id = ?').run(id).changes === 1;
+}
