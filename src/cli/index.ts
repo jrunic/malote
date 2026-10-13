@@ -29,6 +29,7 @@ import { identificarPorValor } from '../nucleo/identificar.js';
 import { basename, join } from 'node:path';
 import { ehFonte, PRESENCAS, type Fonte } from '../nucleo/tipos.js';
 import { MENSAGEM_SEM_INQUILINO_NA_REDE } from './sem-inquilino-na-rede.js';
+import { linhasDeContatoCompartilhado } from './contatos-compartilhados-texto.js';
 import { formatarAnexos, tipoGuardado } from './anexos-texto.js';
 import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
 import { identificadoresDoRemetente } from '../nucleo/remetente.js';
@@ -2117,6 +2118,7 @@ function executarComAtor(
         } else {
           for (const m of mensagens) {
             escrever(`${new Date(m.ocorridaEm).toISOString()}  ${m.conteudo ?? '(sem texto)'}`);
+            for (const l of linhasDeContatoCompartilhado(m.contatosCompartilhados)) escrever(l);
           }
         }
       } finally {
@@ -2240,6 +2242,7 @@ function executarComAtor(
         } else {
           for (const m of achadas) {
             escrever(`${new Date(m.ocorridaEm).toISOString()}  ${m.conteudo ?? '(sem texto)'}`);
+            for (const l of linhasDeContatoCompartilhado(m.contatosCompartilhados)) escrever(l);
             for (const a of m.anexos) {
               // A Presenca vai SEMPRE, inclusive `presente`: mostrar so o
               // descartado ensinaria que anexo sem aviso e anexo em disco, e a
