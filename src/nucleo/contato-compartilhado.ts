@@ -168,3 +168,38 @@ export function registrarContatosCompartilhados(
   })();
   return { mudou: true, criados };
 }
+
+export interface MensagemComOrigemDeCartao {
+  mensagemId: MensagemId;
+  /** O Conteudo Bruto de onde o cartao sai: o do Anexo `contact` (backup) ou o do evento (ao vivo). */
+  bruto: string;
+}
+
+/**
+ * As Mensagens que podem ter cartao no Conteudo Bruto e ainda NAO tem nenhum gravado, por origem.
+ * E o estoque do preenchimento: depois dele, a lista volta vazia. Do lado ao vivo o filtro de texto
+ * e so um pre-corte barato; quem decide se o `contactMessage` esta no TOPO do evento (e nao numa
+ * citacao) e o adaptador, lendo o JSON.
+ */
+export function listarMensagensSemCartao(acervo: Acervo): {
+  doBackup: MensagemComOrigemDeCartao[];
+  aoVivo: MensagemComOrigemDeCartao[];
+} {
+  const doBackup = acervo
+    .preparar(
+      `SELECT a.mensagem_id AS mensagemId, a.bruto AS bruto
+         FROM anexos a
+        WHERE a.tipo = 'contact' AND a.bruto IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM contatos_compartilhados c WHERE c.mensagem_id = a.mensagem_id)`,
+    )
+    .all() as MensagemComOrigemDeCartao[];
+  const aoVivo = acervo
+    .preparar(
+      `SELECT m.id AS mensagemId, m.bruto AS bruto
+         FROM mensagens m
+        WHERE m.fonte = 'whatsapp' AND m.bruto IS NOT NULL AND instr(m.bruto, '"contactMessage"') > 0
+          AND NOT EXISTS (SELECT 1 FROM contatos_compartilhados c WHERE c.mensagem_id = m.id)`,
+    )
+    .all() as MensagemComOrigemDeCartao[];
+  return { doBackup, aoVivo };
+}
