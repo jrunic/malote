@@ -8,6 +8,7 @@ import { identificadoresDoRemetente } from '../nucleo/remetente.js';
 import type { PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
 import { pedirGet } from './cliente.js';
 import { opcao, recusarBandeiras } from './bandeiras.js';
+import { linhasDeContatoCompartilhado } from './contatos-compartilhados-texto.js';
 import { MENSAGEM_SEM_INQUILINO_NA_REDE } from './sem-inquilino-na-rede.js';
 
 /**
@@ -107,6 +108,7 @@ function linhasDeTxt(m: MensagemLida, nomes: Map<string, AutorDeExport>): string
   for (const a of m.anexos) {
     linhas.push(`    [${a.tipo} ${a.presenca} ${a.id}${a.nomeOriginal !== null ? ` ${a.nomeOriginal}` : ''}]`);
   }
+  linhas.push(...linhasDeContatoCompartilhado(m.contatosCompartilhados));
   return linhas;
 }
 
