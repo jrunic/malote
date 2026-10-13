@@ -23,6 +23,15 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+### Adicionado
+
+- **O contato que alguém envia dentro de uma Mensagem do WhatsApp deixa de se perder (Contato Compartilhado).** O cartão (nome, organização, telefones e e-mails) era guardado só no Conteúdo Bruto, e `mensagens`, `exportar` e `buscar` o ignoravam: no backup o Anexo `contact` ficava `nunca-obtido`, sem nome nem telefone, e ao vivo a Mensagem ficava sem conteúdo. Agora cada cartão vira uma linha derivada do bruto, pelos dois caminhos de ingestão (backup e recepção ao vivo), e a mesma Mensagem recebida pelos dois termina com um só conjunto. `mensagens` (JSON e texto), `exportar` e a API trazem `contatosCompartilhados`, e `buscar` acha pelo nome, pela organização, por trecho de telefone (6 dígitos ou mais) e por trecho de e-mail, com a origem marcada. O contato citado numa resposta a outra Mensagem não conta. A foto do cartão fica só no bruto. Nenhum Anexo `contact` existente muda.
+- **`malote contato-compartilhado extrair --inquilino <id> [--com-efeito --confirmo]`** preenche os cartões das Mensagens já gravadas, a partir do bruto. Ensaio por padrão; `operacao desfazer` remove o que ele criou.
+
+### Alterado
+
+- **O Acervo sobe para a forma 27** (duas tabelas e a busca de texto do Contato Compartilhado). A migração só cria tabelas e não exige contexto do Registro; o estoque é preenchido pelo comando acima, não pela migração.
+
 ### Corrigido
 
 - **Importar um backup agora atualiza o assunto e a descrição de um grupo que já está no Acervo.** Até aqui só a Conversa nova
