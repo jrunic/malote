@@ -1,4 +1,6 @@
 import type { Acervo } from '../../nucleo/acervo.js';
+import { registrarContatosCompartilhados } from '../../nucleo/contato-compartilhado.js';
+import { lerCartoesDoAnexoDeBackup } from './contato-compartilhado.js';
 import {
   anexoJaExiste,
   conversaJaExiste,
@@ -414,6 +416,16 @@ export function gravarMaterialLido(
         });
         relatorio.anexosCriados += 1;
       }
+    }
+
+    // O Contato Compartilhado sai do Conteudo Bruto do Anexo `contact`, e FORA do desvio por Anexo
+    // ja existente: a reimportacao e o que preenche a Mensagem que ja estava no Acervo sem cartao
+    // (a recepcao ao vivo a gravou antes). Conjunto igual ao gravado nao escreve nada.
+    if (m.anexo?.tipo === 'contact' && m.anexo.bruto !== undefined) {
+      const leitura = lerCartoesDoAnexoDeBackup(m.anexo.bruto);
+      const r = registrarContatosCompartilhados(acervo, mensagemId, leitura.cartoes);
+      relatorio.contatosCompartilhadosCriados += r.criados.length;
+      relatorio.contatosCompartilhadosRecusados += leitura.recusados;
     }
   }
 

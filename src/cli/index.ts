@@ -1857,6 +1857,15 @@ function executarComAtor(
           `  ${r.mensagensCriadas} mensagens novas, ${r.mensagensJaExistentes} ja existentes`,
         );
         escrever(`  ${r.anexosCriados} anexos novos, ${r.anexosJaExistentes} ja existentes`);
+        if (r.contatosCompartilhadosCriados > 0 || r.contatosCompartilhadosRecusados > 0) {
+          // So CONTAGENS: nome, telefone e e-mail de cartao nunca vao a relatorio.
+          escrever(
+            `  ${r.contatosCompartilhadosCriados} contatos compartilhados novos` +
+              (r.contatosCompartilhadosRecusados > 0
+                ? `, ${r.contatosCompartilhadosRecusados} cartoes recusados (ilegiveis ou sem nome)`
+                : ''),
+          );
+        }
         if (r.transicoesCriadas > 0) {
           escrever(`  ${r.transicoesCriadas} transicoes de participacao novas`);
         }

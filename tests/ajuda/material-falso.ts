@@ -50,6 +50,10 @@ export interface MensagemFalsa {
   conteudoDeMidia?: string;
   /** ZLATITUDE do item de midia. NAO modelado — testemunha do Conteudo Bruto. */
   latitude?: number;
+  /** ZVCARDSTRING do item de midia: os cartoes do contato enviado (tipo 4), separados por marcador. */
+  cartoes?: string;
+  /** ZVCARDNAME: os nomes, separados por outro marcador, POR POSICAO. */
+  nomesDosCartoes?: string;
   /** ZPUSHNAME. NAO modelado — testemunha do Conteudo Bruto. */
   nomeTransmitido?: string;
 }
@@ -182,7 +186,7 @@ export function backupFalso(conteudo: {
       );
       CREATE TABLE ZWAMEDIAITEM (
         Z_PK INTEGER PRIMARY KEY, ZMEDIALOCALPATH TEXT, ZFILESIZE INTEGER, ZLATITUDE REAL,
-        ZMOVIEDURATION INTEGER
+        ZMOVIEDURATION INTEGER, ZVCARDSTRING TEXT, ZVCARDNAME TEXT
       );
       CREATE TABLE ZWAMESSAGE (
         Z_PK INTEGER PRIMARY KEY, ZSTANZAID TEXT, ZCHATSESSION INTEGER, ZFROMJID TEXT,
@@ -216,8 +220,9 @@ export function backupFalso(conteudo: {
       );
 
     const porMidia = chat.prepare(
-      `INSERT INTO ZWAMEDIAITEM (Z_PK, ZMEDIALOCALPATH, ZFILESIZE, ZLATITUDE, ZMOVIEDURATION)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO ZWAMEDIAITEM
+         (Z_PK, ZMEDIALOCALPATH, ZFILESIZE, ZLATITUDE, ZMOVIEDURATION, ZVCARDSTRING, ZVCARDNAME)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
     const porMensagem = chat.prepare(
       `INSERT INTO ZWAMESSAGE
@@ -231,9 +236,17 @@ export function backupFalso(conteudo: {
     let pkDeMidia = 1;
     for (const m of dados.mensagens) {
       let idDeMidia: number | null = null;
-      if (m.caminhoDeMidia !== undefined) {
+      if (m.caminhoDeMidia !== undefined || m.cartoes !== undefined) {
         idDeMidia = pkDeMidia++;
-        porMidia.run(idDeMidia, m.caminhoDeMidia, m.tamanhoDeMidia ?? null, m.latitude ?? null, m.duracaoDeMidia ?? null);
+        porMidia.run(
+          idDeMidia,
+          m.caminhoDeMidia ?? null,
+          m.tamanhoDeMidia ?? null,
+          m.latitude ?? null,
+          m.duracaoDeMidia ?? null,
+          m.cartoes ?? null,
+          m.nomesDosCartoes ?? null,
+        );
       }
       const conversa = dados.conversas.find((c) => c.pk === m.chatSessionPk);
       porMensagem.run(

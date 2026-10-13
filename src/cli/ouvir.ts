@@ -567,6 +567,13 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
                   : ''),
             );
           }
+          // So CONTAGENS: nome, telefone e e-mail de cartao nunca entram em log.
+          if (r.contatosCompartilhados > 0 || r.contatosCompartilhadosRecusados > 0) {
+            escrever(
+              `[ouvinte] contatos compartilhados: ${r.contatosCompartilhados} gravado(s)` +
+                (r.contatosCompartilhadosRecusados > 0 ? `, ${r.contatosCompartilhadosRecusados} recusado(s)` : ''),
+            );
+          }
           // A #1068: cada Anexo que nasceu `nunca-obtido` NESTE lote baixa em
           // segundo plano — fire-and-forget de proposito, porque `aoReceber` e
           // sincrono por construcao (o Ator acima depende disso) e esperar o
