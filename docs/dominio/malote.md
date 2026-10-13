@@ -260,6 +260,25 @@ Duas regras atravessam o modelo inteiro:
 
 **Ciclo de vida** — nasce da importação (Identificador solto), da vinculação feita por um adaptador de identidade, ou da promoção de um Identificador que já tem Atribuição de Nome mas nenhum catálogo o alcançou; permanece. Fusão de duas Pessoas é operação explícita e **reversível por construção**: mesclar escreve um apontamento, e desfazer o remove. Nenhuma Pessoa é apagada em nenhum momento — a absorvida continua existindo, com tudo que tinha.
 
+### Contato Compartilhado
+
+**Entidades / Objetos de Valor**
+
+- **Contato Compartilhado** (raiz) — o contato que alguém enviou dentro de uma Mensagem: nome, organização, nome comercial e a posição dele na Mensagem
+- **Valor de contato** (objeto de valor) — um telefone ou um e-mail do cartão, com o texto como a Fonte entregou, os **dígitos** (só os que a Fonte declara ou que estão no texto, sem inferir código de país) e o rótulo
+- **Conteúdo Bruto** — a Mensagem e o Anexo de origem seguem inteiros; a foto do cartão fica só neles
+
+**Invariantes**
+
+- **Pertence a exatamente uma Mensagem e ao Inquilino dela.** A chave é `(Mensagem, posição)`.
+- **É derivado do Conteúdo Bruto e refazível.** O conjunto de cartões de uma Mensagem é substituído inteiro quando muda; conjunto igual ao gravado não escreve; conjunto vazio nunca apaga.
+- **Todo Contato Compartilhado tem nome.** O nome sai, nesta ordem, do nome de exibição do cartão, da organização, do nome comercial e, por último, do nome separado que a Fonte guarda (backup, só quando alinha com os cartões) ou do nome de exibição do evento (ao vivo). Cartão sem nome por nenhum caminho é recusado e contado, nunca vira linha.
+- **Só o cartão enviado conta.** Um contato citado dentro da resposta a outra Mensagem não é Contato Compartilhado.
+- **Não é Pessoa nem Identificador.** Compartilhar um contato não afirma identidade: nenhuma operação cria Pessoa ou vínculo a partir dele.
+- A mesma Mensagem recebida pelo backup e pela recepção ao vivo termina com um só conjunto de cartões.
+
+**Ciclo de vida** — nasce junto com a Mensagem, pelas duas Fontes de ingestão, ou depois, pelo preenchimento do estoque. Pode ser substituído quando a Fonte entrega o conjunto de outra forma; é removido junto com a Mensagem.
+
 ### Anexo
 
 **Entidades / Objetos de Valor**
