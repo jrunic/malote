@@ -141,6 +141,8 @@ Roadmap, specs, planos e diários vivem fora deste repositório.
 
 ## Restrições
 
+- **Operação declarada `por-efeito` só se desfaz se `desfazerLinha` tem o CASO da tabela; sem ele o `desfazer` recusa a linha ("não tem porta de restauração").** Declarar a reversibilidade e relatar o efeito não a entregam: `extrair-duracao` está assim desde a #1103. O preenchimento do Contato Compartilhado (#1135) tem o caso, mais um teste que roda o `desfazer` e confere que cartões, valores e linha de busca saem. Ao criar comando que escreve, o teste de `desfazer` vem junto, ou a Operação se declara `irreversivel`.
+
 Hard limits sempre relevantes durante a sessão. O motivo e a medição de cada regra por subsistema estão em `docs/explicacoes/` (ponteiros ao fim desta seção).
 
 - **Runner de testes canônico:** `npm test`
