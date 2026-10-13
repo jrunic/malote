@@ -19,6 +19,8 @@ import {
 import { lerMudancaDeEtiqueta, type MudancaDeEtiqueta } from './etiqueta-ao-vivo.js';
 import { nomeRepeteONumeroBrasileiro } from './nome-repete-numero-br.js';
 import { registrarNome } from '../../nucleo/identidade.js';
+import { registrarContatosCompartilhados } from '../../nucleo/contato-compartilhado.js';
+import { lerCartaoAoVivo } from './contato-compartilhado.js';
 import { ehCifrada, naturezaDoStub, textoDoStub } from './stubs-ao-vivo.js';
 
 /**
@@ -154,6 +156,10 @@ export interface RelatoDeRecepcao {
   etiquetas: number;
   /** Destas, as que sao REMOCAO (texto vazio). */
   etiquetasRemovidas: number;
+  /** Contatos Compartilhados que nasceram nesta passada. So contagem: o texto do cartao nunca vai a relatorio. */
+  contatosCompartilhados: number;
+  /** Cartoes ilegiveis ou sem nome, recusados. */
+  contatosCompartilhadosRecusados: number;
   /**
    * Etiquetas da PROPRIA conta cujo endereco a Configuracao ainda nao conferiu:
    * contadas e NAO gravadas. O autor proprio chega em LID, e sem o Endereco da
@@ -389,6 +395,8 @@ export function receberEvento(
     transicoes: 0,
     etiquetas: 0,
     etiquetasRemovidas: 0,
+    contatosCompartilhados: 0,
+    contatosCompartilhadosRecusados: 0,
     etiquetasDaContaSemEndereco: 0,
     nomesQueRepetemOEndereco: 0,
     correspondencia: {
@@ -699,6 +707,22 @@ function gravarUma(
     // A #1068: quem baixa os bytes precisa saber ONDE, no lote CRU, esta esta
     // mensagem — ver o comentario de `anexosNuncaObtidos`.
     relato.anexosNuncaObtidos.push({ indice, anexoId, tipo: tipoDoAnexo });
+  }
+
+  // 5b. O Contato Compartilhado: so o `contactMessage` do TOPO do evento. O mesmo tipo dentro de
+  //     `quotedMessage` e citacao de outra Mensagem (19 de 105 no Acervo real em 13/10/2026) e
+  //     nunca e cartao enviado. `contactsArrayMessage` (varios contatos) NAO entra: nao foi medido
+  //     ao vivo, e a classificacao e medida, nunca deduzida.
+  const contato = desembrulhar(m.message)?.['contactMessage'];
+  if (contato !== undefined && contato !== null && typeof contato === 'object') {
+    const dado = contato as Record<string, unknown>;
+    const leitura = lerCartaoAoVivo(
+      typeof dado['vcard'] === 'string' ? dado['vcard'] : '',
+      typeof dado['displayName'] === 'string' ? dado['displayName'] : undefined,
+    );
+    const r = registrarContatosCompartilhados(acervo, mensagemId, leitura.cartoes);
+    relato.contatosCompartilhados += r.criados.length;
+    relato.contatosCompartilhadosRecusados += leitura.recusados;
   }
 
   // 6. A Transicao de Participacao, quando a Fonte declara o evento.

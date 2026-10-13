@@ -4,6 +4,7 @@ import { SQL_FAMILIA } from './familia.js';
 import type { ConversaId, Direcao, EstadoDeTranscricao, Fonte, MensagemId, PessoaId, Presenca } from './tipos.js';
 import { nomeDoIdentificador } from './identidade.js';
 import { nomesEmLote } from './nomes-em-lote.js';
+import { lerContatosCompartilhados, type ContatoCompartilhadoLido } from './contato-compartilhado.js';
 
 /**
  * Leitura do Acervo. Nenhum caminho daqui escreve.
@@ -286,6 +287,8 @@ export interface MensagemLida {
   /** Enviada pelo Titular ou recebida de outra Pessoa. NULL em Mensagem migrada sem discriminante. */
   direcao: Direcao | null;
   anexos: AnexoLido[];
+  /** Os cartoes de contato que a Mensagem enviou (#1135). Lista vazia quando nao ha. */
+  contatosCompartilhados: ContatoCompartilhadoLido[];
 }
 
 /** `m` = mensagens. A lista de ids vai como um JSON; `[]` nao casa nada. */
@@ -324,6 +327,11 @@ export interface FiltroDeMensagem {
 }
 
 function montarMensagens(acervo: Acervo, linhas: Array<Record<string, unknown>>): MensagemLida[] {
+  // Os cartoes da PAGINA INTEIRA em duas consultas (cartoes e valores), nunca uma por Mensagem.
+  const cartoes = lerContatosCompartilhados(
+    acervo,
+    linhas.map((l) => l['id'] as string),
+  );
   return linhas.map((l) => {
     const id = l['id'] as string;
     return {
@@ -335,6 +343,7 @@ function montarMensagens(acervo: Acervo, linhas: Array<Record<string, unknown>>)
       direcao: (l['direcao'] as Direcao | null) ?? null,
       ocorridaEm: l['ocorrida_em'] as number,
       anexos: lerAnexos(acervo, id),
+      contatosCompartilhados: cartoes.get(id) ?? [],
     };
   });
 }
@@ -448,6 +457,14 @@ export interface ResultadoDaBusca {
   truncado: boolean;
 }
 
+/**
+ * Onde a busca casou. `transcricao` e `contato-compartilhado` sao APROXIMACAO ou dado de
+ * terceiro, nunca texto que a pessoa escreveu: nenhuma consulta os apresenta como o mesmo que
+ * `conteudo`. Quando mais de uma origem casa a mesma Mensagem, vale a de maior fe:
+ * conteudo, depois transcricao, depois contato-compartilhado.
+ */
+export type OrigemDaCorrespondencia = 'conteudo' | 'transcricao' | 'contato-compartilhado';
+
 export interface FiltroDeBusca {
   texto: string;
   limite?: number;
@@ -472,7 +489,7 @@ export interface MensagemEncontrada extends MensagemLida {
    * Anexos dela — a Transcricao e aproximacao de modelo, nunca fato, e quem
    * le a busca precisa saber a diferenca.
    */
-  origemDaCorrespondencia: 'conteudo' | 'transcricao';
+  origemDaCorrespondencia: OrigemDaCorrespondencia;
 }
 
 /**
@@ -488,6 +505,26 @@ export function termoParaFts5(texto: string): string | null {
   if (palavras.length === 0) return null;
   return palavras.map((p) => `"${p.replace(/"/g, '""')}"`).join(' ');
 }
+
+/**
+ * Os digitos do termo, quando ele e um NUMERO: so digitos e a pontuacao de telefone, com 6 ou
+ * mais digitos. Abaixo disso o trecho casa ruido demais para valer uma busca. Sem normalizacao
+ * de codigo de pais: o trecho e literal contra os digitos que o cartao guardou.
+ */
+export function digitosDoTermo(texto: string): string | null {
+  const t = texto.trim();
+  if (!/^[\d\s()+.-]+$/.test(t)) return null;
+  const digitos = t.replace(/\D/g, '');
+  return digitos.length >= 6 ? digitos : null;
+}
+
+/** O termo como trecho de e-mail: uma palavra so, com 3 ou mais caracteres, em minusculas. */
+export function trechoDeEmail(texto: string): string | null {
+  const t = texto.trim();
+  return /\s/.test(t) || t.length < 3 ? null : t.toLowerCase();
+}
+
+const escaparLike = (t: string): string => t.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): MensagemEncontrada[] {
   return buscarMensagensComCorte(acervo, filtro).mensagens;
@@ -554,14 +591,65 @@ export function buscarMensagensComCorte(acervo: Acervo, filtro: FiltroDeBusca): 
     )
     .all(consulta, ...porTranscricao.valores, limite + 1) as Array<{ id: string; ocorrida_em: number }>;
 
+  // O Contato Compartilhado (#1135), por DOIS mecanismos. Nome, organizacao e nome comercial vao
+  // pela busca de texto, como a Transcricao. Numero e e-mail NAO: a busca de texto so casa a palavra
+  // inteira, e o numero e uma palavra so ("99991234" nao acharia 556599991234). Eles casam por
+  // trecho LITERAL (% e _ escapados) na tabela de valores, que tem poucos milhares de linhas.
+  const porContatoNome = condicoesBase('m');
+  const linhasPorContatoNome = acervo
+    .preparar(
+      `SELECT DISTINCT m.id, m.ocorrida_em
+         FROM contatos_compartilhados_texto tx
+         JOIN contatos_compartilhados c ON c.rowid = tx.rowid
+         JOIN mensagens m ON m.id = c.mensagem_id
+        WHERE contatos_compartilhados_texto MATCH ? ${porContatoNome.condicoes.map((c) => `AND ${c}`).join(' ')}
+        ORDER BY m.ocorrida_em ${direcao} LIMIT ?`,
+    )
+    .all(consulta, ...porContatoNome.valores, limite + 1) as Array<{ id: string; ocorrida_em: number }>;
+
+  const trechos: string[] = [];
+  const valoresDoTrecho: unknown[] = [];
+  const digitos = digitosDoTermo(filtro.texto);
+  if (digitos !== null) {
+    trechos.push(`v.digitos LIKE ? ESCAPE '\\'`);
+    valoresDoTrecho.push(`%${digitos}%`);
+  }
+  const email = trechoDeEmail(filtro.texto);
+  if (email !== null) {
+    // O LIKE do SQLite ignora a caixa em ASCII, entao nao ha LOWER aqui (um mutante que o recolocasse
+    // sobreviveria por equivalencia: nenhum e-mail do Acervo real tem letra fora de ASCII).
+    trechos.push(`(v.tipo = 'email' AND v.texto LIKE ? ESCAPE '\\')`);
+    valoresDoTrecho.push(`%${escaparLike(email)}%`);
+  }
+  const porContatoValor = condicoesBase('m');
+  // O `LIMIT limite + 1` daqui e so TETO DE CUSTO, como nas outras consultas: com ele maior, a uniao
+  // abaixo corta do mesmo jeito e o resultado e identico (mutante equivalente, nao ha teste que o separe).
+  const linhasPorContatoValor =
+    trechos.length === 0
+      ? []
+      : (acervo
+          .preparar(
+            `SELECT DISTINCT m.id, m.ocorrida_em
+               FROM valores_de_contato_compartilhado v
+               JOIN contatos_compartilhados c ON c.id = v.contato_id
+               JOIN mensagens m ON m.id = c.mensagem_id
+              WHERE (${trechos.join(' OR ')}) ${porContatoValor.condicoes.map((c) => `AND ${c}`).join(' ')}
+              ORDER BY m.ocorrida_em ${direcao} LIMIT ?`,
+          )
+          .all(...valoresDoTrecho, ...porContatoValor.valores, limite + 1) as Array<{
+          id: string;
+          ocorrida_em: number;
+        }>);
+
   // Conteudo tem precedencia sobre transcricao quando os dois casam a mesma
   // Mensagem — a Mensagem tem texto de verdade; nao ha porque marca-la como
-  // aproximada so porque o audio ao lado TAMBEM contem o termo.
-  const origemPorId = new Map<string, 'conteudo' | 'transcricao'>();
+  // aproximada so porque o audio ao lado TAMBEM contem o termo. O cartao vem por ultimo.
+  const origemPorId = new Map<string, OrigemDaCorrespondencia>();
+  for (const l of [...linhasPorContatoNome, ...linhasPorContatoValor]) origemPorId.set(l.id, 'contato-compartilhado');
   for (const l of linhasPorTranscricao) origemPorId.set(l.id, 'transcricao');
   for (const l of linhasPorConteudo) origemPorId.set(l.id, 'conteudo');
 
-  const unicos = [...linhasPorConteudo, ...linhasPorTranscricao]
+  const unicos = [...linhasPorConteudo, ...linhasPorTranscricao, ...linhasPorContatoNome, ...linhasPorContatoValor]
     .sort((a, b) => (ordem === 'recentes' ? b.ocorrida_em - a.ocorrida_em : a.ocorrida_em - b.ocorrida_em))
     .map((l) => l.id)
     .filter((id, i, todos) => todos.indexOf(id) === i);
@@ -585,7 +673,7 @@ export function buscarMensagensComCorte(acervo: Acervo, filtro: FiltroDeBusca): 
     mensagens: idsOrdenados
       .map((id) => porId.get(id))
       .filter((m): m is MensagemLida => m !== undefined)
-      .map((m) => ({ ...m, origemDaCorrespondencia: origemPorId.get(m.id) as 'conteudo' | 'transcricao' })),
+      .map((m) => ({ ...m, origemDaCorrespondencia: origemPorId.get(m.id) as OrigemDaCorrespondencia })),
     truncado,
   };
 }

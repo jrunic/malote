@@ -1,3 +1,4 @@
+import { removerContatoCompartilhado } from './contato-compartilhado.js';
 import type { Acervo } from './acervo.js';
 import { emOperacao, lerOperacao, type LinhaDeEfeito, type OperacaoVista } from './trilha.js';
 import {
@@ -188,6 +189,14 @@ function desfazerLinha(acervo: Acervo, l: LinhaDeEfeito, todas: LinhaDeEfeito[])
     }
     desfazerMesclagem(acervo, { absorvidaId: ativo.absorvidaId });
     return null;
+  }
+
+  // Cartao que o preenchimento criou (#1135): desfazer e remover. Os valores saem em cascata e a
+  // linha da busca, pelo gatilho. O cartao refeito depois (outro id) nao e tocado.
+  if (l.tabela === 'contatos_compartilhados' && l.campo === 'id' && l.antes === null && l.depois !== null) {
+    return removerContatoCompartilhado(acervo, l.chave)
+      ? null
+      : 'o cartao ja nao existe — foi refeito, ou a Mensagem saiu';
   }
 
   if (l.tabela === 'identificadores' && l.campo === 'pessoa_id') {

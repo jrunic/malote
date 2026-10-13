@@ -4,7 +4,7 @@ projeto: malote
 tipo: dominio
 descricao: "Modelo do arquivo pessoal de conversas — núcleo genérico multi-inquilino (Inquilino, Conversa, Mensagem, Pessoa, Identificador, Anexo, Envio) desacoplado das fontes por Adaptador"
 status: aprovado
-aprovado-em: 2026-10-06
+aprovado-em: 2026-10-13
 escopo: repo:malote
 plataforma: "*"
 dominios: [tecnologia]
@@ -105,7 +105,7 @@ Duas regras atravessam o modelo inteiro:
 - **Conversa** (raiz) — o fio de mensagens.
 - **Referência Externa** (objeto de valor) — o que amarra a Conversa ao que ela é lá fora. Em Conversa **coletiva** é o par `(Fonte, identificador na origem)`; em Conversa **direta** é a tripla `(Fonte, Configuração de Adaptador, identificador na origem)`.
 - **Participação** (entidade) — a presença de uma Pessoa na Conversa, com início e fim **quando a Fonte os informa**, e com o instante em que o malote a observou.
-- **Metadados de Coletiva** (objeto de valor, opcional) — assunto, descrição, imagem, quem alterou e quando. Só existe quando a Conversa é coletiva.
+- **Metadados de Coletiva** (objeto de valor, opcional) — assunto, descrição, imagem, quem alterou e quando. Só existe quando a Conversa é coletiva. Registrar de novo uma coletiva já existente atualiza cada campo que a Fonte entrega; valor vazio não apaga o gravado, e retrato com instante anterior ao gravado é ignorado.
 - **Marca do Titular** (objeto de valor, opcional) — uma afirmação do **dono da conta** sobre um objeto do Acervo, com tipo, procedência e data. Pendura em **Mensagem ou em Conversa**, exatamente um dos dois, pelo mesmo critério da Atribuição de Nome. Tipos: `favorito` em Mensagem; `fixada` e `arquivada` em Conversa.
 
 **Invariantes**
@@ -259,6 +259,25 @@ Duas regras atravessam o modelo inteiro:
 - **Quando a Fonte não fornece endereço algum, o Adaptador usa o sinal mais durável que o material tiver, e declara qual é.** Registrado em 26/08/2026, ao entrar o segundo Adaptador: há material que dá o nome de exibição de um participante e nenhum endereço. O valor do Identificador passa a ser esse nome, e a consequência é dita em vez de escondida — homônimos colidem e troca de nome cria Identificador novo. O núcleo não muda: ele guarda o par (Fonte, valor) e a unicidade dele, e não interpreta o valor. Unir o que se descobrir depois ser a mesma Pessoa é operação explícita e reversível, nunca inferência do Adaptador.
 
 **Ciclo de vida** — nasce da importação (Identificador solto), da vinculação feita por um adaptador de identidade, ou da promoção de um Identificador que já tem Atribuição de Nome mas nenhum catálogo o alcançou; permanece. Fusão de duas Pessoas é operação explícita e **reversível por construção**: mesclar escreve um apontamento, e desfazer o remove. Nenhuma Pessoa é apagada em nenhum momento — a absorvida continua existindo, com tudo que tinha.
+
+### Contato Compartilhado
+
+**Entidades / Objetos de Valor**
+
+- **Contato Compartilhado** (raiz) — o contato que alguém enviou dentro de uma Mensagem: nome, organização, nome comercial e a posição dele na Mensagem
+- **Valor de contato** (objeto de valor) — um telefone ou um e-mail do cartão, com o texto como a Fonte entregou, os **dígitos** (só os que a Fonte declara ou que estão no texto, sem inferir código de país) e o rótulo
+- **Conteúdo Bruto** — a Mensagem e o Anexo de origem seguem inteiros; a foto do cartão fica só neles
+
+**Invariantes**
+
+- **Pertence a exatamente uma Mensagem e ao Inquilino dela.** A chave é `(Mensagem, posição)`.
+- **É derivado do Conteúdo Bruto e refazível.** O conjunto de cartões de uma Mensagem é substituído inteiro quando muda; conjunto igual ao gravado não escreve; conjunto vazio nunca apaga.
+- **Todo Contato Compartilhado tem nome.** O nome sai, nesta ordem, do nome de exibição do cartão, da organização, do nome comercial e, por último, do nome separado que a Fonte guarda (backup, só quando alinha com os cartões) ou do nome de exibição do evento (ao vivo). Cartão sem nome por nenhum caminho é recusado e contado, nunca vira linha.
+- **Só o cartão enviado conta.** Um contato citado dentro da resposta a outra Mensagem não é Contato Compartilhado.
+- **Não é Pessoa nem Identificador.** Compartilhar um contato não afirma identidade: nenhuma operação cria Pessoa ou vínculo a partir dele.
+- A mesma Mensagem recebida pelo backup e pela recepção ao vivo termina com um só conjunto de cartões.
+
+**Ciclo de vida** — nasce junto com a Mensagem, pelas duas Fontes de ingestão, ou depois, pelo preenchimento do estoque. Pode ser substituído quando a Fonte entrega o conjunto de outra forma; é removido junto com a Mensagem.
 
 ### Anexo
 
@@ -528,6 +547,14 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Saída:** uma Pessoa nova por Identificador, vinculada por Procedência `material`
 - **Regras:** não resolve correspondência entre Identificadores — cada um vira sua própria Pessoa, sozinho. Nunca sobrescreve vínculo de Procedência maior (`catálogo` ou `humano`) já existente. Nunca roda embutida em importação nem em recepção ao vivo — é decisão explícita sobre identidade, separada de "material chegou". Toda a invocação grava uma única Operação, reentrante sobre `criar-pessoa` e `vincular`.
 - **Não-funcionais:** idempotente por construção — Identificador já vinculado nunca é elegível de novo, então repetir a operação sobre o mesmo Acervo não cria Pessoa duplicada.
+
+### extrair-contatos-compartilhados
+
+- **Ator:** humano ou agente
+- **Entrada:** Inquilino; ensaio por padrão, `--com-efeito` com `--confirmo` para gravar
+- **Saída:** um Contato Compartilhado novo por cartão que o Conteúdo Bruto de uma Mensagem ainda sem cartão gravado traz; o relatório conta as Mensagens que ganhariam cartão, os cartões criados, os recusados (ilegíveis ou sem nome) e de onde veio o nome de cada um. Nunca traz nome, telefone nem e-mail
+- **Regras:** lê o Anexo `contact` do backup e o `contactMessage` do **topo** do evento ao vivo, e nunca a citação de outra Mensagem. A Mensagem que está nos dois lados sai uma vez, pelo backup. Só alcança Mensagem sem cartão gravado: não substitui nem apaga cartão. Nunca altera o Conteúdo Bruto. Nunca cria Pessoa nem Identificador
+- **Não-funcionais:** idempotente (a segunda passada não acha candidata). Com efeito, grava uma única Operação, com um efeito por cartão criado, que `desfazer` remove (os valores saem em cascata e a linha da busca pelo gatilho); sem nada a gravar, não abre Operação. O ensaio lê o bruto das Mensagens do Acervo inteiro: em Acervo grande, medir o tempo do ensaio antes de gravar.
 
 ### vincular-identificador
 

@@ -25,6 +25,7 @@ function msg(sobre: Partial<MensagemLida>): MensagemLida {
     ocorridaEm: T,
     direcao: 'recebida',
     anexos: [],
+    contatosCompartilhados: [],
     ...sobre,
   };
 }

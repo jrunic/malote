@@ -29,6 +29,8 @@ import { identificarPorValor } from '../nucleo/identificar.js';
 import { basename, join } from 'node:path';
 import { ehFonte, PRESENCAS, type Fonte } from '../nucleo/tipos.js';
 import { MENSAGEM_SEM_INQUILINO_NA_REDE } from './sem-inquilino-na-rede.js';
+import { linhasDeContatoCompartilhado } from './contatos-compartilhados-texto.js';
+import { extrairContatosCompartilhados } from '../adaptadores/whatsapp/extrair-contatos-compartilhados.js';
 import { formatarAnexos, tipoGuardado } from './anexos-texto.js';
 import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
 import { identificadoresDoRemetente } from '../nucleo/remetente.js';
@@ -318,6 +320,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote transcricao solicitar --anexo <id> --inquilino <id>           (prioriza UM Anexo na fila)
   malote transcricao estado      --inquilino <id> [--json]     (contagem por estado; se o motor esta configurado)
   malote midia extrair-duracao --inquilino <id> [--json]        (extrai duração do Conteúdo Bruto já gravado)
+  malote contato-compartilhado extrair --inquilino <id> [--com-efeito --confirmo] [--json]  (preenche os contatos enviados em Mensagens já gravadas; ensaio por padrão)
   malote servir     --porta <n> [--endereco <ip>] [--exposto] [--trabalhadores <n>] [--prazo <segundos>]
                                         (leituras em workers, 4 por padrao, com prazo de 25 s; passou do prazo: 504;
                                          um Inquilino ocupa no maximo N-1 workers e metade da fila; as escritas ficam na thread principal)
@@ -1551,6 +1554,34 @@ function executarComAtor(
       return 0;
     }
 
+    if (grupo === 'contato-compartilhado' && sub === 'extrair') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
+      const comEfeito = temBandeira(argumentos, 'com-efeito');
+      if (comEfeito && !temBandeira(argumentos, 'confirmo')) {
+        throw new Error('Repita o comando com --confirmo para executar.');
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const r = extrairContatosCompartilhados(acervo, { comEfeito });
+        if (temBandeira(argumentos, 'json')) {
+          escrever(JSON.stringify(r, null, 2));
+        } else {
+          // So CONTAGENS: nome, telefone e e-mail de cartao nunca vao a relatorio.
+          escrever(
+            `${comEfeito ? 'Preenchido' : 'Ensaio'}: ${r.mensagensComCartao} Mensagem(ns) com cartao, ` +
+              `${comEfeito ? r.criados : r.cartoesACriar} cartao(oes) ${comEfeito ? 'criado(s)' : 'a criar'}.`,
+          );
+          if (r.recusados > 0) escrever(`  ${r.recusados} cartao(oes) recusado(s) (ilegiveis ou sem nome).`);
+          for (const [recurso, n] of Object.entries(r.nomesPorRecurso)) escrever(`  nome por ${recurso}: ${n}`);
+          if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
+        }
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
     if (grupo === 'midia' && sub === 'extrair-duracao') {
       const inquilino = opcao(argumentos, 'inquilino');
       if (inquilino === undefined) {
@@ -1857,6 +1888,15 @@ function executarComAtor(
           `  ${r.mensagensCriadas} mensagens novas, ${r.mensagensJaExistentes} ja existentes`,
         );
         escrever(`  ${r.anexosCriados} anexos novos, ${r.anexosJaExistentes} ja existentes`);
+        if (r.contatosCompartilhadosCriados > 0 || r.contatosCompartilhadosRecusados > 0) {
+          // So CONTAGENS: nome, telefone e e-mail de cartao nunca vao a relatorio.
+          escrever(
+            `  ${r.contatosCompartilhadosCriados} contatos compartilhados novos` +
+              (r.contatosCompartilhadosRecusados > 0
+                ? `, ${r.contatosCompartilhadosRecusados} cartoes recusados (ilegiveis ou sem nome)`
+                : ''),
+          );
+        }
         if (r.transicoesCriadas > 0) {
           escrever(`  ${r.transicoesCriadas} transicoes de participacao novas`);
         }
@@ -2108,6 +2148,7 @@ function executarComAtor(
         } else {
           for (const m of mensagens) {
             escrever(`${new Date(m.ocorridaEm).toISOString()}  ${m.conteudo ?? '(sem texto)'}`);
+            for (const l of linhasDeContatoCompartilhado(m.contatosCompartilhados)) escrever(l);
           }
         }
       } finally {
@@ -2231,6 +2272,7 @@ function executarComAtor(
         } else {
           for (const m of achadas) {
             escrever(`${new Date(m.ocorridaEm).toISOString()}  ${m.conteudo ?? '(sem texto)'}`);
+            for (const l of linhasDeContatoCompartilhado(m.contatosCompartilhados)) escrever(l);
             for (const a of m.anexos) {
               // A Presenca vai SEMPRE, inclusive `presente`: mostrar so o
               // descartado ensinaria que anexo sem aviso e anexo em disco, e a

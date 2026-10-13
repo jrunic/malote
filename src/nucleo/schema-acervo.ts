@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3';
  * Politica completa das duas bases na ADR local
  * `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_ACERVO = 26;
+export const VERSAO_SCHEMA_ACERVO = 27;
 
 /**
  * Forma mais antiga que a maquina de migracao alcanca.
@@ -585,6 +585,56 @@ export function aplicarSchemaAcervo(db: Database): void {
 
     CREATE INDEX IF NOT EXISTS etiqueta_por_conversa_e_membro
       ON etiquetas_de_participacao (conversa_id, identificador_id, ocorrida_em);
+
+    -- Contato Compartilhado: o contato que alguem ENVIA dentro de uma Mensagem
+    -- (nao e Pessoa nem Cartao de Contato do catalogo). Derivado do Conteudo Bruto,
+    -- refazivel. A foto do cartao fica so no bruto.
+    CREATE TABLE IF NOT EXISTS contatos_compartilhados (
+      id             TEXT PRIMARY KEY,
+      mensagem_id    TEXT NOT NULL,
+      posicao        INTEGER NOT NULL,
+      nome           TEXT NOT NULL,
+      organizacao    TEXT,
+      nome_comercial TEXT,
+      UNIQUE (mensagem_id, posicao),
+      FOREIGN KEY (mensagem_id) REFERENCES mensagens(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS valores_de_contato_compartilhado (
+      id         TEXT PRIMARY KEY,
+      contato_id TEXT NOT NULL,
+      tipo       TEXT NOT NULL CHECK (tipo IN ('telefone', 'email')),
+      texto      TEXT NOT NULL,
+      digitos    TEXT,
+      rotulo     TEXT,
+      FOREIGN KEY (contato_id) REFERENCES contatos_compartilhados(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS valor_de_contato_por_contato
+      ON valores_de_contato_compartilhado (contato_id);
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS contatos_compartilhados_texto USING fts5(
+      nome,
+      organizacao,
+      nome_comercial,
+      content = 'contatos_compartilhados',
+      content_rowid = 'rowid'
+    );
+
+    CREATE TRIGGER IF NOT EXISTS contatos_compartilhados_texto_ins AFTER INSERT ON contatos_compartilhados BEGIN
+      INSERT INTO contatos_compartilhados_texto(rowid, nome, organizacao, nome_comercial)
+      VALUES (new.rowid, new.nome, new.organizacao, new.nome_comercial);
+    END;
+    CREATE TRIGGER IF NOT EXISTS contatos_compartilhados_texto_upd AFTER UPDATE ON contatos_compartilhados BEGIN
+      INSERT INTO contatos_compartilhados_texto(contatos_compartilhados_texto, rowid, nome, organizacao, nome_comercial)
+      VALUES ('delete', old.rowid, old.nome, old.organizacao, old.nome_comercial);
+      INSERT INTO contatos_compartilhados_texto(rowid, nome, organizacao, nome_comercial)
+      VALUES (new.rowid, new.nome, new.organizacao, new.nome_comercial);
+    END;
+    CREATE TRIGGER IF NOT EXISTS contatos_compartilhados_texto_del AFTER DELETE ON contatos_compartilhados BEGIN
+      INSERT INTO contatos_compartilhados_texto(contatos_compartilhados_texto, rowid, nome, organizacao, nome_comercial)
+      VALUES ('delete', old.rowid, old.nome, old.organizacao, old.nome_comercial);
+    END;
 
     CREATE INDEX IF NOT EXISTS linhas_por_operacao
       ON linhas_de_efeito (operacao_id, ordem);

@@ -46,6 +46,7 @@ local (veja a referência do servidor).
 - **`--json`:** devolve o corpo da API. Sem ele, a saída é texto, no mesmo formato do modo local.
 - **`--limite <n>`:** o servidor valida; valor que não é inteiro positivo é erro (código 6).
 - **`buscar`:** devolve as **mais recentes** primeiro (`--ordem cronologica` inverte), até `--limite` (padrão 100). A resposta traz **`truncado`** (`true` quando havia mais). Uma busca de termo comum sem `--desde` já não devolve só as mais antigas do Acervo.
+- **Contato enviado (`mensagens`, `buscar`, `exportar`):** cada Mensagem traz `contatosCompartilhados` — o nome, a organização e os telefones e e-mails do cartão —, lista vazia quando não há. A `buscar` casa o nome, a organização e o nome comercial por **palavra**; o telefone por **trecho de dígitos** (6 ou mais: `99991234` acha `556599991234`, e `(65) 99999-1234` também); o e-mail por **trecho**, sem diferenciar caixa. O que casou por cartão vem com `origemDaCorrespondencia: contato-compartilhado`. Servidor anterior a este campo não o devolve, e o cliente trata a ausência como lista vazia.
 - Um único `--limite` pesado por vez: o servidor dá prazo de 25 s a cada leitura (veja `504` abaixo).
 
 ## Comandos de leitura
@@ -57,7 +58,7 @@ Todos aceitam `--json`. As flags marcadas com `*` são obrigatórias.
 | `malote conversas` | Índice do Acervo: id, fonte, natureza, contagem, assunto, Configuração | `--busca <texto>` `--fonte <nome>` `--coletiva true\|false` `--pessoa <id>` `--configuracao <apelido>` `--fixada true` `--desde <data>` `--limite <n>` |
 | `malote mensagens` | Mensagens de uma Conversa, ou de todas (sem `--conversa`, as últimas por recência) | `--conversa <id>` `--desde` `--ate` `--autor <id-de-pessoa>` `--remetente <valor>` `--fonte` `--direcao enviada\|recebida` `--favorito true` `--configuracao` `--ordem` `--limite` `--antes` |
 | `malote anexos` | Os Anexos de **uma** Conversa, em ordem cronológica, com a presença de cada um | `--conversa <id>`\* `--tipo image\|video\|audio\|document\|sticker\|other\|imagem\|documento` `--remetente <valor>` `--desde` `--ate` `--presenca presente\|nunca-obtido\|descartado` `--limite` `--antes` |
-| `malote buscar` | Busca no conteúdo, e também na Transcrição de áudio (com a proveniência marcada) | `--texto <termo>`\* `--conversa` `--autor` `--desde` `--ate` `--limite` `--ordem` |
+| `malote buscar` | Busca no conteúdo, na Transcrição de áudio e nos contatos enviados dentro de Mensagens (com a proveniência marcada) | `--texto <termo>`\* `--conversa` `--autor` `--desde` `--ate` `--limite` `--ordem` |
 | `malote pessoas` | Resolve texto em Pessoa: texto entra, id sai | `--texto <nome>`\* |
 | `malote identificar <valor>` | O que o Acervo sabe de um Identificador, com ou sem Pessoa. O valor é comparado exato | `--fonte <fonte>` |
 | `malote participantes` | Participantes de uma Conversa coletiva, com nome e Pessoa; opcionalmente a posição numa data | `--conversa <id>`\* `--em <AAAA-MM-DD>` |

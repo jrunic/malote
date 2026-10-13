@@ -45,6 +45,10 @@ export interface RelatorioDeImportacao {
    */
   favoritos: number;
   anexosCriados: number;
+  /** Contatos Compartilhados que NASCERAM nesta passagem (cartao enviado dentro de uma Mensagem). */
+  contatosCompartilhadosCriados: number;
+  /** Cartoes ilegiveis ou sem nome: recusados e contados. So contagem, nunca o texto. */
+  contatosCompartilhadosRecusados: number;
   /**
    * Criado e ja existente andam em PAR nas quatro grandezas. Sem o par, uma
    * rodada recorrente reporta como nova a Conversa que ja estava no Acervo —
@@ -102,6 +106,8 @@ export function relatorioVazio(): RelatorioDeImportacao {
     nomesQueRepetemOEndereco: 0,
     favoritos: 0,
     anexosCriados: 0,
+    contatosCompartilhadosCriados: 0,
+    contatosCompartilhadosRecusados: 0,
     jaRegistrado: false,
     conversasJaExistentes: 0,
     conflitosDeEndereco: 0,

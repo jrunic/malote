@@ -110,7 +110,7 @@ A janela de tempo em que uma Conversa tem evento declarado. Fora dela o produto 
 
 **Pessoa**:
 Quem conversa — uma só entidade, ainda que apareça em várias plataformas.
-*Evitar*: contato, usuário, perfil, autor.
+*Evitar*: contato, usuário, perfil, autor. (O **Contato Compartilhado** é outra coisa: um contato enviado numa Mensagem, que não é Pessoa.)
 
 **Identificador**:
 O endereço de uma Pessoa numa Fonte — número, apelido de perfil, e-mail, código interno da plataforma.
@@ -284,7 +284,11 @@ ato humano, como mesclar. Só existe para material de Natureza completa.
 
 **Cartão de Contato**:
 Uma entrada do catálogo de contatos: um nome e os endereços que a pessoa guardou para alguém. **Pertence a exatamente uma Configuração de Adaptador** — sem isso, "o Google não tem mais esse número" é indistinguível de "o iCloud nunca teve". É o **laço** que diz que dois telefones são da mesma pessoa — a única Fonte que sabe isso.
-*Evitar*: contato, vCard, card, registro.
+*Evitar*: contato, vCard, card, registro. Não confundir com o **Contato Compartilhado**, que é o contato enviado dentro de uma Mensagem.
+
+**Contato Compartilhado**:
+O contato que alguém **envia dentro de uma Mensagem**: um nome, uma organização e os telefones e e-mails do cartão. Pendura na Mensagem e é derivado do Conteúdo Bruto, que segue inteiro; a foto do cartão fica só no bruto. **Não é Pessoa, nem Identificador, nem Cartão de Contato do catálogo**: compartilhar um contato não afirma identidade, então ele nunca cria Pessoa nem vincula nada sozinho. A palavra *contato* volta aqui por ser o nome que a própria Fonte dá ao gesto de enviar; o que o distingue do Cartão de Contato é de onde vem (uma Mensagem, e não o catálogo) e a quem pertence (à Mensagem, e não a uma Configuração de Adaptador).
+*Evitar*: cartão, vCard, card, Cartão de Contato.
 
 **Proposta**:
 A afirmação de que um conjunto de Identificadores é a mesma Pessoa, com a evidência que a sustenta. **É calculada a cada listagem, nunca armazenada** — por isso não existe Proposta obsoleta, e um par já resolvido simplesmente deixa de aparecer.

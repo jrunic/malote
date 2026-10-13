@@ -841,6 +841,84 @@ const ETIQUETA_V26: PassoDeMigracao = {
   tabelasNovas: ['etiquetas_de_participacao'],
 };
 
+/**
+ * O Contato Compartilhado entra (#1135). Tabelas novas e a busca de texto de nome,
+ * organizacao e nome comercial; nenhuma linha preexistente a migrar. O estoque
+ * (cartoes que ja estao no Conteudo Bruto) NAO e preenchido aqui: varrer o bruto de
+ * ~1,7 milhao de Mensagens dentro da transacao da migracao nao se justifica, e quem
+ * preenche e `malote contato-compartilhado extrair`. Nao exige contexto do Registro,
+ * entao qualquer abridor pode migrar. O DDL e fotografia congelada.
+ *
+ * As sete tabelas de `tabelasNovas` sao as que o FTS5 cria de verdade (a tabela
+ * virtual e as quatro sombras), mais as duas de dado.
+ */
+const CONTATO_COMPARTILHADO_V27: PassoDeMigracao = {
+  de: 26,
+  para: 27,
+  descricao: 'cria o Contato Compartilhado (contato enviado dentro de uma Mensagem) e a busca de texto dele',
+  aplicar: (db) =>
+    db.exec(`
+    -- Contato Compartilhado: o contato que alguem ENVIA dentro de uma Mensagem
+    -- (nao e Pessoa nem Cartao de Contato do catalogo). Derivado do Conteudo Bruto,
+    -- refazivel. A foto do cartao fica so no bruto.
+    CREATE TABLE IF NOT EXISTS contatos_compartilhados (
+      id             TEXT PRIMARY KEY,
+      mensagem_id    TEXT NOT NULL,
+      posicao        INTEGER NOT NULL,
+      nome           TEXT NOT NULL,
+      organizacao    TEXT,
+      nome_comercial TEXT,
+      UNIQUE (mensagem_id, posicao),
+      FOREIGN KEY (mensagem_id) REFERENCES mensagens(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS valores_de_contato_compartilhado (
+      id         TEXT PRIMARY KEY,
+      contato_id TEXT NOT NULL,
+      tipo       TEXT NOT NULL CHECK (tipo IN ('telefone', 'email')),
+      texto      TEXT NOT NULL,
+      digitos    TEXT,
+      rotulo     TEXT,
+      FOREIGN KEY (contato_id) REFERENCES contatos_compartilhados(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS valor_de_contato_por_contato
+      ON valores_de_contato_compartilhado (contato_id);
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS contatos_compartilhados_texto USING fts5(
+      nome,
+      organizacao,
+      nome_comercial,
+      content = 'contatos_compartilhados',
+      content_rowid = 'rowid'
+    );
+
+    CREATE TRIGGER IF NOT EXISTS contatos_compartilhados_texto_ins AFTER INSERT ON contatos_compartilhados BEGIN
+      INSERT INTO contatos_compartilhados_texto(rowid, nome, organizacao, nome_comercial)
+      VALUES (new.rowid, new.nome, new.organizacao, new.nome_comercial);
+    END;
+    CREATE TRIGGER IF NOT EXISTS contatos_compartilhados_texto_upd AFTER UPDATE ON contatos_compartilhados BEGIN
+      INSERT INTO contatos_compartilhados_texto(contatos_compartilhados_texto, rowid, nome, organizacao, nome_comercial)
+      VALUES ('delete', old.rowid, old.nome, old.organizacao, old.nome_comercial);
+      INSERT INTO contatos_compartilhados_texto(rowid, nome, organizacao, nome_comercial)
+      VALUES (new.rowid, new.nome, new.organizacao, new.nome_comercial);
+    END;
+    CREATE TRIGGER IF NOT EXISTS contatos_compartilhados_texto_del AFTER DELETE ON contatos_compartilhados BEGIN
+      INSERT INTO contatos_compartilhados_texto(contatos_compartilhados_texto, rowid, nome, organizacao, nome_comercial)
+      VALUES ('delete', old.rowid, old.nome, old.organizacao, old.nome_comercial);
+    END;
+    `),
+  tabelasNovas: [
+    'contatos_compartilhados',
+    'valores_de_contato_compartilhado',
+    'contatos_compartilhados_texto',
+    'contatos_compartilhados_texto_config',
+    'contatos_compartilhados_texto_data',
+    'contatos_compartilhados_texto_docsize',
+    'contatos_compartilhados_texto_idx',
+  ],
+};
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -858,6 +936,7 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   ENVIO_V24,
   ENVIO_MIDIA_V25,
   ETIQUETA_V26,
+  CONTATO_COMPARTILHADO_V27,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {

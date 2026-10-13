@@ -6,7 +6,7 @@ import { abrirAcervo } from '../src/nucleo/acervo.js';
 import { registrarConversa, registrarIdentificador } from '../src/nucleo/escrita.js';
 import { CFG_WHATSAPP } from './ajuda/configuracao.js';
 
-test('um Acervo na v25 sobe para a v26 sem perder linha e ganha a tabela da Etiqueta', () => {
+test('um Acervo na v25 sobe (passando pela v26) sem perder linha e ganha a tabela da Etiqueta', () => {
   const c = cenario();
   try {
     const { id, acervo } = c.novoInquilino('Padme');
@@ -21,7 +21,7 @@ test('um Acervo na v25 sobe para a v26 sem perder linha e ganha a tabela da Etiq
     const migrado = abrirAcervo(join(c.raiz, 'acervos'), id, { configuracoes: [CFG_WHATSAPP] });
     try {
       const versao = migrado.db.prepare('SELECT versao FROM versao_schema').get() as { versao: number };
-      assert.equal(versao.versao, 26);
+      assert.equal(versao.versao, 27);
       const tabela = migrado.db
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'etiquetas_de_participacao'")
         .get();
