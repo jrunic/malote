@@ -506,6 +506,18 @@ export function termoParaFts5(texto: string): string | null {
   return palavras.map((p) => `"${p.replace(/"/g, '""')}"`).join(' ');
 }
 
+/**
+ * Os digitos do termo, quando ele e um NUMERO: so digitos e a pontuacao de telefone, com 6 ou
+ * mais digitos. Abaixo disso o trecho casa ruido demais para valer uma busca. Sem normalizacao
+ * de codigo de pais: o trecho e literal contra os digitos que o cartao guardou.
+ */
+export function digitosDoTermo(texto: string): string | null {
+  const t = texto.trim();
+  if (!/^[\d\s()+.-]+$/.test(t)) return null;
+  const digitos = t.replace(/\D/g, '');
+  return digitos.length >= 6 ? digitos : null;
+}
+
 export function buscarMensagens(acervo: Acervo, filtro: FiltroDeBusca): MensagemEncontrada[] {
   return buscarMensagensComCorte(acervo, filtro).mensagens;
 }
@@ -571,8 +583,10 @@ export function buscarMensagensComCorte(acervo: Acervo, filtro: FiltroDeBusca): 
     )
     .all(consulta, ...porTranscricao.valores, limite + 1) as Array<{ id: string; ocorrida_em: number }>;
 
-  // O Contato Compartilhado (#1135): nome, organizacao e nome comercial vao pela busca de texto,
-  // como a Transcricao, e a Mensagem sai com a origem marcada.
+  // O Contato Compartilhado (#1135), por DOIS mecanismos. Nome, organizacao e nome comercial vao
+  // pela busca de texto, como a Transcricao. Numero e e-mail NAO: a busca de texto so casa a palavra
+  // inteira, e o numero e uma palavra so ("99991234" nao acharia 556599991234). Eles casam por
+  // trecho LITERAL (% e _ escapados) na tabela de valores, que tem poucos milhares de linhas.
   const porContatoNome = condicoesBase('m');
   const linhasPorContatoNome = acervo
     .preparar(
@@ -585,15 +599,42 @@ export function buscarMensagensComCorte(acervo: Acervo, filtro: FiltroDeBusca): 
     )
     .all(consulta, ...porContatoNome.valores, limite + 1) as Array<{ id: string; ocorrida_em: number }>;
 
+  const trechos: string[] = [];
+  const valoresDoTrecho: unknown[] = [];
+  const digitos = digitosDoTermo(filtro.texto);
+  if (digitos !== null) {
+    trechos.push(`v.digitos LIKE ? ESCAPE '\\'`);
+    valoresDoTrecho.push(`%${digitos}%`);
+  }
+  const porContatoValor = condicoesBase('m');
+  // O `LIMIT limite + 1` daqui e so TETO DE CUSTO, como nas outras consultas: com ele maior, a uniao
+  // abaixo corta do mesmo jeito e o resultado e identico (mutante equivalente, nao ha teste que o separe).
+  const linhasPorContatoValor =
+    trechos.length === 0
+      ? []
+      : (acervo
+          .preparar(
+            `SELECT DISTINCT m.id, m.ocorrida_em
+               FROM valores_de_contato_compartilhado v
+               JOIN contatos_compartilhados c ON c.id = v.contato_id
+               JOIN mensagens m ON m.id = c.mensagem_id
+              WHERE (${trechos.join(' OR ')}) ${porContatoValor.condicoes.map((c) => `AND ${c}`).join(' ')}
+              ORDER BY m.ocorrida_em ${direcao} LIMIT ?`,
+          )
+          .all(...valoresDoTrecho, ...porContatoValor.valores, limite + 1) as Array<{
+          id: string;
+          ocorrida_em: number;
+        }>);
+
   // Conteudo tem precedencia sobre transcricao quando os dois casam a mesma
   // Mensagem — a Mensagem tem texto de verdade; nao ha porque marca-la como
   // aproximada so porque o audio ao lado TAMBEM contem o termo. O cartao vem por ultimo.
   const origemPorId = new Map<string, OrigemDaCorrespondencia>();
-  for (const l of linhasPorContatoNome) origemPorId.set(l.id, 'contato-compartilhado');
+  for (const l of [...linhasPorContatoNome, ...linhasPorContatoValor]) origemPorId.set(l.id, 'contato-compartilhado');
   for (const l of linhasPorTranscricao) origemPorId.set(l.id, 'transcricao');
   for (const l of linhasPorConteudo) origemPorId.set(l.id, 'conteudo');
 
-  const unicos = [...linhasPorConteudo, ...linhasPorTranscricao, ...linhasPorContatoNome]
+  const unicos = [...linhasPorConteudo, ...linhasPorTranscricao, ...linhasPorContatoNome, ...linhasPorContatoValor]
     .sort((a, b) => (ordem === 'recentes' ? b.ocorrida_em - a.ocorrida_em : a.ocorrida_em - b.ocorrida_em))
     .map((l) => l.id)
     .filter((id, i, todos) => todos.indexOf(id) === i);
