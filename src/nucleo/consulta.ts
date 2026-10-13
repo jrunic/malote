@@ -4,6 +4,7 @@ import { SQL_FAMILIA } from './familia.js';
 import type { ConversaId, Direcao, EstadoDeTranscricao, Fonte, MensagemId, PessoaId, Presenca } from './tipos.js';
 import { nomeDoIdentificador } from './identidade.js';
 import { nomesEmLote } from './nomes-em-lote.js';
+import { lerContatosCompartilhados, type ContatoCompartilhadoLido } from './contato-compartilhado.js';
 
 /**
  * Leitura do Acervo. Nenhum caminho daqui escreve.
@@ -286,6 +287,8 @@ export interface MensagemLida {
   /** Enviada pelo Titular ou recebida de outra Pessoa. NULL em Mensagem migrada sem discriminante. */
   direcao: Direcao | null;
   anexos: AnexoLido[];
+  /** Os cartoes de contato que a Mensagem enviou (#1135). Lista vazia quando nao ha. */
+  contatosCompartilhados: ContatoCompartilhadoLido[];
 }
 
 /** `m` = mensagens. A lista de ids vai como um JSON; `[]` nao casa nada. */
@@ -324,6 +327,11 @@ export interface FiltroDeMensagem {
 }
 
 function montarMensagens(acervo: Acervo, linhas: Array<Record<string, unknown>>): MensagemLida[] {
+  // Os cartoes da PAGINA INTEIRA em duas consultas (cartoes e valores), nunca uma por Mensagem.
+  const cartoes = lerContatosCompartilhados(
+    acervo,
+    linhas.map((l) => l['id'] as string),
+  );
   return linhas.map((l) => {
     const id = l['id'] as string;
     return {
@@ -335,6 +343,7 @@ function montarMensagens(acervo: Acervo, linhas: Array<Record<string, unknown>>)
       direcao: (l['direcao'] as Direcao | null) ?? null,
       ocorridaEm: l['ocorrida_em'] as number,
       anexos: lerAnexos(acervo, id),
+      contatosCompartilhados: cartoes.get(id) ?? [],
     };
   });
 }
