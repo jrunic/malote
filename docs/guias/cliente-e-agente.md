@@ -186,6 +186,10 @@ Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`
   gravado e nas de Instagram). `--busca T` casa o assunto das coletivas **e** o nome de
   qualquer Atribuição daquele Identificador, sem distinguir maiúscula. Limitação conhecida:
   um valor-sentinela que a plataforma grava no lugar do nome aparece como nome.
+- `malote detalhar --conversa <id> [--json]` — uma Conversa por inteiro, sem baixar a listagem: na coletiva, o
+  assunto, a **descrição**, quem alterou e quando; na direta, o nome do outro lado; nas duas, a contagem de
+  Mensagens e o instante da primeira e da última. O instante dos metadados é o da última alteração (um por
+  Conversa). O id que não existe e o de outro Inquilino respondem igual (código 6).
 - `malote configuracao listar` — lista as Configurações do Inquilino (apelido + fonte).
 - `malote identificar <valor> [--fonte F] [--json]` — o que o Acervo sabe de um Identificador (o endereço
   de uma Pessoa numa Fonte), **com ou sem Pessoa**: use quando só se tem um número ou um endereço da
@@ -305,6 +309,7 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 | `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `remetente`, `antes`, `ordem`, `direcao`, `favorito`, `configuracao` | `{ mensagens: [...], proximo? }` |
 | `GET /conversas/<id>/anexos` | `tipo`, `remetente`, `desde`, `ate`, `presenca`, `limite`, `antes` | `{ anexos: [{ id, tipo, presenca, tamanho, nomeOriginal, mensagemId, autorId, ocorridaEm, ... }], proximo? }` — uma só ordem; `ordem` é `400` |
 | `GET /conversas/<id>/autores` | — | `{ autores: [{ identificadorId, valor, nome, origemDoNome, pessoaId }] }` — quem escreveu na Conversa, uma vez cada (participante ou não) |
+| `GET /conversas/<id>/detalhe` | — | `{ id, fonte, coletiva, configuracao, nome, origemDoNome, mensagens, primeiraMensagemEm, ultimaMensagemEm, metadados? }` — `metadados` (`assunto`, `descricao`, `alteradoPor`, `alteradoEm`) só na coletiva; `configuracao` é o apelido |
 | `GET /buscar?texto=` | `conversa`, `autor`, `desde`, `ate`, `limite`, `ordem` (`recentes`, o padrão, ou `cronologica`) | `{ mensagens: [...], truncado }` |
 | `GET /pessoas?texto=` | — | `{ pessoas: [{ id, nome, identificadores }] }` |
 | `GET /conversas/<id>/participantes` | `em` | `{ presenca: {...} }` — cada participante com `valor`, `nome`, `origemDoNome`, `pessoaId`, `etiqueta` e `etiquetaEm` |
@@ -332,7 +337,7 @@ achar coletiva fixada. `favorito` em `/conversas/<id>/mensagens` exige `configur
 junto; a Fonte usada para resolver o apelido é a da própria Conversa (nunca ambígua),
 não uma que o chamador precise informar.
 
-`GET /conversas/<id>/anexos` e `GET /conversas/<id>/autores` seguem a regra das rotas por Conversa: `404` de corpo
+`GET /conversas/<id>/anexos`, `GET /conversas/<id>/autores` e `GET /conversas/<id>/detalhe` seguem a regra das rotas por Conversa: `404` de corpo
 vazio só para Conversa inexistente ou de outro Inquilino (igual nos dois casos), e lista vazia por filtro que nada
 casa é `200`. Parâmetro inválido (`presenca`, data, cursor, `limite`, `remetente` ou `tipo` vazios) é `400`.
 `remetente` é o valor do Identificador, comparado exato; valor desconhecido é lista vazia.
