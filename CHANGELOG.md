@@ -21,7 +21,7 @@ Cada entrada tem uma tag `vX.Y.Z` no commit publicado. O histórico público com
 commit "Initial public release": as entradas anteriores são o registro fiel do que foi
 publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
-## [Não publicado]
+## [0.37.0] — 2026-10-16
 
 ### Adicionado
 
