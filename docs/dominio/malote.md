@@ -274,6 +274,7 @@ Duas regras atravessam o modelo inteiro:
 - **É derivado do Conteúdo Bruto e refazível.** O conjunto de cartões de uma Mensagem é substituído inteiro quando muda; conjunto igual ao gravado não escreve; conjunto vazio nunca apaga.
 - **Todo Contato Compartilhado tem nome.** O nome sai, nesta ordem, do nome de exibição do cartão, da organização, do nome comercial e, por último, do nome separado que a Fonte guarda (backup, só quando alinha com os cartões) ou do nome de exibição do evento (ao vivo). Cartão sem nome por nenhum caminho é recusado e contado, nunca vira linha.
 - **Só o cartão enviado conta.** Um contato citado dentro da resposta a outra Mensagem não é Contato Compartilhado.
+- **O cartão múltiplo vira um Contato Compartilhado por cartão.** Quando a Fonte entrega vários contatos num envio, a recepção ao vivo grava a Mensagem (sem texto, com o Conteúdo Bruto) e um cartão por elemento da lista, no mesmo ato; o conjunto inteiro substitui o da Mensagem. O rótulo do envelope ("N contatos") não é nome de ninguém: cada cartão tem o seu nome, e o que não tem é recusado e contado, sem derrubar os outros.
 - **Não é Pessoa nem Identificador.** Compartilhar um contato não afirma identidade: nenhuma operação cria Pessoa ou vínculo a partir dele.
 - A mesma Mensagem recebida pelo backup e pela recepção ao vivo termina com um só conjunto de cartões.
 
@@ -554,7 +555,7 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Ator:** humano ou agente
 - **Entrada:** Inquilino; ensaio por padrão, `--com-efeito` com `--confirmo` para gravar
 - **Saída:** um Contato Compartilhado novo por cartão que o Conteúdo Bruto de uma Mensagem ainda sem cartão gravado traz; o relatório conta as Mensagens que ganhariam cartão, os cartões criados, os recusados (ilegíveis ou sem nome) e de onde veio o nome de cada um. Nunca traz nome, telefone nem e-mail
-- **Regras:** lê o Anexo `contact` do backup e o `contactMessage` do **topo** do evento ao vivo, e nunca a citação de outra Mensagem. A Mensagem que está nos dois lados sai uma vez, pelo backup. Só alcança Mensagem sem cartão gravado: não substitui nem apaga cartão. Nunca altera o Conteúdo Bruto. Nunca cria Pessoa nem Identificador
+- **Regras:** lê o Anexo `contact` do backup e o `contactMessage` ou o cartão múltiplo do **topo** do evento ao vivo, e nunca a citação de outra Mensagem. A Mensagem que está nos dois lados sai uma vez, pelo backup. Só alcança Mensagem sem cartão gravado: não substitui nem apaga cartão. Nunca altera o Conteúdo Bruto. Nunca cria Pessoa nem Identificador
 - **Não-funcionais:** idempotente (a segunda passada não acha candidata). Com efeito, grava uma única Operação, com um efeito por cartão criado, que `desfazer` remove (os valores saem em cascata e a linha da busca pelo gatilho); sem nada a gravar, não abre Operação. O ensaio lê o bruto das Mensagens do Acervo inteiro: em Acervo grande, medir o tempo do ensaio antes de gravar.
 
 ### vincular-identificador

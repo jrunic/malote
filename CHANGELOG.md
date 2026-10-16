@@ -27,6 +27,7 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 - **O assunto e a descrição de um grupo do WhatsApp passam a ser gravados ao vivo.** O ouvinte reconhece a criação do grupo e a troca de assunto e de descrição, e grava o texto novo, quem alterou e quando. A remoção da descrição também é gravada. Um grupo novo, ou renomeado, passa a ser achado por `conversas --busca` sem importar backup. O que o grupo já tinha antes do ouvinte não muda: só o que chega a partir de agora. A descrição ainda não aparece em nenhum comando de consulta.
 - **`malote detalhar --conversa <id>` mostra uma Conversa por inteiro, local e por rede.** Na coletiva traz o assunto, a descrição, quem alterou e quando; na direta, o nome do outro lado; nas duas, a contagem de Mensagens e o instante da primeira e da última. O id que não existe e o de outro Inquilino respondem igual. O documento do `exportar --formato json` ganha a descrição da coletiva; o texto, a direta e a listagem `conversas` não mudam.
+- **Os contatos enviados de uma vez deixam de ser descartados.** Quando alguém manda vários contatos num envio (cartão múltiplo), a recepção ao vivo grava a Mensagem e um Contato Compartilhado por contato, com o nome de cada um; `malote contato-compartilhado extrair` lê o cartão múltiplo também. O que a recepção já descartou desde que a guarda do evento cru existe se recupera por `ouvinte reprocessar-descartados`.
 
 ### Corrigido
 
