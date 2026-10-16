@@ -75,6 +75,7 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   cliente só avisa em resposta que chegou. `envio estado` também é despachado por rede
   (ciclo 29), no ponto de entrada e fora de `COMANDOS_DE_REDE`; `envio reprocessar`
   continua só local.
+- **`COMANDOS_DE_REDE` é por PRIMEIRA palavra, e comando novo de leitura é um verbo solto (#1203).** `conversa presenca` é local e fica fora da lista; pôr `conversa` nela mandaria `presenca` por rede, onde não há rota. Um subcomando de rede (`conversa mostrar`) exigiria que a lista olhasse a segunda palavra, mudança na resolução global que não desce para dentro de handler. Por isso o detalhe de uma Conversa é `detalhar`, ao lado de `conversas`. A resposta nomeia a Configuração pelo **apelido**, como a listagem, nunca pelo id interno; `404` de corpo vazio vale para o id inexistente e para o de outro Inquilino.
 - **Cliente HTTP mora em `src/cli/`, nunca em `src/rede/`.** `src/rede/` é a zona do
   baileys e a fronteira proíbe `cli` importá-la — a guarda pegou a violação no commit em
   que nasceu (ciclo 21).
