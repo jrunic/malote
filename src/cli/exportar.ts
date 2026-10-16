@@ -2,6 +2,7 @@ import { once } from 'node:events';
 import { closeSync, existsSync, openSync, renameSync, writeSync } from 'node:fs';
 import type { Acervo } from '../nucleo/acervo.js';
 import { autoresDaConversa } from '../nucleo/autores-da-conversa.js';
+import { detalharConversa, type DetalheDaConversa } from '../nucleo/detalhe-da-conversa.js';
 import { expandirData, fonteDaConversa, lerMensagens, type MensagemLida } from '../nucleo/consulta.js';
 import type { CursorDePaginacao } from '../nucleo/cursor.js';
 import { identificadoresDoRemetente } from '../nucleo/remetente.js';
@@ -86,6 +87,11 @@ export interface ConfigDoExportador {
   filtros: Record<string, string>;
   exportadoEm: string;
   autores: AutorDeExport[];
+  /**
+   * A descricao da coletiva (#1203): `null` quando o grupo nao tem, AUSENTE quando a Conversa e direta — a direta
+   * nao ganha chave nova. So o json a leva; o txt nao muda.
+   */
+  descricao?: string | null;
   /** A saida padrao, quando nao ha `saida`. Uma linha por chamada. */
   escrever: (linha: string) => void;
   saida?: string;
@@ -129,7 +135,9 @@ export function criarExportador(cfg: ConfigDoExportador): Exportador {
   if (cfg.formato === 'json') {
     emitir(
       `{"conversa":${JSON.stringify(cfg.conversaId)},"filtros":${JSON.stringify(cfg.filtros)},` +
-        `"exportadoEm":${JSON.stringify(cfg.exportadoEm)},"mensagens":[`,
+        `"exportadoEm":${JSON.stringify(cfg.exportadoEm)},` +
+        (cfg.descricao !== undefined ? `"descricao":${JSON.stringify(cfg.descricao)},` : '') +
+        `"mensagens":[`,
     );
   }
   return {
@@ -227,12 +235,14 @@ export async function executarExportarRede(argumentos: string[], rede: RedeDeExp
   try {
     const r = await pedirGet(rede.servidor, rede.chave, `/conversas/${pedido.conversaId}/autores`);
     const autores = autoresDaResposta((JSON.parse(r.corpo) as { autores: AutorDeExport[] }).autores);
+    const descricao = await descricaoDoServidor(rede, pedido.conversaId);
     exportador = criarExportador({
       formato: pedido.formato,
       conversaId: pedido.conversaId,
       filtros: filtrosDoPedido(pedido),
       exportadoEm: new Date().toISOString(),
       autores,
+      ...(descricao !== undefined ? { descricao } : {}),
       escrever: rede.escrever,
       ...(pedido.saida !== undefined ? { saida: pedido.saida } : {}),
     });
@@ -263,6 +273,21 @@ export async function executarExportarRede(argumentos: string[], rede: RedeDeExp
   }
 }
 
+/**
+ * A descricao da coletiva, pelo detalhe do servidor (#1203). `undefined` quando a Conversa e direta ou quando o
+ * servidor e anterior ao detalhe (404): o export segue sem a chave, em vez de falhar por um campo a mais.
+ */
+async function descricaoDoServidor(rede: RedeDeExport, conversaId: string): Promise<string | null | undefined> {
+  try {
+    const r = await pedirGet(rede.servidor, rede.chave as string, `/conversas/${conversaId}/detalhe`);
+    const detalhe = JSON.parse(r.corpo) as DetalheDaConversa;
+    return detalhe.metadados === undefined ? undefined : detalhe.metadados.descricao;
+  } catch (e) {
+    if ((e as { status?: number }).status === 404) return undefined;
+    throw e;
+  }
+}
+
 /** `malote exportar` LOCAL: o mesmo formatador, as paginas vindas direto do Acervo. */
 export function executarExportarLocal(
   acervo: Acervo,
@@ -285,12 +310,14 @@ export function executarExportarLocal(
   const autores = autoresDaResposta(autoresDaConversa(acervo, pedido.conversaId, precedencia));
   const autorIds =
     pedido.remetente === undefined ? undefined : identificadoresDoRemetente(acervo, { valor: pedido.remetente, fonte });
+  const descricao = detalharConversa(acervo, pedido.conversaId, precedencia)?.metadados?.descricao;
   const exportador = criarExportador({
     formato: pedido.formato,
     conversaId: pedido.conversaId,
     filtros: filtrosDoPedido(pedido),
     exportadoEm: new Date().toISOString(),
     autores,
+    ...(descricao !== undefined ? { descricao } : {}),
     escrever: saida.escrever,
     ...(pedido.saida !== undefined ? { saida: pedido.saida } : {}),
   });

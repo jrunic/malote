@@ -228,6 +228,34 @@ export function lerCartaoAoVivo(vcard: string, nomeDeExibicao: string | undefine
 }
 
 /**
+ * Le a lista do cartao MULTIPLO da recepcao ao vivo (`contactsArrayMessage.contacts`, #1206): cada elemento e um
+ * `{displayName, vcard}`, e o nome de exibicao dele serve de ultimo recurso para o cartao dele. O nome de exibicao
+ * EXTERNO do envelope ("N contatos", com uma marca de direcao invisivel) e rotulo, nunca nome: por isso so a lista
+ * chega aqui. Elemento que nao e objeto e recusa contada; lista ausente ou vazia e "a Fonte nao disse nada".
+ */
+export function lerCartaoMultiploAoVivo(contatos: unknown): LeituraDeCartoes {
+  const leitura = vazia();
+  if (!Array.isArray(contatos)) return leitura;
+  for (const elemento of contatos) {
+    if (elemento === null || typeof elemento !== 'object') {
+      leitura.recusados += 1;
+      continue;
+    }
+    const dado = elemento as Record<string, unknown>;
+    const lido = lerCartaoAoVivo(
+      typeof dado['vcard'] === 'string' ? dado['vcard'] : '',
+      typeof dado['displayName'] === 'string' ? dado['displayName'] : undefined,
+    );
+    leitura.cartoes.push(...lido.cartoes);
+    leitura.recusados += lido.recusados;
+    for (const [recurso, n] of Object.entries(lido.nomesPorRecurso) as Array<[RecursoDeNome, number]>) {
+      leitura.nomesPorRecurso[recurso] = (leitura.nomesPorRecurso[recurso] ?? 0) + n;
+    }
+  }
+  return leitura;
+}
+
+/**
  * Le os cartoes do Conteudo Bruto de um Anexo `contact` do backup (o item de midia serializado).
  * Bruto que nao e JSON, ou sem o campo de cartoes, e recusa contada e nunca excecao.
  */

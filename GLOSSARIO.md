@@ -189,7 +189,9 @@ modelo, nunca fac-símile: o Anexo continua sendo a fonte de verdade.
 *Evitar*: transcript, legenda, subtítulo, resumo (resumo julga; transcrição não).
 
 **Metadados de Coletiva**:
-Assunto, descrição e imagem de uma Conversa coletiva, com quem alterou e quando.
+Assunto, descrição e imagem de uma Conversa coletiva, com quem alterou e quando. A recepção ao vivo
+os grava na criação do grupo e a cada troca; a remoção da descrição é um evento que a anula, e
+ausência ou vazio nunca apagam o que está gravado.
 *Evitar*: metadados de grupo, subject, tópico, nome do grupo.
 
 **Envio**:
@@ -287,7 +289,7 @@ Uma entrada do catálogo de contatos: um nome e os endereços que a pessoa guard
 *Evitar*: contato, vCard, card, registro. Não confundir com o **Contato Compartilhado**, que é o contato enviado dentro de uma Mensagem.
 
 **Contato Compartilhado**:
-O contato que alguém **envia dentro de uma Mensagem**: um nome, uma organização e os telefones e e-mails do cartão. Pendura na Mensagem e é derivado do Conteúdo Bruto, que segue inteiro; a foto do cartão fica só no bruto. **Não é Pessoa, nem Identificador, nem Cartão de Contato do catálogo**: compartilhar um contato não afirma identidade, então ele nunca cria Pessoa nem vincula nada sozinho. A palavra *contato* volta aqui por ser o nome que a própria Fonte dá ao gesto de enviar; o que o distingue do Cartão de Contato é de onde vem (uma Mensagem, e não o catálogo) e a quem pertence (à Mensagem, e não a uma Configuração de Adaptador).
+O contato que alguém **envia dentro de uma Mensagem** (um, ou vários de uma vez, cada um com o seu cartão): um nome, uma organização e os telefones e e-mails do cartão. Pendura na Mensagem e é derivado do Conteúdo Bruto, que segue inteiro; a foto do cartão fica só no bruto. **Não é Pessoa, nem Identificador, nem Cartão de Contato do catálogo**: compartilhar um contato não afirma identidade, então ele nunca cria Pessoa nem vincula nada sozinho. A palavra *contato* volta aqui por ser o nome que a própria Fonte dá ao gesto de enviar; o que o distingue do Cartão de Contato é de onde vem (uma Mensagem, e não o catálogo) e a quem pertence (à Mensagem, e não a uma Configuração de Adaptador).
 *Evitar*: cartão, vCard, card, Cartão de Contato.
 
 **Proposta**:

@@ -21,6 +21,22 @@ Cada entrada tem uma tag `vX.Y.Z` no commit publicado. O histórico público com
 commit "Initial public release": as entradas anteriores são o registro fiel do que foi
 publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [0.37.0] — 2026-10-16
+
+### Adicionado
+
+- **O assunto e a descrição de um grupo do WhatsApp passam a ser gravados ao vivo.** O ouvinte reconhece a criação do grupo e a troca de assunto e de descrição, e grava o texto novo, quem alterou e quando. A remoção da descrição também é gravada. Um grupo novo, ou renomeado, passa a ser achado por `conversas --busca` sem importar backup. O que o grupo já tinha antes do ouvinte não muda: só o que chega a partir de agora. A descrição ainda não aparece em nenhum comando de consulta.
+- **`malote detalhar --conversa <id>` mostra uma Conversa por inteiro, local e por rede.** Na coletiva traz o assunto, a descrição, quem alterou e quando; na direta, o nome do outro lado; nas duas, a contagem de Mensagens e o instante da primeira e da última. O id que não existe e o de outro Inquilino respondem igual. O documento do `exportar --formato json` ganha a descrição da coletiva; o texto, a direta e a listagem `conversas` não mudam.
+- **Os contatos enviados de uma vez deixam de ser descartados.** Quando alguém manda vários contatos num envio (cartão múltiplo), a recepção ao vivo grava a Mensagem e um Contato Compartilhado por contato, com o nome de cada um; `malote contato-compartilhado extrair` lê o cartão múltiplo também. O que a recepção já descartou desde que a guarda do evento cru existe se recupera por `ouvinte reprocessar-descartados`.
+
+### Alterado
+
+- **`malote conversas` passa a vir em páginas de 500, por cursor.** Sem `--limite`, a CLI e `GET /conversas` devolvem a primeira página; havendo mais, a resposta traz `proximo` (vai em `antes`) e a CLI avisa o corte, na saída de erro quando há `--json`. `--tudo` percorre as páginas e entrega a lista inteira como antes. A listagem sem filtro tinha 1,9 MB contra o teto de 2,0 MB e crescia a cada Conversa. Quem lia a API crua sem seguir `proximo` passa a ver só a primeira página. A ordem por criação ganha o id como desempate: dentro de um mesmo instante de criação a ordem muda.
+
+### Corrigido
+
+- **A Mensagem recebida ao vivo cujo instante está poucos décimos de segundo à frente do relógio deixa de ser recusada.** O instante vem do aparelho de quem enviou, e a guarda recusava qualquer instante à frente do relógio local, sem folga: na medição, 2 de 27 eventos ao vivo chegaram à frente por menos de 200 ms. A recepção ao vivo agora tolera até 5 s à frente, grava o instante declarado e conta, por dia, as Mensagens que só entraram por causa da janela (`ouvinte estado --json`, chave `instantesAdiantados`). A importação de backup continua sem tolerância. Além da janela a Mensagem segue recusada e guardada com o evento cru.
+
 ## [0.36.0] — 2026-10-13
 
 ### Adicionado

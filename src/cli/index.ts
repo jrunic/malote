@@ -21,10 +21,17 @@ import { executarEnviarRede } from './enviar-rede.js';
 import { executarEnvioEstadoRede } from './envio-estado-rede.js';
 import { encerrar } from './encerrar.js';
 import { primeiroPosicional } from './posicional.js';
-import { avisoDeCorte } from './aviso-de-corte.js';
+import { avisoDeCorte, avisoDeCorteDeConversas } from './aviso-de-corte.js';
+import {
+  CursorDeConversasInvalidoError,
+  LIMITE_PADRAO_DE_CONVERSAS,
+  paginarConversas,
+} from '../nucleo/pagina-de-conversas.js';
 import type { OrdemDaBusca } from '../nucleo/consulta.js';
 import { opcao, recusarBandeiras, temBandeira, todasAsOpcoes } from './bandeiras.js';
 import { formatarIdentificacao } from './identificar-texto.js';
+import { formatarDetalhe } from './detalhar-texto.js';
+import { detalharConversa } from '../nucleo/detalhe-da-conversa.js';
 import { identificarPorValor } from '../nucleo/identificar.js';
 import { basename, join } from 'node:path';
 import { ehFonte, PRESENCAS, type Fonte } from '../nucleo/tipos.js';
@@ -47,7 +54,7 @@ import { recriarAcervo } from '../nucleo/recriar.js';
 import { versaoDoAcervoEmDisco } from '../nucleo/acervo.js';
 import { passosAplicados } from '../nucleo/migracao.js';
 import {
-  listarConversas,
+ 
   buscarMensagensComCorte,
   lerMensagens,
   listarSemEndereco,
@@ -315,6 +322,8 @@ Titular (nao exige chave enquanto nao houver rede):
   malote envio reprocessar  --inquilino <id> [--json]   (so local)
   malote identificar <valor> --inquilino <id> [--fonte <fonte>] [--json]   (o que o Acervo sabe de um Identificador, com ou sem Pessoa)
   malote identificar <valor> [--fonte <fonte>] [--json]                    (com MALOTE_SERVIDOR no ambiente: por REDE; o Inquilino vem da chave)
+  malote detalhar   --inquilino <id> --conversa <id> [--json]   (uma Conversa por inteiro; na coletiva, assunto e descricao)
+  malote detalhar   --conversa <id> [--json]                    (com MALOTE_SERVIDOR no ambiente: por REDE; o Inquilino vem da chave)
   malote transcricao reprocessar --inquilino <id>              (volta falhas para pendente)
   malote transcricao incluir-estoque --inquilino <id> --limite <n> [--json]  (promove estoque fora-de-escopo, em lote)
   malote transcricao solicitar --anexo <id> --inquilino <id>           (prioriza UM Anexo na fila)
@@ -324,7 +333,8 @@ Titular (nao exige chave enquanto nao houver rede):
   malote servir     --porta <n> [--endereco <ip>] [--exposto] [--trabalhadores <n>] [--prazo <segundos>]
                                         (leituras em workers, 4 por padrao, com prazo de 25 s; passou do prazo: 504;
                                          um Inquilino ocupa no maximo N-1 workers e metade da fila; as escritas ficam na thread principal)
-  malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--json]
+  malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--limite <n>] [--antes <cursor>] [--tudo] [--json]
+                                        (a primeira pagina de 500; ha mais: o aviso traz o cursor para --antes, e --tudo percorre as paginas)
   malote mensagens  --inquilino <id> [--conversa <id>] [--desde D] [--ate D] [--fonte <nome>] [--direcao enviada|recebida] [--remetente <valor>] [--limite <n>] [--json]
                                         (sem --conversa: atravessa todas as Conversas e Fontes,
                                          ordenado por recencia por default — ultimas mensagens;
@@ -444,6 +454,7 @@ export const COMANDOS_DE_REDE = new Set([
   'configuracao',
   'midia',
   'identificar',
+  'detalhar',
   'anexos',
   'etiquetas',
 ]);
@@ -455,7 +466,13 @@ export const COMANDOS_DE_REDE = new Set([
  */
 export async function executarConsultaRede(
   argumentos: string[],
-  rede: { servidor: string; chave: string; escrever: (t: string) => void },
+  rede: {
+    servidor: string;
+    chave: string;
+    escrever: (t: string) => void;
+    /** Diagnostico e aviso (#1202): nunca a saida de dados. Ausente, o aviso de corte nao sai. */
+    erro?: (t: string) => void;
+  },
 ): Promise<number> {
   const recusaDeBandeira = recusarBandeiras(argumentos, rede.escrever);
   if (recusaDeBandeira !== undefined) return recusaDeBandeira;
@@ -467,9 +484,9 @@ export async function executarConsultaRede(
     const valor = opcao(argumentos, nome);
     if (valor !== undefined) q.set(nome, valor);
   }
+  if (grupo === 'conversas') return consultarConversasPorRede(argumentos, rede, q);
   let caminho: string;
-  if (grupo === 'conversas') caminho = '/conversas';
-  else if (grupo === 'buscar') caminho = '/buscar';
+  if (grupo === 'buscar') caminho = '/buscar';
   else if (grupo === 'pessoas') caminho = '/pessoas';
   else if (grupo === 'participantes') {
     const conversa = opcao(argumentos, 'conversa');
@@ -514,6 +531,34 @@ export async function executarConsultaRede(
       }
       return 0;
     } catch (e) {
+      rede.escrever((e as Error).message);
+      return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
+    }
+  }
+  else if (grupo === 'detalhar') {
+    if (argumentos.includes('--inquilino')) {
+      rede.escrever(MENSAGEM_SEM_INQUILINO_NA_REDE);
+      return 2;
+    }
+    const conversa = opcao(argumentos, 'conversa');
+    if (conversa === undefined) {
+      rede.escrever('Informe --conversa <id>.');
+      return 2;
+    }
+    try {
+      const r = await pedirGet(rede.servidor, rede.chave, `/conversas/${encodeURIComponent(conversa)}/detalhe`);
+      if (argumentos.includes('--json')) {
+        rede.escrever(JSON.stringify(JSON.parse(r.corpo), null, 2));
+      } else {
+        for (const l of formatarDetalhe(JSON.parse(r.corpo))) rede.escrever(l);
+      }
+      return 0;
+    } catch (e) {
+      // 404 e o mesmo para o id que nao existe e para o de outro Inquilino: a frase nao distingue os dois.
+      if ((e as { status?: number }).status === 404) {
+        rede.escrever(`Conversa nao encontrada: ${conversa}`);
+        return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 6;
+      }
       rede.escrever((e as Error).message);
       return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
     }
@@ -611,6 +656,49 @@ export async function executarConsultaRede(
   try {
     const r = await pedirGet(rede.servidor, rede.chave, `${caminho}${qs ? `?${qs}` : ''}`);
     rede.escrever(JSON.stringify(JSON.parse(r.corpo), null, 2));
+    return 0;
+  } catch (e) {
+    rede.escrever((e as Error).message);
+    return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
+  }
+}
+
+/**
+ * `conversas` por REDE (#1202): a primeira pagina com o `proximo` do corpo e o aviso de corte na saida de erro, ou, com
+ * `--tudo`, o laco das paginas num corpo so (sem `proximo`). Quem monta o laco e a CLI, como no `exportar`: a API so
+ * entende cursor.
+ */
+async function consultarConversasPorRede(
+  argumentos: string[],
+  rede: { servidor: string; chave: string; escrever: (t: string) => void; erro?: (t: string) => void },
+  q: URLSearchParams,
+): Promise<number> {
+  const tudo = argumentos.includes('--tudo');
+  if (tudo && q.has('antes')) {
+    rede.escrever('--tudo e --antes se contradizem: --tudo ja percorre todas as paginas.');
+    return 2;
+  }
+  try {
+    const todas: unknown[] = [];
+    let ultimo: { conversas: unknown[]; proximo?: string } = { conversas: [] };
+    for (;;) {
+      const qs = q.toString();
+      const r = await pedirGet(rede.servidor, rede.chave, `/conversas${qs ? `?${qs}` : ''}`);
+      ultimo = JSON.parse(r.corpo) as { conversas: unknown[]; proximo?: string };
+      if (!tudo) break;
+      todas.push(...ultimo.conversas);
+      if (ultimo.proximo === undefined) break;
+      if (ultimo.proximo === q.get('antes')) {
+        throw new Error('O servidor devolveu o mesmo cursor duas vezes; parei para nao repetir para sempre.');
+      }
+      q.set('antes', ultimo.proximo);
+    }
+    if (tudo) {
+      rede.escrever(JSON.stringify({ conversas: todas }, null, 2));
+    } else {
+      rede.escrever(JSON.stringify(ultimo, null, 2));
+      if (ultimo.proximo !== undefined) rede.erro?.(avisoDeCorteDeConversas(ultimo.conversas.length, ultimo.proximo));
+    }
     return 0;
   } catch (e) {
     rede.escrever((e as Error).message);
@@ -874,6 +962,9 @@ function executarComAtor(
             pulos: lerPulos(caminhosDoEstado.pulos),
             // O que a recepcao nao gravou como Mensagem, por dia e por tipo (#1159): so tipos e numeros.
             descartes: lerDescartes(caminhosDoEstado.descartes),
+            // As Mensagens GRAVADAS so por causa da janela de relogio, por dia (#1204): serie propria, no formato da dos
+            // descartes. So o --json: a saida default e contrato com o watchdog.
+            instantesAdiantados: lerDescartes(caminhosDoEstado.adiantadas),
             // Quanto esta guardado (eventos e bytes), nunca o conteudo. Le o arquivo para contar: o custo
             // cresce com o teto (medido: 2 x 50 MiB custam ~92 ms e ~392 MB de RSS), e so o --json paga.
             guarda: estadoDaGuarda(caminhosDoEstado.guarda),
@@ -2202,29 +2293,65 @@ function executarComAtor(
         );
 
         const precedencia = lerPrecedenciasDeNome(registro, inquilino);
-        let conversas = listarConversas(acervo, {
+        const antes = opcao(argumentos, 'antes');
+        const tudo = temBandeira(argumentos, 'tudo');
+        if (tudo && antes !== undefined) {
+          escrever('--tudo e --antes se contradizem: --tudo ja percorre todas as paginas.');
+          return 2;
+        }
+        const filtro = {
           precedencia,
           ...(pessoa === undefined ? {} : { pessoaId: pessoa }),
           ...(busca === undefined ? {} : { busca }),
           ...(fonte === undefined ? {} : { fonte: fonte as Fonte }),
           ...(coletiva === undefined ? {} : { coletiva: coletiva === 'true' }),
-          ...(marcadas === undefined && limite !== undefined ? { limite: Number(limite) } : {}),
           ...(marcadas === undefined && configuracaoId !== undefined ? { configuracaoId } : {}),
           ...(desde === undefined ? {} : { desde: expandirData(desde, 'inicio') }),
-        }).map((c) => ({
-          id: c.id,
-          fonte: c.fonte,
-          coletiva: c.coletiva,
-          assunto: c.assunto,
-          mensagens: c.mensagens,
-          configuracao: c.configuracaoId === null ? null : (apelidoPorId.get(c.configuracaoId) ?? null),
-          nome: c.nome,
-          origemDoNome: c.origemDoNome,
-        }));
-
-        if (marcadas !== undefined) {
-          conversas = conversas.filter((c) => marcadas.has(c.id));
-          if (limite !== undefined) conversas = conversas.slice(0, Number(limite));
+        };
+        // A pagina (#1202): sem --limite e sem --antes, a primeira de 500; --tudo percorre todas.
+        const tamanho = limite !== undefined ? Number(limite) : LIMITE_PADRAO_DE_CONVERSAS;
+        const conversas: Array<{
+          id: string;
+          fonte: Fonte;
+          coletiva: boolean;
+          assunto: string | null;
+          mensagens: number;
+          configuracao: string | null;
+          nome: string | null;
+          origemDoNome: string | null;
+        }> = [];
+        let proximo: string | undefined;
+        let cursor = antes;
+        try {
+          for (;;) {
+            const pagina = paginarConversas(acervo, filtro, {
+              limite: tamanho,
+              ...(cursor !== undefined ? { antes: cursor } : {}),
+              ...(marcadas !== undefined ? { marcadas } : {}),
+            });
+            for (const c of pagina.conversas) {
+              conversas.push({
+                id: c.id,
+                fonte: c.fonte,
+                coletiva: c.coletiva,
+                assunto: c.assunto,
+                mensagens: c.mensagens,
+                configuracao: c.configuracaoId === null ? null : (apelidoPorId.get(c.configuracaoId) ?? null),
+                nome: c.nome,
+                origemDoNome: c.origemDoNome,
+              });
+            }
+            proximo = pagina.proximo;
+            if (!tudo || proximo === undefined) break;
+            if (proximo === cursor) throw new Error('A listagem devolveu o mesmo cursor duas vezes; parei para nao repetir para sempre.');
+            cursor = proximo;
+          }
+        } catch (e) {
+          if (e instanceof CursorDeConversasInvalidoError) {
+            escrever('Cursor invalido: use o valor que o aviso de corte imprimiu em --antes.');
+            return 2;
+          }
+          throw e;
         }
 
         if (temBandeira(argumentos, 'json')) {
@@ -2234,6 +2361,12 @@ function executarComAtor(
             const natureza = c.coletiva ? 'coletiva' : 'direta';
             escrever(`${c.id}  ${natureza}  ${c.mensagens} msgs  ${c.assunto ?? c.nome ?? ''}`);
           }
+        }
+        // O corte e dito: no --json, na saida de erro (o JSON da saida padrao segue parseavel); no texto, na saida padrao.
+        if (proximo !== undefined) {
+          const aviso = avisoDeCorteDeConversas(conversas.length, proximo);
+          if (temBandeira(argumentos, 'json')) ambiente.erro?.(aviso);
+          else escrever(aviso);
         }
       } finally {
         acervo.fechar();
@@ -2388,6 +2521,30 @@ function executarComAtor(
             `${p.id}  ${p.nome ?? '(sem nome)'}  ${p.identificadores.length} endereco(s)${marca}`,
           );
         }
+      } finally {
+        acervo.fechar();
+      }
+      return 0;
+    }
+
+    if (grupo === 'detalhar') {
+      const conversa = opcao(argumentos, 'conversa');
+      if (conversa === undefined) {
+        escrever('Informe --conversa <id>.');
+        return 2;
+      }
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino.');
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const apelidoPorId = new Map(listarConfiguracoes(registro, inquilino).map((c) => [c.id, c.apelido]));
+        const detalhe = detalharConversa(acervo, conversa, lerPrecedenciasDeNome(registro, inquilino), apelidoPorId);
+        if (detalhe === undefined) {
+          escrever(`Conversa desconhecida: ${conversa}`);
+          return 2;
+        }
+        if (temBandeira(argumentos, 'json')) escrever(JSON.stringify(detalhe, null, 2));
+        else for (const l of formatarDetalhe(detalhe)) escrever(l);
       } finally {
         acervo.fechar();
       }
@@ -3313,6 +3470,7 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
         servidor: opcao(argumentos, 'servidor') ?? (ambiente.servidor as string),
         chave,
         escrever: (t) => console.log(t),
+        erro: (t) => console.error(t),
       }).then(encerrar);
     }
   } else {

@@ -107,6 +107,17 @@ export interface MetadadosDeColetiva {
   imagem?: string;
   alteradoPor?: string;
   alteradoEm?: string;
+  /**
+   * A Fonte declarou que a descricao foi REMOVIDA (#1160). E o unico jeito de anular a descricao: vazio e
+   * ausencia nunca apagam. Nao se combina com `descricao`.
+   */
+  removerDescricao?: boolean;
+  /**
+   * So grava se o texto entregue DIFERE do gravado; igual nao toca nada, `alterado_em` e `alterado_por`
+   * inclusive. E o contrato do aviso de metadados de grupo, que chega logo depois do evento de grupo, sem o
+   * instante do fato, e nao pode sobrescrever o instante que o evento ja gravou.
+   */
+  soSeMudar?: boolean;
 }
 
 /**
@@ -169,8 +180,11 @@ interface LinhaDeMetadados {
  *   reimportado depois do ao vivo nao desfaz a troca de nome.
  * - Sem instante, vale o mais recente a chegar (mesma regra do `bruto`).
  */
-function gravarMetadadosDeColetiva(acervo: Acervo, conversaId: string, m: MetadadosDeColetiva): void {
+function gravarMetadadosDeColetiva(acervo: Acervo, conversaId: string, m: MetadadosDeColetiva): boolean {
   const preenchido = (v: string | undefined): v is string => v !== undefined && v !== '';
+  if (m.removerDescricao === true && m.descricao !== undefined) {
+    throw new Error('removerDescricao nao se combina com descricao: a entrada se contradiz');
+  }
   const atual = acervo
     .preparar(
       `SELECT assunto, descricao, imagem, alterado_por, alterado_em
@@ -179,6 +193,8 @@ function gravarMetadadosDeColetiva(acervo: Acervo, conversaId: string, m: Metada
     .get(conversaId) as LinhaDeMetadados | undefined;
 
   if (atual === undefined) {
+    // Remover o que nao ha nao cria linha: a remocao nao e um valor, e um evento sobre um valor.
+    if (m.removerDescricao === true && !preenchido(m.assunto) && !preenchido(m.imagem)) return false;
     acervo
       .preparar(
         `INSERT INTO metadados_de_coletiva
@@ -193,18 +209,26 @@ function gravarMetadadosDeColetiva(acervo: Acervo, conversaId: string, m: Metada
         m.alteradoPor ?? null,
         m.alteradoEm ?? null,
       );
-    return;
+    return true;
   }
 
   if (m.alteradoEm !== undefined && atual.alterado_em !== null) {
     const entregue = Date.parse(m.alteradoEm);
     const gravado = Date.parse(atual.alterado_em);
-    if (!Number.isNaN(entregue) && !Number.isNaN(gravado) && gravado > entregue) return;
+    if (!Number.isNaN(entregue) && !Number.isNaN(gravado) && gravado > entregue) return false;
   }
 
   const assunto = preenchido(m.assunto) ? m.assunto : atual.assunto;
-  const descricao = preenchido(m.descricao) ? m.descricao : atual.descricao;
+  const descricao = m.removerDescricao === true ? null : preenchido(m.descricao) ? m.descricao : atual.descricao;
   const imagem = preenchido(m.imagem) ? m.imagem : atual.imagem;
+  if (
+    m.soSeMudar === true &&
+    assunto === atual.assunto &&
+    descricao === atual.descricao &&
+    imagem === atual.imagem
+  ) {
+    return false;
+  }
   const alteradoPor = m.alteradoPor ?? atual.alterado_por;
   const alteradoEm = m.alteradoEm ?? atual.alterado_em;
   acervo
@@ -214,6 +238,39 @@ function gravarMetadadosDeColetiva(acervo: Acervo, conversaId: string, m: Metada
         WHERE conversa_id = ?`,
     )
     .run(assunto, descricao, imagem, alteradoPor, alteradoEm, conversaId);
+  return true;
+}
+
+/**
+ * Grava os Metadados de Coletiva de uma Conversa que ja existe e diz se gravou (#1160). E a porta da recepcao ao
+ * vivo, que nao passa por `registrarConversa` para dizer so o que mudou. As regras sao as de
+ * `gravarMetadadosDeColetiva`: vazio nao apaga, retrato velho nao vence o novo, remocao so por pedido explicito.
+ */
+export function registrarMetadadosDeColetiva(acervo: Acervo, conversaId: string, m: MetadadosDeColetiva): boolean {
+  return gravarMetadadosDeColetiva(acervo, conversaId, m);
+}
+
+export interface MetadadosGravados {
+  /** O id da Conversa coletiva, ou `undefined` quando ela ainda nao existe. */
+  conversaId: string | undefined;
+  assunto: string | null;
+  descricao: string | null;
+}
+
+/**
+ * Le os Metadados de Coletiva gravados, pelo endereco da coletiva (#1160). E a leitura que o Adaptador faz para
+ * DECIDIR antes de abrir Operacao: o aviso de metadados chega depois de todo evento de grupo, com o mesmo texto, e
+ * uma Operacao por aviso sem efeito e lixo na trilha.
+ */
+export function lerMetadadosDeColetiva(acervo: Acervo, fonte: Fonte, idExterno: string): MetadadosGravados {
+  const conversa = acervo
+    .preparar('SELECT id FROM conversas WHERE fonte = ? AND id_externo = ? AND coletiva = 1')
+    .get(fonte, idExterno) as { id: string } | undefined;
+  if (conversa === undefined) return { conversaId: undefined, assunto: null, descricao: null };
+  const linha = acervo
+    .preparar('SELECT assunto, descricao FROM metadados_de_coletiva WHERE conversa_id = ?')
+    .get(conversa.id) as { assunto: string | null; descricao: string | null } | undefined;
+  return { conversaId: conversa.id, assunto: linha?.assunto ?? null, descricao: linha?.descricao ?? null };
 }
 
 /** Registra uma Conversa. Idempotente por (fonte, idExterno). */
@@ -509,6 +566,12 @@ export interface EntradaMensagem {
   direcao: Direcao;
   /** Instante de referência para a checagem de plausibilidade. */
   agora: number;
+  /**
+   * Folga, em milissegundos, para a FRENTE do relógio (#1204). Só a recepção ao vivo a passa: o instante de uma
+   * Mensagem recebida agora é o que o aparelho de quem a enviou declarou, e o relógio dele pode estar um pouco à
+   * frente. Ausente é zero, que é o que a importação quer: no material exportado o futuro é dado ruim.
+   */
+  toleranciaDeRelogioMs?: number;
 }
 
 /**
@@ -527,7 +590,7 @@ export function idDeMensagemPorExterno(
 }
 
 export function registrarMensagem(acervo: Acervo, entrada: EntradaMensagem): MensagemId {
-  const motivo = motivoDaRejeicao(entrada.fonte, entrada.ocorridaEm, entrada.agora);
+  const motivo = motivoDaRejeicao(entrada.fonte, entrada.ocorridaEm, entrada.agora, entrada.toleranciaDeRelogioMs);
   if (motivo !== null) {
     throw new InstanteImplausivelError(motivo);
   }

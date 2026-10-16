@@ -55,12 +55,13 @@ Todos aceitam `--json`. As flags marcadas com `*` são obrigatórias.
 
 | comando | o que faz | flags |
 |---|---|---|
-| `malote conversas` | Índice do Acervo: id, fonte, natureza, contagem, assunto, Configuração | `--busca <texto>` `--fonte <nome>` `--coletiva true\|false` `--pessoa <id>` `--configuracao <apelido>` `--fixada true` `--desde <data>` `--limite <n>` |
+| `malote conversas` | Índice do Acervo: id, fonte, natureza, contagem, assunto, Configuração. **Em páginas de 500:** havendo mais, o aviso traz o cursor | `--busca <texto>` `--fonte <nome>` `--coletiva true\|false` `--pessoa <id>` `--configuracao <apelido>` `--fixada true` `--desde <data>` `--limite <n>` `--antes <cursor>` `--tudo` |
 | `malote mensagens` | Mensagens de uma Conversa, ou de todas (sem `--conversa`, as últimas por recência) | `--conversa <id>` `--desde` `--ate` `--autor <id-de-pessoa>` `--remetente <valor>` `--fonte` `--direcao enviada\|recebida` `--favorito true` `--configuracao` `--ordem` `--limite` `--antes` |
 | `malote anexos` | Os Anexos de **uma** Conversa, em ordem cronológica, com a presença de cada um | `--conversa <id>`\* `--tipo image\|video\|audio\|document\|sticker\|other\|imagem\|documento` `--remetente <valor>` `--desde` `--ate` `--presenca presente\|nunca-obtido\|descartado` `--limite` `--antes` |
 | `malote buscar` | Busca no conteúdo, na Transcrição de áudio e nos contatos enviados dentro de Mensagens (com a proveniência marcada) | `--texto <termo>`\* `--conversa` `--autor` `--desde` `--ate` `--limite` `--ordem` |
 | `malote pessoas` | Resolve texto em Pessoa: texto entra, id sai | `--texto <nome>`\* |
 | `malote identificar <valor>` | O que o Acervo sabe de um Identificador, com ou sem Pessoa. O valor é comparado exato | `--fonte <fonte>` |
+| `malote detalhar` | Uma Conversa por inteiro: id, natureza, nome do outro lado (direta) ou assunto, descrição, quem alterou e quando (coletiva), contagem de Mensagens e a primeira e a última. Id inexistente e id de outro Inquilino respondem igual | `--conversa <id>`\* |
 | `malote participantes` | Participantes de uma Conversa coletiva, com nome e Pessoa; opcionalmente a posição numa data | `--conversa <id>`\* `--em <AAAA-MM-DD>` |
 | `malote etiquetas` | As etiquetas que os membros põem em si em cada grupo: as correntes não vazias, ou o histórico de um membro numa Conversa | `--conversa <id>` `--remetente <valor>` `--busca <texto>` `--historico` `--limite <n>` |
 | `malote configuracao listar` | Quais Configurações existem (apelido, fonte e, nas de WhatsApp, telefone, jid e lid), antes de filtrar por uma | — |

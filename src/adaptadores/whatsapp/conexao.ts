@@ -95,6 +95,11 @@ export interface OpcoesDeConexao {
    */
   capturar?: (fluxo: string, dado: unknown) => void;
   /**
+   * O aviso de metadados de grupo (`groups.upsert` e `groups.update`), entregue como veio (#1160, fatia C). Quem
+   * recebe grava, e a conexao so entrega: excecao aqui nunca custa Mensagem nem derruba o processo.
+   */
+  aoAvisoDeGrupo?: (fluxo: string, dado: unknown) => void;
+  /**
    * Resumo ESTRUTURADO de cada evento de app-state observado — forma, nunca
    * valor. Diferente de `capturar`, este fica LIGADO em producao: e por ele
    * que o instante do ultimo Retrato de Estado e anotado.
@@ -272,6 +277,20 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
           // Estourar aqui nao pode custar frame nem Mensagem.
         }
       });
+    }
+
+    // O aviso de metadados de grupo e a COBERTURA do evento de grupo da mensagem: a espiga de 13 e 14/10/2026 mediu
+    // que os dois chegam no mesmo instante, e que so o aviso existe quando a Mensagem do evento e recusada.
+    for (const fluxo of ['groups.upsert', 'groups.update'] as const) {
+      sock.ev.on(fluxo, ((dado: unknown) => {
+        // Parada pedida ou conta recusada: o Acervo ja pode estar fechado.
+        if (parado) return;
+        try {
+          opcoes.aoAvisoDeGrupo?.(fluxo, dado);
+        } catch {
+          opcoes.registrar(`[grupos] ${fluxo} (falhou ao processar)`);
+        }
+      }) as (dado: never) => void);
     }
 
     sock.ev.on('messages.upsert', ((dado: { messages?: unknown[] }) => {

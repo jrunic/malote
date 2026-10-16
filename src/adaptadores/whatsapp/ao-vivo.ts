@@ -8,6 +8,7 @@ import {
 } from '../../nucleo/correspondencia.js';
 import {
   anexoJaExiste,
+  idDeMensagemPorExterno,
   registrarAnexo,
   registrarConversa,
   registrarIdentificador,
@@ -17,10 +18,16 @@ import {
   registrarEtiqueta,
 } from '../../nucleo/escrita.js';
 import { lerMudancaDeEtiqueta, type MudancaDeEtiqueta } from './etiqueta-ao-vivo.js';
+import { TOLERANCIA_DE_RELOGIO_AO_VIVO_MS } from '../../nucleo/instante.js';
+import {
+  gravarMetadadosDoEvento,
+  lerMudancaDeMetadados,
+  type MudancaDeMetadados,
+} from './metadados-de-coletiva-ao-vivo.js';
 import { nomeRepeteONumeroBrasileiro } from './nome-repete-numero-br.js';
 import { registrarNome } from '../../nucleo/identidade.js';
 import { registrarContatosCompartilhados } from '../../nucleo/contato-compartilhado.js';
-import { lerCartaoAoVivo } from './contato-compartilhado.js';
+import { lerCartaoAoVivo, lerCartaoMultiploAoVivo, type LeituraDeCartoes } from './contato-compartilhado.js';
 import { ehCifrada, naturezaDoStub, textoDoStub } from './stubs-ao-vivo.js';
 
 /**
@@ -69,7 +76,7 @@ export interface MensagemRecebida {
   /** Tipo de evento administrativo. Chega como nome OU como numero. */
   messageStubType?: string | number;
   /** Os alvos do evento — enderecos, na forma que a Fonte escolher. */
-  messageStubParameters?: string[];
+  messageStubParameters?: string[] | null;
 }
 
 /**
@@ -152,6 +159,18 @@ export interface RelatoDeRecepcao {
   descartados: EventoDescartado[];
   /** Transicoes de Participacao que NASCERAM nesta recepcao. */
   transicoes: number;
+  /**
+   * Mensagens GRAVADAS so por causa da tolerancia de relogio (#1204): o instante delas esta a frente do relogio local, e
+   * sem a janela teriam sido recusadas. A reentrega nao conta (a Mensagem ja existia). So numero: e a medicao de campo
+   * que diz se a janela esta larga ou estreita, e o Acervo nao guarda a hora de chegada.
+   */
+  mensagensPelaJanela: number;
+  /** Metadados de Coletiva que MUDARAM nesta recepcao pelo evento de grupo (nunca o texto: assunto e descricao sao texto de conversa). */
+  metadadosDeColetiva: number;
+  /** Eventos de grupo cujo texto ja era o gravado. */
+  metadadosRepetidos: number;
+  /** Eventos de grupo que NAO gravaram metadados, por motivo: `fora-de-grupo`, `forma-vazia`. So contagem. */
+  metadadosIgnorados: Record<string, number>;
   /** Etiquetas de Participacao que NASCERAM nesta recepcao (nunca o texto delas). */
   etiquetas: number;
   /** Destas, as que sao REMOCAO (texto vazio). */
@@ -251,6 +270,9 @@ const VIRAM_MENSAGEM = new Set([
   'documentMessage',
   'reactionMessage',
   'contactMessage',
+  // O cartao MULTIPLO (varios contatos num envio, #1206): medido na espiga de 14/10/2026, chega por `messages.upsert`
+  // como assunto do evento, sozinho ou so com `messageContextInfo`. Descartado antes, e guardado cru.
+  'contactsArrayMessage',
   'locationMessage',
 ]);
 
@@ -393,6 +415,10 @@ export function receberEvento(
     ignorados: {},
     descartados: [],
     transicoes: 0,
+    mensagensPelaJanela: 0,
+    metadadosDeColetiva: 0,
+    metadadosRepetidos: 0,
+    metadadosIgnorados: {},
     etiquetas: 0,
     etiquetasRemovidas: 0,
     contatosCompartilhados: 0,
@@ -529,6 +555,21 @@ export function receberEvento(
       if (aGravar === null) continue;
     }
 
+    // Os Metadados de Coletiva (#1160, fatia C) sao um ramo ADITIVO: o evento de grupo segue para a gravacao da
+    // Mensagem sem texto (o Conteudo Bruto guarda o evento original, e o repo nunca perde o dado original), e os
+    // metadados se gravam na MESMA Operacao. Decide LENDO; o que nao grava e contado por motivo.
+    let metadadosAGravar: MudancaDeMetadados | null = null;
+    const metadados = lerMudancaDeMetadados(m);
+    if (metadados !== null) {
+      if (!metadados.grupo.endsWith('@g.us')) {
+        relato.metadadosIgnorados['fora-de-grupo'] = (relato.metadadosIgnorados['fora-de-grupo'] ?? 0) + 1;
+      } else if (metadados.acao === 'forma-vazia') {
+        relato.metadadosIgnorados['forma-vazia'] = (relato.metadadosIgnorados['forma-vazia'] ?? 0) + 1;
+      } else {
+        metadadosAGravar = metadados;
+      }
+    }
+
     const tipo = tipoDeConteudo(m.message);
     if (mudanca === null && tipo !== null && !VIRAM_MENSAGEM.has(tipo)) {
       relato.ignorados[tipo] = (relato.ignorados[tipo] ?? 0) + 1;
@@ -550,10 +591,19 @@ export function receberEvento(
       emOperacao(
         acervo,
         { natureza: 'receber-ao-vivo', reversibilidade: 'irreversivel', registraEfeito: false },
-        () =>
-          mudanca !== null && aGravar !== null
-            ? gravarEtiqueta(acervo, m, mudanca, aGravar, relato)
-            : gravarUma(acervo, m, indice, opcoes, relato),
+        () => {
+          if (mudanca !== null && aGravar !== null) {
+            gravarEtiqueta(acervo, m, mudanca, aGravar, relato);
+            return;
+          }
+          // Os metadados entram ANTES da Mensagem e na mesma transacao: se a Mensagem for recusada, a Operacao
+          // inteira se desfaz (a tolerancia de relogio da guarda de instante vale para os dois). O contador so
+          // anda depois que a Mensagem entrou, para a recusa nao deixar contagem de gravacao desfeita.
+          const gravou = metadadosAGravar === null ? undefined : gravarMetadadosDoEvento(acervo, m, metadadosAGravar);
+          gravarUma(acervo, m, indice, opcoes, relato);
+          if (gravou === true) relato.metadadosDeColetiva += 1;
+          else if (gravou === false) relato.metadadosRepetidos += 1;
+        },
       );
     } catch (erro) {
       // O catch e POR EVENTO, e sem ele o adaptador PERDE mensagem.
@@ -657,18 +707,27 @@ function gravarUma(
 
   // 4. A Mensagem.
   const texto = textoDe(m.message);
+  // Antes da gravacao: a guarda de instante roda ANTES da checagem de idempotencia da porta, entao a reentrega de uma
+  // Mensagem a frente do relogio passaria pela janela de novo e seria contada de novo. Custo: uma consulta a mais por
+  // Mensagem ao vivo, pelo mesmo indice unico que `registrarMensagem` consulta logo depois (a importacao ja faz o
+  // mesmo antes de gravar).
+  const jaExistia = idDeMensagemPorExterno(acervo, { fonte: FONTE, idExterno: m.key.id }) !== undefined;
   const mensagemId = registrarMensagem(acervo, {
     conversaId,
     fonte: FONTE,
     idExterno: m.key.id,
     ocorridaEm: m.messageTimestamp * 1000,
     agora: opcoes.agora,
+    // O UNICO ponto que passa a tolerancia (#1204): o instante e o do aparelho de quem enviou, e o lote do ouvinte, a
+    // drenagem do derrame e o reprocessamento dos descartados passam todos por aqui.
+    toleranciaDeRelogioMs: TOLERANCIA_DE_RELOGIO_AO_VIVO_MS,
     bruto: JSON.stringify(m),
     direcao: m.key.fromMe ? 'enviada' : 'recebida',
     ...(autorId !== undefined ? { autorId } : {}),
     ...(texto !== undefined ? { conteudo: texto } : {}),
   });
   relato.gravados += 1;
+  if (!jaExistia && m.messageTimestamp * 1000 > opcoes.agora) relato.mensagensPelaJanela += 1;
 
   // 5. O Anexo nasce `nunca-obtido`, como na importacao. Ao vivo a plataforma
   //    entrega referencia de download — 54 em 288 —, e e ela que o comando de
@@ -709,20 +768,27 @@ function gravarUma(
     relato.anexosNuncaObtidos.push({ indice, anexoId, tipo: tipoDoAnexo });
   }
 
-  // 5b. O Contato Compartilhado: so o `contactMessage` do TOPO do evento. O mesmo tipo dentro de
-  //     `quotedMessage` e citacao de outra Mensagem (19 de 105 no Acervo real em 13/10/2026) e
-  //     nunca e cartao enviado. `contactsArrayMessage` (varios contatos) NAO entra: nao foi medido
-  //     ao vivo, e a classificacao e medida, nunca deduzida.
-  const contato = desembrulhar(m.message)?.['contactMessage'];
+  // 5b. O Contato Compartilhado: so o `contactMessage` (um cartao) ou o `contactsArrayMessage` (varios, #1206)
+  //     do TOPO do evento. O mesmo tipo dentro de `quotedMessage` e citacao de outra Mensagem (19 de 105 no
+  //     Acervo real em 13/10/2026) e nunca e cartao enviado. O cartao multiplo e gravado numa chamada so: a
+  //     porta SUBSTITUI o conjunto da Mensagem, entao um cartao por chamada deixaria so o ultimo.
+  const topo = desembrulhar(m.message);
+  const contato = topo?.['contactMessage'];
+  const multiplo = topo?.['contactsArrayMessage'];
+  let leituraDoCartao: LeituraDeCartoes | undefined;
   if (contato !== undefined && contato !== null && typeof contato === 'object') {
     const dado = contato as Record<string, unknown>;
-    const leitura = lerCartaoAoVivo(
+    leituraDoCartao = lerCartaoAoVivo(
       typeof dado['vcard'] === 'string' ? dado['vcard'] : '',
       typeof dado['displayName'] === 'string' ? dado['displayName'] : undefined,
     );
-    const r = registrarContatosCompartilhados(acervo, mensagemId, leitura.cartoes);
+  } else if (multiplo !== undefined && multiplo !== null && typeof multiplo === 'object') {
+    leituraDoCartao = lerCartaoMultiploAoVivo((multiplo as Record<string, unknown>)['contacts']);
+  }
+  if (leituraDoCartao !== undefined) {
+    const r = registrarContatosCompartilhados(acervo, mensagemId, leituraDoCartao.cartoes);
     relato.contatosCompartilhados += r.criados.length;
-    relato.contatosCompartilhadosRecusados += leitura.recusados;
+    relato.contatosCompartilhadosRecusados += leituraDoCartao.recusados;
   }
 
   // 6. A Transicao de Participacao, quando a Fonte declara o evento.

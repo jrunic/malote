@@ -90,7 +90,7 @@ brasileiro com e sem o nono dígito conta como o mesmo telefone.
 | comando | o que faz |
 |---|---|
 | `ouvir --inquilino <id> --conta <nome> [--numero <so digitos>]` | O ouvinte: recebe do WhatsApp e grava. **Um processo por conta**; roda como serviço (`malote-ouvinte@<conta>`). No **primeiro pareamento**, `--numero` (só dígitos, com o código do país) é obrigatório para receber o código |
-| `ouvinte estado --conta <nome> [--json]` | O instante do último evento recebido, lido de um arquivo, **sem abrir o Acervo**. É o que a vigilância de silêncio lê; a saída padrão é contrato com ela. O `--json` traz também `descartes`: a série diária, por tipo, do que a recepção não gravou como Mensagem (últimos 30 dias, só tipos e números, nunca conteúdo) e `guarda`: quantos eventos (`eventos`) e quantos bytes (`bytes`) a guarda do evento cru ocupa; e `ultimoSinalDaConexao`: o instante do último frame que a Conexão recebeu do WhatsApp (ISO), ou `null` quando o sinal está indisponível. Anda mesmo em conta sem Mensagem; é gravado no máximo a cada 15 s |
+| `ouvinte estado --conta <nome> [--json]` | O instante do último evento recebido, lido de um arquivo, **sem abrir o Acervo**. É o que a vigilância de silêncio lê; a saída padrão é contrato com ela. O `--json` traz também `descartes`: a série diária, por tipo, do que a recepção não gravou como Mensagem (últimos 30 dias, só tipos e números, nunca conteúdo) e `guarda`: quantos eventos (`eventos`) e quantos bytes (`bytes`) a guarda do evento cru ocupa; e `instantesAdiantados`: a série diária, só em números, das Mensagens gravadas apenas por causa da tolerância de relógio da recepção (até 5 s à frente do relógio local; últimos 30 dias); e `ultimoSinalDaConexao`: o instante do último frame que a Conexão recebeu do WhatsApp (ISO), ou `null` quando o sinal está indisponível. Anda mesmo em conta sem Mensagem; é gravado no máximo a cada 15 s |
 | `ouvinte reprocessar --inquilino <id> --conta <nome> --configuracao <apelido>` | Grava o que caiu no derrame (Acervo ocupado). **Recusa com o ouvinte no ar** |
 | `ouvinte reprocessar-descartados --inquilino <id> --conta <nome> --configuracao <apelido>` | Reprocessa o evento cru que a recepção guardou por não gravá-lo como Mensagem. **Recusa com o ouvinte no ar.** Sai da guarda o que passou a ser gravado; fica o que ainda é descartado |
 
@@ -170,7 +170,7 @@ etapas estão na seção 4.3 do [guia do host](../guias/host-continuo-ouvinte-e-
 ## Consulta local
 
 As mesmas consultas do modo cliente, lendo o Acervo direto, com `--inquilino <id>`:
-`conversas`, `mensagens`, `anexos`, `exportar`, `buscar`, `pessoas`, `participantes`, `etiquetas` e `identificar <valor>`. Flags, formatos e o
+`conversas`, `mensagens`, `anexos`, `exportar`, `buscar`, `pessoas`, `participantes`, `etiquetas`, `identificar <valor>` e `detalhar`. Flags, formatos e o
 significado de `--remetente` e `--autor` estão na [referência do modo cliente](comandos-modo-cliente.md); a
 diferença é o `--inquilino` e o fato de **`malote midia <id>`** (os bytes do Anexo) só existir por rede:
 local, o arquivo já está em disco, e o caminho vem no campo `caminho` de `mensagens --json`. A resposta de `buscar` traz `truncado`, e `ordem` aceita `recentes` (padrão) ou `cronologica`.

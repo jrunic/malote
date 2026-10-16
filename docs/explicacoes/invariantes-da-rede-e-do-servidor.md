@@ -24,7 +24,10 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   já faz uma contagem correlacionada por linha sobre ~1,4 M Mensagens. O Identificador do outro lado da
   Conversa direta vem de um `LEFT JOIN` pela chave única `(fonte, valor)`, nunca de chave montada em JS.
   Baseline medida em produção (04/10/2026) para o aceite: `conversas` sem filtro **0,62 a 2,12 s e
-  1.407.993 bytes**; teto com os campos novos: 3 s e 2,0 MB.
+  1.407.993 bytes**; teto com os campos novos: 3 s e 2,0 MB. **O teto vale POR PÁGINA desde a #1202**: a listagem
+  vem em páginas de 500 por cursor composto (instante de criação ou da última Mensagem, e id), `proximo` só existe
+  quando há mais, e a CLI avisa o corte e tem `--tudo`. A linha de base da sem-filtro era 1.898.051 bytes e 1,12 a
+  1,27 s em 15/10/2026, com 5,4% de folga; a primeira página é a medida nova.
 - **Listar Anexos e exportar Conversa seguem o que o ciclo 31 mediu: uma consulta por página (nunca uma por
   Mensagem), `ordem=cronologica` em TODA página do export, e nome por autor, nunca por participante.** Na maior
   Conversa (270.453 Mensagens) a página de 500 custa 0,45 s e 276 KB; paginar tudo é ~541 páginas, ~4 min e
@@ -75,6 +78,7 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   cliente só avisa em resposta que chegou. `envio estado` também é despachado por rede
   (ciclo 29), no ponto de entrada e fora de `COMANDOS_DE_REDE`; `envio reprocessar`
   continua só local.
+- **`COMANDOS_DE_REDE` é por PRIMEIRA palavra, e comando novo de leitura é um verbo solto (#1203).** `conversa presenca` é local e fica fora da lista; pôr `conversa` nela mandaria `presenca` por rede, onde não há rota. Um subcomando de rede (`conversa mostrar`) exigiria que a lista olhasse a segunda palavra, mudança na resolução global que não desce para dentro de handler. Por isso o detalhe de uma Conversa é `detalhar`, ao lado de `conversas`. A resposta nomeia a Configuração pelo **apelido**, como a listagem, nunca pelo id interno; `404` de corpo vazio vale para o id inexistente e para o de outro Inquilino.
 - **Cliente HTTP mora em `src/cli/`, nunca em `src/rede/`.** `src/rede/` é a zona do
   baileys e a fronteira proíbe `cli` importá-la — a guarda pegou a violação no commit em
   que nasceu (ciclo 21).

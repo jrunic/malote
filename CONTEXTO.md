@@ -141,13 +141,15 @@ Roadmap, specs, planos e diários vivem fora deste repositório.
 
 ## Restrições
 
+- **Operação declarada `por-efeito` só se desfaz se `desfazerLinha` tem o CASO da tabela; sem ele o `desfazer` recusa a linha ("não tem porta de restauração").** Declarar a reversibilidade e relatar o efeito não a entregam: `extrair-duracao` está assim desde a #1103. O preenchimento do Contato Compartilhado (#1135) tem o caso, mais um teste que roda o `desfazer` e confere que cartões, valores e linha de busca saem. Ao criar comando que escreve, o teste de `desfazer` vem junto, ou a Operação se declara `irreversivel`.
+
 Hard limits sempre relevantes durante a sessão. O motivo e a medição de cada regra por subsistema estão em `docs/explicacoes/` (ponteiros ao fim desta seção).
 
 - **Runner de testes canônico:** `npm test`
 - **Idioma da saída para humano:** pt-BR
 - **Comentários inline:** pt-BR
 - **Nome do repo e do binário:** `malote`, nome comercial próprio, sem prefixo de organização nem de ferramenta interna.
-- **Nada neste repo nomeia pessoa real, cliente, host ou caminho de máquina do autor** — em código, fixture, comentário, exemplo e mensagem de commit. Dado de exemplo é sintético
+- **Nada neste repo nomeia pessoa real, cliente, agente, conta, host ou caminho de máquina do autor** — em código, fixture, comentário, exemplo e mensagem de commit. Dado de exemplo é sintético, e o nome do identificador de fixture descreve o **papel** (`LID_DA_CONTA`, `LID_DE_OUTRO_MEMBRO`), nunca quem é. Já passou numa revisão: um `LID_DA_<agente>` numa fixture e um comentário "na conta da <agente>", pegos antes do primeiro commit; ref empurrada é permanente
 - **Nenhum caminho de arquivo do acervo contém dado pessoal** — invariante do agregado Anexo; foi defeito real no repo de origem
 - **O núcleo não nomeia ferramenta.** `jid`, `lid`, `handle`, `resource_name`, `etag` são vocabulário de Adaptador e não aparecem em agregado do núcleo
 - **Tudo é escopado a Inquilino.** Nenhuma consulta atravessa Inquilino — nem como opção, nem sob flag
@@ -165,9 +167,9 @@ Hard limits sempre relevantes durante a sessão. O motivo e a medição de cada 
 
 **Regras por subsistema** (motivo e medição em `docs/explicacoes/`; leia antes de mexer no assunto). Entre parênteses, as mais perigosas de cada uma:
 
-- [Recepção ao vivo, mídia e Envio](docs/explicacoes/invariantes-da-recepcao-e-do-ouvinte.md): a classificação de conteúdo é **medida, nunca deduzida**; a saída default de `ouvinte estado` é contrato com quem vigia a instalação; trabalho de disco na subida do ouvinte pode travá-la; o código de saída do ouvinte é contrato com o supervisor (1 é vínculo invalidado e NÃO reinicia, exceção que escapa da biblioteca sai por 70 e reinicia, #1173); o sinal de vida da Conexão é o frame do transporte (`ws`), estrangulado, e `null` é indisponível, nunca morta (#1162).
+- [Recepção ao vivo, mídia e Envio](docs/explicacoes/invariantes-da-recepcao-e-do-ouvinte.md): a classificação de conteúdo é **medida, nunca deduzida**; a saída default de `ouvinte estado` é contrato com quem vigia a instalação; trabalho de disco na subida do ouvinte pode travá-la; o código de saída do ouvinte é contrato com o supervisor (1 é vínculo invalidado e NÃO reinicia, exceção que escapa da biblioteca sai por 70 e reinicia, #1173); o sinal de vida da Conexão é o frame do transporte (`ws`), estrangulado, e `null` é indisponível, nunca morta (#1162); só a recepção ao vivo tolera relógio adiantado e grava o instante declarado (#1204); o aviso de metadados de grupo decide lendo e nunca reescreve o `bruto` de Conversa existente (#1160).
 - [Identidade, nome e catálogo](docs/explicacoes/invariantes-de-identidade-nome-e-catalogo.md): vazio conta como ausente (`??` não serve); o nono dígito brasileiro fica no adaptador; nome-sentinela de biblioteca não é nome.
-- [Rede e servidor](docs/explicacoes/invariantes-da-rede-e-do-servidor.md): o modo rede é fail-closed e a guarda morre antes de qualquer I/O; a leitura roda em worker, com prazo, e nunca escreve; o texto do usuário é texto, nunca sintaxe.
+- [Rede e servidor](docs/explicacoes/invariantes-da-rede-e-do-servidor.md): o modo rede é fail-closed e a guarda morre antes de qualquer I/O; a leitura roda em worker, com prazo, e nunca escreve; o texto do usuário é texto, nunca sintaxe; comando novo de leitura por rede é um verbo solto, porque a lista é por primeira palavra (#1203); o teto da listagem de Conversas (3 s e 2,0 MB) vale por página, de 500, e a ordem por criação desempata por id (#1202).
 - [Acervo, migração e trilha](docs/explicacoes/invariantes-do-acervo-migracao-e-trilha.md): passo que precisa de contexto declara `exigeContexto` e recusa sem ele; a trilha de uma migração se escreve depois dela; verificação contra alvo que se move usa contenção.
 - [Ingestão por varredura](docs/explicacoes/invariantes-da-ingestao-por-varredura.md): a varredura invoca a importação em modo de reprocessamento; mover para `processados/` só depois do registro de conclusão.
 - [Regras de código, teste e build](docs/explicacoes/regras-de-codigo-teste-e-build.md): o detalhe e as medições das regras de código acima.

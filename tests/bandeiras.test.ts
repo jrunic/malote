@@ -29,7 +29,7 @@ test('as bandeiras nao pedem valor, e nao consomem o argumento seguinte', () => 
   }
   assert.deepEqual([...BANDEIRAS].sort(), [
     'ajuda', 'com-efeito', 'confirmo', 'exposto', 'historico', 'incluir-absorvidas', 'json',
-    'reprocessar', 'sobrescrever', 'versao',
+    'reprocessar', 'sobrescrever', 'tudo', 'versao',
   ]);
 });
 

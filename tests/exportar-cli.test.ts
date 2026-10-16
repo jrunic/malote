@@ -35,6 +35,13 @@ async function servidorDePaginas(paginas: Pagina[]): Promise<{ url: string; pedi
       res.end(JSON.stringify({ autores: [{ identificadorId: 'i1', valor: '111@s.whatsapp.net', nome: 'Ana' }] }));
       return;
     }
+    if ((req.url ?? '').includes('/detalhe')) {
+      // #1203: o servidor de mentira e ANTERIOR ao detalhe (404). O export tem de seguir sem a descricao, e o pedido
+      // do detalhe nao pode consumir uma pagina.
+      res.writeHead(404, { 'content-type': 'application/json' });
+      res.end('');
+      return;
+    }
     const p = paginas[n] ?? { mensagens: [] };
     n += 1;
     res.writeHead(p.status ?? 200, { 'content-type': 'application/json' });
@@ -82,6 +89,20 @@ function rede(url: string) {
     },
   };
 }
+
+test('servidor anterior ao detalhe (404): o export json segue, sem a chave da descricao (#1203)', async () => {
+  const T = Date.parse('2026-06-01T12:00:00Z');
+  const s = await servidorDePaginas([{ mensagens: [m('a', T, 'um')] }]);
+  try {
+    const r = rede(s.url);
+    assert.equal(await executarExportarRede(['exportar', '--conversa', 'c1', '--formato', 'json'], r.dep), 0);
+    const doc = JSON.parse(r.dados.join(''));
+    assert.equal('descricao' in doc, false);
+    assert.equal(doc.mensagens.length, 1, 'o detalhe nao pode consumir uma pagina');
+  } finally {
+    s.parar();
+  }
+});
 
 test('o export manda ordem=cronologica em TODA pagina, devolve o cursor recebido e junta sem repetir nem pular (#1129)', async () => {
   const T = Date.parse('2026-06-01T12:00:00Z');

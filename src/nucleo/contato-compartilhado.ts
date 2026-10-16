@@ -178,8 +178,8 @@ export interface MensagemComOrigemDeCartao {
 /**
  * As Mensagens que podem ter cartao no Conteudo Bruto e ainda NAO tem nenhum gravado, por origem.
  * E o estoque do preenchimento: depois dele, a lista volta vazia. Do lado ao vivo o filtro de texto
- * e so um pre-corte barato; quem decide se o `contactMessage` esta no TOPO do evento (e nao numa
- * citacao) e o adaptador, lendo o JSON.
+ * e so um pre-corte barato (o cartao unico OU o multiplo); quem decide se ele esta no TOPO do evento
+ * (e nao numa citacao) e o adaptador, lendo o JSON.
  */
 export function listarMensagensSemCartao(acervo: Acervo): {
   doBackup: MensagemComOrigemDeCartao[];
@@ -197,7 +197,7 @@ export function listarMensagensSemCartao(acervo: Acervo): {
     .preparar(
       `SELECT m.id AS mensagemId, m.bruto AS bruto
          FROM mensagens m
-        WHERE m.fonte = 'whatsapp' AND m.bruto IS NOT NULL AND instr(m.bruto, '"contactMessage"') > 0
+        WHERE m.fonte = 'whatsapp' AND m.bruto IS NOT NULL AND (instr(m.bruto, '"contactMessage"') > 0 OR instr(m.bruto, '"contactsArrayMessage"') > 0)
           AND NOT EXISTS (SELECT 1 FROM contatos_compartilhados c WHERE c.mensagem_id = m.id)`,
     )
     .all() as MensagemComOrigemDeCartao[];
