@@ -149,6 +149,10 @@ test('SEM --desde, a ordem continua por criacao — nao regride o default existe
     const { acervo } = c.novoInquilino('Ahsoka');
     const a = conversa(acervo, { idExterno: 'a@s.whatsapp.net', coletiva: false });
     const b = conversa(acervo, { idExterno: 'b@s.whatsapp.net', coletiva: false });
+    // Instantes de criacao DISTINTOS (#1202): duas Conversas criadas em sequencia podem cair no mesmo milissegundo, e
+    // dentro de um empate a ordem e a do id (UUID). Este teste e sobre a ordem por criacao, nao sobre o empate.
+    acervo.db.prepare('UPDATE conversas SET criada_em = ? WHERE id = ?').run('2026-01-01T00:00:00.000Z', a);
+    acervo.db.prepare('UPDATE conversas SET criada_em = ? WHERE id = ?').run('2026-01-02T00:00:00.000Z', b);
     msg(acervo, b, 'm-b', Date.parse('2026-09-01T00:00:00Z'));
     msg(acervo, a, 'm-a', Date.parse('2026-01-01T00:00:00Z'));
 

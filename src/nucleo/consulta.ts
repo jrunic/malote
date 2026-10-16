@@ -5,6 +5,7 @@ import type { ConversaId, Direcao, EstadoDeTranscricao, Fonte, MensagemId, Pesso
 import { nomeDoIdentificador } from './identidade.js';
 import { nomesEmLote } from './nomes-em-lote.js';
 import { lerContatosCompartilhados, type ContatoCompartilhadoLido } from './contato-compartilhado.js';
+import type { CursorDeConversas } from './cursor-de-conversas.js';
 
 /**
  * Leitura do Acervo. Nenhum caminho daqui escreve.
@@ -175,9 +176,30 @@ export interface FiltroDeConversa {
    * terceiro parametro: a aridade de `listarConversas` e guardada por teste.
    */
   precedencia?: PrecedenciaDeNome;
+  /**
+   * So as Conversas DEPOIS deste cursor, na ordem da consulta (#1202). A ordem do cursor tem de ser a da consulta:
+   * por criacao sem `desde`, por atividade com `desde`. Quem valida isso e `paginarConversas`.
+   */
+  cursor?: CursorDeConversas;
+}
+
+/** A Conversa listada com a chave de ordem que o cursor usa. Uso interno da paginacao (#1202). */
+export interface ConversaListadaComChave extends ConversaListada {
+  /** O instante de criacao, como o Acervo o grava (texto). */
+  chaveDeCriacao: string;
+  /** O instante da ultima Mensagem; so a consulta com `desde` o calcula. */
+  chaveDeAtividade: number | null;
 }
 
 export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): ConversaListada[] {
+  return consultarConversas(acervo, filtro).map(({ chaveDeCriacao: _c, chaveDeAtividade: _a, ...conversa }) => conversa);
+}
+
+/**
+ * A consulta de `listarConversas`, com a chave de ordem de cada linha. Ordem total: por criacao, (instante, id); com
+ * `desde`, (ultima Mensagem do mais recente ao mais antigo, id).
+ */
+export function consultarConversas(acervo: Acervo, filtro: FiltroDeConversa): ConversaListadaComChave[] {
   const condicoes: string[] = [];
   const valores: unknown[] = [];
   if (filtro.fonte !== undefined) {
@@ -218,33 +240,50 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
     condicoes.push('c.configuracao_id = ?');
     valores.push(filtro.configuracaoId);
   }
+  const cursor = filtro.cursor;
+  if (cursor !== undefined && cursor.ordem === 'criacao') {
+    condicoes.push('(c.criada_em > ? OR (c.criada_em = ? AND c.id > ?))');
+    valores.push(cursor.valor, cursor.valor, cursor.id);
+  }
   const onde = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
   const limite = filtro.limite !== undefined ? ` LIMIT ${Number(filtro.limite)}` : '';
 
   let linhas: Array<Record<string, unknown>>;
   if (filtro.desde !== undefined) {
+    // Mutante que SOBREVIVE (#1202), sem ser equivalencia semantica: tirar `, c.id` do ORDER BY abaixo nao muda resposta
+    // alguma hoje, porque o GROUP BY c.id entrega os empates de atividade em ordem de id e o ordenador do SQLite
+    // preserva essa ordem (medido em 16/10/2026 com o teste de empate por atividade). E comportamento do SQLite de
+    // agora, e nao garantia da linguagem; o cursor depende do id como desempate, por isso ele fica no ORDER BY.
     linhas = acervo.preparar(
-        `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, md.assunto, i.id AS identificador_id,
-                COUNT(msg.id) AS mensagens
+        `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, c.criada_em, md.assunto, i.id AS identificador_id,
+                COUNT(msg.id) AS mensagens, MAX(msg.ocorrida_em) AS ultima_em
            FROM conversas c
            LEFT JOIN metadados_de_coletiva md ON md.conversa_id = c.id
            LEFT JOIN identificadores i ON i.fonte = c.fonte AND i.valor = c.id_externo AND c.coletiva = 0
            LEFT JOIN mensagens msg ON msg.conversa_id = c.id
            ${onde}
            GROUP BY c.id
-           HAVING MAX(msg.ocorrida_em) >= ?
-           ORDER BY MAX(msg.ocorrida_em) DESC${limite}`,
+           HAVING MAX(msg.ocorrida_em) >= ?${
+             cursor !== undefined && cursor.ordem === 'atividade'
+               ? ' AND (MAX(msg.ocorrida_em) < ? OR (MAX(msg.ocorrida_em) = ? AND c.id > ?))'
+               : ''
+           }
+           ORDER BY MAX(msg.ocorrida_em) DESC, c.id${limite}`,
       )
-      .all(...valores, filtro.desde) as Array<Record<string, unknown>>;
+      .all(
+        ...valores,
+        filtro.desde,
+        ...(cursor !== undefined && cursor.ordem === 'atividade' ? [cursor.valor, cursor.valor, cursor.id] : []),
+      ) as Array<Record<string, unknown>>;
   } else {
     linhas = acervo.preparar(
-        `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, md.assunto, i.id AS identificador_id,
+        `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, c.criada_em, md.assunto, i.id AS identificador_id,
                 (SELECT COUNT(*) FROM mensagens x WHERE x.conversa_id = c.id) AS mensagens
            FROM conversas c
            LEFT JOIN metadados_de_coletiva md ON md.conversa_id = c.id
            LEFT JOIN identificadores i ON i.fonte = c.fonte AND i.valor = c.id_externo AND c.coletiva = 0
            ${onde}
-           ORDER BY c.criada_em${limite}`,
+           ORDER BY c.criada_em, c.id${limite}`,
       )
       .all(...valores) as Array<Record<string, unknown>>;
   }
@@ -259,6 +298,8 @@ export function listarConversas(acervo: Acervo, filtro: FiltroDeConversa): Conve
     nome: null as string | null,
     origemDoNome: null as string | null,
     identificadorId: (l['identificador_id'] as string | null) ?? null,
+    chaveDeCriacao: l['criada_em'] as string,
+    chaveDeAtividade: (l['ultima_em'] as number | null | undefined) ?? null,
   }));
 
   if (filtro.precedencia !== undefined) {
