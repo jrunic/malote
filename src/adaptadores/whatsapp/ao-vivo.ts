@@ -27,7 +27,7 @@ import {
 import { nomeRepeteONumeroBrasileiro } from './nome-repete-numero-br.js';
 import { registrarNome } from '../../nucleo/identidade.js';
 import { registrarContatosCompartilhados } from '../../nucleo/contato-compartilhado.js';
-import { lerCartaoAoVivo } from './contato-compartilhado.js';
+import { lerCartaoAoVivo, lerCartaoMultiploAoVivo, type LeituraDeCartoes } from './contato-compartilhado.js';
 import { ehCifrada, naturezaDoStub, textoDoStub } from './stubs-ao-vivo.js';
 
 /**
@@ -270,6 +270,9 @@ const VIRAM_MENSAGEM = new Set([
   'documentMessage',
   'reactionMessage',
   'contactMessage',
+  // O cartao MULTIPLO (varios contatos num envio, #1206): medido na espiga de 14/10/2026, chega por `messages.upsert`
+  // como assunto do evento, sozinho ou so com `messageContextInfo`. Descartado antes, e guardado cru.
+  'contactsArrayMessage',
   'locationMessage',
 ]);
 
@@ -765,20 +768,27 @@ function gravarUma(
     relato.anexosNuncaObtidos.push({ indice, anexoId, tipo: tipoDoAnexo });
   }
 
-  // 5b. O Contato Compartilhado: so o `contactMessage` do TOPO do evento. O mesmo tipo dentro de
-  //     `quotedMessage` e citacao de outra Mensagem (19 de 105 no Acervo real em 13/10/2026) e
-  //     nunca e cartao enviado. `contactsArrayMessage` (varios contatos) NAO entra: nao foi medido
-  //     ao vivo, e a classificacao e medida, nunca deduzida.
-  const contato = desembrulhar(m.message)?.['contactMessage'];
+  // 5b. O Contato Compartilhado: so o `contactMessage` (um cartao) ou o `contactsArrayMessage` (varios, #1206)
+  //     do TOPO do evento. O mesmo tipo dentro de `quotedMessage` e citacao de outra Mensagem (19 de 105 no
+  //     Acervo real em 13/10/2026) e nunca e cartao enviado. O cartao multiplo e gravado numa chamada so: a
+  //     porta SUBSTITUI o conjunto da Mensagem, entao um cartao por chamada deixaria so o ultimo.
+  const topo = desembrulhar(m.message);
+  const contato = topo?.['contactMessage'];
+  const multiplo = topo?.['contactsArrayMessage'];
+  let leituraDoCartao: LeituraDeCartoes | undefined;
   if (contato !== undefined && contato !== null && typeof contato === 'object') {
     const dado = contato as Record<string, unknown>;
-    const leitura = lerCartaoAoVivo(
+    leituraDoCartao = lerCartaoAoVivo(
       typeof dado['vcard'] === 'string' ? dado['vcard'] : '',
       typeof dado['displayName'] === 'string' ? dado['displayName'] : undefined,
     );
-    const r = registrarContatosCompartilhados(acervo, mensagemId, leitura.cartoes);
+  } else if (multiplo !== undefined && multiplo !== null && typeof multiplo === 'object') {
+    leituraDoCartao = lerCartaoMultiploAoVivo((multiplo as Record<string, unknown>)['contacts']);
+  }
+  if (leituraDoCartao !== undefined) {
+    const r = registrarContatosCompartilhados(acervo, mensagemId, leituraDoCartao.cartoes);
     relato.contatosCompartilhados += r.criados.length;
-    relato.contatosCompartilhadosRecusados += leitura.recusados;
+    relato.contatosCompartilhadosRecusados += leituraDoCartao.recusados;
   }
 
   // 6. A Transicao de Participacao, quando a Fonte declara o evento.
