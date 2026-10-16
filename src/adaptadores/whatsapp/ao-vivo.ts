@@ -71,7 +71,7 @@ export interface MensagemRecebida {
   /** Tipo de evento administrativo. Chega como nome OU como numero. */
   messageStubType?: string | number;
   /** Os alvos do evento — enderecos, na forma que a Fonte escolher. */
-  messageStubParameters?: string[];
+  messageStubParameters?: string[] | null;
 }
 
 /**
