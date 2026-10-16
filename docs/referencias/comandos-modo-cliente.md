@@ -55,7 +55,7 @@ Todos aceitam `--json`. As flags marcadas com `*` são obrigatórias.
 
 | comando | o que faz | flags |
 |---|---|---|
-| `malote conversas` | Índice do Acervo: id, fonte, natureza, contagem, assunto, Configuração | `--busca <texto>` `--fonte <nome>` `--coletiva true\|false` `--pessoa <id>` `--configuracao <apelido>` `--fixada true` `--desde <data>` `--limite <n>` |
+| `malote conversas` | Índice do Acervo: id, fonte, natureza, contagem, assunto, Configuração. **Em páginas de 500:** havendo mais, o aviso traz o cursor | `--busca <texto>` `--fonte <nome>` `--coletiva true\|false` `--pessoa <id>` `--configuracao <apelido>` `--fixada true` `--desde <data>` `--limite <n>` `--antes <cursor>` `--tudo` |
 | `malote mensagens` | Mensagens de uma Conversa, ou de todas (sem `--conversa`, as últimas por recência) | `--conversa <id>` `--desde` `--ate` `--autor <id-de-pessoa>` `--remetente <valor>` `--fonte` `--direcao enviada\|recebida` `--favorito true` `--configuracao` `--ordem` `--limite` `--antes` |
 | `malote anexos` | Os Anexos de **uma** Conversa, em ordem cronológica, com a presença de cada um | `--conversa <id>`\* `--tipo image\|video\|audio\|document\|sticker\|other\|imagem\|documento` `--remetente <valor>` `--desde` `--ate` `--presenca presente\|nunca-obtido\|descartado` `--limite` `--antes` |
 | `malote buscar` | Busca no conteúdo, na Transcrição de áudio e nos contatos enviados dentro de Mensagens (com a proveniência marcada) | `--texto <termo>`\* `--conversa` `--autor` `--desde` `--ate` `--limite` `--ordem` |

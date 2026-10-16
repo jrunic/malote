@@ -169,8 +169,10 @@ Use a CLI do malote, no modo rede. As variáveis `MALOTE_SERVIDOR` e
 escreva em arquivo, commit ou log, e nunca a passe adiante.
 
 Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`, descrito em "Solicitar Envio"):
-- `malote conversas [--busca T] [--fonte F] [--coletiva true|false] [--configuracao A] [--fixada true] [--desde D] [--limite N]` —
-  índice; comece sempre aqui. `--configuracao` sozinho filtra por apelido (`malote
+- `malote conversas [--busca T] [--fonte F] [--coletiva true|false] [--configuracao A] [--fixada true] [--desde D] [--limite N] [--antes C] [--tudo]` —
+  índice; comece sempre aqui. **Vem em páginas:** sem `--limite`, a primeira de 500; havendo mais, o aviso de corte
+  (na saída de erro quando há `--json`) traz o cursor para `--antes`, e `--tudo` percorre todas as páginas e entrega
+  a lista inteira, como a listagem era antes. Quem lê a API crua segue o `proximo` da resposta. `--configuracao` sozinho filtra por apelido (`malote
   configuracao listar` mostra o que existe) e só alcança Conversa DIRETA — coletiva
   pertence ao Inquilino inteiro, não a uma Configuração, e nunca casa esse filtro. Com
   `--fixada true`, `--configuracao` muda de sentido: passa a escopar a MARCA de fixada
@@ -304,7 +306,7 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 
 | rota | parâmetros opcionais | resposta |
 |---|---|---|
-| `GET /conversas` | `fonte`, `coletiva`, `busca`, `pessoa`, `limite`, `configuracao`, `fixada`, `desde` | `{ conversas: [{ id, fonte, coletiva, assunto, mensagens, configuracao, nome, origemDoNome }] }` |
+| `GET /conversas` | `fonte`, `coletiva`, `busca`, `pessoa`, `limite`, `configuracao`, `fixada`, `desde`, `antes` | `{ conversas: [{ id, fonte, coletiva, assunto, mensagens, configuracao, nome, origemDoNome }], proximo? }` — página de 500 por padrão; `proximo` só existe quando há mais, e vai em `antes`; cursor inválido ou de outra ordem é `400` |
 | `GET /mensagens` | `limite`, `desde`, `ate`, `autor`, `remetente`, `fonte`, `direcao`, `antes`, `ordem` | `{ mensagens: [...], proximo? }` |
 | `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `remetente`, `antes`, `ordem`, `direcao`, `favorito`, `configuracao` | `{ mensagens: [...], proximo? }` |
 | `GET /conversas/<id>/anexos` | `tipo`, `remetente`, `desde`, `ate`, `presenca`, `limite`, `antes` | `{ anexos: [{ id, tipo, presenca, tamanho, nomeOriginal, mensagemId, autorId, ocorridaEm, ... }], proximo? }` — uma só ordem; `ordem` é `400` |
