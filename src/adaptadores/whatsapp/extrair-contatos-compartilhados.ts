@@ -5,7 +5,13 @@ import {
   type CartaoCompartilhado,
 } from '../../nucleo/contato-compartilhado.js';
 import { emOperacao } from '../../nucleo/trilha.js';
-import { lerCartaoAoVivo, lerCartoesDoAnexoDeBackup, type RecursoDeNome } from './contato-compartilhado.js';
+import {
+  lerCartaoAoVivo,
+  lerCartaoMultiploAoVivo,
+  lerCartoesDoAnexoDeBackup,
+  type LeituraDeCartoes,
+  type RecursoDeNome,
+} from './contato-compartilhado.js';
 
 export interface RelatorioDeExtracaoDeContatos {
   /** Mensagens que ganhariam (ou ganharam) ao menos um cartao. */
@@ -21,15 +27,27 @@ export interface RelatorioDeExtracaoDeContatos {
   gravou: boolean;
 }
 
-function topoDoEvento(bruto: string): { vcard: string; nome: string | undefined } | null {
+/**
+ * O cartao do TOPO do evento: o unico (`contactMessage`) ou o multiplo (`contactsArrayMessage`, #1206). O de dentro
+ * de uma citacao nao conta. Devolve a leitura pronta, ou `null` quando o topo nao tem cartao nenhum.
+ */
+function cartoesDoTopo(bruto: string): LeituraDeCartoes | null {
   try {
-    const evento = JSON.parse(bruto) as { message?: { contactMessage?: Record<string, unknown> } };
-    const c = evento.message?.contactMessage;
-    if (c === undefined || c === null || typeof c !== 'object') return null;
-    return {
-      vcard: typeof c['vcard'] === 'string' ? c['vcard'] : '',
-      nome: typeof c['displayName'] === 'string' ? c['displayName'] : undefined,
+    const evento = JSON.parse(bruto) as {
+      message?: { contactMessage?: Record<string, unknown>; contactsArrayMessage?: Record<string, unknown> };
     };
+    const c = evento.message?.contactMessage;
+    if (c !== undefined && c !== null && typeof c === 'object') {
+      return lerCartaoAoVivo(
+        typeof c['vcard'] === 'string' ? c['vcard'] : '',
+        typeof c['displayName'] === 'string' ? c['displayName'] : undefined,
+      );
+    }
+    const multiplo = evento.message?.contactsArrayMessage;
+    if (multiplo !== undefined && multiplo !== null && typeof multiplo === 'object') {
+      return lerCartaoMultiploAoVivo(multiplo['contacts']);
+    }
+    return null;
   } catch {
     return null;
   }
@@ -72,9 +90,8 @@ export function extrairContatosCompartilhados(
   }
   for (const candidata of aoVivo) {
     if (plano.has(candidata.mensagemId)) continue;
-    const evento = topoDoEvento(candidata.bruto);
-    if (evento === null) continue; // citacao, ou outro tipo: nao e cartao enviado
-    const leitura = lerCartaoAoVivo(evento.vcard, evento.nome);
+    const leitura = cartoesDoTopo(candidata.bruto);
+    if (leitura === null) continue; // citacao, ou outro tipo: nao e cartao enviado
     relatorio.recusados += leitura.recusados;
     if (leitura.cartoes.length > 0) {
       plano.set(candidata.mensagemId, leitura.cartoes);
