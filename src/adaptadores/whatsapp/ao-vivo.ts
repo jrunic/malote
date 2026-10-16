@@ -17,6 +17,7 @@ import {
   registrarEtiqueta,
 } from '../../nucleo/escrita.js';
 import { lerMudancaDeEtiqueta, type MudancaDeEtiqueta } from './etiqueta-ao-vivo.js';
+import { TOLERANCIA_DE_RELOGIO_AO_VIVO_MS } from '../../nucleo/instante.js';
 import { nomeRepeteONumeroBrasileiro } from './nome-repete-numero-br.js';
 import { registrarNome } from '../../nucleo/identidade.js';
 import { registrarContatosCompartilhados } from '../../nucleo/contato-compartilhado.js';
@@ -663,6 +664,9 @@ function gravarUma(
     idExterno: m.key.id,
     ocorridaEm: m.messageTimestamp * 1000,
     agora: opcoes.agora,
+    // O UNICO ponto que passa a tolerancia (#1204): o instante e o do aparelho de quem enviou, e o lote do ouvinte, a
+    // drenagem do derrame e o reprocessamento dos descartados passam todos por aqui.
+    toleranciaDeRelogioMs: TOLERANCIA_DE_RELOGIO_AO_VIVO_MS,
     bruto: JSON.stringify(m),
     direcao: m.key.fromMe ? 'enviada' : 'recebida',
     ...(autorId !== undefined ? { autorId } : {}),

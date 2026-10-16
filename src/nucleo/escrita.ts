@@ -509,6 +509,12 @@ export interface EntradaMensagem {
   direcao: Direcao;
   /** Instante de referência para a checagem de plausibilidade. */
   agora: number;
+  /**
+   * Folga, em milissegundos, para a FRENTE do relógio (#1204). Só a recepção ao vivo a passa: o instante de uma
+   * Mensagem recebida agora é o que o aparelho de quem a enviou declarou, e o relógio dele pode estar um pouco à
+   * frente. Ausente é zero, que é o que a importação quer: no material exportado o futuro é dado ruim.
+   */
+  toleranciaDeRelogioMs?: number;
 }
 
 /**
@@ -527,7 +533,7 @@ export function idDeMensagemPorExterno(
 }
 
 export function registrarMensagem(acervo: Acervo, entrada: EntradaMensagem): MensagemId {
-  const motivo = motivoDaRejeicao(entrada.fonte, entrada.ocorridaEm, entrada.agora);
+  const motivo = motivoDaRejeicao(entrada.fonte, entrada.ocorridaEm, entrada.agora, entrada.toleranciaDeRelogioMs);
   if (motivo !== null) {
     throw new InstanteImplausivelError(motivo);
   }
