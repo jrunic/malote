@@ -120,7 +120,7 @@ function registrarFalha(o_que: string, erro: unknown, avisar: (texto: string) =>
  * os descartes daquele lote. E sincrona e curta.
  */
 export function registrarDescartes(
-  caminhos: { descartes: string; guarda: string },
+  caminhos: { descartes: string; guarda: string; adiantadas?: string },
   r: RelatoDeRecepcao,
   agora: number,
   avisar: (texto: string) => void,
@@ -129,6 +129,18 @@ export function registrarDescartes(
     anotarDescartes(caminhos.descartes, contagemDosDescartes(r), agora);
   } catch (erro) {
     registrarFalha('o contador', erro, avisar);
+  }
+  // A serie das Mensagens GRAVADAS pela janela de relogio (#1204). Propria, e nao uma chave da dos descartes: aquela
+  // mede o que a recepcao NAO grava. Mora aqui porque este e o ponto unico do lote do ouvinte, da drenagem do derrame e
+  // do reprocessar do derrame; o `reprocessar-descartados` NAO passa por aqui (nao escreve na guarda) e por isso nao
+  // alimenta a serie, o que e inofensivo: o relogio dele ja passou o instante. Sem o caminho (chamador antigo) nao
+  // anota; zero nao anota (zero visto nao e dia anotado).
+  if (caminhos.adiantadas !== undefined && r.mensagensPelaJanela > 0) {
+    try {
+      anotarDescartes(caminhos.adiantadas, { mensagens: r.mensagensPelaJanela }, agora);
+    } catch (erro) {
+      registrarFalha('o contador de instantes a frente do relogio', erro, avisar);
+    }
   }
   let guardados = 0;
   try {

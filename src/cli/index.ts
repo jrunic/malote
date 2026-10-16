@@ -874,6 +874,9 @@ function executarComAtor(
             pulos: lerPulos(caminhosDoEstado.pulos),
             // O que a recepcao nao gravou como Mensagem, por dia e por tipo (#1159): so tipos e numeros.
             descartes: lerDescartes(caminhosDoEstado.descartes),
+            // As Mensagens GRAVADAS so por causa da janela de relogio, por dia (#1204): serie propria, no formato da dos
+            // descartes. So o --json: a saida default e contrato com o watchdog.
+            instantesAdiantados: lerDescartes(caminhosDoEstado.adiantadas),
             // Quanto esta guardado (eventos e bytes), nunca o conteudo. Le o arquivo para contar: o custo
             // cresce com o teto (medido: 2 x 50 MiB custam ~92 ms e ~392 MB de RSS), e so o --json paga.
             guarda: estadoDaGuarda(caminhosDoEstado.guarda),

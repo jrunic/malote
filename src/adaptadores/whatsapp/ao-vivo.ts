@@ -8,6 +8,7 @@ import {
 } from '../../nucleo/correspondencia.js';
 import {
   anexoJaExiste,
+  idDeMensagemPorExterno,
   registrarAnexo,
   registrarConversa,
   registrarIdentificador,
@@ -153,6 +154,12 @@ export interface RelatoDeRecepcao {
   descartados: EventoDescartado[];
   /** Transicoes de Participacao que NASCERAM nesta recepcao. */
   transicoes: number;
+  /**
+   * Mensagens GRAVADAS so por causa da tolerancia de relogio (#1204): o instante delas esta a frente do relogio local, e
+   * sem a janela teriam sido recusadas. A reentrega nao conta (a Mensagem ja existia). So numero: e a medicao de campo
+   * que diz se a janela esta larga ou estreita, e o Acervo nao guarda a hora de chegada.
+   */
+  mensagensPelaJanela: number;
   /** Etiquetas de Participacao que NASCERAM nesta recepcao (nunca o texto delas). */
   etiquetas: number;
   /** Destas, as que sao REMOCAO (texto vazio). */
@@ -394,6 +401,7 @@ export function receberEvento(
     ignorados: {},
     descartados: [],
     transicoes: 0,
+    mensagensPelaJanela: 0,
     etiquetas: 0,
     etiquetasRemovidas: 0,
     contatosCompartilhados: 0,
@@ -658,6 +666,11 @@ function gravarUma(
 
   // 4. A Mensagem.
   const texto = textoDe(m.message);
+  // Antes da gravacao: a guarda de instante roda ANTES da checagem de idempotencia da porta, entao a reentrega de uma
+  // Mensagem a frente do relogio passaria pela janela de novo e seria contada de novo. Custo: uma consulta a mais por
+  // Mensagem ao vivo, pelo mesmo indice unico que `registrarMensagem` consulta logo depois (a importacao ja faz o
+  // mesmo antes de gravar).
+  const jaExistia = idDeMensagemPorExterno(acervo, { fonte: FONTE, idExterno: m.key.id }) !== undefined;
   const mensagemId = registrarMensagem(acervo, {
     conversaId,
     fonte: FONTE,
@@ -673,6 +686,7 @@ function gravarUma(
     ...(texto !== undefined ? { conteudo: texto } : {}),
   });
   relato.gravados += 1;
+  if (!jaExistia && m.messageTimestamp * 1000 > opcoes.agora) relato.mensagensPelaJanela += 1;
 
   // 5. O Anexo nasce `nunca-obtido`, como na importacao. Ao vivo a plataforma
   //    entrega referencia de download — 54 em 288 —, e e ela que o comando de

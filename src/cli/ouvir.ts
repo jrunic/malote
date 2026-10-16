@@ -63,6 +63,8 @@ export interface CaminhosDaConta {
   guarda: string;
   /** O instante do ultimo frame que a Conexao recebeu (#1162). Ver `sinal-da-conexao.ts`. */
   sinal: string;
+  /** Serie diaria das Mensagens gravadas pela janela de relogio (#1204). Ver `descartes.ts`. */
+  adiantadas: string;
 }
 
 /**
@@ -85,6 +87,7 @@ export function caminhosDaConta(raiz: string, conta: string): CaminhosDaConta {
       descartes: join(pasta, 'descartes.json'),
       guarda: join(pasta, 'descartados.jsonl'),
       sinal: join(pasta, 'ultimo-sinal.txt'),
+      adiantadas: join(pasta, 'instantes-adiantados.json'),
   };
 }
 
@@ -557,6 +560,10 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
           // efeito que so avanca com escrita nova o declararia morto.
           marcarUltimoEvento(caminhos.ultimoEvento, agora());
           if (r.recusados.length > 0) escrever(`[ouvinte] recusados: ${r.recusados.length}`);
+          // So o NUMERO: e a medicao de campo da janela de relogio (#1204), e o texto da Mensagem nunca entra em log.
+          if (r.mensagensPelaJanela > 0) {
+            escrever(`[ouvinte] mensagens aceitas pela tolerancia de relogio: ${r.mensagensPelaJanela}`);
+          }
           // So CONTAGENS: o texto da etiqueta e dado pessoal declarado e nunca
           // entra em log, mensagem de erro nem relatorio.
           if (r.etiquetas > 0 || r.etiquetasDaContaSemEndereco > 0) {
