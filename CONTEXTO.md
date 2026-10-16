@@ -149,7 +149,7 @@ Hard limits sempre relevantes durante a sessão. O motivo e a medição de cada 
 - **Idioma da saída para humano:** pt-BR
 - **Comentários inline:** pt-BR
 - **Nome do repo e do binário:** `malote`, nome comercial próprio, sem prefixo de organização nem de ferramenta interna.
-- **Nada neste repo nomeia pessoa real, cliente, host ou caminho de máquina do autor** — em código, fixture, comentário, exemplo e mensagem de commit. Dado de exemplo é sintético
+- **Nada neste repo nomeia pessoa real, cliente, agente, conta, host ou caminho de máquina do autor** — em código, fixture, comentário, exemplo e mensagem de commit. Dado de exemplo é sintético, e o nome do identificador de fixture descreve o **papel** (`LID_DA_CONTA`, `LID_DE_OUTRO_MEMBRO`), nunca quem é. Já passou numa revisão: um `LID_DA_<agente>` numa fixture e um comentário "na conta da <agente>", pegos antes do primeiro commit; ref empurrada é permanente
 - **Nenhum caminho de arquivo do acervo contém dado pessoal** — invariante do agregado Anexo; foi defeito real no repo de origem
 - **O núcleo não nomeia ferramenta.** `jid`, `lid`, `handle`, `resource_name`, `etag` são vocabulário de Adaptador e não aparecem em agregado do núcleo
 - **Tudo é escopado a Inquilino.** Nenhuma consulta atravessa Inquilino — nem como opção, nem sob flag
