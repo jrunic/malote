@@ -9,6 +9,7 @@ import {
   type RelatoDeRecepcao,
 } from '../adaptadores/whatsapp/ao-vivo.js';
 import { processarEstadoDeConversa } from '../adaptadores/whatsapp/estado-ao-vivo.js';
+import { processarAvisoDeGrupo } from '../adaptadores/whatsapp/metadados-de-coletiva-ao-vivo.js';
 import { processarEnvios } from '../adaptadores/whatsapp/enviar.js';
 import { conectar } from '../adaptadores/whatsapp/conexao.js';
 import { lerDestinoDeMidia } from '../registro/destino-midia.js';
@@ -477,6 +478,21 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
         });
       },
       aoFrame: marcarSinal,
+      // O aviso de metadados de grupo entra por um gancho que NAO e o de `aoReceber`: o Ator abre AQUI, pelo mesmo
+      // motivo (o escopo nao atravessa o encanamento assincrono da biblioteca), senao a Operacao sairia
+      // `indeterminado`. Uma Operacao por aviso. So CONTAGENS: assunto e descricao sao texto de conversa.
+      aoAvisoDeGrupo: (fluxo, dado) =>
+        comAtor(atorDeServico('ouvinte-whatsapp'), () => {
+          const r = processarAvisoDeGrupo(acervo, fluxo, dado, agora());
+          // O aviso REPETIDO (o que chega depois de todo evento de grupo) nao sai no log: seria uma linha por troca.
+          if (r.gravados > 0 || r.semTexto > 0 || r.foraDeGrupo > 0) {
+            escrever(
+              `[ouvinte] metadados de coletiva (aviso): ${r.gravados} gravado(s), ${r.repetidos} repetido(s)` +
+                (r.semTexto > 0 ? `, ${r.semTexto} sem texto` : '') +
+                (r.foraDeGrupo > 0 ? `, ${r.foraDeGrupo} fora de grupo` : ''),
+            );
+          }
+        }),
       aoEstado: (fluxo, dado) => {
         const r = processarEstadoDeConversa(acervo, {
           fluxo,
@@ -573,6 +589,14 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
                   ? `, ${r.etiquetasDaContaSemEndereco} da propria conta sem endereco conferido`
                   : ''),
             );
+          }
+          // So CONTAGENS: assunto e descricao de grupo sao texto de conversa e nunca entram em log.
+          if (r.metadadosDeColetiva > 0) {
+            escrever(`[ouvinte] metadados de coletiva: ${r.metadadosDeColetiva} gravado(s), ${r.metadadosRepetidos} repetido(s)`);
+          }
+          const ignoradosDeMetadados = Object.entries(r.metadadosIgnorados);
+          if (ignoradosDeMetadados.length > 0) {
+            escrever(`[ouvinte] metadados de coletiva ignorados: ${ignoradosDeMetadados.map(([m, n]) => `${m}=${n}`).join(', ')}`);
           }
           // So CONTAGENS: nome, telefone e e-mail de cartao nunca entram em log.
           if (r.contatosCompartilhados > 0 || r.contatosCompartilhadosRecusados > 0) {
