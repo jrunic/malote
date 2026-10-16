@@ -21,6 +21,12 @@ Cada entrada tem uma tag `vX.Y.Z` no commit publicado. O histórico público com
 commit "Initial public release": as entradas anteriores são o registro fiel do que foi
 publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [Não publicado]
+
+### Corrigido
+
+- **A Mensagem recebida ao vivo cujo instante está poucos décimos de segundo à frente do relógio deixa de ser recusada.** O instante vem do aparelho de quem enviou, e a guarda recusava qualquer instante à frente do relógio local, sem folga: na medição, 2 de 27 eventos ao vivo chegaram à frente por menos de 200 ms. A recepção ao vivo agora tolera até 5 s à frente, grava o instante declarado e conta, por dia, as Mensagens que só entraram por causa da janela (`ouvinte estado --json`, chave `instantesAdiantados`). A importação de backup continua sem tolerância. Além da janela a Mensagem segue recusada e guardada com o evento cru.
+
 ## [0.36.0] — 2026-10-13
 
 ### Adicionado
