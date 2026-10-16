@@ -1,5 +1,10 @@
 // Import so de tipo, apagado em runtime: nao cria ciclo de modulo com `ao-vivo.ts`, que importa este arquivo.
 import type { MensagemRecebida } from './ao-vivo.js';
+import type { Acervo } from '../../nucleo/acervo.js';
+import { resolverEndereco } from '../../nucleo/correspondencia.js';
+import { registrarConversa, registrarMetadadosDeColetiva } from '../../nucleo/escrita.js';
+
+const FONTE = 'whatsapp' as const;
 
 /**
  * Metadados de Coletiva que chegam ao vivo (#1160, fatia C). Puro na leitura: nao abre banco nem biblioteca, e e
@@ -134,4 +139,33 @@ export function lerAvisoDeGrupo(fluxo: string, dado: unknown): AvisosLidos {
     });
   }
   return lidos;
+}
+
+/**
+ * Grava o evento de grupo. Chamado de DENTRO da Operacao do evento, ao lado da gravacao da Mensagem sem texto:
+ * se a Mensagem for recusada, a Operacao inteira se desfaz, e a tolerancia de relogio vale para os dois.
+ * Devolve se a linha mudou.
+ *
+ * Cria a Conversa coletiva se ela ainda nao existe (decisao D1 da spec), como a Etiqueta e a Transicao.
+ */
+export function gravarMetadadosDoEvento(acervo: Acervo, m: MensagemRecebida, mudanca: MudancaDeMetadados): boolean {
+  const enderecoDaConversa = resolverEndereco(acervo, FONTE, m.key.remoteJid);
+  const conversaId = registrarConversa(acervo, {
+    fonte: FONTE,
+    idExterno: enderecoDaConversa,
+    coletiva: true,
+    bruto: JSON.stringify(m.key),
+  });
+  // O autor e o que o evento declara, na forma canonica quando o Acervo a conhece. Nunca por `fromMe`.
+  const alteradoPor = mudanca.autor === undefined ? undefined : resolverEndereco(acervo, FONTE, mudanca.autor);
+  const texto = mudanca.texto;
+  return registrarMetadadosDeColetiva(acervo, conversaId, {
+    ...(mudanca.acao === 'remover' ? { removerDescricao: true } : {}),
+    ...(texto !== undefined && mudanca.natureza === 'descricao' ? { descricao: texto } : {}),
+    ...(texto !== undefined && mudanca.natureza !== 'descricao' ? { assunto: texto } : {}),
+    ...(alteradoPor !== undefined ? { alteradoPor } : {}),
+    alteradoEm: new Date(mudanca.instante).toISOString(),
+    // Reentrega do mesmo evento, ou texto que o aviso ja gravou, nao reescreve nada.
+    soSeMudar: true,
+  });
 }

@@ -19,6 +19,11 @@ import {
 } from '../../nucleo/escrita.js';
 import { lerMudancaDeEtiqueta, type MudancaDeEtiqueta } from './etiqueta-ao-vivo.js';
 import { TOLERANCIA_DE_RELOGIO_AO_VIVO_MS } from '../../nucleo/instante.js';
+import {
+  gravarMetadadosDoEvento,
+  lerMudancaDeMetadados,
+  type MudancaDeMetadados,
+} from './metadados-de-coletiva-ao-vivo.js';
 import { nomeRepeteONumeroBrasileiro } from './nome-repete-numero-br.js';
 import { registrarNome } from '../../nucleo/identidade.js';
 import { registrarContatosCompartilhados } from '../../nucleo/contato-compartilhado.js';
@@ -160,6 +165,12 @@ export interface RelatoDeRecepcao {
    * que diz se a janela esta larga ou estreita, e o Acervo nao guarda a hora de chegada.
    */
   mensagensPelaJanela: number;
+  /** Metadados de Coletiva que MUDARAM nesta recepcao pelo evento de grupo (nunca o texto: assunto e descricao sao texto de conversa). */
+  metadadosDeColetiva: number;
+  /** Eventos de grupo cujo texto ja era o gravado. */
+  metadadosRepetidos: number;
+  /** Eventos de grupo que NAO gravaram metadados, por motivo: `fora-de-grupo`, `forma-vazia`. So contagem. */
+  metadadosIgnorados: Record<string, number>;
   /** Etiquetas de Participacao que NASCERAM nesta recepcao (nunca o texto delas). */
   etiquetas: number;
   /** Destas, as que sao REMOCAO (texto vazio). */
@@ -402,6 +413,9 @@ export function receberEvento(
     descartados: [],
     transicoes: 0,
     mensagensPelaJanela: 0,
+    metadadosDeColetiva: 0,
+    metadadosRepetidos: 0,
+    metadadosIgnorados: {},
     etiquetas: 0,
     etiquetasRemovidas: 0,
     contatosCompartilhados: 0,
@@ -538,6 +552,21 @@ export function receberEvento(
       if (aGravar === null) continue;
     }
 
+    // Os Metadados de Coletiva (#1160, fatia C) sao um ramo ADITIVO: o evento de grupo segue para a gravacao da
+    // Mensagem sem texto (o Conteudo Bruto guarda o evento original, e o repo nunca perde o dado original), e os
+    // metadados se gravam na MESMA Operacao. Decide LENDO; o que nao grava e contado por motivo.
+    let metadadosAGravar: MudancaDeMetadados | null = null;
+    const metadados = lerMudancaDeMetadados(m);
+    if (metadados !== null) {
+      if (!metadados.grupo.endsWith('@g.us')) {
+        relato.metadadosIgnorados['fora-de-grupo'] = (relato.metadadosIgnorados['fora-de-grupo'] ?? 0) + 1;
+      } else if (metadados.acao === 'forma-vazia') {
+        relato.metadadosIgnorados['forma-vazia'] = (relato.metadadosIgnorados['forma-vazia'] ?? 0) + 1;
+      } else {
+        metadadosAGravar = metadados;
+      }
+    }
+
     const tipo = tipoDeConteudo(m.message);
     if (mudanca === null && tipo !== null && !VIRAM_MENSAGEM.has(tipo)) {
       relato.ignorados[tipo] = (relato.ignorados[tipo] ?? 0) + 1;
@@ -559,10 +588,19 @@ export function receberEvento(
       emOperacao(
         acervo,
         { natureza: 'receber-ao-vivo', reversibilidade: 'irreversivel', registraEfeito: false },
-        () =>
-          mudanca !== null && aGravar !== null
-            ? gravarEtiqueta(acervo, m, mudanca, aGravar, relato)
-            : gravarUma(acervo, m, indice, opcoes, relato),
+        () => {
+          if (mudanca !== null && aGravar !== null) {
+            gravarEtiqueta(acervo, m, mudanca, aGravar, relato);
+            return;
+          }
+          // Os metadados entram ANTES da Mensagem e na mesma transacao: se a Mensagem for recusada, a Operacao
+          // inteira se desfaz (a tolerancia de relogio da guarda de instante vale para os dois). O contador so
+          // anda depois que a Mensagem entrou, para a recusa nao deixar contagem de gravacao desfeita.
+          const gravou = metadadosAGravar === null ? undefined : gravarMetadadosDoEvento(acervo, m, metadadosAGravar);
+          gravarUma(acervo, m, indice, opcoes, relato);
+          if (gravou === true) relato.metadadosDeColetiva += 1;
+          else if (gravou === false) relato.metadadosRepetidos += 1;
+        },
       );
     } catch (erro) {
       // O catch e POR EVENTO, e sem ele o adaptador PERDE mensagem.
