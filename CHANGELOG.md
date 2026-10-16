@@ -23,6 +23,10 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ## [Não publicado]
 
+### Adicionado
+
+- **O assunto e a descrição de um grupo do WhatsApp passam a ser gravados ao vivo.** O ouvinte reconhece a criação do grupo e a troca de assunto e de descrição, e grava o texto novo, quem alterou e quando. A remoção da descrição também é gravada. Um grupo novo, ou renomeado, passa a ser achado por `conversas --busca` sem importar backup. O que o grupo já tinha antes do ouvinte não muda: só o que chega a partir de agora. A descrição ainda não aparece em nenhum comando de consulta.
+
 ### Corrigido
 
 - **A Mensagem recebida ao vivo cujo instante está poucos décimos de segundo à frente do relógio deixa de ser recusada.** O instante vem do aparelho de quem enviou, e a guarda recusava qualquer instante à frente do relógio local, sem folga: na medição, 2 de 27 eventos ao vivo chegaram à frente por menos de 200 ms. A recepção ao vivo agora tolera até 5 s à frente, grava o instante declarado e conta, por dia, as Mensagens que só entraram por causa da janela (`ouvinte estado --json`, chave `instantesAdiantados`). A importação de backup continua sem tolerância. Além da janela a Mensagem segue recusada e guardada com o evento cru.

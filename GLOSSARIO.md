@@ -189,7 +189,9 @@ modelo, nunca fac-símile: o Anexo continua sendo a fonte de verdade.
 *Evitar*: transcript, legenda, subtítulo, resumo (resumo julga; transcrição não).
 
 **Metadados de Coletiva**:
-Assunto, descrição e imagem de uma Conversa coletiva, com quem alterou e quando.
+Assunto, descrição e imagem de uma Conversa coletiva, com quem alterou e quando. A recepção ao vivo
+os grava na criação do grupo e a cada troca; a remoção da descrição é um evento que a anula, e
+ausência ou vazio nunca apagam o que está gravado.
 *Evitar*: metadados de grupo, subject, tópico, nome do grupo.
 
 **Envio**:
