@@ -2,7 +2,8 @@
 import type { MensagemRecebida } from './ao-vivo.js';
 import type { Acervo } from '../../nucleo/acervo.js';
 import { resolverEndereco } from '../../nucleo/correspondencia.js';
-import { registrarConversa, registrarMetadadosDeColetiva } from '../../nucleo/escrita.js';
+import { emOperacao } from '../../nucleo/trilha.js';
+import { lerMetadadosDeColetiva, registrarConversa, registrarMetadadosDeColetiva } from '../../nucleo/escrita.js';
 
 const FONTE = 'whatsapp' as const;
 
@@ -168,4 +169,71 @@ export function gravarMetadadosDoEvento(acervo: Acervo, m: MensagemRecebida, mud
     // Reentrega do mesmo evento, ou texto que o aviso ja gravou, nao reescreve nada.
     soSeMudar: true,
   });
+}
+
+export interface ResultadoDoAviso {
+  gravados: number;
+  repetidos: number;
+}
+
+/**
+ * Grava os avisos de metadados de grupo: a COBERTURA do evento de grupo, que nao depende da Mensagem. Quem chama ja
+ * decidiu LENDO que ha o que gravar (`processarAvisoDeGrupo`): o aviso chega milissegundos depois do evento, com o
+ * mesmo texto, e nao pode sobrescrever o instante dele. Na troca, que nao traz instante, usa o de chegada.
+ */
+export function gravarAvisosDeGrupo(acervo: Acervo, avisos: readonly AvisoDeGrupo[], agora: number): ResultadoDoAviso {
+  const resultado: ResultadoDoAviso = { gravados: 0, repetidos: 0 };
+  for (const a of avisos) {
+    const enderecoDaConversa = resolverEndereco(acervo, FONTE, a.grupo);
+    // O `bruto` so entra quando o aviso CRIA a Conversa, e e o item cru: numa Conversa que ja existe, `registrarConversa`
+    // o reescreveria, e o aviso trocaria o bruto do evento pela forma do aviso.
+    const conversaId =
+      lerMetadadosDeColetiva(acervo, FONTE, enderecoDaConversa).conversaId ??
+      registrarConversa(acervo, { fonte: FONTE, idExterno: enderecoDaConversa, coletiva: true, bruto: a.bruto });
+    const alteradoPor = a.autor === undefined ? undefined : resolverEndereco(acervo, FONTE, a.autor);
+    const gravou = registrarMetadadosDeColetiva(acervo, conversaId, {
+      ...(a.assunto !== undefined ? { assunto: a.assunto } : {}),
+      ...(a.descricao !== undefined ? { descricao: a.descricao } : {}),
+      ...(alteradoPor !== undefined ? { alteradoPor } : {}),
+      alteradoEm: new Date(a.instante ?? agora).toISOString(),
+    });
+    if (gravou) resultado.gravados += 1;
+    else resultado.repetidos += 1;
+  }
+  return resultado;
+}
+
+export interface ResultadoDoAvisoLido extends ResultadoDoAviso {
+  semTexto: number;
+  foraDeGrupo: number;
+}
+
+/** Le e grava o aviso de metadados de grupo que a conexao entregou. So contagens: o texto nunca sai daqui. */
+export function processarAvisoDeGrupo(acervo: Acervo, fluxo: string, dado: unknown, agora: number): ResultadoDoAvisoLido {
+  const lidos = lerAvisoDeGrupo(fluxo, dado);
+  // DECIDE LENDO, como a Etiqueta de Participacao: o aviso chega depois de TODO evento de grupo, com o mesmo texto, e
+  // abrir Operacao para ele geraria uma Operacao sem efeito por troca de grupo, num ouvinte que roda por meses. So se
+  // abre a Operacao quando a Conversa nao existe ou o texto difere do gravado.
+  const pendentes = lidos.avisos.filter((a) => {
+    const atual = lerMetadadosDeColetiva(acervo, FONTE, resolverEndereco(acervo, FONTE, a.grupo));
+    return (
+      atual.conversaId === undefined ||
+      (a.assunto !== undefined && a.assunto !== atual.assunto) ||
+      (a.descricao !== undefined && a.descricao !== atual.descricao)
+    );
+  });
+  const gravacao =
+    pendentes.length === 0
+      ? { gravados: 0, repetidos: 0 }
+      : emOperacao(
+          acervo,
+          { natureza: 'receber-ao-vivo', reversibilidade: 'irreversivel', registraEfeito: false },
+          () => gravarAvisosDeGrupo(acervo, pendentes, agora),
+        );
+  return {
+    gravados: gravacao.gravados,
+    repetidos: gravacao.repetidos + (lidos.avisos.length - pendentes.length),
+    semTexto: lidos.semTexto,
+    foraDeGrupo: lidos.foraDeGrupo,
+  };
 }
