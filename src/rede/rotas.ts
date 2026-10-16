@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import type { Acervo } from '../nucleo/acervo.js';
-import { buscarMensagensComCorte, contarPorFonte, expandirData, fonteDaConversa, lerAnexoPorId, lerMensagens, listarConversas, procurarPessoas } from '../nucleo/consulta.js';
+import { buscarMensagensComCorte, contarPorFonte, expandirData, fonteDaConversa, lerAnexoPorId, lerMensagens, procurarPessoas } from '../nucleo/consulta.js';
 import { quemEstavaEm } from '../nucleo/presenca.js';
 import { codificarCursor, decodificarCursor } from '../nucleo/cursor.js';
 import { abrirRegistro, abrirRegistroSomenteLeitura } from '../registro/registro.js';
@@ -17,6 +17,12 @@ import type { ConversaId, Fonte, InquilinoId } from '../nucleo/tipos.js';
 import { identificadoresDoRemetente } from '../nucleo/remetente.js';
 import { autoresDaConversa } from '../nucleo/autores-da-conversa.js';
 import { detalharConversa } from '../nucleo/detalhe-da-conversa.js';
+import {
+  CursorDeConversasInvalidoError,
+  LIMITE_PADRAO_DE_CONVERSAS,
+  paginarConversas,
+  type PaginaDeConversas,
+} from '../nucleo/pagina-de-conversas.js';
 import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
 import { abrirAcervo, versaoDoAcervoEmDisco, VERSAO_SCHEMA_ACERVO } from '../nucleo/acervo.js';
 import { solicitarTranscricao } from '../nucleo/transcricao.js';
@@ -560,6 +566,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const configuracaoApelido = q.get('configuracao');
     const fixada = q.get('fixada') ?? undefined;
     const desdeParam = q.get('desde');
+    const antes = q.get('antes');
 
     if (fixada === 'true' && configuracaoApelido === null) {
       json(res, 400, { erro: 'fixada exige configuracao' });
@@ -612,19 +619,36 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       ? new Set(conversasMarcadas(ctx.acervo, { marca: 'fixada', configuracaoId: configuracaoId! }))
       : undefined;
 
-    let conversas = listarConversas(ctx.acervo, {
-      precedencia,
-      ...(fonte !== undefined ? { fonte: fonte as Fonte } : {}),
-      ...(coletiva !== undefined ? { coletiva: coletiva === 'true' } : {}),
-      ...(busca !== undefined ? { busca } : {}),
-      ...(pessoa !== undefined ? { pessoaId: pessoa } : {}),
-      // limite so vai pro SQL quando NAO ha marca a filtrar depois — senao o
-      // corte aconteceria ANTES do filtro de marca, podendo devolver menos
-      // que o pedido mesmo havendo marcadas suficientes.
-      ...(marcadas === undefined && limite !== undefined ? { limite: Number(limite) } : {}),
-      ...(marcadas === undefined && configuracaoId !== undefined ? { configuracaoId } : {}),
-      ...(filtroDesde !== undefined ? { desde: filtroDesde } : {}),
-    }).map((c) => ({
+    // A pagina (#1202): sem `limite` e sem cursor, a primeira de 500. O limite e o corte vem DEPOIS do filtro de
+    // marca (`marcadas`), dentro de `paginarConversas`.
+    let pagina: PaginaDeConversas;
+    try {
+      pagina = paginarConversas(
+        ctx.acervo,
+        {
+          precedencia,
+          ...(fonte !== undefined ? { fonte: fonte as Fonte } : {}),
+          ...(coletiva !== undefined ? { coletiva: coletiva === 'true' } : {}),
+          ...(busca !== undefined ? { busca } : {}),
+          ...(pessoa !== undefined ? { pessoaId: pessoa } : {}),
+          ...(marcadas === undefined && configuracaoId !== undefined ? { configuracaoId } : {}),
+          ...(filtroDesde !== undefined ? { desde: filtroDesde } : {}),
+        },
+        {
+          limite: limite !== undefined ? Number(limite) : LIMITE_PADRAO_DE_CONVERSAS,
+          ...(antes !== null ? { antes } : {}),
+          ...(marcadas !== undefined ? { marcadas } : {}),
+        },
+      );
+    } catch (e) {
+      if (e instanceof CursorDeConversasInvalidoError) {
+        json(res, 400, { erro: 'cursor invalido' });
+        return;
+      }
+      throw e;
+    }
+
+    const conversas = pagina.conversas.map((c) => ({
       id: c.id,
       fonte: c.fonte,
       coletiva: c.coletiva,
@@ -635,12 +659,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       origemDoNome: c.origemDoNome,
     }));
 
-    if (marcadas !== undefined) {
-      conversas = conversas.filter((c) => marcadas.has(c.id));
-      if (limite !== undefined) conversas = conversas.slice(0, Number(limite));
-    }
-
-    json(res, 200, { conversas });
+    json(res, 200, { conversas, ...(pagina.proximo !== undefined ? { proximo: pagina.proximo } : {}) });
     return;
   }
 
