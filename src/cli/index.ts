@@ -25,6 +25,8 @@ import { avisoDeCorte } from './aviso-de-corte.js';
 import type { OrdemDaBusca } from '../nucleo/consulta.js';
 import { opcao, recusarBandeiras, temBandeira, todasAsOpcoes } from './bandeiras.js';
 import { formatarIdentificacao } from './identificar-texto.js';
+import { formatarDetalhe } from './detalhar-texto.js';
+import { detalharConversa } from '../nucleo/detalhe-da-conversa.js';
 import { identificarPorValor } from '../nucleo/identificar.js';
 import { basename, join } from 'node:path';
 import { ehFonte, PRESENCAS, type Fonte } from '../nucleo/tipos.js';
@@ -315,6 +317,8 @@ Titular (nao exige chave enquanto nao houver rede):
   malote envio reprocessar  --inquilino <id> [--json]   (so local)
   malote identificar <valor> --inquilino <id> [--fonte <fonte>] [--json]   (o que o Acervo sabe de um Identificador, com ou sem Pessoa)
   malote identificar <valor> [--fonte <fonte>] [--json]                    (com MALOTE_SERVIDOR no ambiente: por REDE; o Inquilino vem da chave)
+  malote detalhar   --inquilino <id> --conversa <id> [--json]   (uma Conversa por inteiro; na coletiva, assunto e descricao)
+  malote detalhar   --conversa <id> [--json]                    (com MALOTE_SERVIDOR no ambiente: por REDE; o Inquilino vem da chave)
   malote transcricao reprocessar --inquilino <id>              (volta falhas para pendente)
   malote transcricao incluir-estoque --inquilino <id> --limite <n> [--json]  (promove estoque fora-de-escopo, em lote)
   malote transcricao solicitar --anexo <id> --inquilino <id>           (prioriza UM Anexo na fila)
@@ -444,6 +448,7 @@ export const COMANDOS_DE_REDE = new Set([
   'configuracao',
   'midia',
   'identificar',
+  'detalhar',
   'anexos',
   'etiquetas',
 ]);
@@ -514,6 +519,34 @@ export async function executarConsultaRede(
       }
       return 0;
     } catch (e) {
+      rede.escrever((e as Error).message);
+      return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
+    }
+  }
+  else if (grupo === 'detalhar') {
+    if (argumentos.includes('--inquilino')) {
+      rede.escrever(MENSAGEM_SEM_INQUILINO_NA_REDE);
+      return 2;
+    }
+    const conversa = opcao(argumentos, 'conversa');
+    if (conversa === undefined) {
+      rede.escrever('Informe --conversa <id>.');
+      return 2;
+    }
+    try {
+      const r = await pedirGet(rede.servidor, rede.chave, `/conversas/${encodeURIComponent(conversa)}/detalhe`);
+      if (argumentos.includes('--json')) {
+        rede.escrever(JSON.stringify(JSON.parse(r.corpo), null, 2));
+      } else {
+        for (const l of formatarDetalhe(JSON.parse(r.corpo))) rede.escrever(l);
+      }
+      return 0;
+    } catch (e) {
+      // 404 e o mesmo para o id que nao existe e para o de outro Inquilino: a frase nao distingue os dois.
+      if ((e as { status?: number }).status === 404) {
+        rede.escrever(`Conversa nao encontrada: ${conversa}`);
+        return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 6;
+      }
       rede.escrever((e as Error).message);
       return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
     }
@@ -2391,6 +2424,30 @@ function executarComAtor(
             `${p.id}  ${p.nome ?? '(sem nome)'}  ${p.identificadores.length} endereco(s)${marca}`,
           );
         }
+      } finally {
+        acervo.fechar();
+      }
+      return 0;
+    }
+
+    if (grupo === 'detalhar') {
+      const conversa = opcao(argumentos, 'conversa');
+      if (conversa === undefined) {
+        escrever('Informe --conversa <id>.');
+        return 2;
+      }
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino.');
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const apelidoPorId = new Map(listarConfiguracoes(registro, inquilino).map((c) => [c.id, c.apelido]));
+        const detalhe = detalharConversa(acervo, conversa, lerPrecedenciasDeNome(registro, inquilino), apelidoPorId);
+        if (detalhe === undefined) {
+          escrever(`Conversa desconhecida: ${conversa}`);
+          return 2;
+        }
+        if (temBandeira(argumentos, 'json')) escrever(JSON.stringify(detalhe, null, 2));
+        else for (const l of formatarDetalhe(detalhe)) escrever(l);
       } finally {
         acervo.fechar();
       }

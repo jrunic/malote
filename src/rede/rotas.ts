@@ -16,6 +16,7 @@ import { ehFonte, PRESENCAS } from '../nucleo/tipos.js';
 import type { ConversaId, Fonte, InquilinoId } from '../nucleo/tipos.js';
 import { identificadoresDoRemetente } from '../nucleo/remetente.js';
 import { autoresDaConversa } from '../nucleo/autores-da-conversa.js';
+import { detalharConversa } from '../nucleo/detalhe-da-conversa.js';
 import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
 import { abrirAcervo, versaoDoAcervoEmDisco, VERSAO_SCHEMA_ACERVO } from '../nucleo/acervo.js';
 import { solicitarTranscricao } from '../nucleo/transcricao.js';
@@ -1095,6 +1096,27 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       registro.fechar();
     }
     json(res, 200, { autores: autoresDaConversa(ctx.acervo, conversaId, precedencia) });
+    return;
+  }
+
+  if (partes.length === 3 && partes[0] === 'conversas' && partes[2] === 'detalhe') {
+    // #1203: UMA Conversa por inteiro. Id inexistente e id de OUTRO Inquilino sao a mesma coisa para quem pergunta (o
+    // Acervo aberto e o da Chave): 404 de corpo vazio, sem dizer que o id existe em outro lugar.
+    const registro = abrirRegistroSomenteLeitura(ctx.dados);
+    let precedencia: PrecedenciaDeNome;
+    let apelidoPorId: Map<string, string>;
+    try {
+      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+      apelidoPorId = new Map(listarConfiguracoes(registro, ctx.identidade.inquilinoId).map((c) => [c.id, c.apelido]));
+    } finally {
+      registro.fechar();
+    }
+    const detalhe = detalharConversa(ctx.acervo, partes[1] as ConversaId, precedencia, apelidoPorId);
+    if (detalhe === undefined) {
+      naoEncontrado(res);
+      return;
+    }
+    json(res, 200, detalhe);
     return;
   }
 

@@ -61,6 +61,7 @@ Todos aceitam `--json`. As flags marcadas com `*` são obrigatórias.
 | `malote buscar` | Busca no conteúdo, na Transcrição de áudio e nos contatos enviados dentro de Mensagens (com a proveniência marcada) | `--texto <termo>`\* `--conversa` `--autor` `--desde` `--ate` `--limite` `--ordem` |
 | `malote pessoas` | Resolve texto em Pessoa: texto entra, id sai | `--texto <nome>`\* |
 | `malote identificar <valor>` | O que o Acervo sabe de um Identificador, com ou sem Pessoa. O valor é comparado exato | `--fonte <fonte>` |
+| `malote detalhar` | Uma Conversa por inteiro: id, natureza, nome do outro lado (direta) ou assunto, descrição, quem alterou e quando (coletiva), contagem de Mensagens e a primeira e a última. Id inexistente e id de outro Inquilino respondem igual | `--conversa <id>`\* |
 | `malote participantes` | Participantes de uma Conversa coletiva, com nome e Pessoa; opcionalmente a posição numa data | `--conversa <id>`\* `--em <AAAA-MM-DD>` |
 | `malote etiquetas` | As etiquetas que os membros põem em si em cada grupo: as correntes não vazias, ou o histórico de um membro numa Conversa | `--conversa <id>` `--remetente <valor>` `--busca <texto>` `--historico` `--limite <n>` |
 | `malote configuracao listar` | Quais Configurações existem (apelido, fonte e, nas de WhatsApp, telefone, jid e lid), antes de filtrar por uma | — |
