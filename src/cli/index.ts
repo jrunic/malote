@@ -21,7 +21,12 @@ import { executarEnviarRede } from './enviar-rede.js';
 import { executarEnvioEstadoRede } from './envio-estado-rede.js';
 import { encerrar } from './encerrar.js';
 import { primeiroPosicional } from './posicional.js';
-import { avisoDeCorte } from './aviso-de-corte.js';
+import { avisoDeCorte, avisoDeCorteDeConversas } from './aviso-de-corte.js';
+import {
+  CursorDeConversasInvalidoError,
+  LIMITE_PADRAO_DE_CONVERSAS,
+  paginarConversas,
+} from '../nucleo/pagina-de-conversas.js';
 import type { OrdemDaBusca } from '../nucleo/consulta.js';
 import { opcao, recusarBandeiras, temBandeira, todasAsOpcoes } from './bandeiras.js';
 import { formatarIdentificacao } from './identificar-texto.js';
@@ -49,7 +54,7 @@ import { recriarAcervo } from '../nucleo/recriar.js';
 import { versaoDoAcervoEmDisco } from '../nucleo/acervo.js';
 import { passosAplicados } from '../nucleo/migracao.js';
 import {
-  listarConversas,
+ 
   buscarMensagensComCorte,
   lerMensagens,
   listarSemEndereco,
@@ -328,7 +333,8 @@ Titular (nao exige chave enquanto nao houver rede):
   malote servir     --porta <n> [--endereco <ip>] [--exposto] [--trabalhadores <n>] [--prazo <segundos>]
                                         (leituras em workers, 4 por padrao, com prazo de 25 s; passou do prazo: 504;
                                          um Inquilino ocupa no maximo N-1 workers e metade da fila; as escritas ficam na thread principal)
-  malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--json]
+  malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--limite <n>] [--antes <cursor>] [--tudo] [--json]
+                                        (a primeira pagina de 500; ha mais: o aviso traz o cursor para --antes, e --tudo percorre as paginas)
   malote mensagens  --inquilino <id> [--conversa <id>] [--desde D] [--ate D] [--fonte <nome>] [--direcao enviada|recebida] [--remetente <valor>] [--limite <n>] [--json]
                                         (sem --conversa: atravessa todas as Conversas e Fontes,
                                          ordenado por recencia por default — ultimas mensagens;
@@ -460,7 +466,13 @@ export const COMANDOS_DE_REDE = new Set([
  */
 export async function executarConsultaRede(
   argumentos: string[],
-  rede: { servidor: string; chave: string; escrever: (t: string) => void },
+  rede: {
+    servidor: string;
+    chave: string;
+    escrever: (t: string) => void;
+    /** Diagnostico e aviso (#1202): nunca a saida de dados. Ausente, o aviso de corte nao sai. */
+    erro?: (t: string) => void;
+  },
 ): Promise<number> {
   const recusaDeBandeira = recusarBandeiras(argumentos, rede.escrever);
   if (recusaDeBandeira !== undefined) return recusaDeBandeira;
@@ -472,9 +484,9 @@ export async function executarConsultaRede(
     const valor = opcao(argumentos, nome);
     if (valor !== undefined) q.set(nome, valor);
   }
+  if (grupo === 'conversas') return consultarConversasPorRede(argumentos, rede, q);
   let caminho: string;
-  if (grupo === 'conversas') caminho = '/conversas';
-  else if (grupo === 'buscar') caminho = '/buscar';
+  if (grupo === 'buscar') caminho = '/buscar';
   else if (grupo === 'pessoas') caminho = '/pessoas';
   else if (grupo === 'participantes') {
     const conversa = opcao(argumentos, 'conversa');
@@ -644,6 +656,49 @@ export async function executarConsultaRede(
   try {
     const r = await pedirGet(rede.servidor, rede.chave, `${caminho}${qs ? `?${qs}` : ''}`);
     rede.escrever(JSON.stringify(JSON.parse(r.corpo), null, 2));
+    return 0;
+  } catch (e) {
+    rede.escrever((e as Error).message);
+    return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
+  }
+}
+
+/**
+ * `conversas` por REDE (#1202): a primeira pagina com o `proximo` do corpo e o aviso de corte na saida de erro, ou, com
+ * `--tudo`, o laco das paginas num corpo so (sem `proximo`). Quem monta o laco e a CLI, como no `exportar`: a API so
+ * entende cursor.
+ */
+async function consultarConversasPorRede(
+  argumentos: string[],
+  rede: { servidor: string; chave: string; escrever: (t: string) => void; erro?: (t: string) => void },
+  q: URLSearchParams,
+): Promise<number> {
+  const tudo = argumentos.includes('--tudo');
+  if (tudo && q.has('antes')) {
+    rede.escrever('--tudo e --antes se contradizem: --tudo ja percorre todas as paginas.');
+    return 2;
+  }
+  try {
+    const todas: unknown[] = [];
+    let ultimo: { conversas: unknown[]; proximo?: string } = { conversas: [] };
+    for (;;) {
+      const qs = q.toString();
+      const r = await pedirGet(rede.servidor, rede.chave, `/conversas${qs ? `?${qs}` : ''}`);
+      ultimo = JSON.parse(r.corpo) as { conversas: unknown[]; proximo?: string };
+      if (!tudo) break;
+      todas.push(...ultimo.conversas);
+      if (ultimo.proximo === undefined) break;
+      if (ultimo.proximo === q.get('antes')) {
+        throw new Error('O servidor devolveu o mesmo cursor duas vezes; parei para nao repetir para sempre.');
+      }
+      q.set('antes', ultimo.proximo);
+    }
+    if (tudo) {
+      rede.escrever(JSON.stringify({ conversas: todas }, null, 2));
+    } else {
+      rede.escrever(JSON.stringify(ultimo, null, 2));
+      if (ultimo.proximo !== undefined) rede.erro?.(avisoDeCorteDeConversas(ultimo.conversas.length, ultimo.proximo));
+    }
     return 0;
   } catch (e) {
     rede.escrever((e as Error).message);
@@ -2238,29 +2293,65 @@ function executarComAtor(
         );
 
         const precedencia = lerPrecedenciasDeNome(registro, inquilino);
-        let conversas = listarConversas(acervo, {
+        const antes = opcao(argumentos, 'antes');
+        const tudo = temBandeira(argumentos, 'tudo');
+        if (tudo && antes !== undefined) {
+          escrever('--tudo e --antes se contradizem: --tudo ja percorre todas as paginas.');
+          return 2;
+        }
+        const filtro = {
           precedencia,
           ...(pessoa === undefined ? {} : { pessoaId: pessoa }),
           ...(busca === undefined ? {} : { busca }),
           ...(fonte === undefined ? {} : { fonte: fonte as Fonte }),
           ...(coletiva === undefined ? {} : { coletiva: coletiva === 'true' }),
-          ...(marcadas === undefined && limite !== undefined ? { limite: Number(limite) } : {}),
           ...(marcadas === undefined && configuracaoId !== undefined ? { configuracaoId } : {}),
           ...(desde === undefined ? {} : { desde: expandirData(desde, 'inicio') }),
-        }).map((c) => ({
-          id: c.id,
-          fonte: c.fonte,
-          coletiva: c.coletiva,
-          assunto: c.assunto,
-          mensagens: c.mensagens,
-          configuracao: c.configuracaoId === null ? null : (apelidoPorId.get(c.configuracaoId) ?? null),
-          nome: c.nome,
-          origemDoNome: c.origemDoNome,
-        }));
-
-        if (marcadas !== undefined) {
-          conversas = conversas.filter((c) => marcadas.has(c.id));
-          if (limite !== undefined) conversas = conversas.slice(0, Number(limite));
+        };
+        // A pagina (#1202): sem --limite e sem --antes, a primeira de 500; --tudo percorre todas.
+        const tamanho = limite !== undefined ? Number(limite) : LIMITE_PADRAO_DE_CONVERSAS;
+        const conversas: Array<{
+          id: string;
+          fonte: Fonte;
+          coletiva: boolean;
+          assunto: string | null;
+          mensagens: number;
+          configuracao: string | null;
+          nome: string | null;
+          origemDoNome: string | null;
+        }> = [];
+        let proximo: string | undefined;
+        let cursor = antes;
+        try {
+          for (;;) {
+            const pagina = paginarConversas(acervo, filtro, {
+              limite: tamanho,
+              ...(cursor !== undefined ? { antes: cursor } : {}),
+              ...(marcadas !== undefined ? { marcadas } : {}),
+            });
+            for (const c of pagina.conversas) {
+              conversas.push({
+                id: c.id,
+                fonte: c.fonte,
+                coletiva: c.coletiva,
+                assunto: c.assunto,
+                mensagens: c.mensagens,
+                configuracao: c.configuracaoId === null ? null : (apelidoPorId.get(c.configuracaoId) ?? null),
+                nome: c.nome,
+                origemDoNome: c.origemDoNome,
+              });
+            }
+            proximo = pagina.proximo;
+            if (!tudo || proximo === undefined) break;
+            if (proximo === cursor) throw new Error('A listagem devolveu o mesmo cursor duas vezes; parei para nao repetir para sempre.');
+            cursor = proximo;
+          }
+        } catch (e) {
+          if (e instanceof CursorDeConversasInvalidoError) {
+            escrever('Cursor invalido: use o valor que o aviso de corte imprimiu em --antes.');
+            return 2;
+          }
+          throw e;
         }
 
         if (temBandeira(argumentos, 'json')) {
@@ -2270,6 +2361,12 @@ function executarComAtor(
             const natureza = c.coletiva ? 'coletiva' : 'direta';
             escrever(`${c.id}  ${natureza}  ${c.mensagens} msgs  ${c.assunto ?? c.nome ?? ''}`);
           }
+        }
+        // O corte e dito: no --json, na saida de erro (o JSON da saida padrao segue parseavel); no texto, na saida padrao.
+        if (proximo !== undefined) {
+          const aviso = avisoDeCorteDeConversas(conversas.length, proximo);
+          if (temBandeira(argumentos, 'json')) ambiente.erro?.(aviso);
+          else escrever(aviso);
         }
       } finally {
         acervo.fechar();
@@ -3373,6 +3470,7 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
         servidor: opcao(argumentos, 'servidor') ?? (ambiente.servidor as string),
         chave,
         escrever: (t) => console.log(t),
+        erro: (t) => console.error(t),
       }).then(encerrar);
     }
   } else {

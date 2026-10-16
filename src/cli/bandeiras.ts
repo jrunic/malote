@@ -23,6 +23,7 @@ export const BANDEIRAS: ReadonlySet<string> = new Set([
   'sobrescrever',
   'incluir-absorvidas',
   'historico',
+  'tudo',
 ]);
 
 /** Flags cujo valor e de um conjunto fechado; fora dele, `true` virava `false` em silencio. */
