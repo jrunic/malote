@@ -33,6 +33,17 @@ function chaveDeEstado(id: string): MensagemRecebida {
   return { key: { remoteJid: DIRETA, id, fromMe: false }, messageTimestamp: INSTANTE, message: { protocolMessage: { type: 'APP_STATE_SYNC_KEY_SHARE' } } };
 }
 
+function envelopeDeMidia(id: string): MensagemRecebida {
+  return {
+    key: { remoteJid: DIRETA, id, fromMe: false },
+    messageTimestamp: INSTANTE,
+    message: {
+      associatedChildMessage: { message: { videoMessage: { mimetype: 'video/mp4', seconds: 9, fileLength: '2048' } } },
+      messageContextInfo: { messageAssociation: { associationType: 'MOTION_PHOTO', parentMessageKey: { remoteJid: DIRETA, id: 'PAI9', fromMe: false } } },
+    },
+  };
+}
+
 function linha(evento: MensagemRecebida, motivo: string): string {
   return JSON.stringify({ em: '2026-09-01T00:00:00.000Z', motivo, evento });
 }
@@ -266,6 +277,30 @@ test('a retirada NAO escreve no Acervo: a linha sai ANTES da troca, e uma falha 
     assert.deepEqual(recebidas, [[]], 'a linha de ruido deveria ter saido ANTES da troca');
     assert.equal(readFileSync(g.caminho, 'utf8'), original, 'a falha na troca perdeu a linha');
     assert.equal(g.n('mensagens'), antesMensagens, 'a retirada escreveu no Acervo');
+  } finally {
+    g.limpar();
+  }
+});
+
+test('o envelope de midia associada GUARDADO vira Mensagem e Anexo e sai da guarda; o pai de album e retirado (#1190)', () => {
+  const g = cenarioDaGuarda();
+  try {
+    const pai: MensagemRecebida = { key: { remoteJid: DIRETA, id: 'ALB1', fromMe: false }, messageTimestamp: INSTANTE, message: { albumMessage: { expectedImageCount: 2 } } };
+    writeFileSync(
+      g.caminho,
+      [
+        linha(envelopeDeMidia('ENV1'), 'associatedChildMessage'),
+        linha(pai, 'albumMessage'),
+        linha(aindaDescartado('X9'), 'tipoNuncaVistoMessage'),
+      ].join('\n') + '\n',
+    );
+    const r = reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA);
+    assert.deepEqual(r, { lidos: 3, gravados: 1, mantidos: 1, retirados: 1 });
+    assert.equal(g.n('mensagens'), 1);
+    assert.equal(g.n('anexos'), 1);
+    const restantes = readFileSync(g.caminho, 'utf8').split('\n').filter((l) => l !== '');
+    assert.equal(restantes.length, 1);
+    assert.equal((JSON.parse(restantes[0]!) as { evento: MensagemRecebida }).evento.key.id, 'X9');
   } finally {
     g.limpar();
   }

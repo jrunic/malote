@@ -145,17 +145,17 @@ test('descartados concorda com ignorados, tipo a tipo (so os dois rotulos fora d
   assert.equal(porMotivo['recusado'], 1);
 });
 
-test('os cinco tipos sem conteudo medidos em campo sao RUIDO; os vizinhos nao (#1234)', () => {
+test('os tipos sem conteudo medidos em campo sao RUIDO (cinco da #1234 e o pai de album da #1190); os vizinhos nao', () => {
   const r = receber([
     evento('N1', { protocolMessage: { type: 'APP_STATE_SYNC_KEY_SHARE' } }),
     evento('N2', { protocolMessage: { type: 'REQUEST_WELCOME_MESSAGE' } }),
     evento('N3', { protocolMessage: { type: 'EPHEMERAL_SYNC_RESPONSE' } }),
     evento('N4', { protocolMessage: { type: 'MEDIA_NOTIFY_MESSAGE' } }),
     evento('N5', { messageHistoryNotice: { messageHistoryMetadata: {} } }),
+    evento('N6', { albumMessage: { expectedImageCount: 2 } }),
     evento('V1', { protocolMessage: { type: 'MESSAGE_EDIT' } }),
     evento('V2', { protocolMessage: { type: 'REVOKE' } }),
     evento('V3', { protocolMessage: {} }),
-    evento('V4', { albumMessage: { expectedImageCount: 2 } }),
     evento('V5', { secretEncryptedMessage: { secretEncType: 'MESSAGE_EDIT' } }),
   ]);
   assert.deepEqual(
@@ -166,10 +166,10 @@ test('os cinco tipos sem conteudo medidos em campo sao RUIDO; os vizinhos nao (#
       ['protocolMessage:EPHEMERAL_SYNC_RESPONSE', true],
       ['protocolMessage:MEDIA_NOTIFY_MESSAGE', true],
       ['messageHistoryNotice', true],
+      ['albumMessage', true],
       ['protocolMessage:MESSAGE_EDIT', false],
       ['protocolMessage:REVOKE', false],
       ['protocolMessage', false],
-      ['albumMessage', false],
       ['secretEncryptedMessage', false],
     ],
   );

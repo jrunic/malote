@@ -107,8 +107,10 @@ export interface EventoDescartado {
  * endereco e resumo do arquivo, sem a chave de decifracao (5); a resposta de sincronizacao
  * de mensagens temporarias (2) e o pedido de boas-vindas (1) sao protocolo puro; o aviso
  * de historico traz so contagens (15). Todos continuam CONTADOS por dia. Fica de fora, por
- * decisao: `albumMessage` (o filho de album da #1190 traz a associacao com o pai) e
- * `protocolMessage:REVOKE` (unica fonte para um dia modelar a Mensagem apagada).
+ * decisao: `protocolMessage:REVOKE` (unica fonte para um dia modelar a Mensagem apagada). O pai
+ * de album (`albumMessage`, #1190) entrou depois: so diz quantos itens o album tem, e os filhos chegam
+ * como imagem e video normais, cada um ligado ao pai (28 de 32 albuns completos por essa ligacao e mais 1
+ * sem ela, medido em 17/10/2026). Continua CONTADO.
  */
 const MOTIVOS_DE_RUIDO: ReadonlySet<string> = new Set([
   'cifrada',
@@ -119,6 +121,7 @@ const MOTIVOS_DE_RUIDO: ReadonlySet<string> = new Set([
   'protocolMessage:EPHEMERAL_SYNC_RESPONSE',
   'protocolMessage:MEDIA_NOTIFY_MESSAGE',
   'messageHistoryNotice',
+  'albumMessage',
 ]);
 
 /**
@@ -317,20 +320,38 @@ const COM_ANEXO = [
 const ACOMPANHAM = new Set(['messageContextInfo', 'senderKeyDistributionMessage']);
 
 /**
- * Desembrulha o documento com legenda: a plataforma o entrega como
- * `documentWithCaptionMessage.message.documentMessage`. Medido em 06/10/2026
- * (documento real de uma Conversa direta ausente do Acervo) e provado com o
- * evento sintético pela própria `receberEvento`.
+ * Desembrulha dois envelopes, e so estes.
  *
- * SO este embrulho. Os outros que a biblioteca desembrulha (`ephemeralMessage`,
- * `viewOnce*`, `editedMessage`) nao foram medidos contra captura real, e a
- * classificacao e medida, nunca deduzida: `editedMessage` e edicao de Mensagem
- * ja gravada, e tratá-lo como nova duplicaria. Seguem ignorados e contados. So
- * para classificar e ler texto/Anexo: o Conteudo Bruto grava o evento inteiro.
+ * O documento com legenda chega como `documentWithCaptionMessage.message.documentMessage`.
+ * Medido em 06/10/2026 (documento real de uma Conversa direta ausente do Acervo) e provado
+ * com o evento sintetico pela propria `receberEvento`.
+ *
+ * O envelope de MIDIA ASSOCIADA (`associatedChildMessage`, #1190) carrega a mesma midia em
+ * outra forma: a versao em alta definicao de um video, ou o trecho de video de uma foto em
+ * movimento. Medido em 17/10/2026 (3 eventos em 5 dias): o interior e uma Mensagem comum e a
+ * associacao ao pai mora ao lado, em `messageContextInfo`. Diferente do documento com legenda,
+ * ele so se abre quando o interior tem conteudo que VIRA Mensagem: aberto, um interior vazio
+ * viraria tipo nulo, e tipo nulo vai para a gravacao de Mensagem, nao para o descarte (criaria
+ * uma Mensagem vazia). Fechado, segue com o rotulo de sempre, contado e guardado cru.
+ *
+ * Os outros embrulhos que a biblioteca desembrulha (`ephemeralMessage`, `viewOnce*`,
+ * `editedMessage`) nao foram medidos contra captura real, e a classificacao e medida, nunca
+ * deduzida: `editedMessage` e edicao de Mensagem ja gravada, e trata-lo como nova duplicaria.
+ * Seguem ignorados e contados. So para classificar e ler texto/Anexo: o Conteudo Bruto grava o
+ * evento inteiro.
  */
 function desembrulhar(
   message: Record<string, unknown> | undefined | null,
 ): Record<string, unknown> | undefined | null {
+  const filho = message?.['associatedChildMessage'];
+  if (filho !== null && typeof filho === 'object') {
+    const interior = (filho as Record<string, unknown>)['message'];
+    if (interior !== null && typeof interior === 'object') {
+      const aberto = interior as Record<string, unknown>;
+      if (Object.keys(aberto).some((k) => VIRAM_MENSAGEM.has(k))) return aberto;
+    }
+    return message;
+  }
   const embrulho = message?.['documentWithCaptionMessage'];
   if (embrulho === null || typeof embrulho !== 'object') return message;
   const interna = (embrulho as Record<string, unknown>)['message'];
