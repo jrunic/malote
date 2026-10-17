@@ -56,7 +56,16 @@ export function reconstituirMensagemParaRetry(
   const key = bruto['key'] as Record<string, unknown> | undefined;
   if (typeof key?.['remoteJid'] !== 'string') return null;
 
-  const mensagemInterna = bruto['message'] as Record<string, unknown> | undefined;
+  let mensagemInterna = bruto['message'] as Record<string, unknown> | undefined;
+  // O envelope de midia associada (#1190): o `bruto` da Mensagem guarda o evento inteiro, com o video DENTRO do
+  // envelope. Abre-se aqui como a conexao abre ao vivo: sem isto o retry nao acha o conteudo e descarta o Anexo.
+  const filho = mensagemInterna?.['associatedChildMessage'];
+  if (filho !== null && filho !== undefined && typeof filho === 'object') {
+    const interior = (filho as Record<string, unknown>)['message'];
+    if (interior !== null && interior !== undefined && typeof interior === 'object') {
+      mensagemInterna = interior as Record<string, unknown>;
+    }
+  }
   const chaveDoConteudo = `${tipoDoAnexo}Message`;
   const conteudo = mensagemInterna?.[chaveDoConteudo] as Record<string, unknown> | undefined;
   if (conteudo === undefined || conteudo === null) return null;

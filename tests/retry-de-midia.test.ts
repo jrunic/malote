@@ -56,3 +56,26 @@ test('ao vivo, conteudo do tipo certo mas SEM mediaKey nenhuma, nao e elegivel',
 test('JSON malformado nao derruba, devolve null', () => {
   assert.equal(reconstituirMensagemParaRetry('video', '{nao e json'), null);
 });
+
+test('o envelope de midia associada (#1190) e ABERTO: o retry reconstitui o video de dentro, sem o envelope', () => {
+  const bruto = JSON.stringify({
+    ...BASE,
+    message: {
+      associatedChildMessage: { message: { videoMessage: { mediaKey: 'ZRu4OBFsg5OwyKys+RJWDjiKtxfUpvBfdmaLXEKi5nY=', directPath: '/x' } } },
+      messageContextInfo: { messageAssociation: { associationType: 'MOTION_PHOTO' } },
+    },
+  });
+  const r = reconstituirMensagemParaRetry('video', bruto) as {
+    key: { id: string };
+    message: Record<string, { mediaKey?: Buffer }>;
+  } | null;
+  assert.notEqual(r, null);
+  assert.equal(r!.key.id, 'M1', 'a chave do evento tem de seguir junto');
+  assert.equal(r!.message['associatedChildMessage'], undefined, 'o retry entregou o envelope fechado');
+  assert.ok(Buffer.isBuffer(r!.message['videoMessage']?.mediaKey));
+});
+
+test('envelope de midia associada SEM conteudo do tipo do Anexo nao e elegivel', () => {
+  const bruto = JSON.stringify({ ...BASE, message: { associatedChildMessage: { message: {} } } });
+  assert.equal(reconstituirMensagemParaRetry('video', bruto), null);
+});
