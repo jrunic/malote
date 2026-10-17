@@ -25,6 +25,11 @@ const descartavel = (id: string, instante = INSTANTE): MensagemRecebida =>
   evento(id, { protocolMessage: { type: 'REVOKE', texto: SEGREDO } }, {}, instante);
 const comum = (id: string, instante = INSTANTE): MensagemRecebida => evento(id, { conversation: 'oi' }, {}, instante);
 const cifrada = (id: string): MensagemRecebida => evento(id, null, { messageStubType: 'CIPHERTEXT' });
+// Os cinco tipos sem conteudo da #1234: contados, nunca guardados. O texto sintetico prova que nada vaza.
+const chaveDeEstado = (id: string): MensagemRecebida =>
+  evento(id, { protocolMessage: { type: 'APP_STATE_SYNC_KEY_SHARE', texto: SEGREDO } });
+const avisoDeHistorico = (id: string): MensagemRecebida => evento(id, { messageHistoryNotice: { texto: SEGREDO } });
+const paiDeAlbum = (id: string): MensagemRecebida => evento(id, { albumMessage: { expectedImageCount: 2, texto: SEGREDO } });
 
 function bibliotecaQueEntrega(mensagens: unknown[]): { disparar: () => void } {
   const ouvintes = new Map<string, (dado: unknown) => void>();
@@ -190,6 +195,55 @@ test('ouvinte estado --json traz o que esta guardado; a saida DEFAULT nao muda',
     const lido = JSON.parse(json.join('')) as { guarda: { eventos: number; bytes: number } };
     assert.equal(lido.guarda.eventos, 2);
     assert.ok(lido.guarda.bytes > 0);
+  } finally {
+    limpar();
+  }
+});
+
+test('a RECEPCAO conta o ruido da #1234 e da #1190 e NAO o guarda (chave de estado, aviso de historico e pai de album)', async () => {
+  const r = await ouvirComLote([chaveDeEstado('K1'), avisoDeHistorico('H1'), paiDeAlbum('A1'), descartavel('D1')]);
+  try {
+    assert.equal(r.codigo, 1, r.linhas.join(' | '));
+    assert.deepEqual(idsGuardados(r.caminhos.guarda), ['D1']);
+    assert.deepEqual(lerDescartes(r.caminhos.descartes), {
+      '2026-10-07': { 'protocolMessage:APP_STATE_SYNC_KEY_SHARE': 1, messageHistoryNotice: 1, albumMessage: 1, 'protocolMessage:REVOKE': 1 },
+    });
+    assert.equal(readFileSync(r.caminhos.guarda, 'utf8').includes('APP_STATE_SYNC_KEY_SHARE'), false, 'a chave de estado entrou na guarda');
+    assert.equal(r.linhas.join('\n').includes(SEGREDO), false, 'o conteudo vazou para a saida');
+  } finally {
+    r.limpar();
+  }
+});
+
+test('a DRENAGEM nao guarda o ruido da #1234 que o lote derramado trazia', async () => {
+  const r = await ouvirComLote([comum('M1')], (caminhos) => {
+    mkdirSync(join(caminhos.derrame, '..'), { recursive: true });
+    derramar(caminhos.derrame, [chaveDeEstado('DK1'), descartavel('DRENADO2')]);
+  });
+  try {
+    assert.equal(r.codigo, 1, r.linhas.join(' | '));
+    assert.deepEqual(idsGuardados(r.caminhos.guarda), ['DRENADO2']);
+  } finally {
+    r.limpar();
+  }
+});
+
+test('o reprocessar do DERRAME nao guarda o ruido da #1234 que o lote descartou', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const registro = abrirRegistro(raiz);
+    const id = criarInquilino(registro, { titularNome: 'Cassian' });
+    resolverConfiguracao(registro, id, 'whatsapp', 'principal');
+    registro.fechar();
+    const caminhos = caminhosDaConta(raiz, 'principal');
+    derramar(caminhos.derrame, [chaveDeEstado('RK1'), descartavel('RD3', PASSADO), comum('RD4', PASSADO)]);
+    const linhas: string[] = [];
+    const codigo = executar(
+      ['ouvinte', 'reprocessar', '--inquilino', id, '--conta', 'principal', '--configuracao', 'principal'],
+      { dados: raiz, estado: raiz, escrever: (t: string) => linhas.push(t), ouvinteEscrevendo: () => false },
+    );
+    assert.equal(codigo, 0, linhas.join('\n'));
+    assert.deepEqual(idsGuardados(caminhos.guarda), ['RD3']);
   } finally {
     limpar();
   }

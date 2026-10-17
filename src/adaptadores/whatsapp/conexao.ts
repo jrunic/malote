@@ -209,6 +209,21 @@ function resumoDeAppState(dado: unknown): ResumoDeAppState {
 
 /** Primeira espera da religacao, em milissegundos. */
 const ESPERA_INICIAL = 5_000;
+/**
+ * A biblioteca nao abre o envelope de midia associada (`associatedChildMessage`, #1190): entregar
+ * o evento fechado a `downloadMediaMessage` falha com "nao e uma mensagem de midia". Aqui a
+ * conexao entrega o conteudo de DENTRO, com a chave do evento junto. O interior NAO e copiado: o
+ * `mediaKey` binario tem de chegar como veio, e e isso que o teste da fronteira guarda.
+ */
+function abrirEnvelopeDeMidia(mensagem: unknown): unknown {
+  const m = mensagem as { message?: Record<string, unknown> | null } | null | undefined;
+  const filho = m?.message?.['associatedChildMessage'];
+  if (filho === null || filho === undefined || typeof filho !== 'object') return mensagem;
+  const interior = (filho as Record<string, unknown>)['message'];
+  if (interior === null || interior === undefined || typeof interior !== 'object') return mensagem;
+  return { ...(mensagem as object), message: interior };
+}
+
 /** Teto da espera. Acima disso, insistir mais rapido nao ajuda e chama atencao. */
 const ESPERA_MAXIMA = 300_000;
 
@@ -317,7 +332,7 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
           if (mensagemCrua === undefined) {
             return Promise.reject(new Error(`indice de mensagem invalido: ${indice}`));
           }
-          return lib.downloadMediaMessage(mensagemCrua, 'buffer', {});
+          return lib.downloadMediaMessage(abrirEnvelopeDeMidia(mensagemCrua), 'buffer', {});
         },
       };
       opcoes.aoReceber(normalizadas, midia);

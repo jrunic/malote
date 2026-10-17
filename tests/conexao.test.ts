@@ -20,6 +20,7 @@ import { conectar, baixarMidiaReconstituida, type MidiaAoVivo } from '../src/ada
 
 function bibliotecaComDownload(
   aoBaixar: (mensagem: unknown) => void,
+  conteudoDoEvento?: Record<string, unknown>,
 ): { disparar: () => void } {
   const ouvintes = new Map<string, (dado: unknown) => void>();
   return {
@@ -42,7 +43,7 @@ function bibliotecaComDownload(
             {
               key: { remoteJid: '5511000000009@s.whatsapp.net', id: 'MIDIA1', fromMe: false },
               messageTimestamp: 1_700_000_000,
-              message: {
+              message: conteudoDoEvento ?? {
                 imageMessage: {
                   mimetype: 'image/jpeg',
                   // O mediaKey REAL e binario. E o que este teste protege:
@@ -162,4 +163,47 @@ test('baixarMidiaReconstituida propaga a falha da biblioteca, sem mascarar', asy
     () => baixarMidiaReconstituida({}, { carregarBiblioteca: () => Promise.resolve(biblioteca) }),
     /bad decrypt/,
   );
+});
+
+test('midia.baixar de um envelope de midia associada entrega a biblioteca o conteudo de DENTRO, com o mediaKey binario (#1190)', async () => {
+  const pasta = mkdtempSync(join(tmpdir(), 'malote-conexao-teste-'));
+  try {
+    let mensagemRecebida: unknown;
+    let midiaCapturada: MidiaAoVivo | undefined;
+    const biblioteca = bibliotecaComDownload(
+      (m) => {
+        mensagemRecebida = m;
+      },
+      {
+        associatedChildMessage: {
+          message: { videoMessage: { mimetype: 'video/mp4', mediaKey: new Uint8Array([5, 6, 7, 8]), directPath: '/v/t62.0-24/sintetico' } },
+        },
+        messageContextInfo: { messageAssociation: { associationType: 'MOTION_PHOTO' } },
+      },
+    );
+
+    await conectar({
+      pastaDoVinculo: pasta,
+      registrar: () => undefined,
+      aoTerminar: () => undefined,
+      carregarBiblioteca: () => {
+        biblioteca.disparar();
+        return Promise.resolve(biblioteca);
+      },
+      aoReceber: (_mensagens, midia) => {
+        midiaCapturada = midia;
+      },
+    });
+    await new Promise((r) => setImmediate(r));
+
+    assert.ok(midiaCapturada !== undefined, 'aoReceber nao foi chamado');
+    await midiaCapturada?.baixar(0);
+    const msg = mensagemRecebida as { key: { id: string }; message: Record<string, { mediaKey?: unknown }> };
+    assert.equal(msg.key.id, 'MIDIA1', 'a chave do evento tem de seguir junto');
+    assert.equal(msg.message['associatedChildMessage'], undefined, 'a biblioteca recebeu o envelope fechado');
+    assert.ok(msg.message['videoMessage']?.mediaKey instanceof Uint8Array, 'o mediaKey perdeu o tipo binario');
+    assert.deepEqual([...(msg.message['videoMessage']?.mediaKey as Uint8Array)], [5, 6, 7, 8]);
+  } finally {
+    rmSync(pasta, { recursive: true, force: true });
+  }
 });

@@ -100,11 +100,28 @@ export interface EventoDescartado {
  * biblioteca (90 de 4.167 eventos, 02/09/2026); status e decisao do Titular (#1094);
  * distribuicao de chave SOZINHA nao tem dado (6.231 no Acervo real). Atencao: a
  * distribuicao de chave que ACOMPANHA conteudo nao chega aqui, e `tipoDeConteudo`.
+ *
+ * Os cinco rotulos de protocolo da #1234 foram medidos na guarda do evento cru em
+ * 17/10/2026 (12 a 17/10, so estrutura, nenhum texto lido): o compartilhamento de chave de
+ * estado traz o MATERIAL da chave e nada mais (5 de 512 eventos); o aviso de mídia traz so
+ * endereco e resumo do arquivo, sem a chave de decifracao (5); a resposta de sincronizacao
+ * de mensagens temporarias (2) e o pedido de boas-vindas (1) sao protocolo puro; o aviso
+ * de historico traz so contagens (15). Todos continuam CONTADOS por dia. Fica de fora, por
+ * decisao: `protocolMessage:REVOKE` (unica fonte para um dia modelar a Mensagem apagada). O pai
+ * de album (`albumMessage`, #1190) entrou depois: so diz quantos itens o album tem, e os filhos chegam
+ * como imagem e video normais, cada um ligado ao pai (28 de 32 albuns completos por essa ligacao e mais 1
+ * sem ela, medido em 17/10/2026). Continua CONTADO.
  */
 const MOTIVOS_DE_RUIDO: ReadonlySet<string> = new Set([
   'cifrada',
   'status',
   'senderKeyDistributionMessage',
+  'protocolMessage:APP_STATE_SYNC_KEY_SHARE',
+  'protocolMessage:REQUEST_WELCOME_MESSAGE',
+  'protocolMessage:EPHEMERAL_SYNC_RESPONSE',
+  'protocolMessage:MEDIA_NOTIFY_MESSAGE',
+  'messageHistoryNotice',
+  'albumMessage',
 ]);
 
 /**
@@ -276,6 +293,19 @@ const VIRAM_MENSAGEM = new Set([
   'locationMessage',
 ]);
 
+/**
+ * Tipos de conta comercial que viram Mensagem SO quando a leitura do texto devolve um corpo nao
+ * vazio (#1235): a mensagem interativa (texto e um botao de link) e a mensagem de modelo (corpo,
+ * as vezes cabecalho com imagem, rodape e botoes). Medidos em 17/10/2026 na guarda do evento cru
+ * (104 eventos, so estrutura): chegam sozinhos no evento e todos tinham corpo.
+ *
+ * Nao estao em `VIRAM_MENSAGEM` de proposito: gravar uma Mensagem vazia trava o identificador do
+ * evento (a idempotencia por fonte e id externo) contra um reprocessar futuro que leia o corpo
+ * direito. Figurinha e localizacao nao tem corpo a ler; estes dois tem. Sem corpo, seguem
+ * ignorados e guardados cru, com o rotulo do tipo.
+ */
+const VIRAM_MENSAGEM_COM_CORPO = new Set(['interactiveMessage', 'templateMessage']);
+
 /** Tipos de conteudo que carregam Anexo, medidos na captura. */
 const COM_ANEXO = [
   'imageMessage',
@@ -303,20 +333,38 @@ const COM_ANEXO = [
 const ACOMPANHAM = new Set(['messageContextInfo', 'senderKeyDistributionMessage']);
 
 /**
- * Desembrulha o documento com legenda: a plataforma o entrega como
- * `documentWithCaptionMessage.message.documentMessage`. Medido em 06/10/2026
- * (documento real de uma Conversa direta ausente do Acervo) e provado com o
- * evento sintético pela própria `receberEvento`.
+ * Desembrulha dois envelopes, e so estes.
  *
- * SO este embrulho. Os outros que a biblioteca desembrulha (`ephemeralMessage`,
- * `viewOnce*`, `editedMessage`) nao foram medidos contra captura real, e a
- * classificacao e medida, nunca deduzida: `editedMessage` e edicao de Mensagem
- * ja gravada, e tratá-lo como nova duplicaria. Seguem ignorados e contados. So
- * para classificar e ler texto/Anexo: o Conteudo Bruto grava o evento inteiro.
+ * O documento com legenda chega como `documentWithCaptionMessage.message.documentMessage`.
+ * Medido em 06/10/2026 (documento real de uma Conversa direta ausente do Acervo) e provado
+ * com o evento sintetico pela propria `receberEvento`.
+ *
+ * O envelope de MIDIA ASSOCIADA (`associatedChildMessage`, #1190) carrega a mesma midia em
+ * outra forma: a versao em alta definicao de um video, ou o trecho de video de uma foto em
+ * movimento. Medido em 17/10/2026 (3 eventos em 5 dias): o interior e uma Mensagem comum e a
+ * associacao ao pai mora ao lado, em `messageContextInfo`. Diferente do documento com legenda,
+ * ele so se abre quando o interior tem conteudo que VIRA Mensagem: aberto, um interior vazio
+ * viraria tipo nulo, e tipo nulo vai para a gravacao de Mensagem, nao para o descarte (criaria
+ * uma Mensagem vazia). Fechado, segue com o rotulo de sempre, contado e guardado cru.
+ *
+ * Os outros embrulhos que a biblioteca desembrulha (`ephemeralMessage`, `viewOnce*`,
+ * `editedMessage`) nao foram medidos contra captura real, e a classificacao e medida, nunca
+ * deduzida: `editedMessage` e edicao de Mensagem ja gravada, e trata-lo como nova duplicaria.
+ * Seguem ignorados e contados. So para classificar e ler texto/Anexo: o Conteudo Bruto grava o
+ * evento inteiro.
  */
 function desembrulhar(
   message: Record<string, unknown> | undefined | null,
 ): Record<string, unknown> | undefined | null {
+  const filho = message?.['associatedChildMessage'];
+  if (filho !== null && typeof filho === 'object') {
+    const interior = (filho as Record<string, unknown>)['message'];
+    if (interior !== null && typeof interior === 'object') {
+      const aberto = interior as Record<string, unknown>;
+      if (Object.keys(aberto).some((k) => VIRAM_MENSAGEM.has(k))) return aberto;
+    }
+    return message;
+  }
   const embrulho = message?.['documentWithCaptionMessage'];
   if (embrulho === null || typeof embrulho !== 'object') return message;
   const interna = (embrulho as Record<string, unknown>)['message'];
@@ -358,7 +406,23 @@ function textoDe(rotulada: Record<string, unknown> | undefined | null): string |
     const legenda = (documento as Record<string, unknown>)['caption'];
     if (typeof legenda === 'string' && legenda !== '') return legenda;
   }
-  return undefined;
+  // O CORPO da mensagem de conta comercial (#1235), nas tres posicoes medidas. Rodape, titulo, botoes, links e a
+  // imagem do cabecalho ficam so no Conteudo Bruto.
+  return (
+    textoEm(message, ['interactiveMessage', 'body', 'text']) ??
+    textoEm(message, ['templateMessage', 'interactiveMessageTemplate', 'body', 'text']) ??
+    textoEm(message, ['templateMessage', 'hydratedTemplate', 'hydratedContentText'])
+  );
+}
+
+/** O texto nao vazio no fim de uma sequencia de chaves, ou `undefined` se faltar qualquer elo ou se for vazio. */
+function textoEm(raiz: Record<string, unknown>, chaves: readonly string[]): string | undefined {
+  let atual: unknown = raiz;
+  for (const chave of chaves) {
+    if (atual === null || typeof atual !== 'object') return undefined;
+    atual = (atual as Record<string, unknown>)[chave];
+  }
+  return typeof atual === 'string' && atual !== '' ? atual : undefined;
 }
 
 /**
@@ -571,7 +635,9 @@ export function receberEvento(
     }
 
     const tipo = tipoDeConteudo(m.message);
-    if (mudanca === null && tipo !== null && !VIRAM_MENSAGEM.has(tipo)) {
+    const viraMensagem =
+      tipo !== null && (VIRAM_MENSAGEM.has(tipo) || (VIRAM_MENSAGEM_COM_CORPO.has(tipo) && textoDe(m.message) !== undefined));
+    if (mudanca === null && tipo !== null && !viraMensagem) {
       relato.ignorados[tipo] = (relato.ignorados[tipo] ?? 0) + 1;
       descartar(relato, m, motivoDoTipo(tipo, m.message));
       continue;

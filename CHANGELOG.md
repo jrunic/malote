@@ -21,6 +21,18 @@ Cada entrada tem uma tag `vX.Y.Z` no commit publicado. O histórico público com
 commit "Initial public release": as entradas anteriores são o registro fiel do que foi
 publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [0.38.0] — 2026-10-17
+
+### Adicionado
+
+- **As mensagens de contas comerciais deixam de ser descartadas.** A mensagem interativa (texto e um botão de link) e a mensagem de modelo (corpo, rodapé, botões e, às vezes, uma imagem no cabeçalho) passam a ser Mensagem quando têm corpo de texto. O texto da Mensagem é o corpo e entra na busca; o rodapé, os botões, os links e a imagem do cabeçalho ficam no Conteúdo Bruto, e a imagem não vira Anexo. Sem corpo, o evento segue descartado e guardado cru. Os eventos já guardados se recuperam com `ouvinte reprocessar-descartados`.
+- **A versão em alta definição de um vídeo e o trecho de vídeo de uma foto em movimento deixam de ser descartados.** O WhatsApp entrega essa mídia extra num segundo evento, embrulhado em `associatedChildMessage`, ligado à Mensagem original. A recepção abre o envelope e grava o evento como uma Mensagem própria, com um Anexo de vídeo; a Mensagem original não muda e a ligação fica no Conteúdo Bruto. Os eventos já guardados se recuperam com `ouvinte reprocessar-descartados`, e `malote midia reprocessar` baixa o arquivo enquanto a referência da mídia valer. A versão em alta definição ocupa mais espaço que o vídeo original.
+
+### Alterado
+
+- **A guarda do evento cru deixa de guardar cinco tipos de protocolo sem conteúdo aproveitável.** O compartilhamento de chave de estado do aplicativo (que traz o material da chave), o pedido de boas-vindas, a resposta de sincronização de mensagens temporárias, o aviso de mídia e o aviso de histórico continuam **contados** por dia em `ouvinte estado --json` (`descartes`), mas o evento cru não é mais gravado em `descartados.jsonl`. A revogação e os demais tipos seguem guardados. O pai de álbum também passa a ser só contado: ele só diz quantos itens o álbum tem, e os filhos chegam como Mensagem normal.
+- **`ouvinte reprocessar-descartados` passa a retirar da guarda as linhas que só são ruído** e diz quantas retirou (`lidos = gravados + mantidos + retirados`). Quem confere a saída por texto vê um termo a mais no fim da linha.
+
 ## [0.37.0] — 2026-10-16
 
 ### Adicionado
