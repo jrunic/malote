@@ -58,7 +58,7 @@ test('sem ouvinte no ar, grava o que foi guardado e esvazia a guarda', () => {
       dados: i.raiz, estado: i.raiz, escrever: (t: string) => linhas.push(t), ouvinteEscrevendo: () => false,
     });
     assert.equal(codigo, 0, linhas.join('\n'));
-    assert.match(linhas.join('\n'), /1 evento\(s\) lido\(s\), 1 gravado\(s\), 0 mantido\(s\)/);
+    assert.match(linhas.join('\n'), /1 evento\(s\) lido\(s\), 1 gravado\(s\), 0 mantido\(s\) na guarda, 0 retirado\(s\)/);
     assert.equal(existsSync(i.guarda), false);
     const acervo = abrirAcervoSomenteLeitura(`${i.raiz}/acervos`, i.id);
     try {
@@ -114,6 +114,31 @@ test('sem os argumentos, mostra o uso e sai 2', () => {
     });
     assert.equal(codigo, 2);
     assert.match(linhas.join('\n'), /Uso: malote ouvinte reprocessar-descartados/);
+  } finally {
+    i.limpar();
+  }
+});
+
+test('diz quantos eventos RETIROU por serem ruido, e a guarda fica so com o que vale (#1234)', () => {
+  const i = instalacao();
+  try {
+    const chave = JSON.stringify({
+      em: '2026-09-01T00:00:00.000Z',
+      motivo: 'protocolMessage:APP_STATE_SYNC_KEY_SHARE',
+      evento: {
+        key: { remoteJid: '5511000000000@s.whatsapp.net', id: 'CMD2', fromMe: false },
+        messageTimestamp: Math.floor(Date.parse('2026-09-08T12:00:00Z') / 1000),
+        message: { protocolMessage: { type: 'APP_STATE_SYNC_KEY_SHARE' } },
+      },
+    });
+    writeFileSync(i.guarda, `${chave}\n${DOCUMENTO_GUARDADO}\n`);
+    const linhas: string[] = [];
+    const codigo = executar(ARGS(i.id), {
+      dados: i.raiz, estado: i.raiz, escrever: (t: string) => linhas.push(t), ouvinteEscrevendo: () => false,
+    });
+    assert.equal(codigo, 0, linhas.join('\n'));
+    assert.match(linhas.join('\n'), /2 evento\(s\) lido\(s\), 1 gravado\(s\), 0 mantido\(s\) na guarda, 1 retirado\(s\)/);
+    assert.equal(existsSync(i.guarda), false, 'a guarda esvaziada deveria sumir');
   } finally {
     i.limpar();
   }

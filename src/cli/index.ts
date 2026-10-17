@@ -1020,7 +1020,7 @@ function executarComAtor(
         }, Date.now());
         escrever(
           `Conta ${conta}: ${r.lidos} evento(s) lido(s), ${r.gravados} gravado(s), ` +
-            `${r.mantidos} mantido(s) na guarda.`,
+            `${r.mantidos} mantido(s) na guarda, ${r.retirados} retirado(s) por serem ruido.`,
         );
       } finally {
         // MUTANTE EQUIVALENTE OBSERVAVEL (medido em 08/10/2026): tirar este `fechar` nao derruba

@@ -114,6 +114,8 @@ export interface ResultadoDoReprocesso {
   lidos: number;
   gravados: number;
   mantidos: number;
+  /** Linhas retiradas por serem so ruido (#1234): lidos = gravados + mantidos + retirados. */
+  retirados: number;
 }
 
 /** Troca atomica do arquivo (temporario e renomeacao); sem linhas, esvazia. */
@@ -152,6 +154,10 @@ function eventoDaLinha(texto: string): MensagemRecebida | undefined {
  * dois lugares, e a unicidade `(fonte, id_externo)` descarta a repeticao. Disputa
  * de escrita (banco ocupado) SOBE sem tocar no arquivo.
  *
+ * RETIRADA (#1234): o evento cujos descartes sao TODOS ruido sai da guarda sem escrever no
+ * Acervo (nao ha o que gravar). A ordem acima nao a protege; protege-a a troca atomica do
+ * arquivo. Evento com um descarte que nao e ruido fica, e a linha ilegivel tambem.
+ *
  * `substituir` e costura de teste: provar a ordem exige morrer entre as duas etapas.
  */
 export function reprocessarDescartados(
@@ -161,7 +167,7 @@ export function reprocessarDescartados(
   agora: number,
   substituir: (caminho: string, linhas: readonly string[]) => void = substituirAtomico,
 ): ResultadoDoReprocesso {
-  const resultado: ResultadoDoReprocesso = { lidos: 0, gravados: 0, mantidos: 0 };
+  const resultado: ResultadoDoReprocesso = { lidos: 0, gravados: 0, mantidos: 0, retirados: 0 };
   for (const arquivo of [caminhoDaGuardaAnterior(caminho), caminho]) {
     const linhas = linhasDoArquivo(arquivo);
     if (linhas.length === 0) continue;
@@ -177,6 +183,9 @@ export function reprocessarDescartados(
       const r = receberEvento(acervo, [evento], { agora, configuracao });
       if (r.descartados.length === 0) {
         resultado.gravados += 1;
+      } else if (r.descartados.every((d) => d.ruido)) {
+        // So ruido: nao ha o que gravar nem o que guardar (#1234). A linha sai do arquivo sem tocar o Acervo.
+        resultado.retirados += 1;
       } else {
         restantes.push(texto);
         resultado.mantidos += 1;
