@@ -25,6 +25,7 @@ publicado antes da abertura, e as tags delas pertencem ao repositório privado d
 
 ### Adicionado
 
+- **As mensagens de contas comerciais deixam de ser descartadas.** A mensagem interativa (texto e um botão de link) e a mensagem de modelo (corpo, rodapé, botões e, às vezes, uma imagem no cabeçalho) passam a ser Mensagem quando têm corpo de texto. O texto da Mensagem é o corpo e entra na busca; o rodapé, os botões, os links e a imagem do cabeçalho ficam no Conteúdo Bruto, e a imagem não vira Anexo. Sem corpo, o evento segue descartado e guardado cru. Os eventos já guardados se recuperam com `ouvinte reprocessar-descartados`.
 - **A versão em alta definição de um vídeo e o trecho de vídeo de uma foto em movimento deixam de ser descartados.** O WhatsApp entrega essa mídia extra num segundo evento, embrulhado em `associatedChildMessage`, ligado à Mensagem original. A recepção abre o envelope e grava o evento como uma Mensagem própria, com um Anexo de vídeo; a Mensagem original não muda e a ligação fica no Conteúdo Bruto. Os eventos já guardados se recuperam com `ouvinte reprocessar-descartados`, e `malote midia reprocessar` baixa o arquivo enquanto a referência da mídia valer. A versão em alta definição ocupa mais espaço que o vídeo original.
 
 ### Alterado
