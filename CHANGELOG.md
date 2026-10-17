@@ -21,6 +21,13 @@ Cada entrada tem uma tag `vX.Y.Z` no commit publicado. O histórico público com
 commit "Initial public release": as entradas anteriores são o registro fiel do que foi
 publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [Não publicado]
+
+### Alterado
+
+- **A guarda do evento cru deixa de guardar cinco tipos de protocolo sem conteúdo aproveitável.** O compartilhamento de chave de estado do aplicativo (que traz o material da chave), o pedido de boas-vindas, a resposta de sincronização de mensagens temporárias, o aviso de mídia e o aviso de histórico continuam **contados** por dia em `ouvinte estado --json` (`descartes`), mas o evento cru não é mais gravado em `descartados.jsonl`. A revogação, o pai de álbum e os demais tipos seguem guardados.
+- **`ouvinte reprocessar-descartados` passa a retirar da guarda as linhas que só são ruído** e diz quantas retirou (`lidos = gravados + mantidos + retirados`). Quem confere a saída por texto vê um termo a mais no fim da linha.
+
 ## [0.37.0] — 2026-10-16
 
 ### Adicionado
