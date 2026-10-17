@@ -100,11 +100,25 @@ export interface EventoDescartado {
  * biblioteca (90 de 4.167 eventos, 02/09/2026); status e decisao do Titular (#1094);
  * distribuicao de chave SOZINHA nao tem dado (6.231 no Acervo real). Atencao: a
  * distribuicao de chave que ACOMPANHA conteudo nao chega aqui, e `tipoDeConteudo`.
+ *
+ * Os cinco rotulos de protocolo da #1234 foram medidos na guarda do evento cru em
+ * 17/10/2026 (12 a 17/10, so estrutura, nenhum texto lido): o compartilhamento de chave de
+ * estado traz o MATERIAL da chave e nada mais (5 de 512 eventos); o aviso de mídia traz so
+ * endereco e resumo do arquivo, sem a chave de decifracao (5); a resposta de sincronizacao
+ * de mensagens temporarias (2) e o pedido de boas-vindas (1) sao protocolo puro; o aviso
+ * de historico traz so contagens (15). Todos continuam CONTADOS por dia. Fica de fora, por
+ * decisao: `albumMessage` (o filho de album da #1190 traz a associacao com o pai) e
+ * `protocolMessage:REVOKE` (unica fonte para um dia modelar a Mensagem apagada).
  */
 const MOTIVOS_DE_RUIDO: ReadonlySet<string> = new Set([
   'cifrada',
   'status',
   'senderKeyDistributionMessage',
+  'protocolMessage:APP_STATE_SYNC_KEY_SHARE',
+  'protocolMessage:REQUEST_WELCOME_MESSAGE',
+  'protocolMessage:EPHEMERAL_SYNC_RESPONSE',
+  'protocolMessage:MEDIA_NOTIFY_MESSAGE',
+  'messageHistoryNotice',
 ]);
 
 /**
