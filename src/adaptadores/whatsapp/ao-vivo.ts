@@ -293,6 +293,19 @@ const VIRAM_MENSAGEM = new Set([
   'locationMessage',
 ]);
 
+/**
+ * Tipos de conta comercial que viram Mensagem SO quando a leitura do texto devolve um corpo nao
+ * vazio (#1235): a mensagem interativa (texto e um botao de link) e a mensagem de modelo (corpo,
+ * as vezes cabecalho com imagem, rodape e botoes). Medidos em 17/10/2026 na guarda do evento cru
+ * (104 eventos, so estrutura): chegam sozinhos no evento e todos tinham corpo.
+ *
+ * Nao estao em `VIRAM_MENSAGEM` de proposito: gravar uma Mensagem vazia trava o identificador do
+ * evento (a idempotencia por fonte e id externo) contra um reprocessar futuro que leia o corpo
+ * direito. Figurinha e localizacao nao tem corpo a ler; estes dois tem. Sem corpo, seguem
+ * ignorados e guardados cru, com o rotulo do tipo.
+ */
+const VIRAM_MENSAGEM_COM_CORPO = new Set(['interactiveMessage', 'templateMessage']);
+
 /** Tipos de conteudo que carregam Anexo, medidos na captura. */
 const COM_ANEXO = [
   'imageMessage',
@@ -393,7 +406,23 @@ function textoDe(rotulada: Record<string, unknown> | undefined | null): string |
     const legenda = (documento as Record<string, unknown>)['caption'];
     if (typeof legenda === 'string' && legenda !== '') return legenda;
   }
-  return undefined;
+  // O CORPO da mensagem de conta comercial (#1235), nas tres posicoes medidas. Rodape, titulo, botoes, links e a
+  // imagem do cabecalho ficam so no Conteudo Bruto.
+  return (
+    textoEm(message, ['interactiveMessage', 'body', 'text']) ??
+    textoEm(message, ['templateMessage', 'interactiveMessageTemplate', 'body', 'text']) ??
+    textoEm(message, ['templateMessage', 'hydratedTemplate', 'hydratedContentText'])
+  );
+}
+
+/** O texto nao vazio no fim de uma sequencia de chaves, ou `undefined` se faltar qualquer elo ou se for vazio. */
+function textoEm(raiz: Record<string, unknown>, chaves: readonly string[]): string | undefined {
+  let atual: unknown = raiz;
+  for (const chave of chaves) {
+    if (atual === null || typeof atual !== 'object') return undefined;
+    atual = (atual as Record<string, unknown>)[chave];
+  }
+  return typeof atual === 'string' && atual !== '' ? atual : undefined;
 }
 
 /**
@@ -606,7 +635,9 @@ export function receberEvento(
     }
 
     const tipo = tipoDeConteudo(m.message);
-    if (mudanca === null && tipo !== null && !VIRAM_MENSAGEM.has(tipo)) {
+    const viraMensagem =
+      tipo !== null && (VIRAM_MENSAGEM.has(tipo) || (VIRAM_MENSAGEM_COM_CORPO.has(tipo) && textoDe(m.message) !== undefined));
+    if (mudanca === null && tipo !== null && !viraMensagem) {
       relato.ignorados[tipo] = (relato.ignorados[tipo] ?? 0) + 1;
       descartar(relato, m, motivoDoTipo(tipo, m.message));
       continue;

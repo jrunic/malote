@@ -44,6 +44,10 @@ function envelopeDeMidia(id: string): MensagemRecebida {
   };
 }
 
+function mensagemComercial(id: string, message: Record<string, unknown>): MensagemRecebida {
+  return { key: { remoteJid: DIRETA, id, fromMe: false }, messageTimestamp: INSTANTE, message };
+}
+
 function linha(evento: MensagemRecebida, motivo: string): string {
   return JSON.stringify({ em: '2026-09-01T00:00:00.000Z', motivo, evento });
 }
@@ -301,6 +305,32 @@ test('o envelope de midia associada GUARDADO vira Mensagem e Anexo e sai da guar
     const restantes = readFileSync(g.caminho, 'utf8').split('\n').filter((l) => l !== '');
     assert.equal(restantes.length, 1);
     assert.equal((JSON.parse(restantes[0]!) as { evento: MensagemRecebida }).evento.key.id, 'X9');
+  } finally {
+    g.limpar();
+  }
+});
+
+test('a mensagem de conta comercial GUARDADA vira Mensagem e sai da guarda; a sem corpo fica (#1235)', () => {
+  const g = cenarioDaGuarda();
+  try {
+    const interativa = mensagemComercial('COM1', { interactiveMessage: { body: { text: 'corpo sintetico' } } });
+    const modelo = mensagemComercial('COM2', { templateMessage: { hydratedTemplate: { hydratedContentText: 'corpo do modelo' } } });
+    const semCorpo = mensagemComercial('COM3', { interactiveMessage: { nativeFlowMessage: { buttons: [] } } });
+    writeFileSync(
+      g.caminho,
+      [
+        linha(interativa, 'interactiveMessage'),
+        linha(modelo, 'templateMessage'),
+        linha(semCorpo, 'interactiveMessage'),
+        linha(aindaDescartado('X8'), 'tipoNuncaVistoMessage'),
+      ].join('\n') + '\n',
+    );
+    const r = reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA);
+    assert.deepEqual(r, { lidos: 4, gravados: 2, mantidos: 2, retirados: 0 });
+    assert.equal(g.n('mensagens'), 2);
+    assert.equal(g.n('anexos'), 0);
+    const restantes = readFileSync(g.caminho, 'utf8').split('\n').filter((l) => l !== '');
+    assert.deepEqual(restantes.map((l) => (JSON.parse(l) as { evento: MensagemRecebida }).evento.key.id), ['COM3', 'X8']);
   } finally {
     g.limpar();
   }
