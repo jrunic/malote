@@ -89,8 +89,14 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   certa; `reconstituirMensagemParaRetry` (`retry-de-midia.ts`) trata as duas.
   **A causa original da falha (ETIMEDOUT, bad decrypt) NÃO prevê se o retry funciona**
   — nos dois casos medidos o resultado esperado se inverteu (o "fácil" falhou de
-  novo, o "difícil" recuperou) — por isso `malote midia reprocessar` tenta TODOS os
-  elegíveis, sem filtrar por motivo anterior.
+  novo, o "difícil" recuperou) — por isso `malote midia reprocessar` tenta todos os
+  elegíveis **do recorte que o operador dá**, sem filtrar por motivo anterior. O recorte
+  (#1248) escolhe QUAIS Anexos, por data, tipo ou Mensagem, e nunca por causa da falha: a
+  regra acima vale dentro dele. Sem recorte e sem `--tudo` o comando recusa, porque
+  "todos" era 22.352 Anexos contra a plataforma (medido em 18/10/2026). A ordem é a da
+  Mensagem mais antiga para a mais nova, que é a que vence primeiro, e o `--limite` conta
+  tentativas: o que não é de recepção ao vivo nunca ocupa uma vaga. O prazo do endereço
+  medido em 18/10/2026 (uma imagem por idade) é de 26 a 29 dias, não 30.
 - **`ZSESSIONTYPE` do backup de iOS tem CINCO naturezas, não duas.** 0=direta,
   1=grupo, 2=lista-de-transmissão, 3=status, 4=comunidade — medido em 21/09/2026 para
   o adaptador macOS de outro produto, contra o **mesmo formato de backup**, decisão confirmada
