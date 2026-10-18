@@ -72,7 +72,7 @@ test('ponta a ponta: o documento com legenda guardado ANTES da correcao vira Men
   try {
     writeFileSync(g.caminho, `${linha(documentoComLegenda('DOC1'), 'documentWithCaptionMessage')}\n`);
     const r = reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA);
-    assert.deepEqual(r, { lidos: 1, gravados: 1, mantidos: 0, retirados: 0 });
+    assert.deepEqual(r, { lidos: 1, gravados: 1, mantidos: 0, retirados: 0, edicoes: 0 });
     assert.equal(g.n('mensagens'), 1);
     assert.equal(g.n('anexos'), 1);
     assert.equal(existsSync(g.caminho), false, 'a guarda esvaziada deveria sumir');
@@ -87,7 +87,7 @@ test('o que continua descartado FICA, na linha original, e a guarda NAO e realim
     const original = `${linha(aindaDescartado('X1'), 'tipoNuncaVistoMessage')}\n`;
     writeFileSync(g.caminho, original);
     const r = reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA);
-    assert.deepEqual(r, { lidos: 1, gravados: 0, mantidos: 1, retirados: 0 });
+    assert.deepEqual(r, { lidos: 1, gravados: 0, mantidos: 1, retirados: 0, edicoes: 0 });
     assert.equal(readFileSync(g.caminho, 'utf8'), original, 'a guarda mudou: foi realimentada ou reescrita');
     assert.equal(g.n('mensagens'), 0);
   } finally {
@@ -105,7 +105,7 @@ test('mistura: sai o que passou, fica o que nao, e o anterior tambem e processad
       `${linha(aindaDescartado('B1'), 'tipoNuncaVistoMessage')}\n${linha(documentoComLegenda('B2'), 'documentWithCaptionMessage')}\n`,
     );
     const r = reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA);
-    assert.deepEqual(r, { lidos: 3, gravados: 2, mantidos: 1, retirados: 0 });
+    assert.deepEqual(r, { lidos: 3, gravados: 2, mantidos: 1, retirados: 0, edicoes: 0 });
     assert.equal(g.n('mensagens'), 2);
     assert.equal(existsSync(anterior), false);
     const restantes = readFileSync(g.caminho, 'utf8').split('\n').filter((l) => l !== '');
@@ -137,7 +137,7 @@ test('ORDEM: o Acervo e gravado ANTES de a guarda ser reescrita (morte no meio)'
     const conteudo = `${linha(documentoComLegenda('DOC1'), 'documentWithCaptionMessage')}\n`;
     writeFileSync(g.caminho, conteudo);
     assert.throws(
-      () => reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA, () => { throw new Error('morreu antes de reescrever'); }),
+      () => reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA, { substituir: () => { throw new Error('morreu antes de reescrever'); } }),
       /morreu antes de reescrever/,
     );
     assert.equal(g.n('mensagens'), 1, 'o Acervo tem de ter recebido antes da reescrita');
@@ -161,7 +161,7 @@ test('linha ilegivel ou sem evento e MANTIDA, nunca descartada', () => {
     const semEvento = JSON.stringify({ motivo: 'y' });
     writeFileSync(g.caminho, `${lixo}\n${semEvento}\n`);
     const r = reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA);
-    assert.deepEqual(r, { lidos: 2, gravados: 0, mantidos: 2, retirados: 0 });
+    assert.deepEqual(r, { lidos: 2, gravados: 0, mantidos: 2, retirados: 0, edicoes: 0 });
     assert.equal(readFileSync(g.caminho, 'utf8'), `${lixo}\n${semEvento}\n`);
   } finally {
     g.limpar();
@@ -188,7 +188,7 @@ test('Etiqueta guardada sai da guarda: ela grava SEM Mensagem (gravados = 0)', (
     const etiqueta = mudancaDeEtiqueta({ id: 'ET1', texto: 'x', autorPn: TEL_DE_OUTRO });
     writeFileSync(g.caminho, `${linha(etiqueta, 'etiqueta-sem-autor')}\n`);
     const r = reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA);
-    assert.deepEqual(r, { lidos: 1, gravados: 1, mantidos: 0, retirados: 0 });
+    assert.deepEqual(r, { lidos: 1, gravados: 1, mantidos: 0, retirados: 0, edicoes: 0 });
     assert.equal(g.n('etiquetas_de_participacao'), 1);
     assert.equal(existsSync(g.caminho), false);
   } finally {
@@ -214,7 +214,7 @@ test('a guarda reescrita pelo reprocessar continua 0600 (conversa em claro)', ()
 test('sem guarda nao ha o que fazer', () => {
   const g = cenarioDaGuarda();
   try {
-    assert.deepEqual(reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA), { lidos: 0, gravados: 0, mantidos: 0, retirados: 0 });
+    assert.deepEqual(reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA), { lidos: 0, gravados: 0, mantidos: 0, retirados: 0, edicoes: 0 });
   } finally {
     g.limpar();
   }
@@ -235,7 +235,7 @@ test('RETIRA a linha cujo evento so e ruido (#1234); fica o que ainda e descarta
       ].join('\n') + '\n',
     );
     const r = reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA);
-    assert.deepEqual(r, { lidos: 5, gravados: 1, mantidos: 2, retirados: 2 });
+    assert.deepEqual(r, { lidos: 5, gravados: 1, mantidos: 2, retirados: 2, edicoes: 0 });
     assert.equal(r.lidos, r.gravados + r.mantidos + r.retirados, 'a conta nao fecha');
     assert.equal(g.n('mensagens'), 1);
     assert.equal(existsSync(anterior), false, 'o anterior so tinha ruido: deveria ter sumido');
@@ -256,7 +256,7 @@ test('um subtipo vizinho (REVOKE) NAO e retirado: so o que a medicao declarou ru
     const original = `${linha(revoke, 'protocolMessage:REVOKE')}\n`;
     writeFileSync(g.caminho, original);
     const r = reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA);
-    assert.deepEqual(r, { lidos: 1, gravados: 0, mantidos: 1, retirados: 0 });
+    assert.deepEqual(r, { lidos: 1, gravados: 0, mantidos: 1, retirados: 0, edicoes: 0 });
     assert.equal(readFileSync(g.caminho, 'utf8'), original);
   } finally {
     g.limpar();
@@ -272,9 +272,11 @@ test('a retirada NAO escreve no Acervo: a linha sai ANTES da troca, e uma falha 
     const recebidas: string[][] = [];
     assert.throws(
       () =>
-        reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA, (_arquivo, linhas) => {
-          recebidas.push([...linhas]);
-          throw new Error('disco cheio');
+        reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA, {
+          substituir: (_arquivo, linhas) => {
+            recebidas.push([...linhas]);
+            throw new Error('disco cheio');
+          },
         }),
       /disco cheio/,
     );
@@ -299,7 +301,7 @@ test('o envelope de midia associada GUARDADO vira Mensagem e Anexo e sai da guar
       ].join('\n') + '\n',
     );
     const r = reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA);
-    assert.deepEqual(r, { lidos: 3, gravados: 1, mantidos: 1, retirados: 1 });
+    assert.deepEqual(r, { lidos: 3, gravados: 1, mantidos: 1, retirados: 1, edicoes: 0 });
     assert.equal(g.n('mensagens'), 1);
     assert.equal(g.n('anexos'), 1);
     const restantes = readFileSync(g.caminho, 'utf8').split('\n').filter((l) => l !== '');
@@ -326,7 +328,7 @@ test('a mensagem de conta comercial GUARDADA vira Mensagem e sai da guarda; a se
       ].join('\n') + '\n',
     );
     const r = reprocessarDescartados(g.acervo, g.caminho, cfg, AGORA);
-    assert.deepEqual(r, { lidos: 4, gravados: 2, mantidos: 2, retirados: 0 });
+    assert.deepEqual(r, { lidos: 4, gravados: 2, mantidos: 2, retirados: 0, edicoes: 0 });
     assert.equal(g.n('mensagens'), 2);
     assert.equal(g.n('anexos'), 0);
     const restantes = readFileSync(g.caminho, 'utf8').split('\n').filter((l) => l !== '');
