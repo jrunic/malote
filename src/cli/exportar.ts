@@ -10,6 +10,7 @@ import type { PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
 import { pedirGet } from './cliente.js';
 import { opcao, recusarBandeiras } from './bandeiras.js';
 import { linhasDeContatoCompartilhado } from './contatos-compartilhados-texto.js';
+import { linhasDaMensagemEditada, textoParaExibir } from './edicoes-texto.js';
 import { MENSAGEM_SEM_INQUILINO_NA_REDE } from './sem-inquilino-na-rede.js';
 
 /**
@@ -108,9 +109,10 @@ function rotulo(m: MensagemLida, nomes: Map<string, AutorDeExport>): string {
 }
 
 function linhasDeTxt(m: MensagemLida, nomes: Map<string, AutorDeExport>): string[] {
-  const texto = m.conteudo ?? '(sem texto)';
+  const texto = textoParaExibir(m);
   const [primeira, ...resto] = texto.split('\n');
   const linhas = [`${instante(m.ocorridaEm)}  ${rotulo(m, nomes)}: ${primeira}`, ...resto.map((l) => `    ${l}`)];
+  linhas.push(...linhasDaMensagemEditada(m));
   for (const a of m.anexos) {
     linhas.push(`    [${a.tipo} ${a.presenca} ${a.id}${a.nomeOriginal !== null ? ` ${a.nomeOriginal}` : ''}]`);
   }

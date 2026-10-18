@@ -37,6 +37,7 @@ import { basename, join } from 'node:path';
 import { ehFonte, PRESENCAS, type Fonte } from '../nucleo/tipos.js';
 import { MENSAGEM_SEM_INQUILINO_NA_REDE } from './sem-inquilino-na-rede.js';
 import { linhasDeContatoCompartilhado } from './contatos-compartilhados-texto.js';
+import { linhasDaMensagemEditada, textoParaExibir } from './edicoes-texto.js';
 import { extrairContatosCompartilhados } from '../adaptadores/whatsapp/extrair-contatos-compartilhados.js';
 import { formatarAnexos, tipoGuardado } from './anexos-texto.js';
 import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
@@ -2238,7 +2239,8 @@ function executarComAtor(
           escrever(JSON.stringify(mensagens, null, 2));
         } else {
           for (const m of mensagens) {
-            escrever(`${new Date(m.ocorridaEm).toISOString()}  ${m.conteudo ?? '(sem texto)'}`);
+            escrever(`${new Date(m.ocorridaEm).toISOString()}  ${textoParaExibir(m)}`);
+            for (const l of linhasDaMensagemEditada(m)) escrever(l);
             for (const l of linhasDeContatoCompartilhado(m.contatosCompartilhados)) escrever(l);
           }
         }
@@ -2404,7 +2406,8 @@ function executarComAtor(
           if (truncado) ambiente.erro?.(avisoDeCorte(limiteEfetivo, ordem));
         } else {
           for (const m of achadas) {
-            escrever(`${new Date(m.ocorridaEm).toISOString()}  ${m.conteudo ?? '(sem texto)'}`);
+            escrever(`${new Date(m.ocorridaEm).toISOString()}  ${textoParaExibir(m)}`);
+            for (const l of linhasDaMensagemEditada(m)) escrever(l);
             for (const l of linhasDeContatoCompartilhado(m.contatosCompartilhados)) escrever(l);
             for (const a of m.anexos) {
               // A Presenca vai SEMPRE, inclusive `presente`: mostrar so o
