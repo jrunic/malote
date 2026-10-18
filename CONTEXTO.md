@@ -199,8 +199,8 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
-- **Produção:** v0.40.0 (18/10/2026, tag `v0.40.0`, `production` em `690a366`, PR #36); Acervo v28 e Registro v8. `main` e `production` no mesmo SHA.
-- **Suíte:** 2.003 testes (18/10/2026), com as 3 falhas pré-existentes de `cli-entrada`; testes de tempo (`despachante`, `servidor-sem-bloqueio`, `servir`) reprovam em lote sob carga e passam isolados; lint limpo.
+- **Produção:** v0.41.0 (19/10/2026, tag `v0.41.0`, `production` em `3649513`, PR #37); Acervo v28 e Registro v8. `main` e `production` no mesmo SHA.
+- **Suíte:** 2.027 testes (19/10/2026), com as 3 falhas pré-existentes de `cli-entrada`; testes de tempo (`despachante`, `servidor-sem-bloqueio`, `servir`) reprovam em lote sob carga e passam isolados; lint limpo.
 - **O histórico de ciclos e releases** vive fora do repositório (documentos internos do autor); as releases estão no `CHANGELOG.md`.
 
 ## Pendências
