@@ -940,8 +940,21 @@ export function contarPorFonte(acervo: Acervo): ContagemPorFonte {
 export interface AnexoNuncaObtidoComBruto {
   anexoId: string;
   tipo: string;
+  /** A Mensagem que carrega o Anexo, para o filtro por Mensagem e para quem relata. */
+  mensagemId: string;
+  /** O instante da MENSAGEM (nao o do Anexo), em ms: e dele que o endereco da midia comeca a envelhecer. */
+  ocorridaEm: number;
   /** O bruto da MENSAGEM (nunca o do Anexo) — e onde mediaKey/directPath vivem. */
   mensagemBruto: string | null;
+}
+
+/** O recorte do retry de midia (#1248): todos os campos combinam por E; `desde` e `ate` sao inclusivos, em ms. */
+export interface FiltroDeAnexosNuncaObtidos {
+  fonte?: Fonte;
+  desde?: number;
+  ate?: number;
+  tipo?: string;
+  mensagemId?: string;
 }
 
 /**
@@ -952,7 +965,7 @@ export interface AnexoNuncaObtidoComBruto {
  */
 export function listarAnexosNuncaObtidosComBruto(
   acervo: Acervo,
-  filtro: { fonte?: Fonte } = {},
+  filtro: FiltroDeAnexosNuncaObtidos = {},
 ): AnexoNuncaObtidoComBruto[] {
   const condicoes = ["a.presenca = 'nunca-obtido'"];
   const valores: unknown[] = [];
@@ -960,17 +973,38 @@ export function listarAnexosNuncaObtidosComBruto(
     condicoes.push('m.fonte = ?');
     valores.push(filtro.fonte);
   }
+  if (filtro.desde !== undefined) {
+    condicoes.push('m.ocorrida_em >= ?');
+    valores.push(filtro.desde);
+  }
+  if (filtro.ate !== undefined) {
+    condicoes.push('m.ocorrida_em <= ?');
+    valores.push(filtro.ate);
+  }
+  if (filtro.tipo !== undefined) {
+    condicoes.push('a.tipo = ?');
+    valores.push(filtro.tipo);
+  }
+  if (filtro.mensagemId !== undefined) {
+    condicoes.push('m.id = ?');
+    valores.push(filtro.mensagemId);
+  }
+  // A Mensagem mais antiga primeiro: e a que o endereco da midia vence primeiro, e sob um limite o corte nunca deve
+  // deixar a mais velha de fora. O id do Anexo desempata, para a ordem ser a mesma em toda leitura.
   const linhas = acervo.preparar(
-      `SELECT a.id AS anexo_id, a.tipo, m.bruto AS mensagem_bruto
+      `SELECT a.id AS anexo_id, a.tipo, m.id AS mensagem_id, m.ocorrida_em, m.bruto AS mensagem_bruto
          FROM anexos a
          JOIN mensagens m ON m.id = a.mensagem_id
-        WHERE ${condicoes.join(' AND ')}`,
+        WHERE ${condicoes.join(' AND ')}
+        ORDER BY m.ocorrida_em ASC, a.id ASC`,
     )
     .all(...valores) as Array<Record<string, unknown>>;
 
   return linhas.map((l) => ({
     anexoId: l['anexo_id'] as string,
     tipo: l['tipo'] as string,
+    mensagemId: l['mensagem_id'] as string,
+    ocorridaEm: l['ocorrida_em'] as number,
     mensagemBruto: (l['mensagem_bruto'] as string | null) ?? null,
   }));
 }
