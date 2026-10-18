@@ -28,6 +28,8 @@ import { nomeRepeteONumeroBrasileiro } from './nome-repete-numero-br.js';
 import { registrarNome } from '../../nucleo/identidade.js';
 import { registrarContatosCompartilhados } from '../../nucleo/contato-compartilhado.js';
 import { lerCartaoAoVivo, lerCartaoMultiploAoVivo, type LeituraDeCartoes } from './contato-compartilhado.js';
+import { EdicaoImplausivelError, registrarEdicao } from '../../nucleo/edicao.js';
+import { decidirEdicao, lerEdicaoRecebida, type CausaDeEdicaoNaoGravada, type Decodificador } from './edicao.js';
 import { ehCifrada, naturezaDoStub, textoDoStub } from './stubs-ao-vivo.js';
 
 /**
@@ -89,7 +91,7 @@ export interface MensagemRecebida {
  */
 export interface EventoDescartado {
   motivo: string;
-  /** So para `recusado`: a causa da recusa. Nunca texto de conversa. */
+  /** A causa da recusa (`recusado`) ou de a edicao nao ter sido gravada (#1246). So rotulo, nunca texto de conversa. */
   causa?: string;
   ruido: boolean;
   evento: MensagemRecebida;
@@ -159,6 +161,11 @@ export interface OpcoesDeRecepcao {
    * escuta UMA conta, e sem ela a Conversa direta nao sabe de qual fio e.
    */
   configuracao: { id: string; fonte: 'whatsapp' };
+  /**
+   * O decodificador do texto claro da edicao cifrada (#1246). Vem do portao da biblioteca, que e o unico que a importa;
+   * sem ele a edicao cifrada nao se grava (causa `sem-decodificador`) e segue descartada e guardada. A edicao aberta nao o usa.
+   */
+  decodificar?: Decodificador;
 }
 
 export interface RelatoDeRecepcao {
@@ -196,6 +203,12 @@ export interface RelatoDeRecepcao {
   contatosCompartilhados: number;
   /** Cartoes ilegiveis ou sem nome, recusados. */
   contatosCompartilhadosRecusados: number;
+  /** Edicoes de Mensagem que NASCERAM nesta passada (#1246). So contagem: o texto da edicao nunca vai a relatorio. */
+  edicoes: number;
+  /** Edicoes cujo evento ja estava gravado (reentrega). */
+  edicoesRepetidas: number;
+  /** Edicoes que NAO foram gravadas, por causa. So rotulo e contagem; o evento segue descartado e guardado cru. */
+  edicoesNaoGravadas: Partial<Record<CausaDeEdicaoNaoGravada, number>>;
   /**
    * Etiquetas da PROPRIA conta cujo endereco a Configuracao ainda nao conferiu:
    * contadas e NAO gravadas. O autor proprio chega em LID, e sem o Endereco da
@@ -487,6 +500,9 @@ export function receberEvento(
     etiquetasRemovidas: 0,
     contatosCompartilhados: 0,
     contatosCompartilhadosRecusados: 0,
+    edicoes: 0,
+    edicoesRepetidas: 0,
+    edicoesNaoGravadas: {},
     etiquetasDaContaSemEndereco: 0,
     nomesQueRepetemOEndereco: 0,
     correspondencia: {
@@ -596,6 +612,51 @@ export function receberEvento(
     if (enderecoEhFeedDeStatus(m.key.remoteJid)) {
       relato.ignorados['status'] = (relato.ignorados['status'] ?? 0) + 1;
       descartar(relato, m, 'status');
+      continue;
+    }
+
+    // A EDICAO de Mensagem (#1246) e um ramo PROPRIO e vem ANTES do descarte por tipo: chega como `secretEncryptedMessage`
+    // (cifrada) ou `protocolMessage` (aberta), que o descarte abaixo ignoraria. Decide LENDO e so abre a Operacao para
+    // gravar. Tudo o que impede a gravacao vira uma causa, e o evento segue descartado, contado e guardado cru.
+    const edicao = lerEdicaoRecebida(m);
+    if (edicao !== null) {
+      const tipoDoEnvelope = tipoDeConteudo(m.message) ?? 'edicao';
+      const naoGravada = (causa: CausaDeEdicaoNaoGravada): void => {
+        relato.edicoesNaoGravadas[causa] = (relato.edicoesNaoGravadas[causa] ?? 0) + 1;
+        relato.ignorados[tipoDoEnvelope] = (relato.ignorados[tipoDoEnvelope] ?? 0) + 1;
+        descartar(relato, m, motivoDoTipo(tipoDoEnvelope, m.message), causa);
+      };
+      if (edicao === 'envelope-incompleto') {
+        naoGravada(edicao);
+        continue;
+      }
+      try {
+        const decisao = decidirEdicao(acervo, FONTE, m, edicao, opcoes.decodificar);
+        if ('recusar' in decisao) {
+          naoGravada(decisao.recusar);
+          continue;
+        }
+        const r = emOperacao(
+          acervo,
+          { natureza: 'receber-ao-vivo', reversibilidade: 'irreversivel', registraEfeito: false },
+          () =>
+            registrarEdicao(acervo, {
+              ...decisao.gravar,
+              agora: opcoes.agora,
+              toleranciaDeRelogioMs: TOLERANCIA_DE_RELOGIO_AO_VIVO_MS,
+            }),
+        );
+        if (r.gravou) relato.edicoes += 1;
+        else relato.edicoesRepetidas += 1;
+      } catch (erro) {
+        if (ehBancoOcupado(erro)) throw erro;
+        if (erro instanceof EdicaoImplausivelError) {
+          naoGravada('instante-implausivel');
+          continue;
+        }
+        relato.recusados.push({ idExterno: m.key.id, causa: String(erro) });
+        descartar(relato, m, 'recusado', String(erro));
+      }
       continue;
     }
 
