@@ -40,3 +40,15 @@ export function removerAnexoNuncaObtido(acervo: Acervo, anexoId: string): 'remov
   acervo.preparar('DELETE FROM anexos WHERE id = ? AND presenca = ?').run(anexoId, 'nunca-obtido');
   return 'removido';
 }
+
+/** Quantas Mensagens de WhatsApp tem mensagem de modelo no bruto, e quantas delas ja tem Anexo. Para o relato do ensaio. */
+export function contarMensagensDeModelo(acervo: Acervo): { total: number; comAnexo: number } {
+  return acervo
+    .preparar(
+      `SELECT COUNT(*) AS total,
+              COALESCE(SUM(CASE WHEN EXISTS (SELECT 1 FROM anexos a WHERE a.mensagem_id = m.id) THEN 1 ELSE 0 END), 0) AS comAnexo
+         FROM mensagens m
+        WHERE m.fonte = 'whatsapp' AND m.bruto IS NOT NULL AND instr(m.bruto, '"templateMessage"') > 0`,
+    )
+    .get() as { total: number; comAnexo: number };
+}
