@@ -11,7 +11,8 @@ import {
 import { processarEstadoDeConversa } from '../adaptadores/whatsapp/estado-ao-vivo.js';
 import { processarAvisoDeGrupo } from '../adaptadores/whatsapp/metadados-de-coletiva-ao-vivo.js';
 import { processarEnvios } from '../adaptadores/whatsapp/enviar.js';
-import { conectar } from '../adaptadores/whatsapp/conexao.js';
+import { carregarDecodificador, conectar } from '../adaptadores/whatsapp/conexao.js';
+import type { Decodificador } from '../adaptadores/whatsapp/edicao.js';
 import { lerDestinoDeMidia } from '../registro/destino-midia.js';
 import { gravarArquivoDeAnexo } from '../nucleo/arquivo-de-anexo.js';
 import { lerUltimoEvento, marcarUltimoEvento } from './ultimo-evento.js';
@@ -150,6 +151,7 @@ export function drenar(
   escrever: (texto: string) => void,
   caminhoDaCorrespondencia?: string,
   aoDescartar?: (relato: RelatoDeRecepcao) => void,
+  decodificar?: Decodificador,
 ): void {
   for (let i = 0; i < LOTES_POR_DRENAGEM; i += 1) {
     const lote = lerDerrame(caminho)[0];
@@ -158,6 +160,7 @@ export function drenar(
       const r = receberEvento(acervo, lote as MensagemRecebida[], {
         agora: agora(),
         configuracao,
+        ...(decodificar !== undefined ? { decodificar } : {}),
       });
       // O EVENTO DERRAMADO E CONTADO AQUI, E SO AQUI — nao ha dupla contagem.
       //
@@ -463,6 +466,26 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
   // arquivo ao lado do `ultimo-evento`. Falha dele nunca derruba a recepcao.
   const marcarSinal = criarMarcadorDoSinal({ caminho: caminhos.sinal, agora, avisar: escrever });
 
+  // O decodificador da edicao cifrada (#1246) vem do portao e e carregado ANTES do primeiro evento, porque `receberEvento` e
+  // sincrono. Falha em carregar nunca impede de ouvir: a edicao cifrada segue descartada e guardada, com a causa dita.
+  //
+  // A biblioteca injetada (teste) e carregada UMA vez e compartilhada com `conectar`: carregar e ter efeito, no dublê, e dois
+  // carregamentos disparariam o efeito duas vezes. Em producao nao ha injecao e cada um faz o proprio import dinamico, que e
+  // idempotente.
+  let biblioteca: Promise<unknown> | undefined;
+  const carregarUmaVez =
+    ambiente.carregarBiblioteca === undefined
+      ? undefined
+      : (): Promise<unknown> => (biblioteca ??= (ambiente.carregarBiblioteca as () => Promise<unknown>)());
+  let decodificar: Decodificador | undefined;
+  try {
+    decodificar = await carregarDecodificador({
+      ...(carregarUmaVez !== undefined ? { carregarBiblioteca: carregarUmaVez } : {}),
+    });
+  } catch (erro) {
+    escrever(`[ouvinte] decodificador de edicao indisponivel; edicoes cifradas ficam guardadas: ${String(erro)}`);
+  }
+
   try {
     const conexao = await conectar({
       pastaDoVinculo: caminhos.vinculo,
@@ -519,9 +542,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
         // parada pedida. Vinculo invalidado exige pareamento humano.
         encerrar(codigoDeFim);
       },
-      ...(ambiente.carregarBiblioteca !== undefined
-        ? { carregarBiblioteca: ambiente.carregarBiblioteca }
-        : {}),
+      ...(carregarUmaVez !== undefined ? { carregarBiblioteca: carregarUmaVez } : {}),
       aoReceber: (mensagens, midia) =>
         // O escopo do Ator abre AQUI, e nao ao redor do laco de recepcao.
         // `receberEvento` e sincrono, entao o Ator vale por construcao — sem
@@ -542,7 +563,11 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
         comAtor(atorDeServico('ouvinte-whatsapp'), () => {
           let r;
           try {
-            r = receberEvento(acervo, mensagens, { agora: agora(), configuracao });
+            r = receberEvento(acervo, mensagens, {
+              agora: agora(),
+              configuracao,
+              ...(decodificar !== undefined ? { decodificar } : {}),
+            });
           } catch (erro) {
             // BANCO OCUPADO NAO MATA O OUVINTE, e SO ele e tratado aqui.
             //
@@ -604,6 +629,17 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
               `[ouvinte] contatos compartilhados: ${r.contatosCompartilhados} gravado(s)` +
                 (r.contatosCompartilhadosRecusados > 0 ? `, ${r.contatosCompartilhadosRecusados} recusado(s)` : ''),
             );
+          }
+          // Edicoes de Mensagem (#1246): so CONTAGENS e rotulos de causa; o texto da edicao nunca entra em log.
+          if (r.edicoes > 0 || r.edicoesRepetidas > 0) {
+            escrever(
+              `[ouvinte] edicoes: ${r.edicoes} gravada(s)` +
+                (r.edicoesRepetidas > 0 ? `, ${r.edicoesRepetidas} repetida(s)` : ''),
+            );
+          }
+          const edicoesNaoGravadas = Object.entries(r.edicoesNaoGravadas);
+          if (edicoesNaoGravadas.length > 0) {
+            escrever(`[ouvinte] edicoes nao gravadas: ${edicoesNaoGravadas.map(([c, n]) => `${c}=${n}`).join(', ')}`);
           }
           // A #1068: cada Anexo que nasceu `nunca-obtido` NESTE lote baixa em
           // segundo plano — fire-and-forget de proposito, porque `aoReceber` e
@@ -674,8 +710,15 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
           anotarCorrespondencia(caminhos.correspondencia, r.correspondencia, agora());
           registrarDescartes(caminhos, r, agora(), escrever);
           // A escrita passou: e o sinal de que a disputa acabou.
-          drenar(acervo, caminhos.derrame, configuracao, agora, escrever, caminhos.correspondencia, (relato) =>
-            registrarDescartes(caminhos, relato, agora(), escrever),
+          drenar(
+            acervo,
+            caminhos.derrame,
+            configuracao,
+            agora,
+            escrever,
+            caminhos.correspondencia,
+            (relato) => registrarDescartes(caminhos, relato, agora(), escrever),
+            decodificar,
           );
         }),
     });
