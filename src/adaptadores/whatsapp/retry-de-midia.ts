@@ -8,6 +8,8 @@
  * e este arquivo nao pode furá-la.
  */
 
+import { leituraDoModelo } from './imagem-de-modelo.js';
+
 /**
  * `mediaKey` aparece em DUAS formas no `bruto` gravado, medidas contra os dois
  * casos reais de producao (29-30/09/2026): string base64 pura (a
@@ -68,7 +70,15 @@ export function reconstituirMensagemParaRetry(
   }
   const chaveDoConteudo = `${tipoDoAnexo}Message`;
   const conteudo = mensagemInterna?.[chaveDoConteudo] as Record<string, unknown> | undefined;
-  if (conteudo === undefined || conteudo === null) return null;
+  if (conteudo === undefined || conteudo === null) {
+    // A imagem do cabecalho de uma mensagem de modelo (#1242): a biblioteca nao abre o modelo, entao se entrega SO a imagem, na
+    // raiz, como a conexao faz ao vivo. O modelo inteiro junto confundiria a biblioteca, e por isso a mensagem sai sem ele.
+    const modelo = tipoDoAnexo === 'image' ? leituraDoModelo(mensagemInterna) : null;
+    if (modelo === null || modelo.tipo !== 'imagem') return null;
+    const chave = normalizarMediaKey(modelo.conteudo['mediaKey']);
+    if (chave === null) return null;
+    return { ...bruto, message: { imageMessage: { ...modelo.conteudo, mediaKey: chave } } };
+  }
 
   const mediaKey = normalizarMediaKey(conteudo['mediaKey']);
   if (mediaKey === null) return null;

@@ -79,3 +79,36 @@ test('envelope de midia associada SEM conteudo do tipo do Anexo nao e elegivel',
   const bruto = JSON.stringify({ ...BASE, message: { associatedChildMessage: { message: {} } } });
   assert.equal(reconstituirMensagemParaRetry('video', bruto), null);
 });
+
+test('imagem do cabecalho de um modelo: o retry a ergue para a raiz, com o mediaKey em Buffer e sem o modelo (#1242)', () => {
+  const bruto = JSON.stringify({
+    ...BASE,
+    message: {
+      templateMessage: {
+        interactiveMessageTemplate: {
+          body: { text: 'corpo' },
+          header: { imageMessage: { mediaKey: 'ZRu4OBFsg5OwyKys+RJWDjiKtxfUpvBfdmaLXEKi5nY=', directPath: '/v/t62/x', mimetype: 'image/jpeg' } },
+        },
+      },
+    },
+  });
+  const r = reconstituirMensagemParaRetry('image', bruto) as {
+    key: { id: string };
+    message: Record<string, { mediaKey?: Buffer }>;
+  } | null;
+  assert.notEqual(r, null);
+  assert.equal(r!.key.id, 'M1', 'a chave do evento segue junto');
+  assert.deepEqual(Object.keys(r!.message), ['imageMessage'], 'so a imagem: o modelo inteiro confundiria a biblioteca');
+  assert.ok(Buffer.isBuffer(r!.message['imageMessage']?.mediaKey));
+  assert.equal(r!.message['imageMessage']?.mediaKey?.toString('base64'), 'ZRu4OBFsg5OwyKys+RJWDjiKtxfUpvBfdmaLXEKi5nY=');
+});
+
+test('modelo sem imagem, ou Anexo de outro tipo, nao e elegivel pelo caminho do modelo', () => {
+  const semImagem = JSON.stringify({ ...BASE, message: { templateMessage: { interactiveMessageTemplate: { header: { title: 'x' } } } } });
+  assert.equal(reconstituirMensagemParaRetry('image', semImagem), null);
+  const comImagem = JSON.stringify({
+    ...BASE,
+    message: { templateMessage: { interactiveMessageTemplate: { header: { imageMessage: { mediaKey: 'AAAA', directPath: '/x' } } } } },
+  });
+  assert.equal(reconstituirMensagemParaRetry('video', comImagem), null, 'o Anexo diz video e a imagem do modelo e image');
+});

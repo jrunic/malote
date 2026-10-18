@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { MensagemRecebida } from './ao-vivo.js';
 import type { Decodificador } from './edicao.js';
 import type { IdentidadeBrutaDoVinculo } from './identidade-da-conta.js';
+import { leituraDoModelo } from './imagem-de-modelo.js';
 
 /**
  * A conexao ao vivo do WhatsApp.
@@ -226,10 +227,22 @@ const ESPERA_INICIAL = 5_000;
 function abrirEnvelopeDeMidia(mensagem: unknown): unknown {
   const m = mensagem as { message?: Record<string, unknown> | null } | null | undefined;
   const filho = m?.message?.['associatedChildMessage'];
-  if (filho === null || filho === undefined || typeof filho !== 'object') return mensagem;
+  if (filho === null || filho === undefined || typeof filho !== 'object') return abrirModeloDeMidia(mensagem);
   const interior = (filho as Record<string, unknown>)['message'];
   if (interior === null || interior === undefined || typeof interior !== 'object') return mensagem;
   return { ...(mensagem as object), message: interior };
+}
+
+/**
+ * A biblioteca tambem nao abre a mensagem de modelo (#1242): a imagem do cabecalho mora dentro do modelo, e entregar o evento
+ * fechado falha. A conexao entrega SO a imagem, na raiz, com a chave do evento junto e sem copiar o conteudo: o `mediaKey`
+ * binario tem de chegar como veio. O reconhecedor e puro; quem fala com a biblioteca continua sendo este modulo.
+ */
+function abrirModeloDeMidia(mensagem: unknown): unknown {
+  const m = mensagem as { message?: unknown } | null | undefined;
+  const modelo = leituraDoModelo(m?.message);
+  if (modelo.tipo !== 'imagem') return mensagem;
+  return { ...(mensagem as object), message: { imageMessage: modelo.conteudo } };
 }
 
 /** Teto da espera. Acima disso, insistir mais rapido nao ajuda e chama atencao. */
