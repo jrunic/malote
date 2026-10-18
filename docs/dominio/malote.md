@@ -294,6 +294,7 @@ Duas regras atravessam o modelo inteiro:
 - **É derivada e refazível.** O texto sai do Conteúdo Bruto da própria Edição e, na forma cifrada, do segredo que a Mensagem original guarda no dela. O núcleo não conhece segredo nem cifra: isso é vocabulário de Fonte e fica no Adaptador.
 - **Edição que não se lê não é gravada.** Original ausente, original sem segredo, tag que não autentica, original em outra Conversa que a do envelope, instante implausível ou forma sem texto reconhecível: nenhuma Edição, e o evento continua descartado, contado por causa e guardado cru.
 - **O texto pode ser vazio** (a legenda apagada é uma edição válida). O instante passa pela mesma guarda de plausibilidade da Mensagem, com a tolerância da recepção ao vivo.
+- **A leitura entrega a Edição junto da Mensagem.** A Mensagem traz `edicoes` (em ordem, vazia sem edição) e o `conteudo` original; só a Mensagem editada traz `textoAtual`, o texto da última edição. Repetir o texto em toda Mensagem custava +21% de bytes por página.
 - **Edição é ordenada pelo instante da edição**; o empate desfaz pela ordem de gravação. Mensagem nunca é apagada por política de espaço, e a Edição também não.
 
 **Ciclo de vida** — nasce pela recepção ao vivo (e, depois, pelo reprocessamento do que o ouvinte guardou); imutável; removida junto com a Mensagem. A Operação que a grava é a da recepção, irreversível e sem efeito linha a linha: a Edição se refaz do bruto, e a proteção é o backup do Acervo.
