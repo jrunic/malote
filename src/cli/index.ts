@@ -80,6 +80,7 @@ import {
 import { trazerArquivos } from '../adaptadores/whatsapp/trazer.js';
 import { extrairDuracoesDoBruto } from '../adaptadores/whatsapp/duracao-do-anexo.js';
 import { reprocessarMidiaNuncaObtida } from '../adaptadores/whatsapp/reprocessar-midia.js';
+import { linhasDoEnsaioDeMidia, lerRecorteDeMidia } from './recorte-de-midia.js';
 import { conferirDisco, relatarAcervo } from '../nucleo/relatorio-de-acervo.js';
 import { aplicarRetencao, projetarRetencao } from '../nucleo/retencao.js';
 import {
@@ -344,7 +345,8 @@ Titular (nao exige chave enquanto nao houver rede):
   malote entrada declarar       --inquilino <id> --fonte <nome> --configuracao <apelido> --pasta <caminho> --natureza completo|parcial [--titular-na-fonte <nome>]
   malote entrada listar         --inquilino <id>
   malote midia trazer           --inquilino <id> --material <caminho> [--conta pessoal|business]
-  malote midia reprocessar      --inquilino <id>  (tenta de novo Anexo ao vivo que falhou)
+  malote midia reprocessar      --inquilino <id> [--ensaio] [--desde D] [--ate D] [--tipo T] [--mensagem <id>] [--limite <n>] [--tudo]
+                                (tenta de novo Anexo ao vivo que falhou; sem recorte e sem --tudo recusa)
   malote acervo relatar         --inquilino <id>
   malote retencao definir       --inquilino <id> [--mais-velho-que-dias <n>] [--maior-que-mb <n>] [--tipos video,audio]
   malote retencao ver           --inquilino <id>
@@ -772,31 +774,61 @@ export async function executarMidiaReprocessar(
   const recusaDeBandeira = recusarBandeiras(argumentos, ambiente.escrever);
   if (recusaDeBandeira !== undefined) return recusaDeBandeira;
   const { escrever } = ambiente;
+  const inquilino = opcao(argumentos, 'inquilino');
+  if (inquilino === undefined) {
+    escrever(
+      'Uso: malote midia reprocessar --inquilino <id> [--ensaio] [--desde D] [--ate D] ' +
+        '[--tipo image|video|audio|document|sticker|other] [--mensagem <id>] [--limite <n>] [--tudo]',
+    );
+    return 2;
+  }
+  // Erro de flag e codigo 2 antes de abrir o Registro, o Acervo, o Destino ou a rede: a leitura e pura (#1248).
+  const recorte = lerRecorteDeMidia(argumentos);
+  if ('erro' in recorte) {
+    escrever(recorte.erro);
+    return 2;
+  }
   const chave = opcao(argumentos, 'chave');
   const registro = comAtor(LOCAL, () => abrirRegistro(ambiente.dados));
   const identidade = chave === undefined ? null : verificarChaveDeOperador(registro, chave);
 
   return comAtor(identidade === null ? LOCAL : atorDeOperador(identidade), async () => {
     try {
-      const inquilino = opcao(argumentos, 'inquilino');
-      if (inquilino === undefined) {
-        escrever('Uso: malote midia reprocessar --inquilino <id>');
-        return 2;
-      }
-      const destino = lerDestinoDeMidia(registro, inquilino);
-      if (destino === undefined) {
-        escrever(
-          'Destino de Midia nao configurado para este Inquilino. Rode: ' +
-            'malote inquilino destino --chave <valor> --inquilino <id> --endereco <caminho>',
-        );
-        return 1;
-      }
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
-        const r = await reprocessarMidiaNuncaObtida(acervo, destino.endereco);
+        // Sem recorte, sem --tudo e sem --ensaio o comando tentaria TODOS os Anexos: recusa e mostra o tamanho disso.
+        // A contagem vem do proprio ensaio, e vem ANTES do Destino: ela nao precisa dele (#1248).
+        if (!recorte.ensaio && !recorte.tudo && !recorte.temRecorte) {
+          const previa = await reprocessarMidiaNuncaObtida(acervo, null, { ensaio: true });
+          escrever(
+            `Sem recorte este comando tentaria baixar ${previa.elegiveis} Anexo(s) (de ${previa.ensaio?.candidatos ?? 0} ` +
+              'candidatos) contra a plataforma. Use --ensaio para ver por tipo e por dia, um recorte ' +
+              '(--desde, --ate, --tipo, --mensagem, --limite) ou --tudo para tentar todos.',
+          );
+          return 2;
+        }
+        const opcoesDoRecorte = {
+          filtro: recorte.filtro,
+          ...(recorte.limite === undefined ? {} : { limite: recorte.limite }),
+        };
+        if (recorte.ensaio) {
+          const r = await reprocessarMidiaNuncaObtida(acervo, null, { ...opcoesDoRecorte, ensaio: true });
+          for (const linha of linhasDoEnsaioDeMidia(r)) escrever(linha);
+          return 0;
+        }
+        const destino = lerDestinoDeMidia(registro, inquilino);
+        if (destino === undefined) {
+          escrever(
+            'Destino de Midia nao configurado para este Inquilino. Rode: ' +
+              'malote inquilino destino --chave <valor> --inquilino <id> --endereco <caminho>',
+          );
+          return 1;
+        }
+        const r = await reprocessarMidiaNuncaObtida(acervo, destino.endereco, opcoesDoRecorte);
         escrever(`${r.recuperados} recuperado(s) (${r.bytesRecuperados} bytes).`);
         if (r.falhas > 0) escrever(`${r.falhas} falharam.`);
         if (r.naoElegiveis > 0) escrever(`${r.naoElegiveis} nao elegivel(is) (nao veio de recepcao ao vivo).`);
+        if (r.foraDoLimite > 0) escrever(`${r.foraDoLimite} elegivel(is) ficaram de fora pelo limite.`);
         return 0;
       } finally {
         acervo.fechar();
