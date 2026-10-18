@@ -5,6 +5,7 @@ import type { ConversaId, Direcao, EstadoDeTranscricao, Fonte, MensagemId, Pesso
 import { nomeDoIdentificador } from './identidade.js';
 import { nomesEmLote } from './nomes-em-lote.js';
 import { lerContatosCompartilhados, type ContatoCompartilhadoLido } from './contato-compartilhado.js';
+import { lerEdicoes, textoAtualDe, type EdicaoDaMensagem } from './edicao.js';
 import type { CursorDeConversas } from './cursor-de-conversas.js';
 
 /**
@@ -330,6 +331,13 @@ export interface MensagemLida {
   anexos: AnexoLido[];
   /** Os cartoes de contato que a Mensagem enviou (#1135). Lista vazia quando nao ha. */
   contatosCompartilhados: ContatoCompartilhadoLido[];
+  /** As Edicoes da Mensagem (#1246), em ordem do instante da edicao. Lista vazia quando nao ha. O `conteudo` e sempre o original. */
+  edicoes: EdicaoDaMensagem[];
+  /**
+   * O texto da ultima Edicao, SO na Mensagem editada (pode ser vazio: a legenda apagada). Sem Edicao a chave nao existe e o
+   * cliente usa o `conteudo`: repeti-lo em toda Mensagem custava +21% de bytes por pagina (medido em 18/10/2026).
+   */
+  textoAtual?: string;
 }
 
 /** `m` = mensagens. A lista de ids vai como um JSON; `[]` nao casa nada. */
@@ -373,18 +381,31 @@ function montarMensagens(acervo: Acervo, linhas: Array<Record<string, unknown>>)
     acervo,
     linhas.map((l) => l['id'] as string),
   );
+  // As Edicoes da PAGINA INTEIRA numa consulta so.
+  const edicoes = lerEdicoes(
+    acervo,
+    linhas.map((l) => l['id'] as string),
+  );
   return linhas.map((l) => {
     const id = l['id'] as string;
+    const conteudo = (l['conteudo'] as string | null) ?? null;
+    const doId: EdicaoDaMensagem[] = (edicoes.get(id) ?? []).map((e) => ({
+      texto: e.texto,
+      editadaEm: e.editadaEm,
+      origem: e.origem,
+    }));
     return {
       id,
       conversaId: l['conversa_id'] as string,
       fonte: l['fonte'] as Fonte,
       autorId: (l['autor_id'] as string | null) ?? null,
-      conteudo: (l['conteudo'] as string | null) ?? null,
+      conteudo,
       direcao: (l['direcao'] as Direcao | null) ?? null,
       ocorridaEm: l['ocorrida_em'] as number,
       anexos: lerAnexos(acervo, id),
       contatosCompartilhados: cartoes.get(id) ?? [],
+      edicoes: doId,
+      ...(doId.length > 0 ? { textoAtual: textoAtualDe(conteudo, doId) as string } : {}),
     };
   });
 }

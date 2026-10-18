@@ -26,6 +26,7 @@ function msg(sobre: Partial<MensagemLida>): MensagemLida {
     direcao: 'recebida',
     anexos: [],
     contatosCompartilhados: [],
+    edicoes: [],
     ...sobre,
   };
 }

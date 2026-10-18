@@ -36,6 +36,22 @@ export interface EdicaoLida {
   origem: OrigemDaEdicao;
 }
 
+/** A Edicao como a leitura a entrega: sem o id interno. */
+export interface EdicaoDaMensagem {
+  texto: string;
+  editadaEm: number;
+  origem: OrigemDaEdicao;
+}
+
+/**
+ * O texto que a pessoa disse por ultimo: o da ultima Edicao (que pode ser vazio, a legenda apagada), ou, sem Edicao, o
+ * proprio `conteudo` da Mensagem. O `conteudo` nunca muda.
+ */
+export function textoAtualDe(conteudo: string | null, edicoes: readonly EdicaoDaMensagem[]): string | null {
+  const ultima = edicoes[edicoes.length - 1];
+  return ultima === undefined ? conteudo : ultima.texto;
+}
+
 export class EdicaoImplausivelError extends Error {
   constructor(readonly motivo: string) {
     super(`Edicao recusada: ${motivo}`);
