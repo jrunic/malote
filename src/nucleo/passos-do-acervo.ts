@@ -919,6 +919,61 @@ const CONTATO_COMPARTILHADO_V27: PassoDeMigracao = {
   ],
 };
 
+/**
+ * v27 para v28 (#1246): a Edicao, o texto novo de uma Mensagem editada. So tabelas novas, sem passo que exija contexto
+ * do Registro: qualquer processo que reabrir o Acervo migra sozinho. Fotografia congelada do DDL, como os demais.
+ * As seis tabelas de `tabelasNovas` sao as que o FTS5 cria de verdade (a tabela virtual e as quatro sombras), mais a
+ * de dado.
+ */
+const EDICAO_V28: PassoDeMigracao = {
+  de: 27,
+  para: 28,
+  descricao: 'cria a Edicao (o texto novo de uma Mensagem editada) e a busca de texto dela',
+  aplicar: (db) =>
+    db.exec(`
+    -- Edicao: o texto novo que alguem deu a uma Mensagem que ja tinha enviado (#1246). Evento datado e imutavel,
+    -- pendurado na Mensagem: o texto e o Conteudo Bruto dela nunca mudam. O texto e DERIVADO do bruto da propria
+    -- Edicao (o evento como chegou) e do segredo da Mensagem original, entao e refazivel. Uma linha por evento de
+    -- edicao; o par (fonte, id do evento) e o que torna a reentrega idempotente.
+    CREATE TABLE IF NOT EXISTS edicoes (
+      id          TEXT PRIMARY KEY,
+      mensagem_id TEXT NOT NULL,
+      fonte       TEXT NOT NULL,
+      id_externo  TEXT NOT NULL,
+      texto       TEXT NOT NULL,
+      editada_em  INTEGER NOT NULL,
+      origem      TEXT NOT NULL CHECK (origem IN ('cifrada', 'aberta')),
+      bruto       TEXT NOT NULL,
+      UNIQUE (fonte, id_externo),
+      FOREIGN KEY (mensagem_id) REFERENCES mensagens(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS edicao_por_mensagem
+      ON edicoes (mensagem_id, editada_em);
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS edicoes_texto USING fts5(
+      texto,
+      content = 'edicoes',
+      content_rowid = 'rowid'
+    );
+
+    CREATE TRIGGER IF NOT EXISTS edicoes_texto_ins AFTER INSERT ON edicoes BEGIN
+      INSERT INTO edicoes_texto(rowid, texto) VALUES (new.rowid, new.texto);
+    END;
+    CREATE TRIGGER IF NOT EXISTS edicoes_texto_del AFTER DELETE ON edicoes BEGIN
+      INSERT INTO edicoes_texto(edicoes_texto, rowid, texto) VALUES ('delete', old.rowid, old.texto);
+    END;
+    `),
+  tabelasNovas: [
+    'edicoes',
+    'edicoes_texto',
+    'edicoes_texto_config',
+    'edicoes_texto_data',
+    'edicoes_texto_docsize',
+    'edicoes_texto_idx',
+  ],
+};
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -937,6 +992,7 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   ENVIO_MIDIA_V25,
   ETIQUETA_V26,
   CONTATO_COMPARTILHADO_V27,
+  EDICAO_V28,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {

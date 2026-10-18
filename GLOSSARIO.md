@@ -292,6 +292,10 @@ Uma entrada do catálogo de contatos: um nome e os endereços que a pessoa guard
 O contato que alguém **envia dentro de uma Mensagem** (um, ou vários de uma vez, cada um com o seu cartão): um nome, uma organização e os telefones e e-mails do cartão. Pendura na Mensagem e é derivado do Conteúdo Bruto, que segue inteiro; a foto do cartão fica só no bruto. **Não é Pessoa, nem Identificador, nem Cartão de Contato do catálogo**: compartilhar um contato não afirma identidade, então ele nunca cria Pessoa nem vincula nada sozinho. A palavra *contato* volta aqui por ser o nome que a própria Fonte dá ao gesto de enviar; o que o distingue do Cartão de Contato é de onde vem (uma Mensagem, e não o catálogo) e a quem pertence (à Mensagem, e não a uma Configuração de Adaptador).
 *Evitar*: cartão, vCard, card, Cartão de Contato.
 
+**Edição**:
+O texto novo que alguém deu a uma Mensagem que já tinha enviado. **Pendura na Mensagem e a Mensagem não muda**: o texto e o Conteúdo Bruto dela seguem como foram gravados, e cada edição é um evento datado e imutável, com o texto novo, o instante da edição e se chegou cifrada ou aberta. A cifrada só se lê com o segredo que a Mensagem original guarda no Conteúdo Bruto; sem original, sem segredo ou sem texto reconhecível, a edição não é gravada e o evento continua guardado cru. Não é Mensagem nova: gravá-la como tal duplicaria o que já existe.
+*Evitar*: versão (colide com a versão do Acervo e do produto), correção, alteração, revisão.
+
 **Proposta**:
 A afirmação de que um conjunto de Identificadores é a mesma Pessoa, com a evidência que a sustenta. **É calculada a cada listagem, nunca armazenada** — por isso não existe Proposta obsoleta, e um par já resolvido simplesmente deixa de aparecer.
 *Evitar*: sugestão, candidato, match, palpite, merge suggestion.

@@ -1,6 +1,7 @@
 import { existsSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import type { MensagemRecebida } from './ao-vivo.js';
+import type { Decodificador } from './edicao.js';
 import type { IdentidadeBrutaDoVinculo } from './identidade-da-conta.js';
 
 /**
@@ -56,6 +57,13 @@ interface Biblioteca {
     tipo: 'buffer',
     opcoes: Record<string, never>,
   ) => Promise<Buffer>;
+  /** O protobuf das mensagens: so a leitura do texto claro da edicao cifrada (#1246) o usa. */
+  proto: {
+    Message: {
+      decode: (bytes: Uint8Array) => unknown;
+      toObject: (mensagem: unknown, opcoes: { longs: NumberConstructor; bytes: StringConstructor; enums: StringConstructor }) => Record<string, unknown>;
+    };
+  };
 }
 
 /**
@@ -498,4 +506,27 @@ export async function baixarMidiaReconstituida(
   const carregar = opcoes.carregarBiblioteca ?? ((): Promise<unknown> => import('baileys'));
   const lib = (await carregar()) as Biblioteca;
   return lib.downloadMediaMessage(mensagem, 'buffer', {});
+}
+
+export interface OpcoesDeDecodificador {
+  /** Injetavel para teste. Por padrao, o import dinamico da biblioteca. */
+  carregarBiblioteca?: () => Promise<unknown>;
+}
+
+/**
+ * O decodificador do texto claro de uma edicao cifrada (#1246): bytes de protobuf para um objeto simples.
+ *
+ * NAO depende de socket, no molde de `baixarMidiaReconstituida`: o receptor ao vivo e o `reprocessar-descartados`, que roda
+ * com o ouvinte parado e sem Conexao, o recebem do mesmo jeito. O import e DINAMICO e acontece AQUI, na chamada, nunca na
+ * carga do modulo: a biblioteca e a arvore inteira dela so entram em quem pede. O resultado e sincrono porque
+ * `receberEvento` e: quem chama espera esta funcao ANTES de receber o primeiro evento.
+ *
+ * Os enums saem pelo NOME e os inteiros longos por numero, que e a forma do evento normalizado que o receptor ja le (o
+ * tipo da edicao chega como `MESSAGE_EDIT`).
+ */
+export async function carregarDecodificador(opcoes: OpcoesDeDecodificador = {}): Promise<Decodificador> {
+  const carregar = opcoes.carregarBiblioteca ?? ((): Promise<unknown> => import('baileys'));
+  const lib = (await carregar()) as Biblioteca;
+  const Mensagem = lib.proto.Message;
+  return (bytes) => Mensagem.toObject(Mensagem.decode(bytes), { longs: Number, bytes: String, enums: String });
 }

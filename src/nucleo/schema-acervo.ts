@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3';
  * Politica completa das duas bases na ADR local
  * `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_ACERVO = 27;
+export const VERSAO_SCHEMA_ACERVO = 28;
 
 /**
  * Forma mais antiga que a maquina de migracao alcanca.
@@ -634,6 +634,39 @@ export function aplicarSchemaAcervo(db: Database): void {
     CREATE TRIGGER IF NOT EXISTS contatos_compartilhados_texto_del AFTER DELETE ON contatos_compartilhados BEGIN
       INSERT INTO contatos_compartilhados_texto(contatos_compartilhados_texto, rowid, nome, organizacao, nome_comercial)
       VALUES ('delete', old.rowid, old.nome, old.organizacao, old.nome_comercial);
+    END;
+
+    -- Edicao: o texto novo que alguem deu a uma Mensagem que ja tinha enviado (#1246). Evento datado e imutavel,
+    -- pendurado na Mensagem: o texto e o Conteudo Bruto dela nunca mudam. O texto e DERIVADO do bruto da propria
+    -- Edicao (o evento como chegou) e do segredo da Mensagem original, entao e refazivel. Uma linha por evento de
+    -- edicao; o par (fonte, id do evento) e o que torna a reentrega idempotente.
+    CREATE TABLE IF NOT EXISTS edicoes (
+      id          TEXT PRIMARY KEY,
+      mensagem_id TEXT NOT NULL,
+      fonte       TEXT NOT NULL,
+      id_externo  TEXT NOT NULL,
+      texto       TEXT NOT NULL,
+      editada_em  INTEGER NOT NULL,
+      origem      TEXT NOT NULL CHECK (origem IN ('cifrada', 'aberta')),
+      bruto       TEXT NOT NULL,
+      UNIQUE (fonte, id_externo),
+      FOREIGN KEY (mensagem_id) REFERENCES mensagens(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS edicao_por_mensagem
+      ON edicoes (mensagem_id, editada_em);
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS edicoes_texto USING fts5(
+      texto,
+      content = 'edicoes',
+      content_rowid = 'rowid'
+    );
+
+    CREATE TRIGGER IF NOT EXISTS edicoes_texto_ins AFTER INSERT ON edicoes BEGIN
+      INSERT INTO edicoes_texto(rowid, texto) VALUES (new.rowid, new.texto);
+    END;
+    CREATE TRIGGER IF NOT EXISTS edicoes_texto_del AFTER DELETE ON edicoes BEGIN
+      INSERT INTO edicoes_texto(edicoes_texto, rowid, texto) VALUES ('delete', old.rowid, old.texto);
     END;
 
     CREATE INDEX IF NOT EXISTS linhas_por_operacao

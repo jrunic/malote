@@ -212,7 +212,7 @@ Duas regras atravessam o modelo inteiro:
 
   Medido em 07/09/2026 no backup real: **90 Mensagens favoritadas, em 7 Conversas**, de 1.018.587. Ao vivo, zero em 571 eventos de atualização de Mensagem — ausência de evento, não de capacidade.
 
-**Ciclo de vida** — criada na importação ou na recepção; imutável quanto ao conteúdo. Pode ganhar vínculos depois (autor resolvido, Anexo baixado).
+**Ciclo de vida** — criada na importação ou na recepção; imutável quanto ao conteúdo. Pode ganhar vínculos depois (autor resolvido, Anexo baixado) e **Edições**, que são agregado à parte e não mudam a Mensagem.
 
 ### Pessoa
 
@@ -279,6 +279,25 @@ Duas regras atravessam o modelo inteiro:
 - A mesma Mensagem recebida pelo backup e pela recepção ao vivo termina com um só conjunto de cartões.
 
 **Ciclo de vida** — nasce junto com a Mensagem, pelas duas Fontes de ingestão, ou depois, pelo preenchimento do estoque. Pode ser substituído quando a Fonte entrega o conjunto de outra forma; é removido junto com a Mensagem.
+
+### Edição
+
+**Entidades / Objetos de Valor**
+
+- **Edição** (raiz) — o texto novo que alguém deu a uma Mensagem que já tinha enviado: o texto, o instante da edição e a origem (`cifrada` ou `aberta`)
+- **Conteúdo Bruto** — o evento de edição como chegou, preservado inteiro; a Mensagem original segue com o dela
+
+**Invariantes**
+
+- **Pertence a exatamente uma Mensagem e ao Inquilino dela.** A chave é `(Fonte, identificador do evento de edição)`: o mesmo evento duas vezes é uma Edição só.
+- **A Mensagem não muda.** O texto e o Conteúdo Bruto da original ficam como foram gravados; a Edição nunca cria Mensagem nova.
+- **É derivada e refazível.** O texto sai do Conteúdo Bruto da própria Edição e, na forma cifrada, do segredo que a Mensagem original guarda no dela. O núcleo não conhece segredo nem cifra: isso é vocabulário de Fonte e fica no Adaptador.
+- **Edição que não se lê não é gravada.** Original ausente, original sem segredo, tag que não autentica, original em outra Conversa que a do envelope, instante implausível ou forma sem texto reconhecível: nenhuma Edição, e o evento continua descartado, contado por causa e guardado cru.
+- **O texto pode ser vazio** (a legenda apagada é uma edição válida). O instante passa pela mesma guarda de plausibilidade da Mensagem, com a tolerância da recepção ao vivo.
+- **A leitura entrega a Edição junto da Mensagem.** A Mensagem traz `edicoes` (em ordem, vazia sem edição) e o `conteudo` original; só a Mensagem editada traz `textoAtual`, o texto da última edição. Repetir o texto em toda Mensagem custava +21% de bytes por página.
+- **Edição é ordenada pelo instante da edição**; o empate desfaz pela ordem de gravação. Mensagem nunca é apagada por política de espaço, e a Edição também não.
+
+**Ciclo de vida** — nasce pela recepção ao vivo (e, depois, pelo reprocessamento do que o ouvinte guardou); imutável; removida junto com a Mensagem. A Operação que a grava é a da recepção, irreversível e sem efeito linha a linha: a Edição se refaz do bruto, e a proteção é o backup do Acervo.
 
 ### Anexo
 
@@ -480,6 +499,7 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Entrada:** o Inquilino, e **uma** conta da Fonte — um processo escuta uma conta, e uma segunda conta é um segundo processo, com o próprio vínculo de dispositivo
 - **Saída:** um efeito contínuo — o instante do último evento recebido, gravado onde quem está **de fora** o lê sem abrir o Acervo; e, por evento, o que foi gravado, o que foi recusado com a causa, e o que foi ignorado contado por tipo
 - **Regras:** o que chega é gravado pelas **mesmas** portas que a importação usa, sem forma nova no núcleo — é isso que faz os dois caminhos convergirem sem código de convergência. Endereço é resolvido para a forma canônica **antes** de virar Referência Externa. Cada evento é gravado por inteiro ou não é gravado. O que a Fonte entrega sem conteúdo decifrável **não** vira Mensagem: gravar o envelope vazio travaria o identificador contra quem souber preenchê-lo depois. Reprocessar não duplica: quem responde *isto já existe* é o Acervo, e o receptor não guarda memória própria. Transição de Participação segue a mesma regra de sempre — só existe quando a Fonte declara o evento. O instante da Mensagem é o que o aparelho de quem a enviou declarou: a recepção tolera até 5 s à frente do relógio local, grava o instante **declarado** (nunca o do relógio) e conta as Mensagens que só entraram por causa da janela; além dela a Mensagem é recusada e guardada com o evento cru, e `ouvinte reprocessar-descartados` a regrava quando o relógio passa o instante
+- **A edição de Mensagem entra por ramo próprio, antes do descarte por tipo.** Chega cifrada (`secretEncryptedMessage`) ou aberta (`protocolMessage` de edição) e vira uma Edição ligada à Mensagem, sem Mensagem nova. A forma cifrada precisa do decodificador do texto claro, que só o portão da biblioteca fornece; sem ele, ou por qualquer causa que impeça a leitura, o evento segue descartado, contado por causa e guardado cru.
 - **Não-funcionais:** o produto continua completo **sem** esta operação; importar e consultar não dependem dela. A recepção é **ingestão, não decisão**: grava uma Operação por evento, com o efeito desligado. Queda de conexão é rotina e não é sinal de parada — a religação é espaçada, com teto, e o sinal de que o receptor morreu é o instante do último evento parar de avançar. Cobertura não é promessa: o que a plataforma não reentrega é **lacuna declarada**, preenchível por importação de material posterior
 - **Quando o Acervo está ocupado, o evento vai para o Derrame e volta depois.** Disputa de escrita **não** é recusa: recusa é sobre dado que o modelo não aceita, e banco ocupado é infraestrutura. O evento é escrito cru, por lote, num arquivo fora do Acervo, e o receptor **continua vivo** — matá-lo perderia tudo o que viesse depois. Na primeira escrita bem-sucedida seguinte, o receptor **drena** parte do Derrame; o sinal de que a disputa passou é o sucesso, e não o relógio. Grava-se no Acervo **antes** de tirar do Derrame: invertido, morrer no meio apaga o que nunca entrou, e nesta ordem o pior caso é repetição, que a unicidade da Referência Externa descarta. Lote que falha por algo que **não** é disputa sai para um arquivo à parte, com a causa junto — sem isso ele derrubaria o receptor a cada drenagem, para sempre
 - **O Derrame é visível sem abrir o Acervo**, pela mesma operação que reporta o instante do último evento. E derramar **não** é ficar em silêncio: o instante continua avançando, porque o receptor está vivo e recebendo

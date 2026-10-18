@@ -13,6 +13,7 @@ import {
   type EventoDescartado,
   type MensagemRecebida,
 } from '../adaptadores/whatsapp/ao-vivo.js';
+import type { Decodificador } from '../adaptadores/whatsapp/edicao.js';
 import type { Acervo } from '../nucleo/acervo.js';
 import { descartarDerrame } from './derrame.js';
 
@@ -116,6 +117,21 @@ export interface ResultadoDoReprocesso {
   mantidos: number;
   /** Linhas retiradas por serem so ruido (#1234): lidos = gravados + mantidos + retirados. */
   retirados: number;
+  /**
+   * Das gravadas, as Edicoes de Mensagem que NASCERAM agora (#1246). A edicao que ja estava no Acervo sai da guarda como
+   * gravada (nao como ruido) e nao entra aqui.
+   */
+  edicoes: number;
+}
+
+export interface OpcoesDoReprocesso {
+  /** Costura de teste: provar a ordem exige morrer entre as duas etapas. */
+  substituir?: (caminho: string, linhas: readonly string[]) => void;
+  /**
+   * O decodificador do texto claro da edicao cifrada, do portao da biblioteca. O comando roda sem Conexao e com o ouvinte
+   * parado, entao quem o chama o carrega. Sem ele a edicao cifrada fica guardada, com a causa dita.
+   */
+  decodificar?: Decodificador;
 }
 
 /** Troca atomica do arquivo (temporario e renomeacao); sem linhas, esvazia. */
@@ -158,16 +174,17 @@ function eventoDaLinha(texto: string): MensagemRecebida | undefined {
  * Acervo (nao ha o que gravar). A ordem acima nao a protege; protege-a a troca atomica do
  * arquivo. Evento com um descarte que nao e ruido fica, e a linha ilegivel tambem.
  *
- * `substituir` e costura de teste: provar a ordem exige morrer entre as duas etapas.
+ * `opcoes.substituir` e costura de teste: provar a ordem exige morrer entre as duas etapas.
  */
 export function reprocessarDescartados(
   acervo: Acervo,
   caminho: string,
   configuracao: { id: string; fonte: 'whatsapp' },
   agora: number,
-  substituir: (caminho: string, linhas: readonly string[]) => void = substituirAtomico,
+  opcoes: OpcoesDoReprocesso = {},
 ): ResultadoDoReprocesso {
-  const resultado: ResultadoDoReprocesso = { lidos: 0, gravados: 0, mantidos: 0, retirados: 0 };
+  const substituir = opcoes.substituir ?? substituirAtomico;
+  const resultado: ResultadoDoReprocesso = { lidos: 0, gravados: 0, mantidos: 0, retirados: 0, edicoes: 0 };
   for (const arquivo of [caminhoDaGuardaAnterior(caminho), caminho]) {
     const linhas = linhasDoArquivo(arquivo);
     if (linhas.length === 0) continue;
@@ -180,9 +197,14 @@ export function reprocessarDescartados(
         resultado.mantidos += 1;
         continue;
       }
-      const r = receberEvento(acervo, [evento], { agora, configuracao });
+      const r = receberEvento(acervo, [evento], {
+        agora,
+        configuracao,
+        ...(opcoes.decodificar !== undefined ? { decodificar: opcoes.decodificar } : {}),
+      });
       if (r.descartados.length === 0) {
         resultado.gravados += 1;
+        resultado.edicoes += r.edicoes;
       } else if (r.descartados.every((d) => d.ruido)) {
         // So ruido: nao ha o que gravar nem o que guardar (#1234). A linha sai do arquivo sem tocar o Acervo.
         resultado.retirados += 1;

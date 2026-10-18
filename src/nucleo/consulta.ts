@@ -5,6 +5,7 @@ import type { ConversaId, Direcao, EstadoDeTranscricao, Fonte, MensagemId, Pesso
 import { nomeDoIdentificador } from './identidade.js';
 import { nomesEmLote } from './nomes-em-lote.js';
 import { lerContatosCompartilhados, type ContatoCompartilhadoLido } from './contato-compartilhado.js';
+import { lerEdicoes, textoAtualDe, type EdicaoDaMensagem } from './edicao.js';
 import type { CursorDeConversas } from './cursor-de-conversas.js';
 
 /**
@@ -330,6 +331,13 @@ export interface MensagemLida {
   anexos: AnexoLido[];
   /** Os cartoes de contato que a Mensagem enviou (#1135). Lista vazia quando nao ha. */
   contatosCompartilhados: ContatoCompartilhadoLido[];
+  /** As Edicoes da Mensagem (#1246), em ordem do instante da edicao. Lista vazia quando nao ha. O `conteudo` e sempre o original. */
+  edicoes: EdicaoDaMensagem[];
+  /**
+   * O texto da ultima Edicao, SO na Mensagem editada (pode ser vazio: a legenda apagada). Sem Edicao a chave nao existe e o
+   * cliente usa o `conteudo`: repeti-lo em toda Mensagem custava +21% de bytes por pagina (medido em 18/10/2026).
+   */
+  textoAtual?: string;
 }
 
 /** `m` = mensagens. A lista de ids vai como um JSON; `[]` nao casa nada. */
@@ -373,18 +381,31 @@ function montarMensagens(acervo: Acervo, linhas: Array<Record<string, unknown>>)
     acervo,
     linhas.map((l) => l['id'] as string),
   );
+  // As Edicoes da PAGINA INTEIRA numa consulta so.
+  const edicoes = lerEdicoes(
+    acervo,
+    linhas.map((l) => l['id'] as string),
+  );
   return linhas.map((l) => {
     const id = l['id'] as string;
+    const conteudo = (l['conteudo'] as string | null) ?? null;
+    const doId: EdicaoDaMensagem[] = (edicoes.get(id) ?? []).map((e) => ({
+      texto: e.texto,
+      editadaEm: e.editadaEm,
+      origem: e.origem,
+    }));
     return {
       id,
       conversaId: l['conversa_id'] as string,
       fonte: l['fonte'] as Fonte,
       autorId: (l['autor_id'] as string | null) ?? null,
-      conteudo: (l['conteudo'] as string | null) ?? null,
+      conteudo,
       direcao: (l['direcao'] as Direcao | null) ?? null,
       ocorridaEm: l['ocorrida_em'] as number,
       anexos: lerAnexos(acervo, id),
       contatosCompartilhados: cartoes.get(id) ?? [],
+      edicoes: doId,
+      ...(doId.length > 0 ? { textoAtual: textoAtualDe(conteudo, doId) as string } : {}),
     };
   });
 }
@@ -504,7 +525,7 @@ export interface ResultadoDaBusca {
  * `conteudo`. Quando mais de uma origem casa a mesma Mensagem, vale a de maior fe:
  * conteudo, depois transcricao, depois contato-compartilhado.
  */
-export type OrigemDaCorrespondencia = 'conteudo' | 'transcricao' | 'contato-compartilhado';
+export type OrigemDaCorrespondencia = 'conteudo' | 'edicao' | 'transcricao' | 'contato-compartilhado';
 
 export interface FiltroDeBusca {
   texto: string;
@@ -619,6 +640,21 @@ export function buscarMensagensComCorte(acervo: Acervo, filtro: FiltroDeBusca): 
     )
     .all(consulta, ...porConteudo.valores, limite + 1) as Array<{ id: string; ocorrida_em: number }>;
 
+  // A EDICAO (#1246): o texto novo de uma Mensagem editada, na busca de texto propria dela. O texto ORIGINAL segue achavel
+  // pela consulta acima (a Mensagem nunca perde o `conteudo`); as duas se unem abaixo, e a Mensagem editada conta uma vez
+  // mesmo com varias edicoes que casam (DISTINCT).
+  const porEdicao = condicoesBase('m');
+  const linhasPorEdicao = acervo
+    .preparar(
+      `SELECT DISTINCT m.id, m.ocorrida_em
+         FROM edicoes_texto tx
+         JOIN edicoes e ON e.rowid = tx.rowid
+         JOIN mensagens m ON m.id = e.mensagem_id
+        WHERE edicoes_texto MATCH ? ${porEdicao.condicoes.map((c) => `AND ${c}`).join(' ')}
+        ORDER BY m.ocorrida_em ${direcao} LIMIT ?`,
+    )
+    .all(consulta, ...porEdicao.valores, limite + 1) as Array<{ id: string; ocorrida_em: number }>;
+
   const porTranscricao = condicoesBase('m');
   const linhasPorTranscricao = acervo
     .preparar(
@@ -684,13 +720,15 @@ export function buscarMensagensComCorte(acervo: Acervo, filtro: FiltroDeBusca): 
 
   // Conteudo tem precedencia sobre transcricao quando os dois casam a mesma
   // Mensagem — a Mensagem tem texto de verdade; nao ha porque marca-la como
-  // aproximada so porque o audio ao lado TAMBEM contem o termo. O cartao vem por ultimo.
+  // aproximada so porque o audio ao lado TAMBEM contem o termo. A edicao e texto de verdade tambem (so nao e o original),
+  // entao vem logo depois do conteudo e acima da transcricao. O cartao vem por ultimo.
   const origemPorId = new Map<string, OrigemDaCorrespondencia>();
   for (const l of [...linhasPorContatoNome, ...linhasPorContatoValor]) origemPorId.set(l.id, 'contato-compartilhado');
   for (const l of linhasPorTranscricao) origemPorId.set(l.id, 'transcricao');
+  for (const l of linhasPorEdicao) origemPorId.set(l.id, 'edicao');
   for (const l of linhasPorConteudo) origemPorId.set(l.id, 'conteudo');
 
-  const unicos = [...linhasPorConteudo, ...linhasPorTranscricao, ...linhasPorContatoNome, ...linhasPorContatoValor]
+  const unicos = [...linhasPorConteudo, ...linhasPorEdicao, ...linhasPorTranscricao, ...linhasPorContatoNome, ...linhasPorContatoValor]
     .sort((a, b) => (ordem === 'recentes' ? b.ocorrida_em - a.ocorrida_em : a.ocorrida_em - b.ocorrida_em))
     .map((l) => l.id)
     .filter((id, i, todos) => todos.indexOf(id) === i);

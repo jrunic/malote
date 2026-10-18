@@ -37,6 +37,9 @@ import { basename, join } from 'node:path';
 import { ehFonte, PRESENCAS, type Fonte } from '../nucleo/tipos.js';
 import { MENSAGEM_SEM_INQUILINO_NA_REDE } from './sem-inquilino-na-rede.js';
 import { linhasDeContatoCompartilhado } from './contatos-compartilhados-texto.js';
+import { linhasDaMensagemEditada, textoParaExibir } from './edicoes-texto.js';
+import { carregarDecodificador } from '../adaptadores/whatsapp/conexao.js';
+import type { Decodificador } from '../adaptadores/whatsapp/edicao.js';
 import { extrairContatosCompartilhados } from '../adaptadores/whatsapp/extrair-contatos-compartilhados.js';
 import { formatarAnexos, tipoGuardado } from './anexos-texto.js';
 import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
@@ -269,6 +272,49 @@ export interface Ambiente {
    * fronteira, e teste nao sobe servico.
    */
   ouvinteEscrevendo?: (conta: string) => boolean;
+  /**
+   * O decodificador do texto claro da edicao cifrada (#1246), do portao da biblioteca. `executar` e sincrono e o portao e
+   * assincrono, entao o ponto de entrada o carrega ANTES de despachar `ouvinte reprocessar` e `ouvinte reprocessar-descartados`,
+   * os dois que gravam edicao. Ausente, a edicao cifrada fica guardada ou derramada.
+   */
+  decodificador?: Decodificador;
+}
+
+/**
+ * Carrega o decodificador para os comandos de reprocessar. Falha em carregar nunca impede o comando: avisa uma vez, e a
+ * edicao cifrada fica onde estava. `carregar` e costura de teste.
+ */
+export async function carregarDecodificadorOuAvisar(
+  avisar: ((texto: string) => void) | undefined,
+  carregar: () => Promise<Decodificador> = carregarDecodificador,
+): Promise<Decodificador | undefined> {
+  try {
+    return await carregar();
+  } catch (erro) {
+    avisar?.(`decodificador de edicao indisponivel; edicoes cifradas ficam onde estavam: ${String(erro)}`);
+    return undefined;
+  }
+}
+
+/** Os comandos de reprocessar que gravam edicao (#1246) e, por isso, precisam do decodificador do portao. */
+export function ehReprocessarQueGravaEdicao(argumentos: readonly string[]): boolean {
+  return (
+    argumentos[0] === 'ouvinte' &&
+    (argumentos[1] === 'reprocessar-descartados' || argumentos[1] === 'reprocessar')
+  );
+}
+
+/**
+ * Despacha `ouvinte reprocessar-descartados` e `ouvinte reprocessar`: carrega o decodificador ANTES, porque `executar` e
+ * sincrono, e o entrega pelo `Ambiente`. `carregar` e costura de teste.
+ */
+export async function executarReprocessar(
+  argumentos: string[],
+  ambiente: Ambiente,
+  carregar?: () => Promise<Decodificador>,
+): Promise<number> {
+  const decodificador = await carregarDecodificadorOuAvisar(ambiente.erro, carregar);
+  return executar(argumentos, { ...ambiente, ...(decodificador !== undefined ? { decodificador } : {}) });
 }
 
 const AJUDA = `malote — arquivo local das suas conversas
@@ -1014,14 +1060,19 @@ function executarComAtor(
       }
       const acervoDaGuarda = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
-        const r = reprocessarDescartados(acervoDaGuarda, caminhoDaGuarda, {
-          id: cfgDaGuarda.id,
-          fonte: 'whatsapp',
-        }, Date.now());
+        const r = reprocessarDescartados(
+          acervoDaGuarda,
+          caminhoDaGuarda,
+          { id: cfgDaGuarda.id, fonte: 'whatsapp' },
+          Date.now(),
+          ambiente.decodificador !== undefined ? { decodificar: ambiente.decodificador } : {},
+        );
         escrever(
           `Conta ${conta}: ${r.lidos} evento(s) lido(s), ${r.gravados} gravado(s), ` +
             `${r.mantidos} mantido(s) na guarda, ${r.retirados} retirado(s) por serem ruido.`,
         );
+        // So a contagem: o texto da edicao nunca vai a saida.
+        if (r.edicoes > 0) escrever(`  ${r.edicoes} edicao(oes) de Mensagem gravada(s).`);
       } finally {
         // MUTANTE EQUIVALENTE OBSERVAVEL (medido em 08/10/2026): tirar este `fechar` nao derruba
         // teste algum, porque o comando e o processo terminam logo em seguida. Fica por higiene,
@@ -1065,6 +1116,7 @@ function executarComAtor(
       }
       const acervoDoDerrame = acervoDoInquilino(registro, ambiente.dados, inquilino);
       let gravados = 0;
+      let edicoes = 0;
       let lotesFeitos = 0;
       const relatos: RelatoDeRecepcao[] = [];
       try {
@@ -1075,8 +1127,10 @@ function executarComAtor(
           const r = receberEvento(acervoDoDerrame, lote as never, {
             agora: Date.now(),
             configuracao: { id: cfgDoDerrame.id, fonte: 'whatsapp' },
+            ...(ambiente.decodificador !== undefined ? { decodificar: ambiente.decodificador } : {}),
           });
           gravados += r.gravados;
+          edicoes += r.edicoes;
           relatos.push(r);
           lotesFeitos += 1;
         }
@@ -1093,6 +1147,7 @@ function executarComAtor(
         }
         descartarDerrame(caminhoDoDerrame);
         escrever(`Conta ${conta}: ${lotesFeitos} lote(s) reprocessado(s), ${gravados} gravada(s).`);
+        if (edicoes > 0) escrever(`  ${edicoes} edicao(oes) de Mensagem gravada(s).`);
         escrever('Derrame esvaziado.');
         return 0;
       }
@@ -2238,7 +2293,8 @@ function executarComAtor(
           escrever(JSON.stringify(mensagens, null, 2));
         } else {
           for (const m of mensagens) {
-            escrever(`${new Date(m.ocorridaEm).toISOString()}  ${m.conteudo ?? '(sem texto)'}`);
+            escrever(`${new Date(m.ocorridaEm).toISOString()}  ${textoParaExibir(m)}`);
+            for (const l of linhasDaMensagemEditada(m)) escrever(l);
             for (const l of linhasDeContatoCompartilhado(m.contatosCompartilhados)) escrever(l);
           }
         }
@@ -2404,7 +2460,8 @@ function executarComAtor(
           if (truncado) ambiente.erro?.(avisoDeCorte(limiteEfetivo, ordem));
         } else {
           for (const m of achadas) {
-            escrever(`${new Date(m.ocorridaEm).toISOString()}  ${m.conteudo ?? '(sem texto)'}`);
+            escrever(`${new Date(m.ocorridaEm).toISOString()}  ${textoParaExibir(m)}`);
+            for (const l of linhasDaMensagemEditada(m)) escrever(l);
             for (const l of linhasDeContatoCompartilhado(m.contatosCompartilhados)) escrever(l);
             for (const a of m.anexos) {
               // A Presenca vai SEMPRE, inclusive `presente`: mostrar so o
@@ -3423,6 +3480,10 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
     void ouvir(argumentos, ambiente).then(encerrar);
   } else if (argumentos[0] === 'servir') {
     void servir(argumentos, ambiente).then(encerrar);
+  } else if (ehReprocessarQueGravaEdicao(argumentos)) {
+    // #1246: os dois reprocessos gravam edicao, e o decodificador do portao e assincrono. Carregado antes de despachar,
+    // para `executar()` continuar sincrona.
+    void executarReprocessar(argumentos, ambiente).then(encerrar);
   } else if (argumentos[0] === 'midia' && argumentos[1] === 'reprocessar') {
     // #1084: baixar midia de novo e I/O de rede — mesmo motivo do ouvir,
     // despachado ANTES de `executar()` para poder `await`.

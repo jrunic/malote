@@ -21,6 +21,22 @@ Cada entrada tem uma tag `vX.Y.Z` no commit publicado. O histórico público com
 commit "Initial public release": as entradas anteriores são o registro fiel do que foi
 publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [0.39.0] — 2026-10-18
+
+Muda a forma do Acervo (versão 27 para 28). O Acervo se migra sozinho na primeira abertura, e o passo só cria tabelas; ainda assim, **faça uma cópia consistente do Acervo antes de atualizar**: depois de migrado, a versão anterior do produto não o abre. Detalhe em [instalação e armazenamento](docs/guias/instalacao-e-armazenamento.md).
+
+### Adicionado
+
+- **A edição de uma mensagem do WhatsApp passa a ser gravada.** Quando alguém corrige o texto de uma mensagem que já enviou, a recepção ao vivo grava a **Edição** (o texto novo, o instante da edição e se chegou cifrada ou aberta), ligada à Mensagem original, e não cria Mensagem nova. O texto e o Conteúdo Bruto da Mensagem original não mudam. A edição cifrada se decifra com o segredo que a Mensagem original guarda no Conteúdo Bruto, sem dependência nova. A edição que não se consegue ler (original ausente ou sem segredo, forma sem texto, instante implausível) continua descartada, contada por causa e guardada crua. A edição aberta (sem cifra) entra pela mesma porta, mas **nunca foi capturada em campo**: o formato interno é o medido nas edições decifradas, e o envelope é premissa.
+- **`mensagens`, `buscar` e `exportar` mostram a edição**, localmente e por rede. A Mensagem traz `edicoes` (o texto novo, o instante e a origem, em ordem), e **só a Mensagem editada** traz `textoAtual`, o texto da última edição; o `conteudo` é sempre o original. Em texto, aparece o texto atual com a marca `(editada)` e as versões anteriores logo abaixo, a original primeiro. Servidor anterior não devolve os campos, e o cliente trata a ausência como sem edição.
+- **`buscar` acha a Mensagem pelo texto de uma edição** e segue achando pelo texto original. O que casou pela edição vem com `origemDaCorrespondencia: edicao`; quando o mesmo termo casa por mais de um caminho vale o primeiro de `conteudo`, `edicao`, `transcricao`, `contato-compartilhado`.
+- **`ouvinte reprocessar-descartados` e `ouvinte reprocessar` gravam as edições** que o ouvinte guardou ou derramou, e dizem só a contagem (`N edicao(oes) de Mensagem gravada(s)`), nunca o texto. A linha de edição que entra, ou que já estava no Acervo, conta como gravada e sai da guarda.
+
+### Alterado
+
+- **O quinto parâmetro de `reprocessarDescartados` virou um objeto de opções** e o resultado ganhou `edicoes`. Quem usa a função como biblioteca precisa ajustar a chamada; a linha de comando não muda.
+- **O Acervo sobe para a versão 28** (a Edição e a busca de texto dela).
+
 ## [0.38.0] — 2026-10-17
 
 ### Adicionado
