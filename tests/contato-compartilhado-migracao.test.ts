@@ -31,7 +31,7 @@ test('um Acervo na v26 sobe para a v27 sem perder linha e ganha as tabelas do Co
     const migrado = abrirAcervo(join(c.raiz, 'acervos'), id, { configuracoes: [CFG_WHATSAPP] });
     try {
       const versao = migrado.db.prepare('SELECT versao FROM versao_schema').get() as { versao: number };
-      assert.equal(versao.versao, 27);
+      assert.equal(versao.versao, 28);
       for (const nome of TABELAS_NOVAS) {
         const t = migrado.db.prepare('SELECT name FROM sqlite_master WHERE name = ?').get(nome);
         assert.ok(t !== undefined, `a tabela ${nome} nao existe depois de migrar`);
