@@ -303,7 +303,7 @@ Duas regras atravessam o modelo inteiro:
 
 **Entidades / Objetos de Valor**
 
-- **Anexo** (raiz) — o arquivo que acompanha a Mensagem.
+- **Anexo** (raiz) — o arquivo que acompanha a Mensagem. A mídia que a Fonte embrulha (o envelope de mídia associada, o cabeçalho de uma mensagem de modelo) também é Anexo da Mensagem, e quem a abre é o Adaptador.
 - **Descritor** (objeto de valor) — tipo, tamanho, nome original, duração, impressão de conteúdo. É o que se sabe sobre o arquivo.
 - **Presença** (objeto de valor) — o estado do arquivo em disco: presente, nunca obtido ou descartado.
 - **Transcrição** (objeto de valor, opcional) — o texto extraído de um Anexo de tipo áudio por
