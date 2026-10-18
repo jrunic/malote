@@ -1,3 +1,4 @@
+import { removerAnexoNuncaObtido } from './anexo-de-modelo.js';
 import { removerContatoCompartilhado } from './contato-compartilhado.js';
 import type { Acervo } from './acervo.js';
 import { emOperacao, lerOperacao, type LinhaDeEfeito, type OperacaoVista } from './trilha.js';
@@ -197,6 +198,16 @@ function desfazerLinha(acervo: Acervo, l: LinhaDeEfeito, todas: LinhaDeEfeito[])
     return removerContatoCompartilhado(acervo, l.chave)
       ? null
       : 'o cartao ja nao existe — foi refeito, ou a Mensagem saiu';
+  }
+
+  // Anexo que o comando da imagem do modelo criou (#1242): desfazer e remover, mas so enquanto `nunca-obtido`. Midia ja baixada
+  // nao se apaga por aqui: isso e Retencao.
+  if (l.tabela === 'anexos' && l.campo === 'id' && l.antes === null && l.depois !== null) {
+    const r = removerAnexoNuncaObtido(acervo, l.chave);
+    if (r === 'removido') return null;
+    return r === 'ja-baixado'
+      ? 'o Anexo ja foi baixado; apagar midia baixada e Retencao, nao desfazer'
+      : 'o Anexo ja nao existe';
   }
 
   if (l.tabela === 'identificadores' && l.campo === 'pessoa_id') {

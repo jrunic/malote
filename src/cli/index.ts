@@ -41,6 +41,7 @@ import { linhasDaMensagemEditada, textoParaExibir } from './edicoes-texto.js';
 import { carregarDecodificador } from '../adaptadores/whatsapp/conexao.js';
 import type { Decodificador } from '../adaptadores/whatsapp/edicao.js';
 import { extrairContatosCompartilhados } from '../adaptadores/whatsapp/extrair-contatos-compartilhados.js';
+import { extrairImagensDeModelo } from '../adaptadores/whatsapp/extrair-imagem-de-modelo.js';
 import { formatarAnexos, tipoGuardado } from './anexos-texto.js';
 import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
 import { identificadoresDoRemetente } from '../nucleo/remetente.js';
@@ -345,6 +346,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote entrada declarar       --inquilino <id> --fonte <nome> --configuracao <apelido> --pasta <caminho> --natureza completo|parcial [--titular-na-fonte <nome>]
   malote entrada listar         --inquilino <id>
   malote midia trazer           --inquilino <id> --material <caminho> [--conta pessoal|business]
+  malote midia extrair-imagem-de-modelo --inquilino <id> [--com-efeito --confirmo] [--json]  (cria o Anexo da imagem do cabecalho da mensagem de modelo; ensaio por padrao)
   malote midia reprocessar      --inquilino <id> [--ensaio] [--desde D] [--ate D] [--tipo T] [--mensagem <id>] [--limite <n>] [--tudo]
                                 (tenta de novo Anexo ao vivo que falhou; sem recorte e sem --tudo recusa)
   malote acervo relatar         --inquilino <id>
@@ -1753,6 +1755,34 @@ function executarComAtor(
           if (r.recusados > 0) escrever(`  ${r.recusados} cartao(oes) recusado(s) (ilegiveis ou sem nome).`);
           for (const [recurso, n] of Object.entries(r.nomesPorRecurso)) escrever(`  nome por ${recurso}: ${n}`);
           if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
+        }
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
+    if (grupo === 'midia' && sub === 'extrair-imagem-de-modelo') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
+      const comEfeito = temBandeira(argumentos, 'com-efeito');
+      if (comEfeito && !temBandeira(argumentos, 'confirmo')) {
+        throw new Error('Repita o comando com --confirmo para executar.');
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const r = extrairImagensDeModelo(acervo, { comEfeito });
+        if (temBandeira(argumentos, 'json')) {
+          escrever(JSON.stringify(r, null, 2));
+        } else {
+          // So CONTAGENS: texto de Mensagem, chave de midia e miniatura nunca vao a relatorio.
+          escrever(
+            `${comEfeito ? 'Criado' : 'Ensaio'}: ${r.comImagem} Mensagem(ns) de modelo com imagem, ` +
+              `${comEfeito ? `${r.criados} Anexo(s) criado(s)` : `${r.aCriar} Anexo(s) a criar`}.`,
+          );
+          if (r.jaComAnexo > 0) escrever(`  ${r.jaComAnexo} Mensagem(ns) de modelo ja tem Anexo (nao entram).`);
+          if (r.formaNaoReconhecida > 0) escrever(`  ${r.formaNaoReconhecida} com imagem em forma nao reconhecida (ficam no bruto).`);
+          if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo. Depois, baixe com midia reprocessar --mensagem.');
         }
         return 0;
       } finally {

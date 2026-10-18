@@ -207,3 +207,49 @@ test('midia.baixar de um envelope de midia associada entrega a biblioteca o cont
     rmSync(pasta, { recursive: true, force: true });
   }
 });
+
+test('midia.baixar da imagem do cabecalho de um modelo entrega a biblioteca a imagem na raiz, com o mediaKey binario (#1242)', async () => {
+  const pasta = mkdtempSync(join(tmpdir(), 'malote-conexao-teste-'));
+  try {
+    let mensagemRecebida: unknown;
+    let midiaCapturada: MidiaAoVivo | undefined;
+    const biblioteca = bibliotecaComDownload(
+      (m) => {
+        mensagemRecebida = m;
+      },
+      {
+        templateMessage: {
+          templateId: 'sintetico',
+          interactiveMessageTemplate: {
+            body: { text: 'corpo' },
+            header: { imageMessage: { mimetype: 'image/jpeg', mediaKey: new Uint8Array([9, 8, 7, 6]), directPath: '/v/t62/sintetico' } },
+          },
+        },
+      },
+    );
+
+    await conectar({
+      pastaDoVinculo: pasta,
+      registrar: () => undefined,
+      aoTerminar: () => undefined,
+      carregarBiblioteca: () => {
+        biblioteca.disparar();
+        return Promise.resolve(biblioteca);
+      },
+      aoReceber: (_mensagens, midia) => {
+        midiaCapturada = midia;
+      },
+    });
+    await new Promise((r) => setImmediate(r));
+
+    assert.ok(midiaCapturada !== undefined, 'aoReceber nao foi chamado');
+    await midiaCapturada?.baixar(0);
+    const msg = mensagemRecebida as { key: { id: string }; message: Record<string, { mediaKey?: unknown }> };
+    assert.equal(msg.key.id, 'MIDIA1', 'a chave do evento tem de seguir junto');
+    assert.equal(msg.message['templateMessage'], undefined, 'a biblioteca recebeu o modelo fechado');
+    assert.ok(msg.message['imageMessage']?.mediaKey instanceof Uint8Array, 'o mediaKey perdeu o tipo binario');
+    assert.deepEqual([...(msg.message['imageMessage']?.mediaKey as Uint8Array)], [9, 8, 7, 6]);
+  } finally {
+    rmSync(pasta, { recursive: true, force: true });
+  }
+});

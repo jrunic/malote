@@ -116,7 +116,7 @@ test('o modelo interativo vira Mensagem so com o corpo; rodape, aviso e imagem d
     assert.equal(m?.conteudo?.includes('aviso-fixo-sintetico'), false, 'o aviso de compartilhamento entrou no texto');
     assert.match(m?.bruto ?? '', /rodape-sintetico-do-modelo/);
     assert.match(m?.bruto ?? '', /cabecalho/);
-    assert.equal(k.anexos(), 0, 'a imagem do cabecalho nao vira Anexo nesta tarefa');
+    assert.equal(k.anexos(), 1, 'a imagem do cabecalho vira UM Anexo nunca-obtido (#1242); o resto do modelo segue so no bruto');
   } finally {
     k.limpar();
   }

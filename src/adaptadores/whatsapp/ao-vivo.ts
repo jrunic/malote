@@ -28,6 +28,7 @@ import { nomeRepeteONumeroBrasileiro } from './nome-repete-numero-br.js';
 import { registrarNome } from '../../nucleo/identidade.js';
 import { registrarContatosCompartilhados } from '../../nucleo/contato-compartilhado.js';
 import { lerCartaoAoVivo, lerCartaoMultiploAoVivo, type LeituraDeCartoes } from './contato-compartilhado.js';
+import { leituraDoModelo } from './imagem-de-modelo.js';
 import { EdicaoImplausivelError, registrarEdicao } from '../../nucleo/edicao.js';
 import { decidirEdicao, lerEdicaoRecebida, type CausaDeEdicaoNaoGravada, type Decodificador } from './edicao.js';
 import { ehCifrada, naturezaDoStub, textoDoStub } from './stubs-ao-vivo.js';
@@ -893,6 +894,20 @@ function gravarUma(
     // A #1068: quem baixa os bytes precisa saber ONDE, no lote CRU, esta esta
     // mensagem — ver o comentario de `anexosNuncaObtidos`.
     relato.anexosNuncaObtidos.push({ indice, anexoId, tipo: tipoDoAnexo });
+  }
+
+  // 5a. A imagem do cabecalho da mensagem de modelo (#1242). Ela NAO passa por `desembrulhar`: abrir o modelo ali faria o
+  //     classificador devolver `imageMessage` e a leitura do texto perderia o corpo da Mensagem. Le-se do evento por um caminho
+  //     proprio, depois de a Mensagem ter sido classificada como sempre; a forma nao reconhecida fica so no bruto.
+  const modelo = leituraDoModelo(m.message);
+  if (modelo.tipo === 'imagem' && !anexoJaExiste(acervo, mensagemId)) {
+    const anexoId = registrarAnexo(acervo, {
+      mensagemId,
+      tipo: 'image',
+      presenca: 'nunca-obtido',
+      bruto: JSON.stringify(modelo.conteudo),
+    });
+    relato.anexosNuncaObtidos.push({ indice, anexoId, tipo: 'image' });
   }
 
   // 5b. O Contato Compartilhado: so o `contactMessage` (um cartao) ou o `contactsArrayMessage` (varios, #1206)
