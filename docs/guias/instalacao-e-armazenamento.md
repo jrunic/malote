@@ -58,6 +58,23 @@ A pergunta que separa as duas categorias: *se eu apagar isto, o que se perde?*
   pareamento novo na frente do aparelho. Copie-a (por **cópia**, nunca movendo) quando for
   mexer na instalação.
 
+### Cópia consistente do Acervo
+
+O Acervo é um banco em modo WAL, e o ouvinte e o servidor o mantêm aberto. Copiar o arquivo
+`.db` com o serviço no ar não é backup: a cópia pode sair sem o que ainda está no arquivo
+`-wal`. Antes de **atualizar para uma versão que muda a forma do Acervo** (o changelog diz),
+faça uma cópia consistente. Depois de migrado, a versão anterior do produto não abre o
+Acervo, e a cópia é a volta. Duas formas, ambas corretas:
+
+- **Com o serviço parado,** copie o `.db` **junto** dos arquivos `-wal` e `-shm` da mesma
+  pasta, nunca só o `.db`.
+- **Com o serviço no ar,** use o backup do próprio SQLite, que lê a base inteira de forma
+  consistente, a partir da pasta do produto: `node -e "const D=require('better-sqlite3');
+  new D(process.argv[1],{readonly:true}).backup(process.argv[2]).then(()=>console.log('ok'))"
+  <origem.db> <destino.db>`.
+
+Confira a cópia abrindo-a somente leitura e rodando `PRAGMA integrity_check`.
+
 ## Serviço de sistema
 
 Em uma instalação de uso contínuo, o ouvinte roda como serviço. O produto roda da fonte:
