@@ -199,8 +199,8 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
-- **Produção:** v0.39.0 (18/10/2026, tag `v0.39.0`, `production` em `0ef06b4`, PR #35); Acervo v28 e Registro v8. A `main` está à frente só com documentação.
-- **Suíte:** 1.979 testes (18/10/2026), com as 3 falhas pré-existentes de `cli-entrada`; testes de tempo (`despachante`, `servidor-sem-bloqueio`, `servir`) reprovam em lote sob carga e passam isolados; lint limpo.
+- **Produção:** v0.40.0 (18/10/2026, tag `v0.40.0`, `production` em `690a366`, PR #36); Acervo v28 e Registro v8. `main` e `production` no mesmo SHA.
+- **Suíte:** 2.003 testes (18/10/2026), com as 3 falhas pré-existentes de `cli-entrada`; testes de tempo (`despachante`, `servidor-sem-bloqueio`, `servir`) reprovam em lote sob carga e passam isolados; lint limpo.
 - **O histórico de ciclos e releases** vive fora do repositório (documentos internos do autor); as releases estão no `CHANGELOG.md`.
 
 ## Pendências
@@ -222,6 +222,7 @@ Repositório expõe services systemd. Convenções:
 - **#1089 sem medição de campo:** rodar `pessoa promover-identificadores-nomeados` em ensaio (sem `--com-efeito`) e comparar com os 11.043 brutos da spec (a maioria era lixo da #1101, que o filtro já recusa).
 - **A promoção pode criar Pessoa com nome EXIBIDO lixo** (limitação conhecida): `titular` = sentinela vence `terceiro` = nome real por rank, e `melhorNome` não filtra sentinela. Só some com a limpeza do estoque da #1101.
 - **#1101 corrigiu a escrita, não o estoque:** 14 Pessoas ainda exibem o valor-sentinela (medido em 30/09/2026). `removerNomesInvalidos` cobre só endereço-repetido e marca-duplicata; sentinela e nono dígito são vocabulário de Fonte e pedem comando de limpeza do lado do adaptador antes de rodar em produção.
+- **`midia reprocessar` recusa sem recorte (v0.40.0).** Passe `--ensaio` (só conta, por tipo e por dia) e um recorte (`--desde`, `--ate`, `--tipo`, `--mensagem`, `--limite`), ou `--tudo`. O endereço da mídia vence entre 26 e 29 dias depois do evento (medido em 18/10/2026: 26 dias baixou, 29 deu 403), então o retry só vale para Anexos mais novos que isso.
 - **Lote derramado (Acervo ocupado) perde a mídia:** `ouvinte reprocessar` não tem socket vivo nem `MidiaAoVivo`, e a referência pode ter expirado, então o Anexo fica `nunca-obtido`. Limite conhecido, não regressão; se aparecer, é trabalho novo.
 - **`GLOSSARIO.md` e o modelo têm ~216 violações de MD013 pré-existentes** (30/08/2026). O gate é `npm run lint`, que não olha markdown: meça a linha de base antes de tratar `markdownlint-cli2` vermelho como regressão.
 - **`anexos` sem restrição de unicidade:** no WhatsApp quem impede duplicata é `anexoJaExiste` (o bloco de Anexo roda antes do desvio por Mensagem existente); no Instagram, o `continue`. Ao mexer em importação, conferir os dois.
