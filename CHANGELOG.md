@@ -21,6 +21,21 @@ Cada entrada tem uma tag `vX.Y.Z` no commit publicado. O histórico público com
 commit "Initial public release": as entradas anteriores são o registro fiel do que foi
 publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [0.40.0] — 2026-10-18
+
+Não muda a forma do Acervo nem do Registro. **Muda o comportamento padrão de um comando**: `malote midia reprocessar` sem nenhum recorte deixa de tentar todos os Anexos e passa a recusar.
+
+### Adicionado
+
+- **`malote midia reprocessar` aceita recorte.** `--desde` e `--ate` (`AAAA-MM-DD` em UTC, inclusivos, sobre o instante da Mensagem), `--tipo` (`image`, `video`, `audio`, `document`, `sticker`, `other`, ou os apelidos `imagem` e `documento`), `--mensagem <id>` e `--limite <n>` combinam por E. O `--limite` conta **tentativas**, as que falham também, e o que não veio de recepção ao vivo nunca ocupa uma vaga. A ordem é da Mensagem mais antiga para a mais nova, que é a que o endereço da mídia vence primeiro.
+- **`malote midia reprocessar --ensaio` só conta.** Diz quantos Anexos são candidatos, quantos são elegíveis e quantos tentaria, por tipo e por dia (UTC) da Mensagem, sem baixar nada, sem escrever no Acervo e sem exigir o Destino de Mídia.
+
+### Alterado
+
+- **Sem recorte e sem `--tudo`, `malote midia reprocessar` recusa** (sai com 2) e diz quantos Anexos tentaria. Antes ele tentava todos os que falharam, de todas as idades, o que num Acervo grande são dezenas de milhares de downloads contra a plataforma. Quem dependia do comportamento antigo passa `--tudo`. `--tudo` junto de um recorte vale o recorte. Erro de flag sai com 2 antes de abrir qualquer base.
+- **O endereço da mídia vence em menos de 30 dias.** Medido: uma imagem de 26 dias baixou e uma de 29 respondeu 403. A documentação deixa de dizer "cerca de 30 dias" e recomenda o ensaio e o recorte por faixa de datas.
+- **A listagem interna dos Anexos `nunca-obtido` sai ordenada** e devolve a Mensagem e o instante de cada um.
+
 ## [0.39.0] — 2026-10-18
 
 Muda a forma do Acervo (versão 27 para 28). O Acervo se migra sozinho na primeira abertura, e o passo só cria tabelas; ainda assim, **faça uma cópia consistente do Acervo antes de atualizar**: depois de migrado, a versão anterior do produto não o abre. Detalhe em [instalação e armazenamento](docs/guias/instalacao-e-armazenamento.md).
