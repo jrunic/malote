@@ -68,10 +68,15 @@ Acervo, e a cópia é a volta. Duas formas, ambas corretas:
 
 - **Com o serviço parado,** copie o `.db` **junto** dos arquivos `-wal` e `-shm` da mesma
   pasta, nunca só o `.db`.
-- **Com o serviço no ar,** use o backup do próprio SQLite, que lê a base inteira de forma
-  consistente, a partir da pasta do produto: `node -e "const D=require('better-sqlite3');
-  new D(process.argv[1],{readonly:true}).backup(process.argv[2]).then(()=>console.log('ok'))"
-  <origem.db> <destino.db>`.
+- **Com o serviço no ar,** use `VACUUM INTO`, a partir da pasta do produto e com a base aberta
+  **somente para leitura**: ele tira uma fotografia consistente numa só transação de leitura, sem
+  parar quem escreve, e grava um arquivo novo (o destino não pode existir):
+  `node -e "const D=require('better-sqlite3');
+  new D(process.argv[1],{readonly:true}).prepare('VACUUM INTO ?').run(process.argv[2])"
+  <origem.db> <destino.db>`. **Não use a API de backup do SQLite** (`db.backup`) com o serviço
+  no ar: ela recomeça a cada escrita de outro processo e, num Acervo que recebe mensagens, não
+  termina (medido: 60 s sem concluir num banco de 300 MB com um escritor a cada 20 ms,
+  contra 380 ms do `VACUUM INTO`).
 
 Confira a cópia abrindo-a somente leitura e rodando `PRAGMA integrity_check`.
 
