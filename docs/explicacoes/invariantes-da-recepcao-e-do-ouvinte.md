@@ -96,7 +96,10 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   "todos" era 22.352 Anexos contra a plataforma (medido em 18/10/2026). A ordem é a da
   Mensagem mais antiga para a mais nova, que é a que vence primeiro, e o `--limite` conta
   tentativas: o que não é de recepção ao vivo nunca ocupa uma vaga. O prazo do endereço
-  medido em 18/10/2026 (uma imagem por idade) é de 26 a 29 dias, não 30.
+  medido em 18/10/2026 **depende do tipo**: figurinha e áudio baixam até ~15 dias (404 aos 17-20, 410 a partir de 21),
+  vídeo e documento dão 410 a partir de 21 dias, e só a imagem baixa até ~28 dias (1 de 5 aos 29); não é 30 dias para
+  todos. Um lote de 4.135 imagens de 21 a 28/09 recuperou 82% (as que restaram deram 410). O freio de um lote por fatias
+  (parar quando uma fatia tenta 30 ou mais e não recupera nenhuma) acertou: lia um tipo expirado, não um bloqueio.
 - **`ZSESSIONTYPE` do backup de iOS tem CINCO naturezas, não duas.** 0=direta,
   1=grupo, 2=lista-de-transmissão, 3=status, 4=comunidade — medido em 21/09/2026 para
   o adaptador macOS de outro produto, contra o **mesmo formato de backup**, decisão confirmada
