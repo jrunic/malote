@@ -28,9 +28,16 @@ local (veja a referência do servidor).
 | `MALOTE_CHAVE_DE_ACESSO` | a Chave de Acesso: uma por consumidor, escopada a **um Inquilino**. Vai **só por variável de ambiente**, nunca por flag |
 
 - **O Inquilino vem da Chave.** `--inquilino` não existe no modo rede e é recusado (código 2). Para
-  consultar uma instalação local, rode com `env -u MALOTE_SERVIDOR`.
+  consultar uma instalação local, rode com `env -u MALOTE_SERVIDOR`. Hoje a recusa acontece em
+  `identificar`, `detalhar`, `anexos`, `etiquetas`, `exportar`, `enviar` e `envio estado`; em
+  `conversas`, `mensagens`, `buscar`, `pessoas`, `participantes`, `relatorio` e `configuracao listar` a
+  flag é ignorada em silêncio e vale o Inquilino da Chave (#1284).
 - **Comando que só existe local é recusado antes de abrir qualquer base** (código 2, mensagem
-  `"<comando>" e uma operacao LOCAL — o modo rede so consulta`). Nenhum arquivo é criado.
+  `"<comando>" e uma operacao LOCAL — o modo rede so consulta`). Nenhum arquivo é criado. Hoje escapam
+  desta recusa `ouvir`, `servir`, `ouvinte reprocessar*` e `midia reprocessar`, que rodam local mesmo com
+  `MALOTE_SERVIDOR` no ambiente (#1284).
+- `--servidor <url>` só troca a URL do servidor; o modo rede só liga com `MALOTE_SERVIDOR` no
+  ambiente.
 - `--chave-em <VARIAVEL>` (só em `enviar` e `envio estado`) usa a Chave que está **na variável
   nomeada**, em vez de `MALOTE_CHAVE_DE_ACESSO`. Serve para quem tem mais de uma Chave (por exemplo, a
   de outro Inquilino).
@@ -43,11 +50,15 @@ local (veja a referência do servidor).
 - **Paginação:** a resposta traz **`proximo`** quando há mais. Devolva-o em `--antes <cursor>`. O cursor é
   opaco: nunca monte um à mão, e um cursor inválido é erro (código 6), não primeira página.
 - **Flag sem valor:** uma flag que pede valor e vem sem ele, no fim da linha ou seguida de outra flag, é erro de uso (código 2, antes de qualquer requisição). Não existe `--flag=valor`, então um valor que comece com `--` não pode ser passado.
-- **`--json`:** devolve o corpo da API. Sem ele, a saída é texto, no mesmo formato do modo local.
-- **`--limite <n>`:** o servidor valida; valor que não é inteiro positivo é erro (código 6).
+- **`--json`:** devolve o corpo da API. Sem ele, a saída é texto, no mesmo formato do modo local, em
+  `identificar`, `detalhar`, `anexos`, `etiquetas` e `exportar`; `conversas`, `mensagens`, `buscar`,
+  `pessoas`, `participantes`, `relatorio` e `configuracao listar` imprimem o JSON da API com ou sem a flag.
+- **`--limite <n>`:** o servidor valida; valor que não é inteiro positivo é erro (código 6). Não há teto: sem
+  `--limite`, `mensagens` devolve a Conversa inteira, e só o prazo de 25 s freia uma resposta enorme. O
+  teto de página de 500 vale para o padrão de `conversas`, não para um `--limite` maior.
 - **`buscar`:** devolve as **mais recentes** primeiro (`--ordem cronologica` inverte), até `--limite` (padrão 100). A resposta traz **`truncado`** (`true` quando havia mais). Uma busca de termo comum sem `--desde` já não devolve só as mais antigas do Acervo.
 - **Contato enviado (`mensagens`, `buscar`, `exportar`):** cada Mensagem traz `contatosCompartilhados` — o nome, a organização e os telefones e e-mails do cartão —, lista vazia quando não há. A `buscar` casa o nome, a organização e o nome comercial por **palavra**; o telefone por **trecho de dígitos** (6 ou mais: `99991234` acha `556599991234`, e `(65) 99999-1234` também); o e-mail por **trecho**, sem diferenciar caixa. O que casou por cartão vem com `origemDaCorrespondencia: contato-compartilhado`. Servidor anterior a este campo não o devolve, e o cliente trata a ausência como lista vazia.
-- **Mensagem editada (`mensagens`, `buscar`, `exportar`):** cada Mensagem traz `edicoes` — o texto novo, o instante da edição e se chegou `cifrada` ou `aberta` —, em ordem, lista vazia quando não há. O `conteudo` é sempre o texto **original**; na Mensagem editada vem também `textoAtual`, o texto da última edição (vazio quando a legenda foi apagada), e sem edição a chave não existe (use o `conteudo`). Em texto, `mensagens`, `buscar` e `exportar` mostram o texto atual com a marca `(editada)` e as versões anteriores logo abaixo, a original primeiro. Servidor anterior a este campo não o devolve, e o cliente trata a ausência como lista vazia. A `buscar` acha a Mensagem pelo texto de uma **edição** e segue achando pelo texto original, que não muda; o que casou pela edição vem com `origemDaCorrespondencia: edicao`. Quando o termo casa por mais de um caminho na mesma Mensagem, vale o primeiro desta ordem: `conteudo`, `edicao`, `transcricao`, `contato-compartilhado`. A Mensagem editada conta uma vez, mesmo com várias edições que casam.
+- **Mensagem editada (`mensagens`, `buscar`, `exportar`):** cada Mensagem traz `edicoes` — o texto novo, o instante da edição e se chegou `cifrada` ou `aberta` —, em ordem, lista vazia quando não há. O `conteudo` é sempre o texto **original**; na Mensagem editada vem também `textoAtual`, o texto da última edição (vazio quando a legenda foi apagada), e sem edição a chave não existe (use o `conteudo`). Em texto (o modo local, e o `exportar` por rede), `mensagens`, `buscar` e `exportar` mostram o texto atual com a marca `(editada)` e as versões anteriores logo abaixo, a original primeiro; por rede, `mensagens` e `buscar` entregam o JSON com `edicoes` e `textoAtual`. Servidor anterior a este campo não o devolve, e o cliente trata a ausência como lista vazia. A `buscar` acha a Mensagem pelo texto de uma **edição** e segue achando pelo texto original, que não muda; o que casou pela edição vem com `origemDaCorrespondencia: edicao`. Quando o termo casa por mais de um caminho na mesma Mensagem, vale o primeiro desta ordem: `conteudo`, `edicao`, `transcricao`, `contato-compartilhado`. A Mensagem editada conta uma vez, mesmo com várias edições que casam.
 - Um único `--limite` pesado por vez: o servidor dá prazo de 25 s a cada leitura (veja `504` abaixo).
 
 ## Comandos de leitura
@@ -82,7 +93,12 @@ Observações:
   saída padrão. `--json` equivale a `--formato json`.
 - **`midia`:** vídeo é recusado com `415`; Anexo inexistente, de outro Inquilino ou sem bytes é `404`
   (indistinguíveis, por desenho).
-- **`mensagens --favorito`** só existe no modo rede.
+- **`mensagens --favorito`** e **`--configuracao`** só valem no modo rede; no modo local a leitura os ignora.
+- **`buscar --autor`** só vale no modo rede: o filtro por Pessoa do modo local é `--pessoa <id>`, e cada lado
+  ignora a flag do outro (#1290).
+- **`midia`:** o `content-type` da resposta é fixo por tipo de Anexo (imagem como `image/jpeg`, áudio como
+  `audio/opus`, figurinha como `image/webp`, o resto `application/octet-stream`), e não o tipo MIME gravado
+  (#1290).
 
 ## Comandos de escrita por rede
 
@@ -113,7 +129,7 @@ O contrato para automação: o código diz a **classe** da falha.
 | 4 | servidor inalcançável |
 | 5 | erro do servidor, incluindo `504` e `503` (abaixo) |
 | 6 | uso errado da API: `4xx` que não é `401` (cursor inválido, `--limite` inválido) |
-| 7 | **tempo esgotado, resultado desconhecido**: repetir uma consulta é seguro; repetir um `enviar` é seguro só com o mesmo `--identificador` |
+| 7 | **tempo esgotado, resultado desconhecido**: repetir uma consulta é seguro; repetir um `enviar` é seguro só com o mesmo `--identificador`. O cliente desiste em 30 s por requisição, antes do prazo de 25 s do servidor se este for aumentado com `servir --prazo`. Hoje o estouro na leitura do **corpo** de uma consulta sai 1, não 7 (#1285) |
 
 **`504` e `503` (código 5).** `504`: a consulta passou do prazo do servidor (25 s por padrão); **restrinja
 os filtros** (período, remetente, tipo) e não repita a mesma consulta. `503` (com `retry-after`): servidor
