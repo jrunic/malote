@@ -21,14 +21,14 @@ Cada entrada tem uma tag `vX.Y.Z` no commit publicado. O histórico público com
 commit "Initial public release": as entradas anteriores são o registro fiel do que foi
 publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
-## [0.41.0] — 2026-10-19
+## [0.41.0] — 2026-10-18
 
 Não muda a forma do Acervo nem do Registro. Mexe na recepção ao vivo: a mensagem de modelo de conta comercial com imagem no cabeçalho passa a gravar um Anexo.
 
 ### Adicionado
 
 - **A imagem do cabeçalho de uma mensagem de modelo de conta comercial vira Anexo.** Até aqui ela ficava só no Conteúdo Bruto e o endereço da mídia vencia sem que ninguém tentasse baixar. A recepção ao vivo grava **um** Anexo de imagem `nunca-obtido` por Mensagem, que entra no download ao vivo; a reentrega do mesmo evento não duplica. Só a forma medida é reconhecida (a imagem em `templateMessage`, `interactiveMessageTemplate`, `header`, `imageMessage`); imagem em outro lugar do modelo, ou sem chave legível, fica no bruto e não vira Anexo. O texto da Mensagem e a classificação não mudam.
-- **`malote midia extrair-imagem-de-modelo` cria o Anexo das Mensagens de modelo já gravadas.** Ensaio por padrão; `--com-efeito` exige `--confirmo`; o relatório só traz contagens. Grava uma Operação por lote, e `malote desfazer` remove os Anexos criados enquanto ainda não foram baixados (o Anexo já baixado é recusado, com a causa). Rodar de novo não cria nada. Para baixar, use `malote midia reprocessar --mensagem <id>`.
+- **`malote midia extrair-imagem-de-modelo` cria o Anexo das Mensagens de modelo já gravadas.** Ensaio por padrão; `--com-efeito` exige `--confirmo`; o relatório só traz contagens. Grava uma Operação por lote, e `malote operacao desfazer` remove os Anexos criados enquanto ainda não foram baixados (o Anexo já baixado é recusado, com a causa). Rodar de novo não cria nada. Para baixar, use `malote midia reprocessar --mensagem <id>`.
 - **A conexão e `malote midia reprocessar` abrem o modelo para baixar a imagem do cabeçalho.** A biblioteca não abre a mensagem de modelo; a conexão e o retry entregam só a imagem, com a chave do evento.
 
 ## [0.40.0] — 2026-10-18

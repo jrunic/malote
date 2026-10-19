@@ -49,23 +49,29 @@ Roadmap, spec, plano e diário: documentos internos do autor, fora deste reposit
 | Módulo | Responsabilidade |
 |---|---|
 | `src/nucleo/` | O modelo: Acervo (SQLite por Inquilino), Conversa, Mensagem, Anexo, Pessoa, Identificador, Operação. **Só ele e `src/registro/` tocam em tabela.** Leitura em `consulta.ts`, escrita em `escrita.ts`, migração por passos em `migracao.ts` e `passos-do-acervo.ts` |
-| `src/nucleo/` (consultas por Conversa) | `anexos-da-conversa.ts` (mídia, cursor composto), `autores-da-conversa.ts` (quem escreveu), `remetente.ts` (o Identificador por valor, em todas as formas) e `identificar.ts` ("quem é este valor?") |
-| `src/registro/` | O Registro da instalação: Inquilinos, Chaves de Operador e de Acesso, Configurações de Adaptador, Destino de Mídia, política de retenção |
-| `src/adaptadores/whatsapp/` | A Fonte WhatsApp: material exportado (`material.ts`, `importar.ts`), recepção ao vivo (`ao-vivo.ts`, `conexao.ts` — o **único** que alcança a biblioteca) e envio (`enviar.ts`) |
+| `src/nucleo/` (consultas por Conversa) | `anexos-da-conversa.ts` (mídia, cursor composto), `autores-da-conversa.ts` (quem escreveu), `remetente.ts` (o Identificador por valor, em todas as formas), `identificar.ts` ("quem é este valor?"), `detalhe-da-conversa.ts` (`detalhar`) e `pagina-de-conversas.ts` com `cursor-de-conversas.ts` (a listagem em páginas de 500) |
+| `src/nucleo/` (agregados e portas) | `edicao.ts` (Edição de Mensagem), `etiqueta-de-participacao.ts`, `contato-compartilhado.ts`, `anexo-de-modelo.ts` (o Anexo da imagem do cabeçalho do modelo), `envio.ts`, `transcricao.ts`, `retencao.ts`, `desfazer.ts` e `trilha.ts` (Operação, Linha de Efeito e a reversão), `ator.ts` e `endereco-da-conta.ts` |
+| `src/registro/` | O Registro da instalação: Inquilinos, Chaves de Operador e de Acesso (e as tentativas de chave), Configurações de Adaptador, Destino de Mídia, política de retenção, Endereços da Conta (`endereco-da-conta.ts`) |
+| `src/adaptadores/whatsapp/` | A Fonte WhatsApp: material exportado (`material.ts`, `importar.ts`), recepção ao vivo (`ao-vivo.ts`, `conexao.ts` — o **único** que alcança a biblioteca) e envio (`enviar.ts`). Em torno da recepção: `edicao.ts` (decifra e grava a Edição), `etiqueta-ao-vivo.ts`, `metadados-de-coletiva-ao-vivo.ts`, `identidade-da-conta.ts`, `contato-compartilhado.ts` e `extrair-contatos-compartilhados.ts`, `imagem-de-modelo.ts` (o reconhecedor, puro) e `extrair-imagem-de-modelo.ts`, e a mídia: `retry-de-midia.ts` e `reprocessar-midia.ts` (`midia reprocessar`), `trazer.ts` (`midia trazer`) e `duracao-do-anexo.ts` |
 | `src/adaptadores/instagram/` | A Fonte Instagram: material exportado |
 | `src/adaptadores/contatos/` | O catálogo de contatos (vCard): propõe identidade por telefone, e-mail e nome |
 | `src/rede/` | A superfície de rede. `servidor.ts` autentica e despacha; `rotas.ts` tem as rotas; `despachante.ts`, `leitura.ts`, `contrato-da-leitura.ts` e `trabalhador-de-leitura.ts` rodam cada `GET` num worker, com prazo (ver abaixo) |
-| `src/cli/` | Os comandos: `index.ts` (despacho e `--ajuda`), `cliente.ts` (o cliente HTTP, **só aqui**, nunca em `src/rede/`), `servir.ts`, `ouvir.ts`, `exportar.ts`, `anexos-texto.ts`, `identificar-texto.ts`, `transcricao.ts`, `varredura.ts` e outros. **Só `src/cli/` compõe mais de uma Fonte** |
+| `src/cli/` | Os comandos: `index.ts` (despacho e `--ajuda`), `cliente.ts` (o cliente HTTP, **só aqui**, nunca em `src/rede/`), `servir.ts`, `ouvir.ts`, `exportar.ts`, `anexos-texto.ts`, `identificar-texto.ts`, `detalhar-texto.ts`, `edicoes-texto.ts`, `transcricao.ts`, `varredura.ts` e outros. O estado do ouvinte: `derrame.ts`, `descartes.ts` (o contador), `guarda-de-descartes.ts` (o evento cru), `ultimo-evento.ts` e `sinal-da-conexao.ts`. As flags: `bandeiras.ts` (as que não levam valor) e `recorte-de-midia.ts` (o recorte do `midia reprocessar`). `encerrar.ts` é quem encerra o processo. **Só `src/cli/` compõe mais de uma Fonte** |
 | `tests/` | `node --test`; `tests/ajuda/` guarda as fixtures e os servidores de teste |
 
 As fronteiras que têm teste (`tests/fronteira-de-dependencia.test.ts`, `tests/sem-prepare-fora-da-porta.test.ts`,
-`tests/sem-exit-direto.test.ts`) estão listadas nas Restrições do `CONTEXTO.md`.
+`tests/sem-exit-direto.test.ts`) estão listadas nas Restrições do `CONTEXTO.md`, junto com
+`tests/guarda-de-descartes-pontos-de-entrada.test.ts` e `tests/importacao-sem-tolerancia.test.ts`.
 
 ## Fluxos críticos
 
 1. **Ao vivo.** `malote ouvir` → `conexao.ts` recebe o evento → `ao-vivo.ts` classifica e resolve o endereço
    para a forma canônica → portas de escrita do núcleo → Acervo. Disputa de escrita vai para o derrame, e
-   não vira recusa.
+   não vira recusa. O mesmo caminho grava, além da Mensagem, a Edição, a Etiqueta de Participação, os
+   metadados de coletiva (aviso de `groups.*`) e o Anexo da imagem do modelo; o que não vira Mensagem é
+   **contado** por dia e por tipo e, se não for ruído conhecido, **guardado cru** em `descartados.jsonl`
+   (`ouvinte reprocessar-descartados` o recupera). O Anexo recebido ao vivo é baixado pela conexão;
+   se falhar, `midia reprocessar` o tenta de novo, dentro de um recorte e do prazo do tipo.
 2. **Consulta por rede.** `GET` → `servidor.ts` verifica a Chave (o Inquilino vem **da credencial**) → o
    despachante manda o pedido a um worker → o worker abre o Acervo somente-leitura e roda a mesma
    `responder` de `rotas.ts` → a resposta volta à thread principal. Prazo de 25 s (`504`), fila de 64
