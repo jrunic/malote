@@ -17,9 +17,11 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o
 versionamento segue [SemVer](https://semver.org/lang/pt-BR/). Enquanto a versão
 maior for `0`, a interface pode mudar entre versões menores.
 
-Cada entrada tem uma tag `vX.Y.Z` no commit publicado. O histórico público começa no
-commit "Initial public release": as entradas anteriores são o registro fiel do que foi
-publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
+Cada entrada tem uma tag `vX.Y.Z` no commit publicado, com uma exceção: **a `v0.31.0` não tem
+tag**. A entrada vale e a release foi publicada, mas a tag nunca foi criada; o código dela é o
+commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O histórico
+público começa no commit "Initial public release": as entradas anteriores são o registro fiel
+do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
 ## [0.41.0] — 2026-10-18
 
@@ -203,6 +205,8 @@ migram o Acervo ao subir. O passo só cria uma tabela e um índice e não exige 
 - O texto da etiqueta é dado pessoal: aparece na saída dos comandos de consulta e nunca em log nem em relatório.
 
 ## [0.31.0] — 2026-10-06
+
+*Sem tag: a `v0.31.0` não foi criada. O código é o commit `7a96bc4`, publicado pelo merge `795f4a8`.*
 
 **Muda a forma do Registro (v7 para v8).** Faça cópia do `registro.db` antes de atualizar; o servidor e cada ouvinte migram o
 Registro ao subir.
