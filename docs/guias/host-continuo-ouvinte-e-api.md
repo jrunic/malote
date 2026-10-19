@@ -85,7 +85,7 @@ primeiro material de cada conta. Resumo dos comandos:
 CLI="node --import tsx src/cli/index.ts"
 $CLI operador chave criar                    # guarde o valor — não é recuperável
 $CLI inquilino criar --chave <valor> --titular "Nome do Titular"
-$CLI importar --inquilino <id> --configuracao <apelido> --material <caminho>
+$CLI importar --inquilino <id> --fonte whatsapp --configuracao <apelido> --material <caminho>
 ```
 
 A importação do material cria a **Configuração de Adaptador** que o ouvinte exige — o
@@ -103,14 +103,23 @@ sem baixar. Configure antes de parear:
 $CLI inquilino destino --chave <valor> --inquilino <id> --endereco <caminho>
 ```
 
+A mídia vive **onde o Destino aponta**, que é um caminho qualquer e não uma pasta sob
+`XDG_DATA_HOME/malote`: inclua esse caminho no backup à parte. O ouvinte lê o Destino só na
+partida; trocá-lo exige reiniciar o unit. Com Destino configurado, um download ao vivo que falha
+(`falhou ao baixar` no log) deixa o Anexo `nunca-obtido`, e a recuperação é `malote midia
+reprocessar` dentro do prazo do tipo (§3.4).
+
 ### 3.1 Pasta de estado é pré-condição
 
 O ouvinte **não cria pasta** na partida (criação de diretório no caminho de subida é o que
 travou processos em sistemas de arquivos patológicos). Crie antes:
 
 ```bash
-mkdir -p ~/.local/state/malote/ouvinte/<conta>
+mkdir -p -m 700 ~/.local/state/malote/ouvinte/<conta>
 ```
+
+A pasta guarda a credencial do vínculo e arquivos com conversa em claro (o derrame e a guarda de
+descartes); o `-m 700` evita depender da `umask`.
 
 `<conta>` é o nome que identifica a pasta do vínculo — um rótulo seu, uma palavra por
 conta.
@@ -155,7 +164,8 @@ Restart=on-failure
 RestartSec=10
 # Contrato de saída medido no produto:
 #   0  = parada pedida (sinal) — não é falha
-#   1  = vínculo invalidado pela plataforma — exige pareamento humano no aparelho
+#   1  = vínculo invalidado pela plataforma (exige pareamento humano no aparelho), ou falha local de
+#        subida (Inquilino desconhecido, "nao consegui conectar"): leia a última linha do log antes de parear
 #   2  = erro de configuração — invocação errada (inquilino/conta/configuração), ou o vínculo é de
 #        outra conta que a da Configuração (o telefone não confere): corrija o cadastro, não reinicie
 #   70 = exceção que a biblioteca deixou escapar — o ouvinte loga a causa e sai para ser reiniciado
@@ -177,6 +187,17 @@ sudo systemctl enable --now malote-ouvinte@<conta>
 Se você prefere tudo numa pasta só, declare `Environment=MALOTE_HOME=/srv/malote` no unit
 (e crie a pasta antes) — vale para os dois serviços.
 
+### 3.4 O que a recepção não grava como Mensagem
+
+A recepção descarta o que não vira Mensagem: protocolo sem dado, conteúdo cifrado, o feed de status, e o que ainda não foi classificado. Em vez de deixar isso se perder em silêncio, o ouvinte **conta** (`ouvinte estado --json`, campo `descartes`) e **guarda o evento cru** do que não é ruído conhecido.
+
+- **Onde fica:** na pasta de estado da conta, `descartados.jsonl` e, depois da rotação, `descartados.anterior.jsonl`. Uma linha por evento, com o instante, o motivo, a causa (quando há) e o evento cru.
+- **O que é, e o que não promete:** **texto de conversa em claro**, fora do Acervo e **fora do backup**, com modo 0600. O produto não promete confidencialidade contra quem opera a instalação. Nunca vai para log: a saída do ouvinte só diz quantos foram guardados.
+- **Teto e rotação:** `MALOTE_TETO_DA_GUARDA_BYTES` (padrão 50 MiB por arquivo, valor provisório). Ao passar do teto o arquivo atual vira o anterior e **o anterior mais antigo é apagado**: é a única exceção à regra de que o produto não apaga, escolhida porque o disco é finito e este arquivo não está no backup.
+- **Reprocessar:** depois de uma correção na classificação, pare o ouvinte, rode `ouvinte reprocessar-descartados --inquilino <id> --conta <nome> --configuracao <apelido>` e suba o ouvinte de novo. Sai da guarda o que passou a ser gravado e o que passou a ser ruído (ele diz quantos **retirou**); fica o que ainda é descartado. O comando recusa com o ouvinte no ar. Ele também grava a **edição de Mensagem** que o ouvinte guardou cifrada (carrega o decodificador da biblioteca sozinho): a linha sai da guarda e a saída diz quantas edições novas entraram, sem nunca mostrar o texto. A edição que não se consegue ler (original ausente ou sem segredo) fica na guarda.
+- **Mídia:** o reprocessar não baixa mídia, e o Anexo de um evento reprocessado nasce sempre `nunca-obtido`. Para trazer os bytes, rode `malote midia reprocessar` logo depois, **dentro do prazo do tipo**, porque o endereço de download vence em dias e não em um prazo único (medido em 18/10/2026: figurinha e áudio baixam até cerca de 15 dias e respondem 404 aos 17-20 e 410 a partir de 21; vídeo e documento respondem 410 a partir de 21 dias; só a imagem baixa até cerca de 28 dias, 1 de 5 aos 29. Imagem de 25 a 28 dias baixou em 80% das tentativas). A imagem do cabeçalho de uma mensagem de modelo de conta comercial vira Anexo na recepção; para as já gravadas, `malote midia extrair-imagem-de-modelo` (ensaio por padrão) cria o Anexo e este comando baixa. O comando recusa (saída 2) sem recorte e sem `--tudo`: comece por `--ensaio`, que conta por tipo e por dia sem baixar, e baixe por faixa (`--desde`, `--ate`, `--tipo`, `--mensagem`) e com `--limite`, a Mensagem mais antiga primeiro. `--limite` sozinho já conta como recorte, e conta tentativas, não sucessos. O comando não tem freio nem retomada: um lote longo em fatias, com pausa e parada se uma fatia não recupera nada, é script de quem opera.
+- **Ver quanto há:** `ouvinte estado --json`, campo `guarda` (`eventos` e `bytes`). O comando lê o arquivo para contar, então o custo cresce com o teto.
+
 ## 4. O servidor de consulta, como serviço
 
 ### 4.1 Chave de Acesso (quem consulta)
@@ -185,7 +206,7 @@ A consulta por rede é autenticada por **Chave de Acesso** — uma por consumido
 Inquilino que ela abre. O Inquilino vem da credencial, nunca do chamador.
 
 ```bash
-$CLI acesso chave criar --chave <chave-de-operador> --inquilino <id>
+$CLI acesso chave emitir --chave <chave-de-operador> --inquilino <id>
 ```
 
 Guarde o valor impresso: como a Chave de Operador, não é recuperável.
@@ -216,7 +237,8 @@ WantedBy=multi-user.target
 andamento por até 5 s antes de cortar as conexões, então o padrão do systemd basta, mas um valor
 explícito evita `SIGKILL` se alguém aumentar a espera.
 
-Exponha ao mundo por um proxy reverso com TLS (Caddy, nginx…). O servidor responde
+`--endereco` aceita loopback sem mais nada; qualquer outro endereço exige `--exposto` e o `servir`
+sai com código 2 sem ele. Exponha ao mundo por um proxy reverso com TLS (Caddy, nginx…). O servidor responde
 **uma recusa de corpo vazio** para credencial ausente, inválida ou revogada — não
 distingue, para não revelar a existência de Inquilinos alheios. O lado de quem consome —
 autenticação, rotas e como instruir um agente — está no
@@ -253,8 +275,10 @@ O que o servidor responde, e o que você faz:
   segue. O `stderr` leva a mensagem e o caminho, **nunca a query** (ela pode ter texto de conversa).
 - Leitura que leva mais de 2 s escreve `[leitura] lenta: GET <caminho> <tempo>`.
 
-**Subida.** O servidor abre o Registro uma vez (migra, se for o caso) e sobe um worker **antes** de
-aceitar pedido. Se o worker não carregar em 5 s, ele escreve `Nao subi: o worker de leitura nao
+**Subida.** O servidor abre o Registro na subida (migra, se for o caso) e sobe um worker **antes** de
+aceitar pedido. Depois disso o Registro é aberto de novo a cada pedido, só para verificar a Chave de
+Acesso, e cada verificação, aceita ou recusada, grava uma linha em `tentativas_de_chave`: é a prova de
+acesso, e a tabela não tem retenção. Se o worker não carregar em 5 s, ele escreve `Nao subi: o worker de leitura nao
 carregou` e **sai com código 1**. Com `Restart=on-failure` isso vira uma tentativa a cada 10 s: se o
 serviço não fica de pé, leia o `journalctl -u malote-servidor` e procure a causa (dependência
 ausente, `tsx` não instalado, arquivo do repositório quebrado) antes de mexer em flag.
@@ -282,8 +306,12 @@ node --import tsx src/cli/index.ts ouvinte estado --conta <conta>
 
 **Uma linha, um instante ISO** — o comando não abre o Acervo e é barato de bater. Silêncio
 por mais que o intervalo tolerado é o sinal de alarme (cair e religar é rotina do ouvinte;
-o que vigia é o instante andar). Com `--json` vêm derrame acumulado, série de
-correspondência e o último retrato — para painel, não para alarme de silêncio.
+o que vigia é o instante andar). Conta sem `ultimo-evento` registrado (nova, ou que nunca rodou) sai
+com código 1 e a linha `Conta <nome>: sem evento registrado.`, mesmo com `--json`: um alarme que trate
+saída diferente de 0 dispara nesse caso. Com `--json` vêm `conta`, `ultimoEvento`, `derramados`,
+`lotes`, `correspondencia`, `ultimoRetrato`, `pulos`, `descartes`, `instantesAdiantados` (as Mensagens
+gravadas só por causa da janela de relógio, por dia), `guarda` e `ultimoSinalDaConexao` — para painel,
+não para alarme de silêncio.
 
 O `--json` traz também `ultimoSinalDaConexao`: o instante do último frame que a Conexão recebeu
 do WhatsApp, gravado no máximo a cada 15 s. A biblioteca manda um `ping` a cada 30 s e encerra a
@@ -303,7 +331,17 @@ vazio.
 - `~/.local/state/malote/ouvinte/<conta>/vinculo` — credencial de sessão. Perder custa um
   pareamento novo na frente do aparelho. Copie **por cópia** antes de qualquer manutenção
   da instalação; não inclua em rotação automática sem saber o que faz.
+- O estado da conta tem arquivos que **não se refazem** e guardam conversa em claro: o derrame
+  (`nao-gravados.jsonl`, eventos que o Acervo ocupado não aceitou e que a plataforma não reentrega), o
+  `nao-gravados.jsonl.envenenado.jsonl` (ver abaixo) e a guarda de descartes (`descartados.jsonl`, que
+  fica fora do backup por decisão). Decida o backup e a limpeza deles de propósito.
 - O resto de `~/.local/state/malote/` se refaz sozinho.
+
+**Lote envenenado.** Se o derrame tem um lote que falha por erro que não é disputa de banco ocupado,
+o ouvinte move o primeiro lote para `nao-gravados.jsonl.envenenado.jsonl`, com a causa, e escreve
+`[ouvinte] LOTE ENVENENADO movido para ...` no log; o lote fica de fora e o ouvinte segue. Nenhum
+comando reprocessa esse arquivo, `ouvinte estado --json` não o conta, e ele tem conversa em claro. O
+sinal para vigiar é essa linha no log.
 
 ## 7. Transcrição de áudio (opcional)
 
@@ -350,31 +388,26 @@ Material que chega recorrentemente (exports de plataforma) entra por **Pastas de
 declaradas e um `material varrer` agendado. Declare cada uma:
 
 ```bash
-$CLI entrada declarar --inquilino <id> --fonte <fonte> \
-  --configuracao <apelido> --pasta <caminho> --natureza completo|parcial
+$CLI entrada declarar --inquilino <id> --fonte instagram|contatos \
+  --configuracao <apelido> --pasta <caminho> --natureza completo|parcial \
+  [--titular-na-fonte "<nome de exibição do Titular>"]
 ```
+
+Só `instagram` e `contatos` entram por pasta vigiada; o WhatsApp chega pelo ouvinte e por `importar`, e
+`entrada declarar --fonte whatsapp` sai com código 2. O Instagram exige `--titular-na-fonte` (o nome de
+exibição do Titular naquela Fonte). A varredura é `material varrer --inquilino <id> [--configuracao
+<apelido>]`.
 
 O disparo da varredura é **seu** (cron, timer): o produto não agenda nada sozinho. As
 pastas gravam caminho absoluto no Registro — mover a instalação exige atualizar essas
 linhas (ver o guia de armazenamento).
 
-### 3.4 O que a recepção não grava como Mensagem
-
-A recepção descarta o que não vira Mensagem: protocolo sem dado, conteúdo cifrado, o feed de status, e o que ainda não foi classificado. Em vez de deixar isso se perder em silêncio, o ouvinte **conta** (`ouvinte estado --json`, campo `descartes`) e **guarda o evento cru** do que não é ruído conhecido.
-
-- **Onde fica:** na pasta de estado da conta, `descartados.jsonl` e, depois da rotação, `descartados.anterior.jsonl`. Uma linha por evento, com o instante, o motivo e o evento cru.
-- **O que é, e o que não promete:** **texto de conversa em claro**, fora do Acervo e **fora do backup**, com modo 0600. O produto não promete confidencialidade contra quem opera a instalação. Nunca vai para log: a saída do ouvinte só diz quantos foram guardados.
-- **Teto e rotação:** `MALOTE_TETO_DA_GUARDA_BYTES` (padrão 50 MiB por arquivo, valor provisório). Ao passar do teto o arquivo atual vira o anterior e **o anterior mais antigo é apagado**: é a única exceção à regra de que o produto não apaga, escolhida porque o disco é finito e este arquivo não está no backup.
-- **Reprocessar:** depois de uma correção na classificação, pare o ouvinte, rode `ouvinte reprocessar-descartados --inquilino <id> --conta <nome> --configuracao <apelido>` e suba o ouvinte de novo. Sai da guarda o que passou a ser gravado e o que passou a ser ruído (ele diz quantos **retirou**); fica o que ainda é descartado. O comando recusa com o ouvinte no ar. Ele também grava a **edição de Mensagem** que o ouvinte guardou cifrada (carrega o decodificador da biblioteca sozinho): a linha sai da guarda e a saída diz quantas edições novas entraram, sem nunca mostrar o texto. A edição que não se consegue ler (original ausente ou sem segredo) fica na guarda.
-- **Mídia:** o reprocessar não baixa mídia, e o Anexo de um evento reprocessado nasce sempre `nunca-obtido`. Para trazer os bytes, rode `malote midia reprocessar` logo depois, **dentro dos cerca de 30 dias** em que a referência de download vale (medido em 18/10/2026, **o prazo depende do tipo**: figurinha e áudio baixam até cerca de 15 dias e respondem 404 aos 17-20 e 410 a partir de 21; vídeo e documento respondem 410 a partir de 21 dias; só a imagem baixa até cerca de 28 dias, 1 de 5 aos 29. Imagem de 25 a 28 dias baixou em 80% das tentativas). A imagem do cabeçalho de uma mensagem de modelo de conta comercial vira Anexo na recepção; para as já gravadas, `malote midia extrair-imagem-de-modelo` (ensaio por padrão) cria o Anexo e este comando baixa. O comando recusa sem recorte: comece por `--ensaio`, que conta por tipo e por dia sem baixar, e baixe por faixa (`--desde`, `--ate`, `--tipo`, `--mensagem`) e com `--limite`, a Mensagem mais antiga primeiro.
-- **Ver quanto há:** `ouvinte estado --json`, campo `guarda` (`eventos` e `bytes`). O comando lê o arquivo para contar, então o custo cresce com o teto.
-
 ## 9. Operações que voltam com frequência
 
 | situação | o que fazer |
 |---|---|
-| vínculo invalidado (unit sai com código 1) | pareamento humano: rode o `ouvir` com `--numero` no terminal, confirme no aparelho, reinicie o unit |
-| trocar a versão | `git fetch && git checkout <tag-ou-branch>` + `npm ci` + `systemctl restart` dos units. **Release que muda a forma do Registro** (a 0.31.0 é uma): faça cópia do `registro.db` antes — o servidor e cada ouvinte migram o Registro ao subir, com segurança entre vários abridores, mas a cópia é o que permite voltar |
+| vínculo invalidado (unit sai com código 1) | leia a última linha do log: `1` também sai por Inquilino desconhecido e falha local de subida. Sendo vínculo invalidado, pareamento humano: rode o `ouvir` com `--numero` no terminal, confirme no aparelho, reinicie o unit |
+| trocar a versão | `git fetch && git checkout <tag-ou-branch>` + `npm ci` + `systemctl restart` dos units. **Release que muda a forma do Registro ou do Acervo** (a 0.31.0 mudou o Registro; a 0.39.0, o Acervo): faça cópia do `registro.db` e dos Acervos antes — o servidor e cada ouvinte migram as bases ao subir, com segurança entre vários abridores, mas a cópia é o que permite voltar |
 | conferir o que o ouvinte derramou | `ouvinte estado --json` (campo derrame) e `ouvinte reprocessar` — recusa se o ouvinte estiver no ar |
 | ver o que a recepção não gravou como Mensagem | `ouvinte estado --json` (campo `descartes`): contagem por dia e por tipo, sem conteúdo. Serve para decidir com número se um tipo merece virar Mensagem. `protocolMessage` aparece por tipo do protocolo (`protocolMessage:REVOKE`, e assim por diante) |
 | segunda conta de WhatsApp | novo material importado com Configuração própria + novo unit `malote-ouvinte@<outra-conta>` |

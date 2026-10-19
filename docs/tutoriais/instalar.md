@@ -108,27 +108,26 @@ Se você declara `MALOTE_HOME`, **tudo** vive sob essa pasta. As variáveis `XDG
 ## 6. Declarar a Configuração — com material ou só para o ouvinte
 
 O malote ingere material exportado das plataformas (WhatsApp, Instagram, catálogo de
-contatos) por uma pasta vigiada. Há dois caminhos, dependendo do que você já tem em mãos.
+contatos). Há dois caminhos, dependendo do que você já tem em mãos.
 
-**Caminho A — já tenho um export e quero importar o histórico:**
-
-```bash
-node --import tsx src/cli/index.ts entrada declarar \
-  --inquilino d8765d15-8c83-4b8f-bec6-d33cedfb31e7 \
-  --fonte whatsapp --configuracao pessoal \
-  --pasta /caminho/da/pasta-de-entrada --natureza completo
-```
-
-E a importação:
+**Caminho A — já tenho um export do WhatsApp e quero importar o histórico:**
 
 ```bash
 node --import tsx src/cli/index.ts importar \
   --inquilino d8765d15-8c83-4b8f-bec6-d33cedfb31e7 \
-  --configuracao pessoal --material /caminho/do/material
+  --fonte whatsapp --configuracao pessoal --material /caminho/do/material
 ```
 
-**Se algo der errado:** `Informe --material.` significa que faltou o caminho do material no
-comando.
+A importação cria a Configuração `pessoal` se ela ainda não existe. O apelido é explícito
+de propósito: não há apelido padrão, porque adivinhar criaria uma Configuração paralela em
+silêncio.
+
+**Se algo der errado:** `Informe --material.` significa que faltou o caminho do material, e
+`Fontes suportadas: whatsapp, instagram, contatos.` que faltou `--fonte` (ou veio outro valor).
+
+O WhatsApp chega por `importar` e pelo ouvinte, nunca por pasta vigiada. A pasta vigiada
+(`entrada declarar`, depois `material varrer`) é só para o Instagram e o catálogo de
+contatos, e está no [guia do host contínuo](../guias/host-continuo-ouvinte-e-api.md).
 
 **Caminho B — ainda não tenho o export e quero só parear o dispositivo e começar a
 receber ao vivo (passo 8):**

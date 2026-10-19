@@ -28,14 +28,16 @@ Acervo (ver [cliente × servidor](cliente-e-agente.md)).
 | variável | o que guarda | se perder |
 |---|---|---|
 | `XDG_DATA_HOME` (default `~/.local/share`) | `malote/` com Registro, Acervos, mídia, material — **dado** | não se reconstrói |
-| `XDG_STATE_HOME` (default `~/.local/state`) | `malote/` com vínculo do ouvinte, fila de derrame, último evento — **estado** | refaz-se, ou é credencial que se move com a pasta |
+| `XDG_STATE_HOME` (default `~/.local/state`) | `malote/` com vínculo do ouvinte, fila de derrame, guarda de descartes, último evento — **estado** | em parte se refaz; o vínculo é credencial e o derrame e a guarda não se recriam |
 | `MALOTE_HOME` | **tudo** numa pasta só | — |
 
 Regras que o produto segue (e testa):
 
 - variável **vazia** = ausente (usa o default);
 - caminho **relativo** é ignorado — cai no default;
-- o que o produto cria nasce `0700`;
+- as pastas que o produto cria nascem `0700`; os arquivos de conversa em claro do estado do
+  ouvinte (o derrame e o `.envenenado.jsonl`) seguem hoje a `umask` do processo, e só a guarda
+  de descartes é `0600`, então crie a pasta da conta com `mkdir -m 700` (#1289);
 - os caminhos são os mesmos em qualquer sistema operacional.
 
 Dentro de `XDG_DATA_HOME/malote/`, o Envio de imagem ou documento usa uma pasta de
@@ -50,13 +52,17 @@ detecta nem o limpa, e removê-lo à mão é seguro.
 
 A pergunta que separa as duas categorias: *se eu apagar isto, o que se perde?*
 
-- **`XDG_DATA_HOME/malote/` é irrecuperável.** É o que entra no backup. Dentro dele,
-  `midia/` costuma ser a maior parte — se o material original ainda existe na fonte, o
-  custo/benefício de incluir a mídia é seu.
+- **`XDG_DATA_HOME/malote/` é irrecuperável.** É o que entra no backup. A mídia costuma ser a
+  maior parte e vive **onde o Destino de Mídia aponta** (`inquilino destino --endereco`), que é
+  um caminho qualquer e pode estar fora desta pasta: inclua esse caminho no backup à parte. Se
+  o material original ainda existe na fonte, o custo/benefício de incluir a mídia é seu.
 - **`XDG_STATE_HOME/malote/` não vai para backup rotineiro.** O que ali se refaz, se refaz;
-  a exceção é `ouvinte/<conta>/vinculo` — credencial de sessão cuja perda custa um
-  pareamento novo na frente do aparelho. Copie-a (por **cópia**, nunca movendo) quando for
-  mexer na instalação.
+  as exceções são `ouvinte/<conta>/vinculo` — credencial de sessão cuja perda custa um
+  pareamento novo na frente do aparelho; `nao-gravados.jsonl` (o derrame: eventos que o Acervo
+  ocupado não aceitou e que a plataforma não reentrega) e o `.envenenado.jsonl` que ele pode
+  gerar; e `descartados.jsonl` (a guarda do evento cru, deliberadamente fora do backup). Os três
+  últimos têm conversa em claro. Copie o vínculo (por **cópia**, nunca movendo) quando for mexer
+  na instalação.
 
 ### Cópia consistente do Acervo
 
@@ -92,13 +98,17 @@ ExecStart=/usr/bin/node --import tsx src/cli/index.ts ouvir \
   --inquilino <id> --conta <nome> --configuracao <apelido>
 Restart=on-failure
 RestartSec=10
+RestartPreventExitStatus=0 1 2
 ```
 
-Duas propriedades do encerramento que valem para o supervisor:
+Propriedades do encerramento que valem para o supervisor:
 
 - saída **0** = parada pedida (sinal) — não é caso de reiniciar;
-- saída **1** = vínculo invalidado pela plataforma — exige pareamento humano; reiniciar em
-  laço não resolve e pode agravar;
+- saída **1** = vínculo invalidado pela plataforma (exige pareamento humano) ou falha local de
+  subida (Inquilino desconhecido, não consegui conectar); reiniciar em laço não resolve e pode
+  agravar;
+- saída **2** = erro de configuração, ou vínculo de outra conta que a da Configuração;
+  corrija o cadastro, não reinicie;
 - saída **70** = exceção que a biblioteca de recepção deixou escapar — o ouvinte loga a causa
   (`EXCECAO NAO TRATADA`), fecha o Acervo e sai por um código que o supervisor **reinicia**. Não
   a coloque em `RestartPreventExitStatus`.

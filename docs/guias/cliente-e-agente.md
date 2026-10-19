@@ -6,7 +6,7 @@ escopo: repo:malote
 plataforma: "*"
 status: ativo
 dominios: [tecnologia]
-descricao: "Guia — consultar o Acervo de uma máquina cliente: autenticação por Chave de Acesso, as quatro rotas, e como instruir um agente a usar a API"
+descricao: "Guia — consultar o Acervo de uma máquina cliente: autenticação por Chave de Acesso, as rotas de leitura e as duas de escrita, e como instruir um agente a usar a API"
 tags: [guia, cliente, api, agente, http]
 ---
 
@@ -57,8 +57,9 @@ O que uma consulta por rede usa — duas variáveis de ambiente:
 | `MALOTE_CHAVE_DE_ACESSO` | a Chave de Acesso — **a identidade da consulta** |
 
 A chave é segredo: uma por consumidor (um por agente/aplicação), revogável no servidor.
-Não a escreva em arquivo versionado, script commitado ou log. Com `--servidor <url>` você
-declara o endereço por invocação, em vez de env.
+Não a escreva em arquivo versionado, script commitado ou log. `MALOTE_SERVIDOR` é o que liga o modo
+rede; `--servidor <url>` só troca o endereço numa invocação e, sozinha, não liga: sem a variável o
+comando roda local e é recusado como operação local.
 
 Duas coisas que a máquina cliente **não** precisa:
 
@@ -232,8 +233,9 @@ Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`
   pareça completo**, e `--saida` que já existe é recusada. Sem `--saida` escreve na saída padrão, e então o
   **código de saída** é o único sinal de truncamento. Conversa grande: use `--saida` (o modo local sem ela
   acumula a saída em memória). Pagina `mensagens` de 500 em 500, mandando `ordem=cronologica` em toda página.
-- `malote buscar --texto T [--conversa <id>] [--desde D] [--ate D] [--limite <n>] [--ordem recentes|cronologica]` — busca
-  no conteúdo e na transcrição. O texto é **literal**: cada palavra entre aspas e todas por E, sem caixa e sem acento.
+- `malote buscar --texto T [--conversa <id>] [--autor <id-de-pessoa>] [--desde D] [--ate D] [--limite <n>] [--ordem recentes|cronologica]` — busca
+  no conteúdo, no texto das edições, na transcrição e nos contatos enviados dentro de Mensagens (a proveniência vem em
+  `origemDaCorrespondencia`: `conteudo`, `edicao`, `transcricao` ou `contato-compartilhado`). O texto é **literal**: cada palavra entre aspas e todas por E, sem caixa e sem acento.
   Ponto, `&`, aspas, `AND`, `OR`, `NOT`, `*` e `NEAR` são texto, não operador (`roc*` não acha `rock`; `a.b` acha a
   Mensagem que tem `a.b`). Devolve até 100 (`--limite`), **as mais recentes primeiro**; `--ordem cronologica` traz as mais
   antigas. Quando há mais resultados que o limite, o JSON da rede traz `"truncado": true` e a saída de texto termina com um
@@ -319,8 +321,15 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 | `GET /identificadores?valor=` | `fonte` | `{ consultado, identificadores: [...], formas: [...] }` — vazio quando o Acervo nunca viu o valor |
 | `GET /relatorio` | — | `{ relatorio: { conversas, mensagens } }` |
 | `GET /chaves` | — | `{ chaves: [...] }` — as chaves do próprio Inquilino |
-| `GET /configuracoes` | — | `{ configuracoes: [{ apelido, fonte }] }` |
-| `GET /midia/<anexoId>` | — | o **arquivo** do Anexo, com `content-type` próprio — não é JSON |
+| `GET /configuracoes` | — | `{ configuracoes: [{ apelido, fonte, telefone, jid, lid }] }` — os três últimos só nas de WhatsApp, nulos até existirem |
+| `GET /midia/<anexoId>` | — | o **arquivo** do Anexo — não é JSON. O `content-type` é fixo por tipo (imagem `image/jpeg`, áudio `audio/opus`, figurinha `image/webp`, o resto `application/octet-stream`), não o tipo MIME gravado |
+
+Cada Mensagem das rotas de mensagens e de busca traz, além de `id`, `conversaId`, `fonte`, `autorId`, `conteudo`,
+`ocorridaEm` e `direcao`: `anexos` (cada um com a `transcricao`, quando há), `contatosCompartilhados` (nome, organização,
+telefones e e-mails do cartão) e `edicoes` (`texto`, `editadaEm` e `origem`, `cifrada` ou `aberta`), todas listas vazias
+quando não há. O `conteudo` é sempre o texto **original**; `textoAtual`, o texto da última edição, só existe na Mensagem
+editada. O `limite` não tem teto nem padrão nas rotas de mensagens e de anexos (na busca o padrão é 100): sem ele, a
+Conversa inteira vem numa resposta, e o único freio é o prazo de 25 s.
 
 `GET /midia/<anexoId>` foge do padrão das demais: sucesso é `200` com os bytes crus
 (não `{ ... }`). `404` vazio cobre inexistente, de outro Inquilino e sem bytes
