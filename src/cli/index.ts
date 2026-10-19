@@ -358,7 +358,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote material intervalo     --inquilino <id> [--configuracao <apelido>] --dias <n>
   malote material varrer        --inquilino <id> [--configuracao <apelido>]
   malote material atraso        --inquilino <id>
-  malote ouvir      --inquilino <id> --conta <nome> [--numero <so digitos>]
+  malote ouvir      --inquilino <id> --conta <nome> --configuracao <apelido> [--numero <so digitos>]
   malote ouvinte estado --conta <nome> [--json]
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
   malote ouvinte reprocessar-descartados --inquilino <id> --conta <nome> --configuracao <apelido>   (recusa com o ouvinte no ar)
@@ -422,10 +422,13 @@ Titular (nao exige chave enquanto nao houver rede):
   malote pessoa remover-nomes-invalidos --inquilino <id> [--com-efeito --confirmo]
                                     (remove Atribuição que repete o próprio endereço ou
                                      duplica outra por marca invisível; ensaio por padrão)
+  malote pessoa promover-identificadores-nomeados --inquilino <id> [--limite <n>] [--com-efeito --confirmo]
+                                    (promove a Pessoa o Identificador sem Pessoa que já tem
+                                     nome utilizável; ensaio por padrão)
   malote identidade resolver-enderecos --inquilino <id> [--com-efeito --confirmo] [--json]
-  malote operacao listar   --inquilino <id> [--chave <valor>]
-  malote operacao ver      <id> --inquilino <id> [--chave <valor>]
-  malote operacao desfazer <id> --inquilino <id> [--com-efeito --confirmo]
+  malote operacao listar   --inquilino <id> --chave <valor>
+  malote operacao ver      <id> --inquilino <id> --chave <valor>
+  malote operacao desfazer <id> --inquilino <id> --chave <valor> [--com-efeito --confirmo]
   malote pessoa precedencia --inquilino <id> [--origem <nome> --peso <n>] [--catalogo-preferido <apelido>]
 
 A primeira Chave de Operador dispensa credencial: a raiz de confianca e o
