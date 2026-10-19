@@ -123,9 +123,19 @@ A reação é medir de novo — re-rodar a espiga contra conta real — **antes*
 Subir de versão como primeira resposta troca um defeito conhecido por um conjunto de mudanças
 não medidas.
 
+## Revisão de 2026-10-19 — o escopo do portão cresceu
+
+O portão (`src/adaptadores/whatsapp/conexao.ts`) não faz mais só a recepção ao vivo. Hoje ele também **envia**
+(`sendMessage`, o Envio), **baixa mídia** (`downloadMediaMessage` e a renovação do endereço, ao vivo e no retry
+de mídia) e abre o envelope de mídia associada e a mensagem de modelo para entregar à biblioteca só o que ela
+entende. A regra de fronteira não mudou — só `conexao.ts` alcança a biblioteca, por import dinâmico — e o risco
+de bloqueio de conta, declarado acima, cobre as três atividades. Duas frases desta ADR perderam a premissa: "o
+produto não envia" (na análise da `sharp`, que a biblioteca usa para gerar miniatura **ao enviar** mídia) e o
+escopo "apenas a recepção ao vivo", abaixo.
+
 ## Escopo
 
-Vale para este repositório, e dentro dele apenas para o adaptador de recepção ao vivo. Não vincula os adaptadores de importação nem o núcleo. Adaptador futuro de outra plataforma decide o próprio caminho, e um caso não serve de precedente para o outro.
+Vale para este repositório, e dentro dele apenas para o adaptador do WhatsApp ao vivo (recepção, Envio e download de mídia). Não vincula os adaptadores de importação nem o núcleo. Adaptador futuro de outra plataforma decide o próprio caminho, e um caso não serve de precedente para o outro.
 
 ## Alternativas Consideradas
 
