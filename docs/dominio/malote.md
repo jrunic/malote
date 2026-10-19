@@ -84,7 +84,7 @@ Duas regras atravessam o modelo inteiro:
 **Entidades / Objetos de Valor**
 
 - **Chave de Acesso** (raiz) — credencial que identifica e autoriza acesso por rede.
-- **Escopo** (objeto de valor) — o que a Chave pode fazer.
+- **Escopo** (objeto de valor, *modelado e não construído*) — o que a Chave pode fazer. Hoje a Chave não guarda escopo: toda Chave de Acesso lê e pode pedir as duas escritas de rede, `solicitar-transcricao` e `solicitar-envio`.
 
 **Invariantes**
 
@@ -106,7 +106,7 @@ Duas regras atravessam o modelo inteiro:
 - **Referência Externa** (objeto de valor) — o que amarra a Conversa ao que ela é lá fora. Em Conversa **coletiva** é o par `(Fonte, identificador na origem)`; em Conversa **direta** é a tripla `(Fonte, Configuração de Adaptador, identificador na origem)`.
 - **Participação** (entidade) — a presença de uma Pessoa na Conversa, com início e fim **quando a Fonte os informa**, e com o instante em que o malote a observou.
 - **Metadados de Coletiva** (objeto de valor, opcional) — assunto, descrição, imagem, quem alterou e quando. Só existe quando a Conversa é coletiva. Registrar de novo uma coletiva já existente atualiza cada campo que a Fonte entrega; valor vazio não apaga o gravado, e retrato com instante anterior ao gravado é ignorado. A **descrição só se anula por um pedido explícito de remoção** (o evento em que a Fonte declara que ela foi removida), com o autor e o instante dele; o instante guardado é um só para a linha, não um por campo. `malote detalhar` devolve a Conversa por inteiro com estes campos; o instante é o da linha, um por Conversa, e a direta não leva o objeto.
-- **Marca do Titular** (objeto de valor, opcional) — uma afirmação do **dono da conta** sobre um objeto do Acervo, com tipo, procedência e data. Pendura em **Mensagem ou em Conversa**, exatamente um dos dois, pelo mesmo critério da Atribuição de Nome. Tipos: `favorito` em Mensagem; `fixada` e `arquivada` em Conversa.
+- **Marca do Titular** (objeto de valor, opcional) — uma afirmação do **dono da conta** sobre um objeto do Acervo, com tipo, procedência e data. Pendura em **Mensagem ou em Conversa**, exatamente um dos dois, pelo mesmo critério da Atribuição de Nome. Tipos: `favorito` em Mensagem; `fixada` em Conversa (`arquivada` está em *Modelado, não construído*).
 
 **Invariantes**
 
@@ -131,6 +131,11 @@ Duas regras atravessam o modelo inteiro:
 - **A Marca só é afirmável a partir de material ou evento de Natureza completa.** Estado que chega num retrato completo autoriza dizer *não está marcada*; estado que chega numa atualização parcial só autoriza dizer *esta mudou*. É o mesmo invariante que já separa retrato de transição na Participação, e a mesma Natureza que o Adaptador declara — ler uma atualização de um item como se fosse o retrato desmarcaria tudo o que não veio nela, em silêncio.
 
   Medido em 12/09/2026 no ouvinte em produção: dos **8.409** eventos de atualização de Conversa em nove dias, **8.394 trouxeram um item só** e **um** trouxe **2.674 com o estado de fixação de cada uma** — e só este último autoriza concluir ausência.
+
+- Metadados de Coletiva só existem em Conversa coletiva; Conversa direta não carrega campo de coletiva nulo.
+- Conversa nunca é apagada por política de espaço.
+
+**Ciclo de vida** — nasce na primeira importação ou no primeiro evento recebido pelo Adaptador; permanece para sempre. Pode ficar inativa (sem Mensagem nova), nunca removida.
 
 ### Transição de Participação
 
@@ -170,11 +175,6 @@ Duas regras atravessam o modelo inteiro:
 - **Não há fonte retroativa.** O material exportado não a traz; só existe etiqueta observada depois de a recepção contínua entrar. Sem evento, "nunca observada" se distingue de "sem etiqueta" (a última etiqueta foi removida).
 
 **Ciclo de vida** — nasce da recepção contínua. Nunca é editada nem removida.
-- Metadados de Coletiva só existem em Conversa coletiva; Conversa direta não carrega campo de coletiva nulo.
-- Conversa nunca é apagada por política de espaço.
-
-**Ciclo de vida** — nasce na primeira importação ou no primeiro evento recebido pelo Adaptador; permanece para sempre. Pode ficar inativa (sem Mensagem nova), nunca removida.
-
 ### Mensagem
 
 **Entidades / Objetos de Valor**
@@ -345,11 +345,11 @@ Duas regras atravessam o modelo inteiro:
 - Todo Envio pertence a exatamente um Inquilino e a exatamente uma Configuração de Adaptador — é a Configuração que tem o vínculo vivo capaz de falar pela conta; Envio não existe solto do Inquilino, como nenhuma entidade do núcleo.
 - **Envio nunca abre conexão própria.** Só é processado pelo processo que já mantém a conexão viva daquela Configuração — o mesmo invariante que já vale para o Derrame: recurso com estado exclusivo tem um dono por vez. Dois processos tentando falar pela mesma Configuração ao mesmo tempo é a classe de incidente que corrompeu sessão em 07/09 e 10/09 (#858), aplicada ao envio em vez da recepção.
 - **A Mensagem resultante de um Envio concluído nasce pelas MESMAS portas que a recepção usa** — não há forma nova no núcleo para "Mensagem que o malote mandou". Ela converge com a Direção que já existe: `enviada`.
-- Estado do Envio: `pendente` → `enviado` (aponta para a Mensagem resultante) ou `falhou` (com o motivo); falho é reenfileirável, nunca automático — mesmo padrão de Transcrição.
+- Estado do Envio: `pendente` → `enviado` (a Mensagem resultante chega pela recepção e se correlaciona pelo Identificador de Envio; o Envio não guarda ponteiro para ela) ou `falhou` (com o motivo); falho é reenfileirável, nunca automático — mesmo padrão de Transcrição.
 - **A garantia é ao menos uma vez, por decisão do Titular (03/10/2026).** Um Envio cujo resultado ficou indeterminado (por exemplo, o processo caiu entre mandar e confirmar) permanece `pendente` e é retentado — nunca descartado em silêncio. O risco de duplicar uma mensagem para um humano é aceito e nomeado, não eliminado por desenho: é o inverso da tolerância a duplicata que já existe na recepção, onde a unicidade da Referência Externa absorve repetição sem custo.
 - Envio nunca é apagado — concluído ou falhado, permanece como peça de auditoria de que o malote falou pela conta, por qual Configuração, em que instante.
 
-**Ciclo de vida** — nasce do pedido (humano ou agente, local ou por rede); fica `pendente` até o processo com a conexão viva da Configuração o processar; termina em `enviado` (com a Mensagem) ou `falhou` (reenfileirável).
+**Ciclo de vida** — nasce do pedido (humano ou agente, local ou por rede); fica `pendente` até o processo com a conexão viva da Configuração o processar; termina em `enviado` (a Mensagem chega pela recepção) ou `falhou` (reenfileirável).
 
 ### Adaptador
 
@@ -393,13 +393,14 @@ Duas regras atravessam o modelo inteiro:
 
 **Entidades / Objetos de Valor**
 
-- **Operação** (raiz) — identificador próprio, natureza, instante, classe de reversibilidade
+- **Operação** (raiz) — identificador próprio, natureza, instante, Ator (quem a ordenou: `operador:`, `acesso:`, `servico:` ou `local`; `indeterminado` é defeito e `NULL` só nas anteriores ao ciclo 11), classe de reversibilidade (`por-efeito`, `por-delegacao` ou `irreversivel`) e, quando é um desfazer, a Operação desfeita
 - **Linha de Efeito** — tabela, chave, e ou o par anterior/posterior de um campo, ou a referência a uma trilha existente
 
 **Invariantes**
 
 - Um comando de decisão grava exatamente uma Operação, ainda que escreva várias linhas.
-- Ingestão grava uma Operação por Material, nunca uma por Mensagem.
+- A importação grava uma Operação por Material, nunca uma por Mensagem. A recepção ao vivo é a exceção declarada: uma Operação `irreversivel` por evento, com o efeito desligado (`receber-ao-vivo`).
+- **Reversibilidade é declaração, não fato:** `por-efeito` só se cumpre se o `desfazer` tem a porta de restauração da tabela (restrição do repositório sobre `desfazerLinha`). A Operação que declara e não tem a porta volta recusada, linha a linha, com a causa.
 - Uma Linha de Efeito tem exatamente uma natureza: diferença de valor **ou** referência.
 - Onde já existe trilha semântica — mesclagem, Material —, a Operação a referencia e não copia o conteúdo dela.
 - Desfazer nunca apaga: acrescenta uma Operação que aponta para a desfeita.
@@ -500,6 +501,7 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Saída:** um efeito contínuo — o instante do último evento recebido, gravado onde quem está **de fora** o lê sem abrir o Acervo; e, por evento, o que foi gravado, o que foi recusado com a causa, e o que foi ignorado contado por tipo
 - **Regras:** o que chega é gravado pelas **mesmas** portas que a importação usa, sem forma nova no núcleo — é isso que faz os dois caminhos convergirem sem código de convergência. Endereço é resolvido para a forma canônica **antes** de virar Referência Externa. Cada evento é gravado por inteiro ou não é gravado. O que a Fonte entrega sem conteúdo decifrável **não** vira Mensagem: gravar o envelope vazio travaria o identificador contra quem souber preenchê-lo depois. Reprocessar não duplica: quem responde *isto já existe* é o Acervo, e o receptor não guarda memória própria. Transição de Participação segue a mesma regra de sempre — só existe quando a Fonte declara o evento. O instante da Mensagem é o que o aparelho de quem a enviou declarou: a recepção tolera até 5 s à frente do relógio local, grava o instante **declarado** (nunca o do relógio) e conta as Mensagens que só entraram por causa da janela; além dela a Mensagem é recusada e guardada com o evento cru, e `ouvinte reprocessar-descartados` a regrava quando o relógio passa o instante
 - **A edição de Mensagem entra por ramo próprio, antes do descarte por tipo.** Chega cifrada (`secretEncryptedMessage`) ou aberta (`protocolMessage` de edição) e vira uma Edição ligada à Mensagem, sem Mensagem nova. A forma cifrada precisa do decodificador do texto claro, que só o portão da biblioteca fornece; sem ele, ou por qualquer causa que impeça a leitura, o evento segue descartado, contado por causa e guardado cru.
+- **O que não vira Mensagem é contado e guardado cru, e parte dele vira Mensagem.** O descarte é contado por dia e por tipo; o que não é ruído conhecido fica cru num arquivo fora do Acervo (modo 0600, com teto), e `reprocessar-descartados` o recupera depois de uma correção de classificação. A mensagem interativa e a de modelo de conta comercial viram Mensagem quando têm corpo de texto (o texto é só o corpo; o resto fica no Conteúdo Bruto), e a imagem do cabeçalho do modelo vira **um** Anexo `nunca-obtido` por Mensagem; sem corpo, seguem descartadas e guardadas, sem Anexo. O envelope de mídia associada vira Mensagem própria com Anexo de vídeo. O pai de álbum e cinco rótulos de protocolo só são contados. O instante da Mensagem ao vivo é o declarado pelo aparelho, com tolerância de 5 s de relógio adiantado só aqui (a importação a recusa).
 - **Não-funcionais:** o produto continua completo **sem** esta operação; importar e consultar não dependem dela. A recepção é **ingestão, não decisão**: grava uma Operação por evento, com o efeito desligado. Queda de conexão é rotina e não é sinal de parada — a religação é espaçada, com teto, e o sinal de que o receptor morreu é o instante do último evento parar de avançar. Cobertura não é promessa: o que a plataforma não reentrega é **lacuna declarada**, preenchível por importação de material posterior
 - **Quando o Acervo está ocupado, o evento vai para o Derrame e volta depois.** Disputa de escrita **não** é recusa: recusa é sobre dado que o modelo não aceita, e banco ocupado é infraestrutura. O evento é escrito cru, por lote, num arquivo fora do Acervo, e o receptor **continua vivo** — matá-lo perderia tudo o que viesse depois. Na primeira escrita bem-sucedida seguinte, o receptor **drena** parte do Derrame; o sinal de que a disputa passou é o sucesso, e não o relógio. Grava-se no Acervo **antes** de tirar do Derrame: invertido, morrer no meio apaga o que nunca entrou, e nesta ordem o pior caso é repetição, que a unicidade da Referência Externa descarta. Lote que falha por algo que **não** é disputa sai para um arquivo à parte, com a causa junto — sem isso ele derrubaria o receptor a cada drenagem, para sempre
 - **O Derrame é visível sem abrir o Acervo**, pela mesma operação que reporta o instante do último evento. E derramar **não** é ficar em silêncio: o instante continua avançando, porque o receptor está vivo e recebendo
@@ -552,6 +554,7 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Entrada:** Inquilino, mais filtros por Pessoa, remetente (o valor de um Identificador), Fonte, período, texto, tipo de Mensagem, tipo e presença de Anexo e Marca do Titular
 - **Saída:** Conversas, Mensagens ou os Anexos de uma Conversa, em formato legível por humano ou estruturado para agente
 - **Regras:** consulta atravessa Fontes e Configurações de Adaptador por padrão — duas contas de WhatsApp do mesmo Inquilino aparecem juntas, sem flag. **Nunca atravessa Inquilino.** Restringir a uma Fonte é filtro, não modo. Filtro por Pessoa resolve todos os Identificadores daquela Pessoa, em todas as Fontes. Resultado indica a Presença do Anexo, nunca omite a Mensagem por o arquivo não estar em disco. A Conversa direta traz o nome do Identificador do outro lado, e o texto de busca casa também esse nome. O filtro por remetente parte do Identificador, e não da Pessoa, e alcança a forma canônica e as alternativas que a correspondência de endereço conhece; remetente sem Pessoa se filtra, e valor desconhecido é resposta vazia. A listagem de Anexos traz o Descritor e a Presença de cada um, em ordem cronológica, e nunca omite o Anexo cujo arquivo não está em disco.
+- **Paginação:** a listagem de Conversas vem em páginas de 500, ordenada por criação com desempate por id, e a página seguinte vai por um Cursor opaco; `detalhar` devolve uma Conversa por inteiro (id, natureza, nome, metadados de coletiva, contagem de Mensagens, primeira e última).
 - **Não-funcionais:** só leitura. Nenhum caminho de consulta escreve no Acervo. Quando invocada por rede, o Inquilino vem da Chave de Acesso, nunca de parâmetro do chamador.
 
 ### resolver-identidade
@@ -577,6 +580,22 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Saída:** um Contato Compartilhado novo por cartão que o Conteúdo Bruto de uma Mensagem ainda sem cartão gravado traz; o relatório conta as Mensagens que ganhariam cartão, os cartões criados, os recusados (ilegíveis ou sem nome) e de onde veio o nome de cada um. Nunca traz nome, telefone nem e-mail
 - **Regras:** lê o Anexo `contact` do backup e o `contactMessage` ou o cartão múltiplo do **topo** do evento ao vivo, e nunca a citação de outra Mensagem. A Mensagem que está nos dois lados sai uma vez, pelo backup. Só alcança Mensagem sem cartão gravado: não substitui nem apaga cartão. Nunca altera o Conteúdo Bruto. Nunca cria Pessoa nem Identificador
 - **Não-funcionais:** idempotente (a segunda passada não acha candidata). Com efeito, grava uma única Operação, com um efeito por cartão criado, que `desfazer` remove (os valores saem em cascata e a linha da busca pelo gatilho); sem nada a gravar, não abre Operação. O ensaio lê o bruto das Mensagens do Acervo inteiro: em Acervo grande, medir o tempo do ensaio antes de gravar.
+
+### extrair-imagem-de-modelo
+
+- **Ator:** humano
+- **Entrada:** Inquilino
+- **Saída:** contagens (Mensagens de modelo, com imagem, com Anexo, a criar); com efeito, o Anexo `nunca-obtido` da imagem do cabeçalho de cada Mensagem de modelo de conta comercial já gravada
+- **Regras:** ensaio por padrão; com efeito exige confirmação. Reconhece só a forma medida e não duplica. Uma Operação por lote, que `desfazer-operacao` reverte enquanto o Anexo não foi baixado (o já baixado é recusado). Para baixar, `reprocessar-midia`.
+- **Não-funcionais:** idempotente; o relatório só traz contagens.
+
+### reprocessar-midia
+
+- **Ator:** humano
+- **Entrada:** Inquilino e um **recorte** (faixa de datas em UTC, tipo, uma Mensagem, ou limite de tentativas), ou a escolha explícita de tentar tudo
+- **Saída:** quantos Anexos recebidos ao vivo foram baixados, quantos falharam e quantos elegíveis ficaram de fora pelo limite
+- **Regras:** tenta de novo os Anexos `nunca-obtido` que vieram da recepção ao vivo, da Mensagem mais antiga para a mais nova, sem filtrar pela causa da falha anterior. **Sem recorte e sem a escolha explícita recusa**, dizendo quantos tentaria. O ensaio só conta e dispensa Destino de Mídia. O limite conta tentativas, não sucessos. O endereço de download vence em dias e o prazo depende do tipo; passado o prazo, não há o que recuperar.
+- **Não-funcionais:** não grava Operação e não se desfaz: o arquivo baixado fica no Destino de Mídia.
 
 ### vincular-identificador
 
@@ -653,7 +672,7 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 ### definir-politica-de-retencao
 
 - **Ator:** humano
-- **Entrada:** Inquilino, mais critérios de retenção (idade, tipo de Anexo, natureza da Conversa, teto de espaço)
+- **Entrada:** Inquilino, mais critérios de retenção (idade, tipo de Anexo e tamanho de **cada** Anexo, combinados por E; não há critério por natureza da Conversa nem teto de espaço total)
 - **Saída:** política gravada, mais a projeção do que ela faria se aplicada agora
 - **Regras:** definir política nunca aplica política. A projeção é obrigatória e mostra quantos Anexos e quantos bytes seriam afetados, por critério.
 - **Não-funcionais:** Padrão.
@@ -709,6 +728,135 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Regras:** **só roda quando a Natureza do Material daquela Configuração é completa.** Marca; não remove Cartão, não desfaz vínculo, não apaga Atribuição de Nome, não mexe em Pessoa. O que foi marcado continua legível e volta a ficar presente se reaparecer num material seguinte.
 - **Não-funcionais:** Padrão
 
+### reprocessar-derrame
+
+- **Ator:** humano ou agente, por comando explícito
+- **Entrada:** Inquilino, conta, e a Configuração de Adaptador sob a qual gravar
+- **Saída:** quantos lotes entraram e quantas Mensagens foram gravadas; e o Derrame esvaziado, ou intacto
+- **Regras:** só descarta o arquivo depois de reprocessar **tudo** — descartar parcial perderia exatamente o que o Derrame existe para não perder. A Configuração é **exigida e nunca criada**: o evento derramado pertence à conta que o recebeu. **Recusa enquanto houver receptor no ar**, porque os dois escrevem no mesmo arquivo e o que for derramado entre a leitura e o descarte some sem ter sido gravado — recurso com estado exclusivo tem um dono por vez
+- **Não-funcionais:** existe apesar da drenagem automática, e não em vez dela: Derrame antigo, drenagem desligada ou dúvida do operador continuam pedindo o ato explícito
+
+### transcrever-anexo
+
+- **Ator:** o próprio produto, num worker de fundo dentro do processo servidor
+- **Entrada:** nenhuma — o worker consulta o Acervo por conta própria, periodicamente
+- **Saída:** a Transcrição gravada (concluída, com texto e motor/modelo) ou marcada falhou, com o motivo
+- **Regras:** só alcança Anexo de áudio, presente, elegível (sem linha em Transcrição, ou `pendente` órfã de execução anterior). Nunca migra o Acervo para alcançar um Inquilino — forma divergente é pulada e relatada. Sequencial: nunca duas transcrições ao mesmo tempo. Não é comando de decisão humana — não grava Operação na trilha, mesma classe de `receber-ao-vivo`, que também grava por evento automático sem abrir Operação por chamada.
+- **Não-funcionais:** o produto continua completo sem esta operação; o Anexo de áudio permanece consultável (só sem Transcrição) enquanto ela não roda.
+
+### reprocessar-transcricao
+
+- **Ator:** humano ou agente, por comando explícito
+- **Entrada:** Inquilino
+- **Saída:** quantas Transcrições falhas voltaram a `pendente`
+- **Regras:** mesmo espírito de `reprocessar-derrame` — o estado de falha é terminal até este ato; nunca retentado sozinho. É comando de decisão: grava uma Operação, com uma Linha de Efeito por Anexo reenfileirado.
+- **Não-funcionais:** idempotente — sem falha pendente, devolve zero e não grava Operação.
+
+### extrair-duracao-de-anexo
+
+- **Ator:** humano ou agente, por comando explícito
+- **Entrada:** Inquilino
+- **Saída:** quantos Anexos de áudio ganharam duração, e quantos têm Conteúdo Bruto preservado sem a chave de duração conhecida
+- **Regras:** extrai do Conteúdo Bruto já preservado (nunca abre o arquivo, nunca invoca ferramenta externa de mídia) — Fonte-agnóstica na seleção, Fonte-específica só na leitura da chave. Idempotente: só alcança Anexo sem duração ainda gravada. Comando de decisão: grava uma Operação, com uma Linha de Efeito por Anexo.
+- **Não-funcionais:** cobre todo o Acervo, não só o que está na fila de Transcrição — duração é atributo do Descritor, não da Transcrição.
+
+### incluir-estoque-em-transcricao
+
+- **Ator:** humano ou agente, por comando explícito, só local (nunca por rede)
+- **Entrada:** Inquilino, limite de quantos Anexos promover nesta chamada
+- **Saída:** quantos Anexos `fora-de-escopo` foram promovidos para `pendente`
+- **Regras:** só promove Anexo que já bate a mesma condição de elegibilidade de `transcrever-anexo` (presente, com caminho) — nunca só o estado. Nunca promove mais que o limite pedido. Comando de decisão: grava uma Operação, com uma Linha de Efeito por Anexo promovido.
+- **Não-funcionais:** idempotente — chamar duas vezes sobre o mesmo recorte do estoque não reprocessa quem já saiu de `fora-de-escopo`.
+
+### solicitar-transcricao
+
+- **Ator:** humano ou agente, local ou por rede (uma das duas operações de escrita que a rede expõe, ao lado de `solicitar-envio`)
+- **Entrada:** identificador do Anexo
+- **Saída:** aceito (o Anexo passa a ser o próximo elegível) ou recusado, com o motivo
+- **Regras:** funciona sobre Anexo nunca visto, `fora-de-escopo` ou `falhou`; recusa sobre `concluída` (sem mecanismo de forçar). Mesma condição de elegibilidade de `transcrever-anexo` — não contorna nada que a fila normal exija. Prioridade: quem foi solicitado vence quem não foi; entre dois solicitados, vence quem pediu primeiro. Comando de decisão: grava uma Operação, com o Anexo como Linha de Efeito e o Ator de quem pediu (local ou `acesso:<chaveId>` quando por rede).
+- **Não-funcionais:** a rota de rede resolve o Inquilino exclusivamente pela Chave de Acesso, nunca por parâmetro; pedir Anexo de outro Inquilino é indistinguível de pedir Anexo inexistente.
+
+### listar-operacoes
+- **Ator:** humano ou agente
+- **Entrada:** Inquilino
+- **Saída:** as Operações do Inquilino, da mais recente à mais antiga, com quantas linhas cada uma tem e se já foi desfeita
+- **Regras:** lê as duas Trilhas em modo somente-leitura e apresenta uma linha do tempo só; Operação de instalação, que não é de Inquilino nenhum, não aparece aqui
+- **Não-funcionais:** Padrão
+
+### ver-operacao
+- **Ator:** humano ou agente
+- **Entrada:** identificador da Operação
+- **Saída:** o efeito linha a linha, com valor anterior e posterior legíveis
+- **Regras:** somente leitura
+- **Não-funcionais:** Padrão
+
+### desfazer-operacao
+- **Ator:** humano ou agente
+- **Entrada:** identificador da Operação
+- **Saída:** a Operação nova que a desfez, quantas linhas reverteram e quais recusaram, com a causa de cada uma
+- **Regras:** ensaio sem efeito é o padrão; reverte pelas portas do núcleo, nunca por escrita direta; recusa com a causa nomeada quando a Operação já foi desfeita, é irreversível, ou é decisão de configuração — que se desfaz redefinindo; item a item, e uma recusa não aborta as demais. Só reverte o que tem porta de restauração: a Linha de Efeito sem ela volta recusada ("não tem porta de restauração"), e Operação `por-efeito` nessa situação é defeito conhecido
+- **Não-funcionais:** Padrão
+
+### definir-precedencia-de-nome
+- **Ator:** humano
+- **Entrada:** Inquilino, origem, peso
+- **Saída:** a precedência gravada
+- **Regras:** vale por Inquilino e muda o nome exibido sem escrever no Acervo
+- **Não-funcionais:** Padrão
+
+### declarar-catalogo-preferido
+- **Ator:** humano
+- **Entrada:** Inquilino, a Configuração de catálogo preferida
+- **Saída:** a preferência gravada
+- **Regras:** é o **segundo nível** da precedência, e só desempata **dentro da mesma
+  origem** — nunca atravessa Fontes. Declarar um catálogo preferido não pode fazer nome de
+  catálogo perder para nome de plataforma. Sem declaração, catálogos empatados desempatam por
+  recência, que é o comportamento de sempre. Vale por Inquilino e muda o nome exibido sem
+  escrever no Acervo, como a precedência por origem.
+- **Não-funcionais:** Padrão
+
+### definir-intervalo-esperado
+- **Ator:** humano
+- **Entrada:** Configuração de Adaptador, dias
+- **Saída:** o intervalo gravado
+- **Regras:** é o que torna possível dizer que um Material está atrasado
+- **Não-funcionais:** Padrão
+
+### resolver-configuracao
+- **Ator:** humano, via `importar`, `entrada declarar` ou `configuracao criar`
+- **Entrada:** Inquilino, Fonte, apelido
+- **Saída:** a Configuração de Adaptador correspondente — criada se não existia, devolvida se já existia
+- **Regras:** idempotente por `(Inquilino, Fonte, apelido)`. Não cria conta nem grava nada além da própria Configuração; declarar a conta é operação separada (`definir-conta`).
+- **Não-funcionais:** Padrão
+
+### definir-conta
+- **Ator:** humano, via `importar` ou `configuracao criar`, quando `--conta` é informado
+- **Entrada:** a Configuração de Adaptador (por id), o nome da conta na Fonte
+- **Saída:** a Configuração atualizada com a conta declarada
+- **Regras:** opcional — uma Configuração pode existir sem conta declarada (`configuracao listar` mostra `(nao declarada)`). Sobrescreve o valor anterior, sem histórico.
+- **Não-funcionais:** Padrão
+
+### declarar-telefone-da-conta
+- **Ator:** humano, via `configuracao criar --telefone` ou `configuracao definir-telefone`; ou o serviço do ouvinte, quando `ouvir --numero` informa o telefone de uma Configuração que ainda não o tem
+- **Entrada:** a Configuração de Adaptador (por id), o telefone (só dígitos, com código do país, de 10 a 15)
+- **Saída:** a Configuração com o telefone declarado
+- **Regras:** idempotente (o mesmo telefone não escreve nem abre Operação). Numa Configuração cujo telefone o vínculo **já conferiu**, trocar por outro é recusado: conta nova é Configuração nova. Duas Configurações de WhatsApp do mesmo Inquilino não podem ter o mesmo telefone, contando o mesmo celular com e sem o nono dígito.
+- **Não-funcionais:** Padrão
+
+### conferir-conta-do-vinculo
+- **Ator:** serviço do ouvinte
+- **Entrada:** a Configuração de Adaptador e a identidade que o vínculo mostra
+- **Saída:** os Endereços da Conta gravados (endereço do telefone, endereço opaco, instante da conferência)
+- **Regras:** o vínculo **confere** a Configuração: se o telefone declarado e o do vínculo não são o mesmo (com a equivalência do nono dígito), o ouvinte não sobe, nada é gravado e a saída é o código 2. Uma Configuração sem telefone **aprende** o do vínculo. O telefone declarado nunca é sobrescrito pelo do vínculo; o endereço ausente nunca apaga o gravado. Idempotente.
+- **Não-funcionais:** Padrão
+
+### declarar-endereco-da-conta
+- **Ator:** serviço do ouvinte
+- **Entrada:** o endereço canônico da conta e, quando a Fonte tem, o alternativo
+- **Saída:** o Identificador do endereço canônico no Acervo e a correspondência alternativo para canônico
+- **Regras:** só o que muda abre Operação (a segunda conexão não escreve nada). Conflito de correspondência é relatado e a primeira permanece. O Identificador é registrado **sem** Configuração: a coluna de Configuração de um Identificador é a do catálogo que sustenta o vínculo com a Pessoa, e a relação entre a Configuração e o endereço da conta vive no Registro. Não dá autor à Mensagem enviada nem cria Participação da própria conta.
+- **Não-funcionais:** Padrão
+
 ## Relações com outros contextos
 
 Nenhuma. Contexto único.
@@ -733,7 +881,7 @@ Nenhuma. Contexto único.
 - **Deduplicação de Anexo por impressão de conteúdo.** O Descritor já prevê o campo. A economia real não foi medida.
 - **Camadas de armazenamento** (Acervo frio em disco externo ou remoto). O invariante de que o núcleo decide a localização é o que torna isso possível sem tocar Adaptador.
 - **Fontes além das três do v1** — LinkedIn, e-mail. Nenhuma exige mudança de agregado; cada uma é um Adaptador.
-- **Escopo de Chave de Acesso além de leitura.** O v1 emite Chave só-leitura; escrita por rede não está fatiada.
+- **Escopo de Chave de Acesso.** Toda Chave de Acesso lê e pode pedir as duas escritas de rede (`solicitar-transcricao` e `solicitar-envio`); distinguir uma Chave só-leitura é o que o Escopo faria, e não está construído.
 - **Migração de arquivos entre Destinos de Mídia.** Configurar Destino não move arquivo; mover é operação à parte.
 - **Marca do Titular do tipo `arquivada`.** Chega no mesmo retrato que a fixação — foi medida na chave, não no valor —, e nenhuma consulta a pede hoje. O tipo já está no modelo para que aceitá-la depois não mexa em agregado.
 - **Silenciar Conversa.** Chave `muteEndTime` observada pela primeira vez em 13/09/2026, num
@@ -805,132 +953,3 @@ Consequências que o modelo assume por causa disso:
 - Toda emissão e toda revogação de Chave de Acesso é registrada de forma imutável.
 - **O Titular lista as Chaves de Acesso do seu Inquilino e o histórico de emissão delas.** Sem isso a auditoria só serve a quem já tem o poder, e a garantia vira nominal.
 - O produto não promete confidencialidade contra o Operador em nenhuma superfície — documentação, README e mensagem de erro incluídos. Prometer o que não se cumpre é pior que não oferecer.
-
-### reprocessar-derrame
-
-- **Ator:** humano ou agente, por comando explícito
-- **Entrada:** Inquilino, conta, e a Configuração de Adaptador sob a qual gravar
-- **Saída:** quantos lotes entraram e quantas Mensagens foram gravadas; e o Derrame esvaziado, ou intacto
-- **Regras:** só descarta o arquivo depois de reprocessar **tudo** — descartar parcial perderia exatamente o que o Derrame existe para não perder. A Configuração é **exigida e nunca criada**: o evento derramado pertence à conta que o recebeu. **Recusa enquanto houver receptor no ar**, porque os dois escrevem no mesmo arquivo e o que for derramado entre a leitura e o descarte some sem ter sido gravado — recurso com estado exclusivo tem um dono por vez
-- **Não-funcionais:** existe apesar da drenagem automática, e não em vez dela: Derrame antigo, drenagem desligada ou dúvida do operador continuam pedindo o ato explícito
-
-### transcrever-anexo
-
-- **Ator:** o próprio produto, num worker de fundo dentro do processo servidor
-- **Entrada:** nenhuma — o worker consulta o Acervo por conta própria, periodicamente
-- **Saída:** a Transcrição gravada (concluída, com texto e motor/modelo) ou marcada falhou, com o motivo
-- **Regras:** só alcança Anexo de áudio, presente, elegível (sem linha em Transcrição, ou `pendente` órfã de execução anterior). Nunca migra o Acervo para alcançar um Inquilino — forma divergente é pulada e relatada. Sequencial: nunca duas transcrições ao mesmo tempo. Não é comando de decisão humana — não grava Operação na trilha, mesma classe de `receber-ao-vivo`, que também grava por evento automático sem abrir Operação por chamada.
-- **Não-funcionais:** o produto continua completo sem esta operação; o Anexo de áudio permanece consultável (só sem Transcrição) enquanto ela não roda.
-
-### reprocessar-transcricao
-
-- **Ator:** humano ou agente, por comando explícito
-- **Entrada:** Inquilino
-- **Saída:** quantas Transcrições falhas voltaram a `pendente`
-- **Regras:** mesmo espírito de `reprocessar-derrame` — o estado de falha é terminal até este ato; nunca retentado sozinho. É comando de decisão: grava uma Operação, com uma Linha de Efeito por Anexo reenfileirado.
-- **Não-funcionais:** idempotente — sem falha pendente, devolve zero e não grava Operação.
-
-### extrair-duracao-de-anexo
-
-- **Ator:** humano ou agente, por comando explícito
-- **Entrada:** Inquilino
-- **Saída:** quantos Anexos de áudio ganharam duração, e quantos têm Conteúdo Bruto preservado sem a chave de duração conhecida
-- **Regras:** extrai do Conteúdo Bruto já preservado (nunca abre o arquivo, nunca invoca ferramenta externa de mídia) — Fonte-agnóstica na seleção, Fonte-específica só na leitura da chave. Idempotente: só alcança Anexo sem duração ainda gravada. Comando de decisão: grava uma Operação, com uma Linha de Efeito por Anexo.
-- **Não-funcionais:** cobre todo o Acervo, não só o que está na fila de Transcrição — duração é atributo do Descritor, não da Transcrição.
-
-### incluir-estoque-em-transcricao
-
-- **Ator:** humano ou agente, por comando explícito, só local (nunca por rede)
-- **Entrada:** Inquilino, limite de quantos Anexos promover nesta chamada
-- **Saída:** quantos Anexos `fora-de-escopo` foram promovidos para `pendente`
-- **Regras:** só promove Anexo que já bate a mesma condição de elegibilidade de `transcrever-anexo` (presente, com caminho) — nunca só o estado. Nunca promove mais que o limite pedido. Comando de decisão: grava uma Operação, com uma Linha de Efeito por Anexo promovido.
-- **Não-funcionais:** idempotente — chamar duas vezes sobre o mesmo recorte do estoque não reprocessa quem já saiu de `fora-de-escopo`.
-
-### solicitar-transcricao
-
-- **Ator:** humano ou agente, local ou por rede (única operação de escrita que a rede expõe)
-- **Entrada:** identificador do Anexo
-- **Saída:** aceito (o Anexo passa a ser o próximo elegível) ou recusado, com o motivo
-- **Regras:** funciona sobre Anexo nunca visto, `fora-de-escopo` ou `falhou`; recusa sobre `concluída` (sem mecanismo de forçar). Mesma condição de elegibilidade de `transcrever-anexo` — não contorna nada que a fila normal exija. Prioridade: quem foi solicitado vence quem não foi; entre dois solicitados, vence quem pediu primeiro. Comando de decisão: grava uma Operação, com o Anexo como Linha de Efeito e o Ator de quem pediu (local ou `acesso:<chaveId>` quando por rede).
-- **Não-funcionais:** a rota de rede resolve o Inquilino exclusivamente pela Chave de Acesso, nunca por parâmetro; pedir Anexo de outro Inquilino é indistinguível de pedir Anexo inexistente.
-
-### listar-operacoes
-- **Ator:** humano ou agente
-- **Entrada:** Inquilino
-- **Saída:** as Operações do Inquilino, da mais recente à mais antiga, com quantas linhas cada uma tem e se já foi desfeita
-- **Regras:** lê as duas Trilhas em modo somente-leitura e apresenta uma linha do tempo só; Operação de instalação, que não é de Inquilino nenhum, não aparece aqui
-- **Não-funcionais:** Padrão
-
-### ver-operacao
-- **Ator:** humano ou agente
-- **Entrada:** identificador da Operação
-- **Saída:** o efeito linha a linha, com valor anterior e posterior legíveis
-- **Regras:** somente leitura
-- **Não-funcionais:** Padrão
-
-### desfazer-operacao
-- **Ator:** humano ou agente
-- **Entrada:** identificador da Operação
-- **Saída:** a Operação nova que a desfez, quantas linhas reverteram e quais recusaram, com a causa de cada uma
-- **Regras:** ensaio sem efeito é o padrão; reverte pelas portas do núcleo, nunca por escrita direta; recusa com a causa nomeada quando a Operação já foi desfeita, é irreversível, ou é decisão de configuração — que se desfaz redefinindo; item a item, e uma recusa não aborta as demais
-- **Não-funcionais:** Padrão
-
-### definir-precedencia-de-nome
-- **Ator:** humano
-- **Entrada:** Inquilino, origem, peso
-- **Saída:** a precedência gravada
-- **Regras:** vale por Inquilino e muda o nome exibido sem escrever no Acervo
-- **Não-funcionais:** Padrão
-
-### declarar-catalogo-preferido
-- **Ator:** humano
-- **Entrada:** Inquilino, a Configuração de catálogo preferida
-- **Saída:** a preferência gravada
-- **Regras:** é o **segundo nível** da precedência, e só desempata **dentro da mesma
-  origem** — nunca atravessa Fontes. Declarar um catálogo preferido não pode fazer nome de
-  catálogo perder para nome de plataforma. Sem declaração, catálogos empatados desempatam por
-  recência, que é o comportamento de sempre. Vale por Inquilino e muda o nome exibido sem
-  escrever no Acervo, como a precedência por origem.
-- **Não-funcionais:** Padrão
-
-### definir-intervalo-esperado
-- **Ator:** humano
-- **Entrada:** Configuração de Adaptador, dias
-- **Saída:** o intervalo gravado
-- **Regras:** é o que torna possível dizer que um Material está atrasado
-- **Não-funcionais:** Padrão
-
-### resolver-configuracao
-- **Ator:** humano, via `importar`, `entrada declarar` ou `configuracao criar`
-- **Entrada:** Inquilino, Fonte, apelido
-- **Saída:** a Configuração de Adaptador correspondente — criada se não existia, devolvida se já existia
-- **Regras:** idempotente por `(Inquilino, Fonte, apelido)`. Não cria conta nem grava nada além da própria Configuração; declarar a conta é operação separada (`definir-conta`).
-- **Não-funcionais:** Padrão
-
-### definir-conta
-- **Ator:** humano, via `importar` ou `configuracao criar`, quando `--conta` é informado
-- **Entrada:** a Configuração de Adaptador (por id), o nome da conta na Fonte
-- **Saída:** a Configuração atualizada com a conta declarada
-- **Regras:** opcional — uma Configuração pode existir sem conta declarada (`configuracao listar` mostra `(nao declarada)`). Sobrescreve o valor anterior, sem histórico.
-- **Não-funcionais:** Padrão
-
-### declarar-telefone-da-conta
-- **Ator:** humano, via `configuracao criar --telefone` ou `configuracao definir-telefone`; ou o serviço do ouvinte, quando `ouvir --numero` informa o telefone de uma Configuração que ainda não o tem
-- **Entrada:** a Configuração de Adaptador (por id), o telefone (só dígitos, com código do país, de 10 a 15)
-- **Saída:** a Configuração com o telefone declarado
-- **Regras:** idempotente (o mesmo telefone não escreve nem abre Operação). Numa Configuração cujo telefone o vínculo **já conferiu**, trocar por outro é recusado: conta nova é Configuração nova. Duas Configurações de WhatsApp do mesmo Inquilino não podem ter o mesmo telefone, contando o mesmo celular com e sem o nono dígito.
-- **Não-funcionais:** Padrão
-
-### conferir-conta-do-vinculo
-- **Ator:** serviço do ouvinte
-- **Entrada:** a Configuração de Adaptador e a identidade que o vínculo mostra
-- **Saída:** os Endereços da Conta gravados (endereço do telefone, endereço opaco, instante da conferência)
-- **Regras:** o vínculo **confere** a Configuração: se o telefone declarado e o do vínculo não são o mesmo (com a equivalência do nono dígito), o ouvinte não sobe, nada é gravado e a saída é o código 2. Uma Configuração sem telefone **aprende** o do vínculo. O telefone declarado nunca é sobrescrito pelo do vínculo; o endereço ausente nunca apaga o gravado. Idempotente.
-- **Não-funcionais:** Padrão
-
-### declarar-endereco-da-conta
-- **Ator:** serviço do ouvinte
-- **Entrada:** o endereço canônico da conta e, quando a Fonte tem, o alternativo
-- **Saída:** o Identificador do endereço canônico no Acervo e a correspondência alternativo para canônico
-- **Regras:** só o que muda abre Operação (a segunda conexão não escreve nada). Conflito de correspondência é relatado e a primeira permanece. O Identificador é registrado **sem** Configuração: a coluna de Configuração de um Identificador é a do catálogo que sustenta o vínculo com a Pessoa, e a relação entre a Configuração e o endereço da conta vive no Registro. Não dá autor à Mensagem enviada nem cria Participação da própria conta.
-- **Não-funcionais:** Padrão

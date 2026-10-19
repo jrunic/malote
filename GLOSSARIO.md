@@ -130,7 +130,7 @@ Preferido, e pela mesma razão nunca atravessa Fontes. Declarada pelo Adaptador.
 
 **Marca do Titular**:
 Uma afirmação do dono da conta sobre um objeto do Acervo, com tipo, procedência e data,
-pendurada numa Mensagem ou numa Conversa. Tipos: `favorito` em Mensagem; `fixada` e `arquivada`
+pendurada numa Mensagem ou numa Conversa. Tipos: `favorito` em Mensagem; `fixada`
 em Conversa. É a única curadoria humana que as Fontes entregam.
 *Evitar*: flag, estrela, star, pin, favorito do sistema.
 
@@ -197,7 +197,7 @@ ausência ou vazio nunca apagam o que está gravado.
 **Envio**:
 Um pedido para o malote falar pela conta de uma Configuração de Adaptador — o inverso de
 Mensagem recebida. Fica `pendente` até o processo com a conexão viva o processar; termina
-`enviado` (com a Mensagem resultante) ou `falhou` (reenfileirável). Garantia **ao menos uma
+`enviado` (a Mensagem resultante chega pela recepção) ou `falhou` (reenfileirável). Garantia **ao menos uma
 vez**: resultado indeterminado nunca é descartado em silêncio.
 *Evitar*: mensagem a enviar, outbox, fila de saída, post, dispatch.
 
@@ -235,7 +235,7 @@ O registro original que a Fonte entregou, guardado inteiro ao lado do que o núc
 
 **Estado de Sincronização**:
 O que um Adaptador precisa lembrar entre execuções para retomar de onde parou.
-*Evitar*: cursor, checkpoint, sync token, sync_state.
+*Evitar*: checkpoint, sync token, sync_state. A palavra *cursor* é de outro conceito, o **Cursor** da paginação.
 
 **Material**:
 Um lote exportado por uma Fonte, processado de uma vez. É a unidade que o Estado de Sincronização registra.
@@ -290,11 +290,31 @@ Uma entrada do catálogo de contatos: um nome e os endereços que a pessoa guard
 
 **Contato Compartilhado**:
 O contato que alguém **envia dentro de uma Mensagem** (um, ou vários de uma vez, cada um com o seu cartão): um nome, uma organização e os telefones e e-mails do cartão. Pendura na Mensagem e é derivado do Conteúdo Bruto, que segue inteiro; a foto do cartão fica só no bruto. **Não é Pessoa, nem Identificador, nem Cartão de Contato do catálogo**: compartilhar um contato não afirma identidade, então ele nunca cria Pessoa nem vincula nada sozinho. A palavra *contato* volta aqui por ser o nome que a própria Fonte dá ao gesto de enviar; o que o distingue do Cartão de Contato é de onde vem (uma Mensagem, e não o catálogo) e a quem pertence (à Mensagem, e não a uma Configuração de Adaptador).
-*Evitar*: cartão, vCard, card, Cartão de Contato.
+*Evitar*: vCard, card, Cartão de Contato. *Cartão* só nomeia o cartão que vem **dentro** da Mensagem (um Contato Compartilhado por cartão, e é o termo dos identificadores `CartaoCompartilhado` no código), nunca o Cartão de Contato do catálogo.
 
 **Edição**:
 O texto novo que alguém deu a uma Mensagem que já tinha enviado. **Pendura na Mensagem e a Mensagem não muda**: o texto e o Conteúdo Bruto dela seguem como foram gravados, e cada edição é um evento datado e imutável, com o texto novo, o instante da edição e se chegou cifrada ou aberta. A cifrada só se lê com o segredo que a Mensagem original guarda no Conteúdo Bruto; sem original, sem segredo ou sem texto reconhecível, a edição não é gravada e o evento continua guardado cru. Não é Mensagem nova: gravá-la como tal duplicaria o que já existe.
 *Evitar*: versão (colide com a versão do Acervo e do produto), correção, alteração, revisão.
+
+**Ator**:
+Quem ordenou uma Operação. Vocabulário fechado: `operador:<id>` e `acesso:<id>`, provados por credencial; `servico:<nome>`, declarado pelo deploy; e `local`, quando nenhuma credencial foi apresentada. É da sessão, não do comando. `indeterminado` é defeito, e `NULL` só nas Operações anteriores ao ciclo 11.
+*Evitar*: usuário, executor, autor (que é o autor de uma Mensagem).
+
+**Reversibilidade**:
+A classe de uma Operação quanto a desfazer: `por-efeito` (o `desfazer` reverte linha a linha, pelas portas do núcleo), `por-delegacao` (existe uma trilha semântica própria, como a da Mesclagem, e a Operação a referencia) e `irreversivel`. É uma declaração: `por-efeito` só se cumpre se o `desfazer` tem a porta de restauração da tabela.
+*Evitar*: undo, rollback.
+
+**Cursor**:
+O token opaco (`proximo`) que a resposta traz para pedir a página seguinte de uma listagem de Conversas, de Mensagens ou de Anexos: ordem fixa, com desempate por id. O consumidor o devolve em `--antes` e nunca o monta; cursor inválido é erro, nunca primeira página. Não é o **Estado de Sincronização**.
+*Evitar*: offset, número de página.
+
+**Detalhe da Conversa**:
+A leitura de uma Conversa por inteiro (`detalhar`): identidade, natureza, nome do outro lado ou os Metadados de Coletiva, contagem de Mensagens e a primeira e a última. Id inexistente e id de outro Inquilino respondem igual.
+*Evitar*: perfil, ficha.
+
+**Guarda de Descartes**:
+O arquivo, fora do Acervo, onde a recepção ao vivo guarda **cru** o evento que não grava como Mensagem e que não é ruído conhecido, com teto e rotação. Tem texto de conversa em claro e fica fora do backup. `ouvinte reprocessar-descartados` o lê. Não é o contador diário de descartes, que guarda só tipos e números.
+*Evitar*: lixeira, dead letter, log de descartes.
 
 **Proposta**:
 A afirmação de que um conjunto de Identificadores é a mesma Pessoa, com a evidência que a sustenta. **É calculada a cada listagem, nunca armazenada** — por isso não existe Proposta obsoleta, e um par já resolvido simplesmente deixa de aparecer.
@@ -341,7 +361,7 @@ A remoção do arquivo de um Anexo do disco, preservando o Descritor.
 - Uma **Mensagem** pertence a exatamente 1 **Conversa** e tem 0..N **Anexos**.
 - Uma **Mensagem** tem 0..1 **Identificador** como autor.
 - Uma **Mensagem** tem 0..1 **Marca do Titular**, do tipo `favorito`.
-- Uma **Conversa** tem 0..N **Marcas do Titular**, dos tipos `fixada` e `arquivada`, no máximo uma de cada tipo.
+- Uma **Conversa** tem 0..N **Marcas do Titular**, do tipo `fixada`, no máximo uma.
 - Uma **Pessoa** tem 0..N **Identificadores**, possivelmente de **Fontes** diferentes.
 - Um **Identificador** pertence a 0..1 **Pessoa** e a exatamente 1 **Fonte**.
 - Um **Anexo** tem exatamente 1 **Descritor** e exatamente 1 **Presença**.
@@ -349,7 +369,7 @@ A remoção do arquivo de um Anexo do disco, preservando o Descritor.
 - Uma **Operação** é desfeita no máximo uma vez.
 - Uma **Fonte** é servida por 1..N **Adaptadores**; cada **Adaptador** tem 1 **Estado de Sincronização** por conta.
 - Uma **Política de Retenção** produz N **Descartes** sobre **Anexos**.
-- Um **Envio** pertence a exatamente 1 **Configuração de Adaptador** e, quando concluído, aponta para exatamente 1 **Mensagem**.
+- Um **Envio** pertence a exatamente 1 **Configuração de Adaptador** e, quando concluído, é correlacionado pelo Identificador de Envio com a **Mensagem** que a recepção traz.
 - Um **Envio** tem exatamente 1 **Destinatário do Envio** (uma **Conversa**) e exatamente 1 **Conteúdo do Envio**.
 
 ## Diálogo de exemplo

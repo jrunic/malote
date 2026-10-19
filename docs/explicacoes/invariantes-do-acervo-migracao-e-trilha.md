@@ -39,4 +39,4 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
 
 ## Limitação conhecida
 
-- **A migração não tem caminho para passo que recrie as tabelas da própria trilha.** A Operação é gravada no início da transação, na forma **velha** dessas tabelas. Nenhum passo de hoje as toca; se um dia precisar, é caminho novo na máquina, não remendo. Consequência medida em 01/09/2026: a linha da Operação entra **antes** de a conferência tomar a linha de base, então ela não aparece como divergência — declarar `+1` para `operacoes` num passo REPROVA a migração.
+- **Entre migrar e registrar a migração na trilha há uma janela, e ela é aceita.** A migração roda primeiro e a Operação `migrar-base` é gravada depois, na forma **nova** das tabelas (`migrarComTrilha`), que é o que permite a um passo alterar as tabelas da trilha. Se o processo morrer entre as duas coisas, a base fica migrada sem a linha na trilha. A contabilidade de verdade é `migracoes_aplicadas`, escrita **dentro** da transação da migração; a trilha é o segundo registro, para quem audita. A Operação também não existe durante a conferência, então um passo não declara `+1` para `operacoes`.
