@@ -35,9 +35,10 @@ Regras que o produto segue (e testa):
 
 - variável **vazia** = ausente (usa o default);
 - caminho **relativo** é ignorado — cai no default;
-- as pastas que o produto cria nascem `0700`; os arquivos de conversa em claro do estado do
-  ouvinte (o derrame e o `.envenenado.jsonl`) seguem hoje a `umask` do processo, e só a guarda
-  de descartes é `0600`, então crie a pasta da conta com `mkdir -m 700` (#1289);
+- as pastas de dado e de estado que o produto cria pela porta de criação de pasta nascem `0700`;
+  as pastas de trabalho (`processados/`, o staging de Envio) e os arquivos de conversa em claro
+  do estado do ouvinte (o derrame e o `.envenenado.jsonl`) seguem hoje a `umask` do processo, e
+  só a guarda de descartes é `0600`, então crie a pasta da conta com `mkdir -m 700` (#1289);
 - os caminhos são os mesmos em qualquer sistema operacional.
 
 Dentro de `XDG_DATA_HOME/malote/`, o Envio de imagem ou documento usa uma pasta de
