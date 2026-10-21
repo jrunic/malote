@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import type { Acervo } from '../../nucleo/acervo.js';
 import { registrarConversa } from '../../nucleo/escrita.js';
 import { enderecoEhColetivo } from './ao-vivo.js';
+import { enderecoEhDestinatarioDeEnvio } from './destinatario-de-envio.js';
 import {
   type ConteudoDeEnvio,
   proximoEnvioPendente,
@@ -35,21 +36,6 @@ export interface OpcoesDeProcessamento {
 export interface ResultadoDoProcessamento {
   /** 0 ou 1: um Envio por chamada, mesmo padrao do worker de Transcricao. */
   processados: number;
-}
-
-/**
- * Forma reconhecida de endereco WhatsApp: numero+sufixo de usuario, grupo,
- * ou LID. Destino sem essa forma e recusado ANTES de tentar enviar — sem
- * isso, `--para 5565936180479` (sem sufixo) criaria uma Conversa que o eco
- * de recepcao (que sempre traz o endereco COM sufixo) nunca reencontra,
- * duplicando a Conversa (#1112, achado do dev-10).
- */
-function formaDeEnderecoReconhecida(endereco: string): boolean {
-  return (
-    endereco.endsWith('@s.whatsapp.net') ||
-    endereco.endsWith('@g.us') ||
-    endereco.endsWith('@lid')
-  );
 }
 
 /**
@@ -100,11 +86,17 @@ export async function processarEnvios(
   if (envio.conversaId !== null) {
     const conversa = acervo
       .preparar('SELECT id_externo FROM conversas WHERE id = ?')
-      .get(envio.conversaId) as { id_externo: string };
+      .get(envio.conversaId) as { id_externo: string } | undefined;
+    if (conversa === undefined) {
+      // A chave estrangeira impede isto na pratica (so um Acervo recriado a contorna); falha o Envio com o motivo em
+      // vez de derrubar o ouvinte com um TypeError.
+      marcarEnvioFalhou(acervo, envio.envioId, 'a Conversa do Envio nao existe mais neste Acervo');
+      return { processados: 1 };
+    }
     jid = conversa.id_externo;
   } else {
     jid = envio.destinoCru as string;
-    if (!formaDeEnderecoReconhecida(jid)) {
+    if (!enderecoEhDestinatarioDeEnvio(jid)) {
       marcarEnvioFalhou(
         acervo,
         envio.envioId,

@@ -408,3 +408,67 @@ test('falha ao gravar `enviado` DEPOIS do envio deixa o Envio pendente, nunca fa
     c.limpar();
   }
 });
+
+// #1323: o Envio por Conversa de GRUPO sai para o endereco do grupo e nao cria Conversa; a Conversa sumida falha o Envio.
+test('processarEnvios com a Conversa de um grupo manda para o endereco do grupo, sem criar Conversa', async () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const conversaId = registrarConversa(acervo, { fonte: 'whatsapp', idExterno: '120363000000000001@g.us', coletiva: true });
+    registrarEnvio(acervo, {
+      configuracaoId: CFG_WHATSAPP.id,
+      destino: { conversaId },
+      conteudo: { tipo: 'texto', texto: 'oi, grupo' },
+    });
+
+    const chamadas: string[] = [];
+    await processarEnvios(acervo, {
+      configuracao: CFG_WHATSAPP,
+      enviar: async (jid) => {
+        chamadas.push(jid);
+        return { keyId: 'X' };
+      },
+    });
+
+    assert.deepEqual(chamadas, ['120363000000000001@g.us']);
+    const n = (acervo.preparar('SELECT COUNT(*) AS n FROM conversas').get() as { n: number }).n;
+    assert.equal(n, 1, 'nao deveria ter criado Conversa');
+    const estado = (acervo.preparar('SELECT estado FROM envios').get() as { estado: string }).estado;
+    assert.equal(estado, 'enviado');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('processarEnvios com a Conversa do Envio sumida marca o Envio como falhou, com o motivo, e nao lanca', async () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Leia');
+    const conversaId = registrarConversa(acervo, { fonte: 'whatsapp', idExterno: '120363000000000001@g.us', coletiva: true });
+    registrarEnvio(acervo, {
+      configuracaoId: CFG_WHATSAPP.id,
+      destino: { conversaId },
+      conteudo: { tipo: 'texto', texto: 'oi' },
+    });
+    // A chave estrangeira impede a remocao; so um Acervo recriado a contorna. O teste a desliga para criar o caso.
+    acervo.db.pragma('foreign_keys = OFF');
+    acervo.db.prepare('DELETE FROM conversas WHERE id = ?').run(conversaId);
+
+    const chamadas: string[] = [];
+    const r = await processarEnvios(acervo, {
+      configuracao: CFG_WHATSAPP,
+      enviar: async (jid) => {
+        chamadas.push(jid);
+        return { keyId: 'X' };
+      },
+    });
+
+    assert.equal(r.processados, 1);
+    assert.deepEqual(chamadas, [], 'nada foi enviado');
+    const linha = acervo.preparar('SELECT estado, motivo_falha FROM envios').get() as { estado: string; motivo_falha: string };
+    assert.equal(linha.estado, 'falhou');
+    assert.match(linha.motivo_falha, /Conversa do Envio nao existe/);
+  } finally {
+    c.limpar();
+  }
+});
