@@ -11,6 +11,7 @@ export function formatarDetalhe(d: DetalheDaConversa): string[] {
   linhas.push(`Conversa ${d.id}  (${d.coletiva ? 'coletiva' : 'direta'}, ${d.fonte})`);
   if (d.metadados !== undefined) {
     const m = d.metadados;
+    if (d.endereco !== undefined) linhas.push(`  endereco: ${d.endereco}`);
     linhas.push(`  assunto: ${m.assunto ?? '(sem assunto)'}`);
     if (m.descricao === null) {
       linhas.push('  descricao: (sem descricao)');

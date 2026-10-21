@@ -78,11 +78,21 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   versão antes de qualquer cliente — servidor antigo ignora o campo e duplicaria, e o
   cliente só avisa em resposta que chegou. `envio estado` também é despachado por rede
   (ciclo 29), no ponto de entrada e fora de `COMANDOS_DE_REDE`; `envio reprocessar`
-  continua só local.
+  continua só local. `exportar` (ciclo 31) também é despachado por rede fora da lista.
+  **O código ainda não cumpre o contrato inteiro (#1284):** o ponto de entrada despacha
+  `ouvir`, `servir`, `ouvinte reprocessar*` e `midia reprocessar` antes de olhar o modo,
+  então eles rodam local mesmo com a variável de ambiente do servidor; e `midia` e
+  `configuracao` entram em `COMANDOS_DE_REDE` por primeira palavra, embora tenham
+  subcomandos locais. Medido: `midia reprocessar --ensaio` com a variável definida criou o
+  `registro.db` e terminou em exceção. Não há teste de recusa para esses comandos.
 - **`COMANDOS_DE_REDE` é por PRIMEIRA palavra, e comando novo de leitura é um verbo solto (#1203).** `conversa presenca` é local e fica fora da lista; pôr `conversa` nela mandaria `presenca` por rede, onde não há rota. Um subcomando de rede (`conversa mostrar`) exigiria que a lista olhasse a segunda palavra, mudança na resolução global que não desce para dentro de handler. Por isso o detalhe de uma Conversa é `detalhar`, ao lado de `conversas`. A resposta nomeia a Configuração pelo **apelido**, como a listagem, nunca pelo id interno; `404` de corpo vazio vale para o id inexistente e para o de outro Inquilino.
-- **Cliente HTTP mora em `src/cli/`, nunca em `src/rede/`.** `src/rede/` é a zona do
-  baileys e a fronteira proíbe `cli` importá-la — a guarda pegou a violação no commit em
-  que nasceu (ciclo 21).
+- **A rede importa de adaptador só o predicado puro de destinatário de Envio (#1323).** `src/rede/rotas.ts` usa `destinatario-de-envio.ts` para recusar, no `POST /envios/solicitar`, a Conversa que não recebe Envio (feed de status e lista de transmissão). É a única exceção a "quem compõe adaptador é `src/cli/`": o módulo não importa nada, e injetá-lo pelo `servir` obrigaria todo servidor de teste a passá-lo. `tests/fronteira-de-dependencia.test.ts` reprova qualquer outro import de adaptador em `src/rede/`.
+- **Cliente HTTP mora em `src/cli/`, nunca em `src/rede/`.** `src/rede/` é o servidor HTTP,
+  e a guarda (`tests/fronteira-de-dependencia.test.ts`) é que **só `src/cli/servir.ts`
+  alcança `src/rede/`**: núcleo, Registro, adaptadores e o resto da CLI não a importam. O
+  cliente fica em `src/cli/` por isso, e a biblioteca de recepção não tem relação com a
+  regra (ela só entra por `conexao.ts`). A guarda pegou a violação no commit em que nasceu
+  (ciclo 21).
 - **Paginação de Mensagens usa cursor COMPOSTO `(ocorrida_em, id)`, opaco.** O instante
   sozinho não pagina: instantes iguais pulam ou repetem. O consumidor devolve o token
   `proximo` que recebeu; a rota trata token inválido como **400**, nunca como primeira
@@ -94,5 +104,5 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   tratar erro de consulta deterministicamente. `--chave` continua sendo Chave de Operador;
   a Chave de Acesso vai só por env.
 - **O Inquilino de toda consulta por rede vem da CREDENCIAL, e nunca do chamador.** A verificação de Chave devolve **quem** — `{chaveId, inquilinoId}` —, e não um booleano: é dela que sai o alcance. Devolver `true` obrigaria quem chama a perguntar o alcance depois, e a janela entre *"é válida"* e *"o que ela abre"* é onde o isolamento se perde. Enviar `?inquilino=` não muda nada, e há guarda com sinal próprio para isso.
-- **A leitura por rede abre o Acervo SOMENTE-LEITURA.** Abrir para escrita **migra** a base, e um servidor que atende requisição de fora não pode ter esse poder — mesma razão pela qual `ouvinte estado` lê um arquivo. A porta recusa forma divergente, e isso é o certo: superfície de consulta não conserta base, avisa.
+- **A leitura por rede abre o Acervo SOMENTE-LEITURA.** Abrir para escrita **migra** a base, e um servidor que atende requisição de fora não pode ter esse poder — mesma razão pela qual `ouvinte estado` lê um arquivo. A porta recusa forma divergente, e isso é o certo: superfície de consulta não conserta base, avisa. **O Registro é outra coisa:** a thread principal o abre (`abrirRegistro`, que pode migrar) a cada requisição, só para verificar a Chave de Acesso, e cada verificação, aceita ou recusada, grava uma linha em `tentativas_de_chave` (a prova de acesso, sem retenção; #1288). `tests/rotas-registro-somente-leitura.test.ts` guarda `rotas.ts`, não `servidor.ts`.
 - **Uma recusa só, com corpo vazio, para credencial ausente, inválida e revogada.** Distinguir vaza a existência de Inquilinos alheios. A promessa é sobre o que a resposta **diz** — corpo e código —, e **não sobre quanto tempo ela leva**: canal lateral de tempo não se elimina, e prometer seria promessa que nenhum código cumpre. Rota desconhecida **com** credencial válida responde 404, e não 401 — quem tem Chave já provou que pode saber que o servidor existe, e separar os códigos dá a cada guarda um sinal próprio.

@@ -17,18 +17,33 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o
 versionamento segue [SemVer](https://semver.org/lang/pt-BR/). Enquanto a versão
 maior for `0`, a interface pode mudar entre versões menores.
 
-Cada entrada tem uma tag `vX.Y.Z` no commit publicado. O histórico público começa no
-commit "Initial public release": as entradas anteriores são o registro fiel do que foi
-publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
+Cada entrada tem uma tag `vX.Y.Z` no commit publicado, com uma exceção: **a `v0.31.0` não tem
+tag**. A entrada vale e a release foi publicada, mas a tag nunca foi criada; o código dela é o
+commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O histórico
+público começa no commit "Initial public release": as entradas anteriores são o registro fiel
+do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
-## [0.41.0] — 2026-10-19
+## [0.42.0] — 2026-10-21
+
+Não muda a forma do Acervo nem do Registro. Mexe na API de Envio e na consulta de Conversa; contrato aditivo.
+
+### Adicionado
+
+- **O detalhe de uma Conversa coletiva traz o `endereco` dela na Fonte**, o mesmo valor que `malote enviar --para` aceita (`GET /conversas/<id>/detalhe`, `malote detalhar`). A Conversa direta não tem o campo. Quem lê com uma chave pode agora enviar a um grupo, o que antes exigia o endereço de fora do malote.
+- **O pedido de Envio aceita `conversa` (o id) no lugar de `para`**, por rede (`POST /envios/solicitar`, `malote enviar --conversa`) e no modo local. A conta (`--configuracao`) continua sempre obrigatória e explícita: nunca é inferida da Conversa, e a resposta e a saída dizem qual conta falou e para qual Conversa. O id é do Acervo do Inquilino da chave (o de outro Inquilino responde `404`); na Conversa direta, a conta tem de ser a dona dela. Feed de status e lista de transmissão não são destinatários (`400`). A Conversa em forma alternativa de um endereço que tem Conversa canônica é redirecionada para a canônica, e a resposta traz `redirecionadaDe`.
+
+### Corrigido
+
+- O processamento de um Envio cuja Conversa deixou de existir marca o Envio `falhou`, com o motivo, em vez de lançar `TypeError` até o ouvinte.
+
+## [0.41.0] — 2026-10-18
 
 Não muda a forma do Acervo nem do Registro. Mexe na recepção ao vivo: a mensagem de modelo de conta comercial com imagem no cabeçalho passa a gravar um Anexo.
 
 ### Adicionado
 
 - **A imagem do cabeçalho de uma mensagem de modelo de conta comercial vira Anexo.** Até aqui ela ficava só no Conteúdo Bruto e o endereço da mídia vencia sem que ninguém tentasse baixar. A recepção ao vivo grava **um** Anexo de imagem `nunca-obtido` por Mensagem, que entra no download ao vivo; a reentrega do mesmo evento não duplica. Só a forma medida é reconhecida (a imagem em `templateMessage`, `interactiveMessageTemplate`, `header`, `imageMessage`); imagem em outro lugar do modelo, ou sem chave legível, fica no bruto e não vira Anexo. O texto da Mensagem e a classificação não mudam.
-- **`malote midia extrair-imagem-de-modelo` cria o Anexo das Mensagens de modelo já gravadas.** Ensaio por padrão; `--com-efeito` exige `--confirmo`; o relatório só traz contagens. Grava uma Operação por lote, e `malote desfazer` remove os Anexos criados enquanto ainda não foram baixados (o Anexo já baixado é recusado, com a causa). Rodar de novo não cria nada. Para baixar, use `malote midia reprocessar --mensagem <id>`.
+- **`malote midia extrair-imagem-de-modelo` cria o Anexo das Mensagens de modelo já gravadas.** Ensaio por padrão; `--com-efeito` exige `--confirmo`; o relatório só traz contagens. Grava uma Operação por lote, e `malote operacao desfazer` remove os Anexos criados enquanto ainda não foram baixados (o Anexo já baixado é recusado, com a causa). Rodar de novo não cria nada. Para baixar, use `malote midia reprocessar --mensagem <id>`.
 - **A conexão e `malote midia reprocessar` abrem o modelo para baixar a imagem do cabeçalho.** A biblioteca não abre a mensagem de modelo; a conexão e o retry entregam só a imagem, com a chave do evento.
 
 ## [0.40.0] — 2026-10-18
@@ -203,6 +218,8 @@ migram o Acervo ao subir. O passo só cria uma tabela e um índice e não exige 
 - O texto da etiqueta é dado pessoal: aparece na saída dos comandos de consulta e nunca em log nem em relatório.
 
 ## [0.31.0] — 2026-10-06
+
+*Sem tag: a `v0.31.0` não foi criada. O código é o commit `7a96bc4`, publicado pelo merge `795f4a8`.*
 
 **Muda a forma do Registro (v7 para v8).** Faça cópia do `registro.db` antes de atualizar; o servidor e cada ouvinte migram o
 Registro ao subir.

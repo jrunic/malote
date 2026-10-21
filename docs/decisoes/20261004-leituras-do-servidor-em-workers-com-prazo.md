@@ -37,8 +37,10 @@ servidor por minutos, e o encerramento só terminou por `SIGKILL`.
   Quando um worker libera, vai para o Inquilino que menos workers ocupa. A fila tem 64 lugares; acima disso, `503` com
   `retry-after: 1`.
 - **Contenção:** exceção da rota ou queda do worker é `500` de corpo vazio, e o worker é substituído.
-- As rotas de leitura abrem o Registro somente-leitura. O Registro é aberto uma vez, para escrita, ao subir, e a
-  migração, se houver, acontece ali. O `servir` também sobe um worker antes de aceitar pedido e recusa subir (código 1)
+- As rotas de leitura abrem o Registro somente-leitura. O Registro é aberto para escrita ao subir, e a
+  migração, se houver, acontece ali. **A autenticação o abre de novo a cada requisição** (`abrirRegistro` na
+  thread principal) e grava a tentativa em `tentativas_de_chave`, aceita ou recusada: é a prova de acesso, sem
+  retenção (revisto em 19/10/2026; a decisão de retenção está aberta). O `servir` também sobe um worker antes de aceitar pedido e recusa subir (código 1)
   se ele não carregar em 5 s.
 - O corpo binário (`GET /midia`) atravessa por transferência do `ArrayBuffer`, sem copiar: o maior arquivo servido
   tem 890 MB.

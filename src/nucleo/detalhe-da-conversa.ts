@@ -32,6 +32,12 @@ export interface DetalheDaConversa {
   ultimaMensagemEm: number | null;
   /** So na coletiva (nulos quando a Fonte nunca entregou nada). A direta NAO leva o campo. */
   metadados?: MetadadosDaConversa;
+  /**
+   * So na coletiva (#1323): o endereco do grupo na Fonte, o mesmo valor que `enviar --para` aceita. E a Referencia
+   * Externa da Conversa. A direta NAO leva o campo: o endereco de uma Pessoa sai por `identificar`, `participantes`
+   * e `autores`.
+   */
+  endereco?: string;
 }
 
 interface LinhaDaConversa {
@@ -39,6 +45,7 @@ interface LinhaDaConversa {
   fonte: Fonte;
   coletiva: number;
   configuracao_id: string | null;
+  id_externo: string;
   assunto: string | null;
   descricao: string | null;
   alterado_por: string | null;
@@ -63,7 +70,7 @@ export function detalharConversa(
 ): DetalheDaConversa | undefined {
   const l = acervo
     .preparar(
-      `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id,
+      `SELECT c.id, c.fonte, c.coletiva, c.configuracao_id, c.id_externo,
               md.assunto, md.descricao, md.alterado_por, md.alterado_em,
               i.id AS identificador_id,
               (SELECT COUNT(*) FROM mensagens x WHERE x.conversa_id = c.id) AS mensagens,
@@ -91,6 +98,7 @@ export function detalharConversa(
     ultimaMensagemEm: l.ultima,
   };
   if (coletiva) {
+    detalhe.endereco = l.id_externo;
     detalhe.metadados = {
       assunto: l.assunto,
       descricao: l.descricao,

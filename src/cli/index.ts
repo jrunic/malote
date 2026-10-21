@@ -17,7 +17,9 @@ import { decodificarCursor } from '../nucleo/cursor.js';
 import { expandirData, procurarPessoas } from '../nucleo/consulta.js';
 import { ehPontoDeEntrada } from './entrada.js';
 import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
-import { executarEnviarRede } from './enviar-rede.js';
+import { executarEnviarRede, mascararEndereco } from './enviar-rede.js';
+import { enderecoEhDestinatarioDeEnvio } from '../adaptadores/whatsapp/destinatario-de-envio.js';
+import { resolverDestinoPorConversa } from '../nucleo/destino-de-envio.js';
 import { executarEnvioEstadoRede } from './envio-estado-rede.js';
 import { encerrar } from './encerrar.js';
 import { primeiroPosicional } from './posicional.js';
@@ -358,12 +360,13 @@ Titular (nao exige chave enquanto nao houver rede):
   malote material intervalo     --inquilino <id> [--configuracao <apelido>] --dias <n>
   malote material varrer        --inquilino <id> [--configuracao <apelido>]
   malote material atraso        --inquilino <id>
-  malote ouvir      --inquilino <id> --conta <nome> [--numero <so digitos>]
+  malote ouvir      --inquilino <id> --conta <nome> --configuracao <apelido> [--numero <so digitos>]
   malote ouvinte estado --conta <nome> [--json]
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
   malote ouvinte reprocessar-descartados --inquilino <id> --conta <nome> --configuracao <apelido>   (recusa com o ouvinte no ar)
-  malote enviar     --inquilino <id> --configuracao <apelido> --para <endereco> (--texto <t> | --imagem <caminho> [--texto <legenda>] | --documento <caminho> [--texto <legenda>])
-  malote enviar     --configuracao <apelido> --para <endereco> (mesmas opcoes de conteudo) [--identificador <uuid>] [--chave-em <VARIAVEL>] [--json]
+  malote enviar     --inquilino <id> --configuracao <apelido> (--para <endereco> | --conversa <id>) (--texto <t> | --imagem <caminho> [--texto <legenda>] | --documento <caminho> [--texto <legenda>])
+  malote enviar     --configuracao <apelido> (--para <endereco> | --conversa <id>) (mesmas opcoes de conteudo) [--identificador <uuid>] [--chave-em <VARIAVEL>] [--json]
+                    (a conta --configuracao e sempre explicita; --conversa vale so dentro do Inquilino da Chave e, na direta, exige a conta dona dela)
                                         (com MALOTE_SERVIDOR no ambiente: pede o Envio por REDE; o Inquilino vem da chave;
                                          o identificador torna a repeticao segura: o mesmo pedido nao cria segundo Envio)
   malote envio estado       --inquilino <id> [--json]
@@ -422,10 +425,13 @@ Titular (nao exige chave enquanto nao houver rede):
   malote pessoa remover-nomes-invalidos --inquilino <id> [--com-efeito --confirmo]
                                     (remove Atribuição que repete o próprio endereço ou
                                      duplica outra por marca invisível; ensaio por padrão)
+  malote pessoa promover-identificadores-nomeados --inquilino <id> [--limite <n>] [--com-efeito --confirmo]
+                                    (promove a Pessoa o Identificador sem Pessoa que já tem
+                                     nome utilizável; ensaio por padrão)
   malote identidade resolver-enderecos --inquilino <id> [--com-efeito --confirmo] [--json]
-  malote operacao listar   --inquilino <id> [--chave <valor>]
-  malote operacao ver      <id> --inquilino <id> [--chave <valor>]
-  malote operacao desfazer <id> --inquilino <id> [--com-efeito --confirmo]
+  malote operacao listar   --inquilino <id> --chave <valor>
+  malote operacao ver      <id> --inquilino <id> --chave <valor>
+  malote operacao desfazer <id> --inquilino <id> --chave <valor> [--com-efeito --confirmo]
   malote pessoa precedencia --inquilino <id> [--origem <nome> --peso <n>] [--catalogo-preferido <apelido>]
 
 A primeira Chave de Operador dispensa credencial: a raiz de confianca e o
@@ -1286,15 +1292,20 @@ function executarComAtor(
       const inquilino = opcao(argumentos, 'inquilino');
       const apelido = opcao(argumentos, 'configuracao');
       const para = opcao(argumentos, 'para');
+      const conversa = opcao(argumentos, 'conversa');
       const texto = opcao(argumentos, 'texto');
       const imagem = opcao(argumentos, 'imagem');
       const documento = opcao(argumentos, 'documento');
-      if (inquilino === undefined || apelido === undefined || para === undefined) {
+      if (inquilino === undefined || apelido === undefined || (para === undefined && conversa === undefined)) {
         escrever(
-          'Uso: malote enviar --inquilino <id> --configuracao <apelido> --para <endereco> ' +
+          'Uso: malote enviar --inquilino <id> --configuracao <apelido> (--para <endereco> | --conversa <id>) ' +
             '(--texto <texto> | --imagem <caminho> [--texto <legenda>] | ' +
             '--documento <caminho> [--texto <legenda>])',
         );
+        return 2;
+      }
+      if (para !== undefined && conversa !== undefined) {
+        escrever('Informe --conversa OU --para, nunca os dois. A conta (--configuracao) vai sempre explicita.');
         return 2;
       }
       if (imagem === undefined && documento === undefined && texto === undefined) {
@@ -1305,7 +1316,7 @@ function executarComAtor(
         escrever('--imagem e --documento sao mutuamente exclusivos.');
         return 2;
       }
-      if (!para.includes('@')) {
+      if (para !== undefined && !para.includes('@')) {
         escrever(
           `--para precisa de endereco completo (ex.: 5511999990000@s.whatsapp.net), recebido "${para}".`,
         );
@@ -1328,6 +1339,32 @@ function executarComAtor(
       // Staging por COPIA: o original do usuario nunca e movido nem apagado.
       let caminhoDeStaging: string | undefined;
       try {
+        // O destino: o endereco cru de `--para`, ou o que `--conversa` resolve (#1323). A conta (`--configuracao`) e
+        // sempre explicita: nunca vem da Conversa, so e conferida contra ela (a direta e chaveada pela Configuracao).
+        let destino: Parameters<typeof registrarEnvio>[1]['destino'] = { enderecoCru: para as string };
+        const sobreODestino: { conversa?: string; redirecionadaDe?: string } = {};
+        if (conversa !== undefined) {
+          const r = resolverDestinoPorConversa(acervo, conversa as never);
+          if (r.tipo === 'inexistente') {
+            escrever(`Conversa "${conversa}" nao existe neste Inquilino.`);
+            return 2;
+          }
+          if (r.dada.fonte !== 'whatsapp') {
+            escrever(`A Conversa e de ${r.dada.fonte}, e so o whatsapp tem Envio.`);
+            return 2;
+          }
+          if (!enderecoEhDestinatarioDeEnvio(r.dada.endereco)) {
+            escrever('A Conversa nao e destinatario de Envio (feed de status ou lista de transmissao).');
+            return 2;
+          }
+          if (!r.dada.coletiva && r.dada.configuracaoId !== cfg.id) {
+            escrever(`A Conversa direta pertence a outra Configuracao: use --configuracao da conta dona dela, nao "${apelido}".`);
+            return 2;
+          }
+          destino = r.tipo === 'conversa' ? { conversaId: r.usada.id } : { enderecoCru: r.endereco };
+          if (r.tipo === 'conversa') sobreODestino.conversa = r.usada.id;
+          if (r.tipo === 'endereco' || r.usada.id !== r.dada.id) sobreODestino.redirecionadaDe = r.dada.id;
+        }
         let conteudo: Parameters<typeof registrarEnvio>[1]['conteudo'];
         if (caminhoDeMidia === undefined) {
           conteudo = { tipo: 'texto', texto: texto as string };
@@ -1351,13 +1388,35 @@ function executarComAtor(
         }
         const r = registrarEnvio(acervo, {
           configuracaoId: cfg.id,
-          destino: { enderecoCru: para },
+          destino,
           conteudo,
         });
         if (argumentos.includes('--json')) {
-          escrever(JSON.stringify({ envioId: r.envioId, identificadorDeEnvio: r.identificadorDeEnvio }));
+          escrever(
+            JSON.stringify({
+              envioId: r.envioId,
+              identificadorDeEnvio: r.identificadorDeEnvio,
+              configuracao: apelido,
+              ...sobreODestino,
+            }),
+          );
         } else {
           escrever(`Envio registrado: ${r.envioId} (pendente — processado pelo "malote ouvir" da conta).`);
+          // A conta que fala fica explicita na saida (#1323).
+          const destinoNaSaida =
+            conversa === undefined
+              ? mascararEndereco(para as string)
+              : sobreODestino.conversa !== undefined
+                ? `a Conversa ${sobreODestino.conversa}`
+                : 'o endereco canonico da Conversa dada';
+          escrever(`  pela Configuracao ${apelido}, para ${destinoNaSaida}.`);
+          if (sobreODestino.redirecionadaDe !== undefined) {
+            escrever(
+              sobreODestino.conversa !== undefined
+                ? `  Conversa ${sobreODestino.conversa} usada no lugar de ${sobreODestino.redirecionadaDe} (a forma canonica do mesmo endereco).`
+                : `  O endereco canonico foi usado no lugar da Conversa ${sobreODestino.redirecionadaDe} (a canonica ainda nao existe; nasce quando a mensagem sai).`,
+            );
+          }
         }
         return 0;
       } catch (erro) {

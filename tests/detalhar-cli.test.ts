@@ -28,10 +28,11 @@ test('o texto da coletiva mostra assunto, descricao em varias linhas, autor e in
     assert.match(grupo, /descricao:\n {4}Avisos da familia\n {4}Sem spam/);
     assert.match(grupo, /alterado por AUTOR@lid em 2026-06-01T12:30:00.000Z/);
     assert.match(grupo, /mensagens: 5/);
+    assert.match(grupo, /endereco: grupo-1@g\.us/);
     const direta = formatarDetalhe(detalharConversa(acervo, s.diretaDeBruno, PRECEDENCIA)!).join('\n');
     assert.match(direta, /direta/);
     assert.match(direta, /nome: Bruno Contato \(contatos\)/);
-    assert.doesNotMatch(direta, /assunto|descricao/);
+    assert.doesNotMatch(direta, /assunto|descricao|endereco/);
   } finally {
     limpar();
   }

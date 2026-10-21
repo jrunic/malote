@@ -504,9 +504,11 @@ export interface OpcoesDeRetryDeMidia {
  * producao que tinham falhado no dia anterior, que `downloadMediaMessage` da
  * biblioteca baixa e decifra so com a mensagem e a referencia CDN (`url`/
  * `directPath`) que ela carrega — sem depender de conexao viva com a
- * plataforma. A referencia expira em cerca de 30 dias (medido decodificando
- * o parametro `oe` da URL, epoch em hex), entao o retry tem uma janela larga,
- * nao uma corrida contra minutos.
+ * plataforma. A URL declara cerca de 30 dias (medido decodificando o parametro
+ * `oe`, epoch em hex), mas o servidor responde antes e o prazo real depende do
+ * TIPO (medido em 18/10/2026): figurinha e audio ~15 dias, video e documento
+ * menos de 21, imagem ~28. O retry tem uma janela de dias, nao uma corrida
+ * contra minutos, e a janela util e a do tipo mais curto.
  *
  * Import DINAMICO, como em `conectar`: este caminho roda como comando de CLI
  * avulso (`malote midia reprocessar`), fora do processo do ouvinte, e importar

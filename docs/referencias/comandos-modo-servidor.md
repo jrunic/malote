@@ -24,15 +24,16 @@ serviço e saúde: [guia do host](../guias/host-continuo-ouvinte-e-api.md); onde
 ## Como o modo é escolhido, e onde estão os dados
 
 - **Sem `MALOTE_SERVIDOR` no ambiente, o comando roda local.** Com ela, só os comandos de consulta e de
-  Envio vão por rede, e o resto é recusado (veja o modo cliente).
+  Envio vão por rede, e o resto é recusado (veja o modo cliente, que lista as exceções de hoje).
 - **Onde ficam os dados:** dado irrecuperável (Registro, Acervos, mídia, material) em `XDG_DATA_HOME/malote`;
-  estado que se refaz (vínculo de sessão, derrame, último evento) em `XDG_STATE_HOME/malote`.
+  estado do ouvinte (vínculo de sessão, derrame, guarda de descartes, último evento) em
+  `XDG_STATE_HOME/malote`; parte se refaz e parte não (veja o guia de armazenamento).
   **`MALOTE_HOME`** move a instalação inteira para uma pasta só, e vale para todos os serviços.
 - **Quase todo comando pede `--inquilino <id>`**: o Acervo é um por Inquilino.
 
 ### Autenticação
 
-- **Comandos administrativos** (`operador`, `inquilino`, `acesso`) exigem **`--chave <Chave de Operador>`**.
+- **Comandos administrativos** (`operador`, `inquilino`, `acesso` e `operacao`) exigem **`--chave <Chave de Operador>`**.
   A **primeira** Chave de Operador dispensa credencial: a raiz de confiança é o acesso à máquina. A partir
   dela, toda administração exige `--chave`, inclusive criar outra Chave.
 - **Os demais comandos locais** (importar, ouvir, consultar, pessoa...) não pedem chave: quem roda no
@@ -44,7 +45,10 @@ serviço e saúde: [guia do host](../guias/host-continuo-ouvinte-e-api.md); onde
 
 Comando que altera muito, ou que não tem volta, **não faz nada por padrão: mostra o que faria**. Para
 valer, `--com-efeito` e `--confirmo` juntos. Vale para `pessoa propostas aplicar`,
-`pessoa remover-nomes-invalidos`, `identidade resolver-enderecos`, `retencao aplicar` e `operacao desfazer`.
+`pessoa remover-nomes-invalidos`, `pessoa promover-identificadores-nomeados`, `identidade resolver-enderecos`,
+`contato-compartilhado extrair`, `midia extrair-imagem-de-modelo`, `retencao aplicar` e `operacao desfazer`.
+`--com-efeito` sem `--confirmo` não executa, mas o código de saída varia: a maioria lança o erro e sai 1,
+`retencao aplicar` sai 2 e `operacao desfazer` cai no ensaio e sai 0.
 `acervo recriar` exige `--confirmo` e **apaga o Acervo e os arquivos do Inquilino**.
 
 ## Administração
@@ -79,7 +83,7 @@ exigem o apelido, sem padrão.**
 | `entrada listar --inquilino <id>` | Lista as Pastas de Entrada |
 | `material listar --inquilino <id>` | Lista os Materiais já importados |
 | `material varrer --inquilino <id> [--configuracao <apelido>]` | Varre as Pastas de Entrada e importa o que chegou. **Nada o chama sozinho**: o gatilho (um timer) é de quem instala |
-| `material intervalo --inquilino <id> [--configuracao <apelido>] --dias <n>` | Declara de quantos em quantos dias se espera um Material novo |
+| `material intervalo --inquilino <id> [--configuracao <apelido>] [--fonte <nome>] --dias <n>` | Declara de quantos em quantos dias se espera um Material novo. **Sem `--fonte` assume `whatsapp`** e, se o apelido não existe nessa Fonte, cria a Configuração (#1287): passe `--fonte` para Instagram e contatos |
 | `material atraso --inquilino <id>` | Mostra o atraso do Material em relação ao intervalo declarado |
 
 O mesmo telefone não pode pertencer a duas Configurações de WhatsApp do mesmo Inquilino, e o celular
@@ -89,8 +93,8 @@ brasileiro com e sem o nono dígito conta como o mesmo telefone.
 
 | comando | o que faz |
 |---|---|
-| `ouvir --inquilino <id> --conta <nome> [--numero <so digitos>]` | O ouvinte: recebe do WhatsApp e grava. **Um processo por conta**; roda como serviço (`malote-ouvinte@<conta>`). No **primeiro pareamento**, `--numero` (só dígitos, com o código do país) é obrigatório para receber o código |
-| `ouvinte estado --conta <nome> [--json]` | O instante do último evento recebido, lido de um arquivo, **sem abrir o Acervo**. É o que a vigilância de silêncio lê; a saída padrão é contrato com ela. O `--json` traz também `descartes`: a série diária, por tipo, do que a recepção não gravou como Mensagem (últimos 30 dias, só tipos e números, nunca conteúdo) e `guarda`: quantos eventos (`eventos`) e quantos bytes (`bytes`) a guarda do evento cru ocupa; e `instantesAdiantados`: a série diária, só em números, das Mensagens gravadas apenas por causa da tolerância de relógio da recepção (até 5 s à frente do relógio local; últimos 30 dias); e `ultimoSinalDaConexao`: o instante do último frame que a Conexão recebeu do WhatsApp (ISO), ou `null` quando o sinal está indisponível. Anda mesmo em conta sem Mensagem; é gravado no máximo a cada 15 s |
+| `ouvir --inquilino <id> --conta <nome> --configuracao <apelido> [--numero <so digitos>]` | O ouvinte: recebe do WhatsApp e grava. **Um processo por conta**; roda como serviço (`malote-ouvinte@<conta>`). Sem `--configuracao` sai 2. No **primeiro pareamento**, `--numero` (só dígitos, com o código do país) é obrigatório para receber o código. Saídas: `0` parada pedida, `1` vínculo invalidado ou falha local de subida (Inquilino desconhecido, não consegui conectar), `2` configuração errada ou vínculo de outra conta, `70` exceção que a biblioteca deixou escapar (o unit reinicia) |
+| `ouvinte estado --conta <nome> [--json]` | O instante do último evento recebido, lido de um arquivo, **sem abrir o Acervo**. Conta sem evento registrado sai 1, também com `--json`. É o que a vigilância de silêncio lê; a saída padrão é contrato com ela. O `--json` traz `conta`, `ultimoEvento`, `derramados`, `lotes`, `correspondencia`, `ultimoRetrato` e `pulos`, e também `descartes`: a série diária, por tipo, do que a recepção não gravou como Mensagem (últimos 30 dias, só tipos e números, nunca conteúdo) e `guarda`: quantos eventos (`eventos`) e quantos bytes (`bytes`) a guarda do evento cru ocupa; e `instantesAdiantados`: a série diária, só em números, das Mensagens gravadas apenas por causa da tolerância de relógio da recepção (até 5 s à frente do relógio local; últimos 30 dias); e `ultimoSinalDaConexao`: o instante do último frame que a Conexão recebeu do WhatsApp (ISO), ou `null` quando o sinal está indisponível. Anda mesmo em conta sem Mensagem; é gravado no máximo a cada 15 s |
 | `ouvinte reprocessar --inquilino <id> --conta <nome> --configuracao <apelido>` | Grava o que caiu no derrame (Acervo ocupado), edição de Mensagem incluída (a saída diz quantas edições entraram). **Recusa com o ouvinte no ar** |
 | `ouvinte reprocessar-descartados --inquilino <id> --conta <nome> --configuracao <apelido>` | Reprocessa o evento cru que a recepção guardou por não gravá-lo como Mensagem. **Recusa com o ouvinte no ar.** Sai da guarda o que passou a ser gravado e o que passou a ser ruído (a saída diz quantos foram gravados, mantidos e retirados, e quantas edições de Mensagem entraram); fica o que ainda é descartado |
 
@@ -98,7 +102,7 @@ brasileiro com e sem o nono dígito conta como o mesmo telefone.
 
 | comando | o que faz |
 |---|---|
-| `enviar --inquilino <id> --configuracao <apelido> --para <endereco> (--texto <t> \| --imagem <caminho> \| --documento <caminho>)` | Solicita um Envio, pelo disco. `--imagem` e `--documento` aceitam `--texto` como legenda |
+| `enviar --inquilino <id> --configuracao <apelido> (--para <endereco> \| --conversa <id>) (--texto <t> \| --imagem <caminho> \| --documento <caminho>)` | Solicita um Envio, pelo disco. `--imagem` e `--documento` aceitam `--texto` como legenda. A conta (`--configuracao`) é sempre explícita. `--conversa` envia à Conversa pelo id; na direta, a conta tem de ser a dona dela (código 2 se não), e Conversa inexistente, feed de status e lista de transmissão também saem 2. A saída diz a conta e a Conversa |
 | `envio estado --inquilino <id> [--json]` | A contagem de Envios por estado |
 | `envio reprocessar --inquilino <id> [--json]` | Volta Envios com falha para pendente. **Só local** |
 
@@ -161,12 +165,13 @@ etapas estão na seção 4.3 do [guia do host](../guias/host-continuo-ouvinte-e-
 | `pessoa mesclar --inquilino <id> --pessoa <id> --pessoa <id> [--mestre <id>]` | Mescla duas Pessoas: a absorvida **aponta** para a mestre e mantém tudo |
 | `pessoa desfazer-mesclagem --inquilino <id> --pessoa <id>` | Desfaz a mesclagem |
 | `pessoa conferir --inquilino <id>` | Detector de integridade da mesclagem. Sai 1 se achar Pessoa apontando para quem não é mestre |
-| `pessoa remover-nomes-invalidos --inquilino <id> [--com-efeito --confirmo]` | Remove Atribuição de nome que repete o próprio endereço ou duplica outra por marca invisível. Ensaio por padrão |
+| `pessoa remover-nomes-invalidos --inquilino <id> [--com-efeito --confirmo]` | Remove Atribuição de nome que repete o próprio endereço ou duplica outra por marca invisível. Ensaio por padrão. **O `desfazer` desta Operação não restaura os nomes** (#1283) |
+| `pessoa promover-identificadores-nomeados --inquilino <id> [--limite <n>] [--com-efeito --confirmo]` | Promove a Pessoa os Identificadores sem Pessoa que já têm nome utilizável. Ensaio por padrão; escreve no Acervo. Nunca foi medido em campo |
 | `pessoa precedencia --inquilino <id> [--origem <nome> --peso <n>] [--catalogo-preferido <apelido>]` | Ajusta a precedência entre as origens de nome, e qual catálogo é o preferido |
 | `identidade resolver-enderecos --inquilino <id> [--com-efeito --confirmo] [--json]` | Resolve, no Acervo existente, os endereços na forma alternativa para a canônica. Reversível |
-| `operacao listar --inquilino <id> [--chave <valor>]` | Lista as Operações da trilha |
-| `operacao ver <id> --inquilino <id> [--chave <valor>]` | O efeito linha a linha de uma Operação |
-| `operacao desfazer <id> --inquilino <id> [--com-efeito --confirmo]` | Desfaz uma Operação. A do Registro (configuração) **não** se desfaz: redefine-se |
+| `operacao listar --inquilino <id> --chave <valor>` | Lista as 50 Operações mais recentes da trilha (do Acervo e do Registro) |
+| `operacao ver <id> --inquilino <id> --chave <valor>` | O efeito linha a linha de uma Operação |
+| `operacao desfazer <id> --inquilino <id> --chave <valor> [--com-efeito --confirmo]` | Desfaz uma Operação. A do Registro (configuração) **não** se desfaz: redefine-se. Só se desfaz o que tem porta de restauração (ver #1283); a linha sem porta volta como recusada, e o resto segue |
 
 ## Consulta local
 
@@ -185,5 +190,10 @@ Além delas, só existem locais:
 
 ## Códigos de saída
 
-`0` deu certo; `1` erro; `2` invocação errada (flag faltando, comando desconhecido, valor inválido). Os
-códigos 3 a 7 são do modo cliente. Exceção: `pessoa conferir` sai `1` quando encontra violação.
+`0` deu certo; `1` erro; `2` invocação errada. Os códigos 3 a 7 são do modo cliente. A divisão entre `1` e `2` para
+**flag obrigatória faltando** não é uniforme: sai `2` em `ouvinte`, `ouvir`, `servir`, `transcricao`, `midia reprocessar`,
+`midia extrair-duracao`, `configuracao criar` e `definir-telefone`, `entrada`, `envio` e `enviar`; sai `1` (o erro cai no
+tratamento geral) em `importar`, `pessoa`, `acervo`, `material`, `retencao`, `inquilino`, `operacao` e nas consultas
+locais. Alguns `1` são **veredito, não erro**, o que importa a quem os pendura num agendador: `material atraso`
+(alguma Configuração atrasada), `material varrer` (houve falha), `ouvinte estado` (sem evento registrado),
+`ouvinte reprocessar` (lote parcial), `transcricao solicitar` (recusado) e `pessoa conferir` (achou violação).

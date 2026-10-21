@@ -6,6 +6,8 @@ import { abrirRegistro } from '../../src/registro/registro.js';
 import { resolverConfiguracao } from '../../src/registro/configuracao-adaptador.js';
 import { abrirAcervo, abrirAcervoSomenteLeitura } from '../../src/nucleo/acervo.js';
 import { registrarEnvio } from '../../src/nucleo/envio.js';
+import { registrarConversa } from '../../src/nucleo/escrita.js';
+import { aprenderCorrespondencia } from '../../src/nucleo/correspondencia.js';
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -25,9 +27,27 @@ export interface EnvioLido {
   conteudo_caminho_arquivo: string | null;
   conteudo_mimetype: string | null;
   conteudo_nome_arquivo: string | null;
+  /** A Conversa a que o Envio ficou ligado (#1323), ou o endereco cru quando nao ha Conversa. */
+  conversa_id: string | null;
+  destino_cru: string | null;
+}
+
+/** As Conversas sinteticas do Inquilino "Agente" (#1323). */
+export interface ConversasDaCena {
+  grupo: string;
+  /** Direta de telefone da Configuracao `agente`: a canonica. */
+  pessoa: string;
+  /** A mesma pessoa em forma alternativa (opaca), com par canonico aprendido. */
+  pessoaOpaca: string;
+  /** Alternativa com par aprendido mas SEM Conversa canonica nesta Configuracao: o endereco canonico e que vai. */
+  pessoaOpacaSemCanonica: string;
+  enderecoCanonicoSemConversa: string;
+  enderecoDoGrupo: string;
+  enderecoDaPessoa: string;
 }
 
 export interface CenaDeEnvio {
+  conversas: ConversasDaCena;
   raiz: string;
   url: string;
   inquilinoId: string;
@@ -56,6 +76,21 @@ export interface OpcoesDaCena {
 export async function subirCenaDeEnvio(opcoes: OpcoesDaCena = {}): Promise<CenaDeEnvio> {
   const c = cenario();
   const { id: inquilinoId, acervo } = c.novoInquilino('Agente');
+  // As Conversas sinteticas da #1323 nascem com a Configuracao `agente` (criada logo abaixo) como dona das diretas.
+  const registroDasConversas = abrirRegistro(c.raiz);
+  const cfgDaCena = resolverConfiguracao(registroDasConversas, inquilinoId, 'whatsapp', 'agente');
+  registroDasConversas.fechar();
+  const enderecoDoGrupo = '120363000000000001@g.us';
+  const enderecoDaPessoa = '5511900000001@s.whatsapp.net';
+  const grupo = registrarConversa(acervo, { fonte: 'whatsapp', idExterno: enderecoDoGrupo, coletiva: true, bruto: '{}' });
+  aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: '123456789012345@lid', canonico: enderecoDaPessoa });
+  const direta = (idExterno: string) =>
+    registrarConversa(acervo, { fonte: 'whatsapp', idExterno, coletiva: false, configuracao: { id: cfgDaCena.id, fonte: 'whatsapp' }, bruto: '{}' });
+  const pessoa = direta(enderecoDaPessoa);
+  const pessoaOpaca = direta('123456789012345@lid');
+  const enderecoCanonicoSemConversa = '5511900000002@s.whatsapp.net';
+  aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: '555555555555555@lid', canonico: enderecoCanonicoSemConversa });
+  const pessoaOpacaSemCanonica = direta('555555555555555@lid');
   acervo.fechar();
   const { id: outroId, acervo: acervoDoOutro } = c.novoInquilino('Titular');
   acervoDoOutro.fechar();
@@ -75,7 +110,7 @@ export async function subirCenaDeEnvio(opcoes: OpcoesDaCena = {}): Promise<CenaD
       return a
         .preparar(
           `SELECT identificador_de_envio, estado, conteudo_tipo, conteudo_texto, conteudo_caminho_arquivo,
-                  conteudo_mimetype, conteudo_nome_arquivo FROM envios ORDER BY rowid`,
+                  conteudo_mimetype, conteudo_nome_arquivo, conversa_id, destino_cru FROM envios ORDER BY rowid`,
         )
         .all() as EnvioLido[];
     } finally {
@@ -118,6 +153,7 @@ export async function subirCenaDeEnvio(opcoes: OpcoesDaCena = {}): Promise<CenaD
   await new Promise<void>((r) => srv.listen(porta, '127.0.0.1', r));
 
   return {
+    conversas: { grupo, pessoa, pessoaOpaca, pessoaOpacaSemCanonica, enderecoCanonicoSemConversa, enderecoDoGrupo, enderecoDaPessoa },
     raiz: c.raiz,
     url: `http://127.0.0.1:${porta}`,
     inquilinoId,
