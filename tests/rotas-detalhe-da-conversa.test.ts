@@ -119,3 +119,16 @@ test('a direta com Configuracao do Registro traz o APELIDO dela, como a listagem
     cena.encerrar();
   }
 });
+
+// #1323: o endereco do grupo tambem chega pela rede: a coletiva o traz, a direta nao tem o campo.
+test('GET /conversas/<id>/detalhe traz o endereco na coletiva e nao o traz na direta', async () => {
+  const cena = await subirCenaDeIdentidade();
+  try {
+    const grupo = j((await cena.pedir(`/conversas/${cena.s.grupo}/detalhe`, cena.chave.valor)).corpo);
+    assert.equal(grupo.endereco, 'grupo-1@g.us');
+    const direta = j((await cena.pedir(`/conversas/${cena.s.diretaDeBruno}/detalhe`, cena.chave.valor)).corpo);
+    assert.equal('endereco' in direta, false);
+  } finally {
+    cena.encerrar();
+  }
+});

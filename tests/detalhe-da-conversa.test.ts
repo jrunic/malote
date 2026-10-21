@@ -104,3 +104,20 @@ test('Conversa que nao existe devolve undefined', () => {
     limpar();
   }
 });
+
+// #1323: a coletiva traz o endereco dela na Fonte (o que `--para` aceita); a direta nao tem o campo, porque o endereco
+// de uma Pessoa ja sai por `identificar`, `participantes` e `autores`.
+test('a coletiva traz o endereco dela na Fonte e a direta nao tem o campo', () => {
+  const { acervo, s, limpar } = acervoDeIdentidade();
+  try {
+    const grupo = detalharConversa(acervo, s.grupo, PRECEDENCIA);
+    assert.ok(grupo !== undefined);
+    assert.equal(grupo.endereco, 'grupo-1@g.us');
+
+    const direta = detalharConversa(acervo, s.diretaDeBruno, PRECEDENCIA);
+    assert.ok(direta !== undefined);
+    assert.equal('endereco' in direta, false);
+  } finally {
+    limpar();
+  }
+});
