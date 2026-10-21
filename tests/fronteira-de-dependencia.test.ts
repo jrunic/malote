@@ -187,6 +187,29 @@ for (const pasta of SEM_ADAPTADOR) {
   });
 }
 
+/**
+ * `src/rede/` nao compoe Fonte: quem compoe e `src/cli`. A UNICA excecao (#1323) e o predicado puro de destinatario de
+ * Envio, que a rota de Envio usa para recusar o que nao e destinatario: o sufixo do endereco e vocabulario de Fonte e
+ * mora no adaptador, e injeta-lo pelo `servir` obrigaria todo servidor de teste a passa-lo. O modulo nao importa nada,
+ * entao a rede nao herda dependencia nenhuma. Qualquer outro import de adaptador em `src/rede/` reprova.
+ */
+const ADAPTADOR_PURO_PERMITIDO_NA_REDE = join('src', 'adaptadores', 'whatsapp', 'destinatario-de-envio.ts');
+
+test('src/rede so importa de adaptador o predicado puro de destinatario de Envio, e ele nao importa nada', () => {
+  const violacoes: string[] = [];
+  for (const arquivo of arquivosDe(join('src', 'rede'))) {
+    for (const alvo of importados(arquivo)) {
+      if (!alcancaAdaptadores(alvo)) continue;
+      if (!alvo.endsWith('adaptadores/whatsapp/destinatario-de-envio.js')) violacoes.push(`${arquivo} importa ${alvo}`);
+    }
+  }
+  assert.deepEqual(violacoes, [], violacoes.join('; '));
+  assert.deepEqual(importados(ADAPTADOR_PURO_PERMITIDO_NA_REDE), [], 'o modulo permitido na rede nao pode importar nada');
+  // Anti-vacuidade: a rota de Envio de fato usa o modulo (senao a excecao nao teria o que guardar).
+  const usos = arquivosDe(join('src', 'rede')).flatMap((a) => importados(a)).filter((alvo) => alcancaAdaptadores(alvo));
+  assert.ok(usos.length >= 1, 'o detector nao viu nenhum import de adaptador em src/rede');
+});
+
 test('o detector de adaptador ACHA os imports que existem de verdade', () => {
   // A protecao anti-vacuidade que decide. As duas anteriores garantem que ha
   // arquivos e que o extrator le imports; esta garante que o DETECTOR casa o

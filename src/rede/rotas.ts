@@ -24,7 +24,9 @@ import {
   type PaginaDeConversas,
 } from '../nucleo/pagina-de-conversas.js';
 import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
-import { abrirAcervo, versaoDoAcervoEmDisco, VERSAO_SCHEMA_ACERVO } from '../nucleo/acervo.js';
+import { abrirAcervo, abrirAcervoSomenteLeitura, versaoDoAcervoEmDisco, VERSAO_SCHEMA_ACERVO } from '../nucleo/acervo.js';
+import { resolverDestinoPorConversa, type DestinoPorConversa } from '../nucleo/destino-de-envio.js';
+import { enderecoEhDestinatarioDeEnvio } from '../adaptadores/whatsapp/destinatario-de-envio.js';
 import { solicitarTranscricao } from '../nucleo/transcricao.js';
 import {
   contarEnviosPorEstado,
@@ -33,6 +35,7 @@ import {
   lerEnvio,
   registrarEnvio,
   type ConteudoDeEnvio,
+  type DestinoDeEnvio,
   type ExameDeRepeticao,
 } from '../nucleo/envio.js';
 import { identificarPorValor } from '../nucleo/identificar.js';
@@ -291,6 +294,7 @@ async function responderSolicitacaoDeEnvio(
     }
     const apelido = texto('configuracao');
     const para = texto('para');
+    const conversa = texto('conversa');
     const tipo = texto('tipo') ?? 'texto';
     const legendaOuTexto = texto('texto');
     const arquivoBase64 = texto('arquivoBase64');
@@ -305,8 +309,9 @@ async function responderSolicitacaoDeEnvio(
       return;
     }
 
-    if (apelido === undefined || para === undefined) {
-      json(res, 400, { erro: 'informe configuracao e para' });
+    // A conta que fala e SEMPRE informada (#1323): nunca inferida da Conversa. O destino e `conversa` OU `para`.
+    if (apelido === undefined || (para === undefined) === (conversa === undefined)) {
+      json(res, 400, { erro: 'informe configuracao e, como destino, conversa OU para (nunca os dois)' });
       return;
     }
     if (tipo !== 'texto' && tipo !== 'imagem' && tipo !== 'documento') {
@@ -335,6 +340,36 @@ async function responderSolicitacaoDeEnvio(
       return;
     }
 
+    // `conversa` (#1323): o id e do Acervo do Inquilino da credencial, entao o de outro Inquilino e `404`, igual ao
+    // inexistente. A resolucao le o Acervo SOMENTE-LEITURA, antes de qualquer byte a disco.
+    let porConversa: Exclude<DestinoPorConversa, { tipo: 'inexistente' }> | undefined;
+    if (conversa !== undefined) {
+      if (versao === undefined) {
+        naoEncontrado(res);
+        return;
+      }
+      const leitura = abrirAcervoSomenteLeitura(pastaDeAcervos, inquilinoId);
+      let resolvido: DestinoPorConversa;
+      try {
+        resolvido = resolverDestinoPorConversa(leitura, conversa as ConversaId);
+      } finally {
+        leitura.fechar();
+      }
+      if (resolvido.tipo === 'inexistente') {
+        naoEncontrado(res);
+        return;
+      }
+      porConversa = resolvido;
+      if (porConversa.dada.fonte !== fonte) {
+        json(res, 400, { erro: `a Conversa e de ${porConversa.dada.fonte}, e o pedido e de ${fonte}` });
+        return;
+      }
+      if (!enderecoEhDestinatarioDeEnvio(porConversa.dada.endereco)) {
+        json(res, 400, { erro: 'a Conversa nao e destinatario de Envio (feed de status ou lista de transmissao)' });
+        return;
+      }
+    }
+
     // BUSCA, NUNCA CRIA, escopada ao Inquilino da credencial: Configuracao de
     // outro Inquilino responde igual a "nao existe em lugar nenhum".
     const registro = abrirRegistro(ctx.dados);
@@ -348,6 +383,17 @@ async function responderSolicitacaoDeEnvio(
       naoEncontrado(res);
       return;
     }
+    // A Conversa direta e chaveada pela Configuracao: outra conta falaria pelo fio errado e o eco criaria um segundo.
+    if (porConversa !== undefined && !porConversa.dada.coletiva && porConversa.dada.configuracaoId !== cfg.id) {
+      json(res, 400, { erro: 'a Conversa direta pertence a outra Configuracao' });
+      return;
+    }
+    // O que a resposta diz sobre o destino: a conta usada, e a Conversa (a usada, e de qual foi redirecionada).
+    const sobreODestino: Record<string, string> = { configuracao: apelido };
+    if (porConversa?.tipo === 'conversa') sobreODestino['conversa'] = porConversa.usada.id;
+    if (porConversa !== undefined && (porConversa.tipo === 'endereco' || porConversa.usada.id !== porConversa.dada.id)) {
+      sobreODestino['redirecionadaDe'] = porConversa.dada.id;
+    }
 
     // O Acervo abre ANTES de qualquer byte ir a disco: se `abrirAcervo`
     // lancar, nenhum staging orfao foi criado. O staging so existe dentro do
@@ -358,7 +404,12 @@ async function responderSolicitacaoDeEnvio(
     const escrita = abrirAcervo(pastaDeAcervos, inquilinoId);
     let stagingParaLimpar: string | undefined;
     try {
-      const destino = { enderecoCru: para };
+      const destino: DestinoDeEnvio =
+        porConversa === undefined
+          ? { enderecoCru: para as string }
+          : porConversa.tipo === 'conversa'
+            ? { conversaId: porConversa.usada.id }
+            : { enderecoCru: porConversa.endereco };
       // Repeticao: examina ANTES de mandar bytes a disco. O arbitro final e a unicidade da
       // coluna, la no registro; aqui se evita escrever o que a repeticao nao vai usar.
       if (identificadorDeEnvio !== undefined) {
@@ -379,7 +430,7 @@ async function responderSolicitacaoDeEnvio(
           return;
         }
         if (exame.resultado === 'repetido') {
-          json(res, 200, { aceita: true, repetido: true, envioId: exame.envioId, identificadorDeEnvio });
+          json(res, 200, { aceita: true, repetido: true, envioId: exame.envioId, identificadorDeEnvio, ...sobreODestino });
           return;
         }
       }
@@ -426,6 +477,7 @@ async function responderSolicitacaoDeEnvio(
           repetido: true,
           envioId: resultado.envioId,
           identificadorDeEnvio: resultado.identificadorDeEnvio,
+          ...sobreODestino,
         });
         return;
       }
@@ -434,6 +486,7 @@ async function responderSolicitacaoDeEnvio(
         aceita: true,
         envioId: resultado.envioId,
         identificadorDeEnvio: resultado.identificadorDeEnvio,
+        ...sobreODestino,
       });
     } catch (erroDeRegistro) {
       if (stagingParaLimpar !== undefined) {
