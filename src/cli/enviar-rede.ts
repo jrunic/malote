@@ -36,6 +36,13 @@ export interface RedeDeEnvio {
   timeoutMs?: number;
 }
 
+/** O endereco sem o numero inteiro na saida: so os 4 ultimos digitos e o sufixo. */
+export function mascararEndereco(endereco: string): string {
+  const i = endereco.lastIndexOf('@');
+  if (i < 0) return endereco;
+  return `...${endereco.slice(Math.max(0, i - 4), i)}${endereco.slice(i)}`;
+}
+
 export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio): Promise<number> {
   const escrever = rede.escrever;
   const recusaDeBandeira = recusarBandeiras(argumentos, escrever);
@@ -50,16 +57,21 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
   }
   const apelido = opcao(argumentos, 'configuracao');
   const para = opcao(argumentos, 'para');
+  const conversa = opcao(argumentos, 'conversa');
   const texto = opcao(argumentos, 'texto');
   const imagem = opcao(argumentos, 'imagem');
   const documento = opcao(argumentos, 'documento');
 
-  if (apelido === undefined || para === undefined) {
+  if (apelido === undefined || (para === undefined && conversa === undefined)) {
     escrever(
-      'Uso: malote enviar --configuracao <apelido> --para <endereco> ' +
+      'Uso: malote enviar --configuracao <apelido> (--para <endereco> | --conversa <id>) ' +
         '(--texto <texto> | --imagem <caminho> [--texto <legenda>] | ' +
         '--documento <caminho> [--texto <legenda>]) [--chave-em <VARIAVEL>] [--json]',
     );
+    return 2;
+  }
+  if (para !== undefined && conversa !== undefined) {
+    escrever('Informe --conversa OU --para, nunca os dois. A conta (--configuracao) vai sempre explicita.');
     return 2;
   }
   if (imagem === undefined && documento === undefined && texto === undefined) {
@@ -70,7 +82,7 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
     escrever('--imagem e --documento sao mutuamente exclusivos.');
     return 2;
   }
-  if (!para.includes('@')) {
+  if (para !== undefined && !para.includes('@')) {
     escrever(`--para precisa de endereco completo (ex.: 5511999990000@s.whatsapp.net), recebido "${para}".`);
     return 2;
   }
@@ -102,9 +114,11 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
     return 2;
   }
 
+  // O destino vai por `conversa` OU por `para`; o servidor recusa os dois juntos.
+  const destinoDoCorpo: Record<string, string> = conversa !== undefined ? { conversa } : { para: para as string };
   let corpo: Record<string, unknown>;
   if (caminhoDoArquivo === undefined) {
-    corpo = { configuracao: apelido, para, tipo: 'texto', texto, identificadorDeEnvio };
+    corpo = { configuracao: apelido, ...destinoDoCorpo, tipo: 'texto', texto, identificadorDeEnvio };
   } else {
     // Guarda de memoria: o base64 nunca e menor que a entrada, entao arquivo que sozinho ja
     // passa do limite do corpo e recusado sem ser lido. A checagem exata, pos-codificacao,
@@ -120,7 +134,7 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
     const bytes = readFileSync(caminhoDoArquivo);
     corpo = {
       configuracao: apelido,
-      para,
+      ...destinoDoCorpo,
       identificadorDeEnvio,
       tipo: imagem !== undefined ? 'imagem' : 'documento',
       arquivoBase64: bytes.toString('base64'),
@@ -164,8 +178,12 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
     }
     if (falha.classe === 'uso' && falha.status === 404) {
       escrever(
-        `Configuracao "${apelido}" nao existe neste Inquilino, ou a chave nao o alcanca ` +
-          '(o servidor nao distingue as duas, e este cliente nao adivinha).',
+        conversa !== undefined
+          ? `Configuracao "${apelido}" ou Conversa "${conversa}" nao existe neste Inquilino, ou a chave nao o alcanca ` +
+              '(o id de Conversa e do Acervo da Chave: o de outro Inquilino responde igual; o servidor nao distingue, ' +
+              'e este cliente nao adivinha).'
+          : `Configuracao "${apelido}" nao existe neste Inquilino, ou a chave nao o alcanca ` +
+              '(o servidor nao distingue as duas, e este cliente nao adivinha).',
       );
     } else {
       escrever(falha.message);
@@ -188,6 +206,9 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
     envioId?: string;
     identificadorDeEnvio?: string;
     repetido?: boolean;
+    configuracao?: string;
+    conversa?: string;
+    redirecionadaDe?: string;
   };
   const envioId = lido.envioId ?? '?';
   escrever(
@@ -196,6 +217,24 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
       : `Envio aceito: ${envioId} (identificador ${identificadorDeEnvio}; pendente — o "malote ouvir" da ` +
           `Configuracao o processa; confira com: malote envio estado ${identificadorDeEnvio} --chave-em <VARIAVEL>).`,
   );
+  // A conta que fala fica explicita na saida (#1323). Servidor antigo nao a devolve: vale o apelido do pedido.
+  const destinoNaSaida =
+    conversa === undefined
+      ? mascararEndereco(para as string)
+      : lido.conversa !== undefined
+        ? `a Conversa ${lido.conversa}`
+        : lido.redirecionadaDe !== undefined
+          ? 'o endereco canonico da Conversa dada'
+          : `a Conversa ${conversa}`;
+  escrever(`  pela Configuracao ${lido.configuracao ?? apelido}, para ${destinoNaSaida}.`);
+  if (lido.redirecionadaDe !== undefined) {
+    escrever(
+      lido.conversa !== undefined
+        ? `  Conversa ${lido.conversa} usada no lugar de ${lido.redirecionadaDe} (a forma canonica do mesmo endereco).`
+        : `  O endereco canonico foi usado no lugar da Conversa ${lido.redirecionadaDe} (a canonica ainda nao existe; ` +
+            'nasce quando a mensagem sai).',
+    );
+  }
   if (lido.identificadorDeEnvio !== identificadorDeEnvio) {
     escrever(
       'Aviso: o servidor nao confirmou o identificador deste pedido (servidor sem repeticao segura). ' +

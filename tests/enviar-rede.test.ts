@@ -398,3 +398,99 @@ test('arquivo que sozinho passa do limite do corpo: recusa 2 sem abrir conexao',
 test('o limite do cliente e igual ao do servidor (a copia nao pode divergir em silencio)', () => {
   assert.equal(LIMITE_DO_CORPO_DE_ENVIO, TAMANHO_MAXIMO_DO_CORPO_DE_ENVIO);
 });
+
+// #1323: `--conversa <id>` no lugar de `--para`. A conta (`--configuracao`) continua obrigatoria e a saida diz qual
+// conta fala e para qual Conversa. O id de Conversa e do Acervo da Chave que envia.
+
+const POR_CONVERSA = ['enviar', '--configuracao', 'agente'];
+
+test('--conversa: aceito pelo id da Conversa, o Envio fica ligado a ela e a saida diz a conta e a Conversa', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    const r = rede(cena.url, cena.chave.valor);
+    const codigo = await executarEnviarRede([...POR_CONVERSA, '--conversa', cena.conversas.grupo, '--texto', 'oi grupo'], r.rede);
+    assert.equal(codigo, 0, r.saida());
+    assert.match(r.saida(), /Envio aceito: \S+/);
+    assert.match(r.saida(), new RegExp(`pela Configuracao agente, para a Conversa ${cena.conversas.grupo}`));
+    const envios = cena.lerEnvios();
+    assert.equal(envios.length, 1);
+    assert.equal(envios[0]!.conversa_id, cena.conversas.grupo);
+    assert.equal(envios[0]!.destino_cru, null);
+    assert.equal(envios[0]!.conteudo_texto, 'oi grupo');
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('--conversa de forma alternativa: a saida diz que a canonica foi usada no lugar da dada', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    const r = rede(cena.url, cena.chave.valor);
+    const codigo = await executarEnviarRede([...POR_CONVERSA, '--conversa', cena.conversas.pessoaOpaca, '--texto', 'oi'], r.rede);
+    assert.equal(codigo, 0, r.saida());
+    assert.match(r.saida(), new RegExp(`Conversa ${cena.conversas.pessoa} usada no lugar de ${cena.conversas.pessoaOpaca}`));
+    assert.equal(cena.lerEnvios()[0]!.conversa_id, cena.conversas.pessoa);
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('--conversa de forma alternativa SEM canonica: o texto fala do endereco canonico, e nao da Conversa dada', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    const r = rede(cena.url, cena.chave.valor);
+    const codigo = await executarEnviarRede([...POR_CONVERSA, '--conversa', cena.conversas.pessoaOpacaSemCanonica, '--texto', 'oi'], r.rede);
+    assert.equal(codigo, 0, r.saida());
+    assert.match(r.saida(), /pela Configuracao agente, para o endereco canonico da Conversa dada/);
+    assert.doesNotMatch(r.saida(), new RegExp(`para a Conversa ${cena.conversas.pessoaOpacaSemCanonica}`));
+    assert.match(r.saida(), new RegExp(`O endereco canonico foi usado no lugar da Conversa ${cena.conversas.pessoaOpacaSemCanonica}`));
+    const envio = cena.lerEnvios()[0]!;
+    assert.equal(envio.conversa_id, null);
+    assert.equal(envio.destino_cru, cena.conversas.enderecoCanonicoSemConversa);
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('por --para a saida tambem diz a conta, com o endereco mascarado', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    const r = rede(cena.url, cena.chave.valor);
+    const codigo = await executarEnviarRede([...BASE, '--texto', 'oi'], r.rede);
+    assert.equal(codigo, 0, r.saida());
+    assert.match(r.saida(), /pela Configuracao agente, para \.\.\.0000@s\.whatsapp\.net/);
+    assert.doesNotMatch(r.saida(), /5511999990000/);
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('--conversa e --para juntos, ou nenhum dos dois: recusa 2 sem abrir conexao', async () => {
+  const s = await subirServidorContador();
+  try {
+    const juntos = rede(s.url, 'k');
+    assert.equal(
+      await executarEnviarRede([...POR_CONVERSA, '--conversa', 'x', '--para', 'a@s.whatsapp.net', '--texto', 'x'], juntos.rede),
+      2,
+    );
+    assert.match(juntos.saida(), /--conversa OU --para/);
+    const nenhum = rede(s.url, 'k');
+    assert.equal(await executarEnviarRede([...POR_CONVERSA, '--texto', 'x'], nenhum.rede), 2);
+    assert.match(nenhum.saida(), /Uso:/);
+    assert.equal(s.requisicoes(), 0);
+  } finally {
+    s.fechar();
+  }
+});
+
+test('--conversa de outro Inquilino ou inexistente: 404 vira codigo 6, e a mensagem nao adivinha qual dos dois falhou', async () => {
+  const cena = await subirCenaDeEnvio();
+  try {
+    const r = rede(cena.url, cena.chaveDoOutro.valor);
+    const codigo = await executarEnviarRede([...POR_CONVERSA, '--conversa', cena.conversas.grupo, '--texto', 'x'], r.rede);
+    assert.equal(codigo, 6);
+    assert.match(r.saida(), /Configuracao "agente" ou Conversa/);
+  } finally {
+    cena.encerrar();
+  }
+});
