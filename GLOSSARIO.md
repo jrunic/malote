@@ -114,7 +114,7 @@ Quem conversa — uma só entidade, ainda que apareça em várias plataformas.
 
 **Identificador**:
 O endereço de uma Pessoa numa Fonte — número, apelido de perfil, e-mail, código interno da plataforma.
-*Evitar*: jid, lid, handle, telefone, número, endereço.
+*Evitar*: jid, lid, handle, telefone, número. A palavra *endereço* é a do produto (`--para`, o campo `endereco` do detalhe da Conversa): o de uma Pessoa é o Identificador, e o de uma Conversa é a sua Referência Externa.
 
 **Atribuição de Nome**:
 Um nome vindo de uma origem, com data e Autoridade, pendurado num Identificador ou numa Pessoa.
@@ -227,7 +227,7 @@ O código que traduz uma Fonte para o núcleo e é dono das suas próprias estru
 
 **Referência Externa**:
 O que amarra uma Conversa ou Mensagem ao que ela é lá fora. Na Mensagem e na Conversa coletiva, é o par Fonte mais identificador na origem. Na Conversa **direta**, entra também a Configuração de Adaptador: duas contas do Titular que falam com o mesmo endereço têm dois fios, e não um.
-*Evitar*: id externo, chave natural, id original.
+*Evitar*: id externo, chave natural, id original. O valor da Referência Externa de uma Conversa na Fonte é o **endereço** dela: é o que `enviar --para` aceita e o que o detalhe da Conversa coletiva traz no campo `endereco`.
 
 **Conteúdo Bruto**:
 O registro original que a Fonte entregou, guardado inteiro ao lado do que o núcleo modelou — Mensagem, Conversa, Participação e Anexo o carregam.

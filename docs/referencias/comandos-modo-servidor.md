@@ -102,7 +102,7 @@ brasileiro com e sem o nono dígito conta como o mesmo telefone.
 
 | comando | o que faz |
 |---|---|
-| `enviar --inquilino <id> --configuracao <apelido> --para <endereco> (--texto <t> \| --imagem <caminho> \| --documento <caminho>)` | Solicita um Envio, pelo disco. `--imagem` e `--documento` aceitam `--texto` como legenda |
+| `enviar --inquilino <id> --configuracao <apelido> (--para <endereco> \| --conversa <id>) (--texto <t> \| --imagem <caminho> \| --documento <caminho>)` | Solicita um Envio, pelo disco. `--imagem` e `--documento` aceitam `--texto` como legenda. A conta (`--configuracao`) é sempre explícita. `--conversa` envia à Conversa pelo id; na direta, a conta tem de ser a dona dela (código 2 se não), e Conversa inexistente, feed de status e lista de transmissão também saem 2. A saída diz a conta e a Conversa |
 | `envio estado --inquilino <id> [--json]` | A contagem de Envios por estado |
 | `envio reprocessar --inquilino <id> [--json]` | Volta Envios com falha para pendente. **Só local** |
 

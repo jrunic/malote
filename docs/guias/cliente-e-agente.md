@@ -313,7 +313,7 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 | `GET /conversas/<id>/mensagens` | `limite`, `desde`, `ate`, `autor`, `remetente`, `antes`, `ordem`, `direcao`, `favorito`, `configuracao` | `{ mensagens: [...], proximo? }` |
 | `GET /conversas/<id>/anexos` | `tipo`, `remetente`, `desde`, `ate`, `presenca`, `limite`, `antes` | `{ anexos: [{ id, tipo, presenca, tamanho, nomeOriginal, mensagemId, autorId, ocorridaEm, ... }], proximo? }` — uma só ordem; `ordem` é `400` |
 | `GET /conversas/<id>/autores` | — | `{ autores: [{ identificadorId, valor, nome, origemDoNome, pessoaId }] }` — quem escreveu na Conversa, uma vez cada (participante ou não) |
-| `GET /conversas/<id>/detalhe` | — | `{ id, fonte, coletiva, configuracao, nome, origemDoNome, mensagens, primeiraMensagemEm, ultimaMensagemEm, metadados? }` — `metadados` (`assunto`, `descricao`, `alteradoPor`, `alteradoEm`) só na coletiva; `configuracao` é o apelido |
+| `GET /conversas/<id>/detalhe` | — | `{ id, fonte, coletiva, configuracao, nome, origemDoNome, mensagens, primeiraMensagemEm, ultimaMensagemEm, metadados?, endereco? }` — `endereco` (o endereço do grupo na Fonte, o que `--para` aceita) só na coletiva; `metadados` (`assunto`, `descricao`, `alteradoPor`, `alteradoEm`) só na coletiva; `configuracao` é o apelido |
 | `GET /buscar?texto=` | `conversa`, `autor`, `desde`, `ate`, `limite`, `ordem` (`recentes`, o padrão, ou `cronologica`) | `{ mensagens: [...], truncado }` |
 | `GET /pessoas?texto=` | — | `{ pessoas: [{ id, nome, identificadores }] }` |
 | `GET /conversas/<id>/participantes` | `em` | `{ presenca: {...} }` — cada participante com `valor`, `nome`, `origemDoNome`, `pessoaId`, `etiqueta` e `etiquetaEm` |
@@ -400,10 +400,13 @@ o pedido na instalação local (e aí leva `--inquilino`).
 
 ```
 malote enviar --configuracao agente --para 5511999990000@s.whatsapp.net --texto "oi"
+malote enviar --configuracao agente --conversa <id da Conversa> --texto "oi, grupo"
 malote enviar --configuracao agente --para <endereço> --imagem foto.png --texto "legenda"
 malote enviar --configuracao agente --para <endereço> --documento relatorio.pdf
 ```
 
+- **A conta (`--configuracao`) é sempre explícita**, no pedido por `--para` e no por `--conversa`: nunca é inferida da Conversa, e a resposta diz qual conta falou. Num grupo de que duas contas participam, quem escolhe a conta é quem pede.
+- **`--conversa` é por Inquilino.** O id vem do Acervo da Chave que envia; o mesmo grupo tem ids diferentes em Inquilinos diferentes, e o id de outro Inquilino responde `404`. **Entre contas** (ler com uma chave e falar com a de outro Inquilino) use o endereço: `malote detalhar --conversa <id>` com a chave de leitura devolve `endereco` na coletiva, e `malote enviar --configuracao <a que fala> --para <endereco> --chave-em <VARIÁVEL>` envia com a outra chave.
 - No modo rede, o Inquilino vem da Chave de Acesso: `--inquilino` é recusado (código 2).
   Para enviar pela instalação local numa máquina que carrega o servidor, rode com
   `env -u MALOTE_SERVIDOR`.
@@ -430,7 +433,8 @@ Corpo (JSON):
 | Campo | Tipo | Obrigatório | Nota |
 |---|---|---|---|
 | `configuracao` | string | sim | apelido de uma Configuração que já existe |
-| `para` | string | sim | endereço completo (`...@s.whatsapp.net`, `...@g.us`) |
+| `para` | string | `para` **ou** `conversa` | endereço completo (`...@s.whatsapp.net`, `...@g.us`) |
+| `conversa` | string | `para` **ou** `conversa` | o id de uma Conversa **deste Inquilino**; nunca junto com `para`. A `configuracao` continua obrigatória |
 | `tipo` | `"texto"`, `"imagem"` ou `"documento"` | não (padrão `"texto"`) | |
 | `texto` | string | se `tipo` for `"texto"` | vira a legenda quando `tipo` é mídia |
 | `arquivoBase64` | string | se `tipo` for mídia | o arquivo inteiro em base64; o corpo todo tem limite de 8 MB |
@@ -439,17 +443,22 @@ Corpo (JSON):
 | `fonte` | string | não (padrão `"whatsapp"`) | só `"whatsapp"` é aceito hoje |
 | `identificadorDeEnvio` | UUID | não | torna a repetição segura: o mesmo pedido com o mesmo identificador devolve o Envio existente |
 
-Resposta: `202` com `{"aceita": true, "envioId": "<id>", "identificadorDeEnvio": "<uuid>"}`
-quando o pedido entrou na fila. O `202` não confirma que a mensagem saiu: o Envio fica
+Resposta: `202` com `{"aceita": true, "envioId": "<id>", "identificadorDeEnvio": "<uuid>", "configuracao": "<apelido>"}`
+quando o pedido entrou na fila. Por `conversa`, a resposta traz também `conversa` (o id da Conversa em que o Envio
+ficou) e, se a Conversa dada era a forma alternativa de um endereço que tem Conversa canônica (a `@lid` de uma
+pessoa com Conversa de telefone), `redirecionadaDe` (o id que foi dado); se a canônica ainda não existe, vem só
+`redirecionadaDe`, e a Conversa nasce quando a mensagem sai. O `202` não confirma que a mensagem saiu: o Envio fica
 `pendente` até o `malote ouvir` daquela Configuração processá-lo. Repetição do mesmo
 pedido com o mesmo `identificadorDeEnvio`: `200` com os mesmos campos e `"repetido": true`.
 
 Recusas:
-- `404`, corpo vazio — a Configuração não existe neste Inquilino. É a mesma
+- `404`, corpo vazio — a Configuração, ou a Conversa de `conversa`, não existe neste Inquilino. É a mesma
   resposta para "não existe em lugar nenhum" e "existe em outro Inquilino".
 - `400`, com `{"erro": "<motivo>"}` — corpo inválido ou maior que o limite,
-  campo obrigatório ausente, `tipo` desconhecido, `fonte` sem suporte ou
-  `identificadorDeEnvio` que não é UUID.
+  campo obrigatório ausente, `conversa` e `para` juntos (ou nenhum dos dois), `tipo` desconhecido,
+  `fonte` sem suporte ou divergente da Conversa, `identificadorDeEnvio` que não é UUID, Conversa que não é
+  destinatário de Envio (feed de status e lista de transmissão) e Conversa direta pedida por conta que não é a
+  dona dela.
 - `409`, com `{"erro": "<motivo>"}` — o `identificadorDeEnvio` já foi usado para outro
   pedido (outra Configuração, destinatário, tipo, texto, mimetype ou nome de arquivo).
   Os bytes do arquivo não são comparados.

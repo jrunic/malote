@@ -23,6 +23,19 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [Não lançado]
+
+Não muda a forma do Acervo nem do Registro. Mexe na API de Envio e na consulta de Conversa; contrato aditivo.
+
+### Adicionado
+
+- **O detalhe de uma Conversa coletiva traz o `endereco` dela na Fonte**, o mesmo valor que `malote enviar --para` aceita (`GET /conversas/<id>/detalhe`, `malote detalhar`). A Conversa direta não tem o campo. Quem lê com uma chave pode agora enviar a um grupo, o que antes exigia o endereço de fora do malote.
+- **O pedido de Envio aceita `conversa` (o id) no lugar de `para`**, por rede (`POST /envios/solicitar`, `malote enviar --conversa`) e no modo local. A conta (`--configuracao`) continua sempre obrigatória e explícita: nunca é inferida da Conversa, e a resposta e a saída dizem qual conta falou e para qual Conversa. O id é do Acervo do Inquilino da chave (o de outro Inquilino responde `404`); na Conversa direta, a conta tem de ser a dona dela. Feed de status e lista de transmissão não são destinatários (`400`). A Conversa em forma alternativa de um endereço que tem Conversa canônica é redirecionada para a canônica, e a resposta traz `redirecionadaDe`.
+
+### Corrigido
+
+- O processamento de um Envio cuja Conversa deixou de existir marca o Envio `falhou`, com o motivo, em vez de lançar `TypeError` até o ouvinte.
+
 ## [0.41.0] — 2026-10-18
 
 Não muda a forma do Acervo nem do Registro. Mexe na recepção ao vivo: a mensagem de modelo de conta comercial com imagem no cabeçalho passa a gravar um Anexo.

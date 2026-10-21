@@ -364,8 +364,9 @@ Titular (nao exige chave enquanto nao houver rede):
   malote ouvinte estado --conta <nome> [--json]
   malote ouvinte reprocessar    --inquilino <id> --conta <nome> --configuracao <apelido>
   malote ouvinte reprocessar-descartados --inquilino <id> --conta <nome> --configuracao <apelido>   (recusa com o ouvinte no ar)
-  malote enviar     --inquilino <id> --configuracao <apelido> --para <endereco> (--texto <t> | --imagem <caminho> [--texto <legenda>] | --documento <caminho> [--texto <legenda>])
-  malote enviar     --configuracao <apelido> --para <endereco> (mesmas opcoes de conteudo) [--identificador <uuid>] [--chave-em <VARIAVEL>] [--json]
+  malote enviar     --inquilino <id> --configuracao <apelido> (--para <endereco> | --conversa <id>) (--texto <t> | --imagem <caminho> [--texto <legenda>] | --documento <caminho> [--texto <legenda>])
+  malote enviar     --configuracao <apelido> (--para <endereco> | --conversa <id>) (mesmas opcoes de conteudo) [--identificador <uuid>] [--chave-em <VARIAVEL>] [--json]
+                    (a conta --configuracao e sempre explicita; --conversa vale so dentro do Inquilino da Chave e, na direta, exige a conta dona dela)
                                         (com MALOTE_SERVIDOR no ambiente: pede o Envio por REDE; o Inquilino vem da chave;
                                          o identificador torna a repeticao segura: o mesmo pedido nao cria segundo Envio)
   malote envio estado       --inquilino <id> [--json]

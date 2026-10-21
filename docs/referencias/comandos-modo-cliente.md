@@ -73,7 +73,7 @@ Todos aceitam `--json`. As flags marcadas com `*` são obrigatórias.
 | `malote buscar` | Busca no conteúdo, no texto das edições, na Transcrição de áudio e nos contatos enviados dentro de Mensagens (com a proveniência marcada) | `--texto <termo>`\* `--conversa` `--autor` `--desde` `--ate` `--limite` `--ordem` |
 | `malote pessoas` | Resolve texto em Pessoa: texto entra, id sai | `--texto <nome>`\* |
 | `malote identificar <valor>` | O que o Acervo sabe de um Identificador, com ou sem Pessoa. O valor é comparado exato | `--fonte <fonte>` |
-| `malote detalhar` | Uma Conversa por inteiro: id, natureza, nome do outro lado (direta) ou assunto, descrição, quem alterou e quando (coletiva), contagem de Mensagens e a primeira e a última. Id inexistente e id de outro Inquilino respondem igual | `--conversa <id>`\* |
+| `malote detalhar` | Uma Conversa por inteiro: id, natureza, nome do outro lado (direta) ou assunto, descrição, quem alterou e quando (coletiva), contagem de Mensagens e a primeira e a última. Na coletiva traz também o **`endereco`** do grupo na Fonte, o mesmo valor que `--para` aceita (a direta não tem o campo). Id inexistente e id de outro Inquilino respondem igual | `--conversa <id>`\* |
 | `malote participantes` | Participantes de uma Conversa coletiva, com nome e Pessoa; opcionalmente a posição numa data | `--conversa <id>`\* `--em <AAAA-MM-DD>` |
 | `malote etiquetas` | As etiquetas que os membros põem em si em cada grupo: as correntes não vazias, ou o histórico de um membro numa Conversa | `--conversa <id>` `--remetente <valor>` `--busca <texto>` `--historico` `--limite <n>` |
 | `malote configuracao listar` | Quais Configurações existem (apelido, fonte e, nas de WhatsApp, telefone, jid e lid), antes de filtrar por uma | — |
@@ -93,6 +93,7 @@ Observações:
   saída padrão. `--json` equivale a `--formato json`.
 - **`midia`:** vídeo é recusado com `415`; Anexo inexistente, de outro Inquilino ou sem bytes é `404`
   (indistinguíveis, por desenho).
+- **`enviar --conversa <id>`** envia à Conversa pelo id, no lugar de `--para`. O id é do Acervo do Inquilino da Chave: o de outro Inquilino responde `404`. A conta (`--configuracao`) vai **sempre explícita**, nunca inferida da Conversa; na Conversa direta ela tem de ser a conta dona dela (`400` se não). Feed de status e lista de transmissão não são destinatários (`400`). Se a Conversa dada é a forma alternativa (`@lid`) de um endereço que tem Conversa de telefone, o Envio vai para a de telefone, e a saída diz qual foi usada no lugar de qual. A saída diz a conta e a Conversa; `--json` traz `configuracao`, `conversa` e `redirecionadaDe`.
 - **`mensagens --favorito`** e **`--configuracao`** só valem no modo rede; no modo local a leitura os ignora.
 - **`buscar --autor`** só vale no modo rede: o filtro por Pessoa do modo local é `--pessoa <id>`, e cada lado
   ignora a flag do outro (#1290).
@@ -107,7 +108,7 @@ sai pela Configuração indicada.
 
 | comando | o que faz | flags |
 |---|---|---|
-| `malote enviar` | Pede o **Envio** de uma mensagem (texto, imagem ou documento) | `--configuracao <apelido>`\* `--para <endereco>`\* e **um** de `--texto <t>`, `--imagem <caminho>` ou `--documento <caminho>` (imagem e documento aceitam `--texto` como legenda); `--identificador <uuid>` `--chave-em <VARIAVEL>` `--json` |
+| `malote enviar` | Pede o **Envio** de uma mensagem (texto, imagem ou documento) | `--configuracao <apelido>`\* **um** de `--para <endereco>` ou `--conversa <id>`\*, e **um** de `--texto <t>`, `--imagem <caminho>` ou `--documento <caminho>` (imagem e documento aceitam `--texto` como legenda); `--identificador <uuid>` `--chave-em <VARIAVEL>` `--json` |
 | `malote envio estado` | A contagem de Envios, ou o estado de um Envio | `[<identificador>]` `--chave-em <VARIAVEL>` `--json` |
 
 - **`--identificador` torna a repetição segura.** O cliente gera um UUID, e repetir o pedido com o mesmo
