@@ -181,7 +181,7 @@ Duas regras atravessam o modelo inteiro:
 
 - **Mensagem** (raiz).
 - **Referência Externa** (objeto de valor) — mesmo conceito da Conversa.
-- **Citação** (objeto de valor, opcional) — ponteiro para a Mensagem citada.
+- **Citação** (objeto de valor, opcional) — a Mensagem responde a outra pelo recurso de citação da Fonte: o id externo da citada (sempre), o ponteiro para a Mensagem citada quando ela está no Acervo (na mesma Conversa e Fonte; o vínculo se completa quando a citada chega depois), o Identificador do autor dela e a direção (enviada pela conta ou recebida). O autor da citada vira Identificador se faltar, e não ganha Participação, nome nem Pessoa. Derivada do Conteúdo Bruto; edição, reação, revogação e pai de álbum não são Citação.
 - **Marca do Titular** (objeto de valor, opcional) — ver o agregado Conversa, onde o conceito está descrito. Em Mensagem o tipo é `favorito`.
 - **Conteúdo Bruto** (objeto de valor) — o registro original entregue pela Fonte, preservado para o que o núcleo não modela. **Não é exclusivo da Mensagem:** Conversa, Participação e Anexo o carregam pela mesma razão, e quem os produz é o Adaptador. Onde a Fonte entrega uma linha, ela é preservada inteira; onde o participante é **derivado** — conversa direta, que não tem roster — não há registro a preservar e o campo fica ausente.
 

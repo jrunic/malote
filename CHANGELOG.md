@@ -23,6 +23,16 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [Não lançado]
+
+Muda a forma do Acervo (v28 para v29): três colunas novas em Mensagem e um índice parcial; a migração roda sozinha na primeira abertura. Contrato da API aditivo.
+
+### Adicionado
+
+- **A Citação da Mensagem.** Quando uma Mensagem responde a outra pelo recurso de citação do WhatsApp, a recepção ao vivo grava o id da Mensagem citada, o autor dela e a direção (enviada pela conta ou recebida), e o vínculo com a citada quando ela está no Acervo. A citada que chega depois completa o vínculo. O autor da citada vira Identificador se faltar, sem Participação, nome nem Pessoa. A edição, a reação, a revogação e o pai de álbum não são Citação.
+- **`mensagens`, `buscar` e `exportar` (local e rede) trazem `citacao`**: `{ id, idExterno, autorId, direcao }`, ou `null` quando a Mensagem não cita outra. `id` é a Mensagem citada no Acervo (nulo se ela não está nele), `autorId` é nulo quando a citada é da própria conta, e `direcao` é `enviada`, `recebida` ou nula quando não há como saber (a citada é de fora do Acervo e a conta própria não é conhecida).
+- **`malote citacao extrair`** preenche a Citação das Mensagens já gravadas, a partir do Conteúdo Bruto (ensaio por padrão; `--com-efeito --confirmo` grava uma Operação que `operacao desfazer` reverte). Aceita `--desde`, `--ate` e `--limite` (inteiro maior que zero; outro valor sai com código 2). O ensaio conta a parte as Mensagens de WhatsApp sem o contexto de citação (importação de backup, ou que não citam), que o comando ignora. A gravação é uma Operação só: rode em fatias com `--desde`/`--ate`/`--limite`, cada uma com o seu `desfazer`. Na Conversa direta vale a conta dona dela; na coletiva só há resposta quando o Inquilino tem uma conta com endereço conhecido.
+
 ## [0.42.0] — 2026-10-21
 
 Não muda a forma do Acervo nem do Registro. Mexe na API de Envio e na consulta de Conversa; contrato aditivo.
