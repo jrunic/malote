@@ -319,6 +319,19 @@ export function consultarConversas(acervo: Acervo, filtro: FiltroDeConversa): Co
   return base.map(({ identificadorId: _identificadorId, ...c }) => c);
 }
 
+/**
+ * A Citacao da Mensagem (#1334): ela responde a outra pelo recurso de citacao da Fonte. O `id` e o da Mensagem citada NO
+ * ACERVO, nulo quando a citada nao esta nele; o `idExterno` e o da Fonte e sempre existe. O `autorId` e o Identificador do
+ * autor da citada (nulo quando a citada e da propria conta, ou quando a Fonte nao disse), e a `direcao` diz se a citada foi
+ * enviada pela conta ou recebida (nula quando nao ha como saber).
+ */
+export interface CitacaoLida {
+  id: string | null;
+  idExterno: string;
+  autorId: string | null;
+  direcao: Direcao | null;
+}
+
 export interface MensagemLida {
   id: string;
   conversaId: ConversaId;
@@ -333,6 +346,8 @@ export interface MensagemLida {
   contatosCompartilhados: ContatoCompartilhadoLido[];
   /** As Edicoes da Mensagem (#1246), em ordem do instante da edicao. Lista vazia quando nao ha. O `conteudo` e sempre o original. */
   edicoes: EdicaoDaMensagem[];
+  /** A Citacao, ou nulo quando a Mensagem nao cita outra. Sempre presente. */
+  citacao: CitacaoLida | null;
   /**
    * O texto da ultima Edicao, SO na Mensagem editada (pode ser vazio: a legenda apagada). Sem Edicao a chave nao existe e o
    * cliente usa o `conteudo`: repeti-lo em toda Mensagem custava +21% de bytes por pagina (medido em 18/10/2026).
@@ -375,6 +390,17 @@ export interface FiltroDeMensagem {
   cursor?: { ocorridaEm: number; id: string };
 }
 
+function citacaoDeLinha(l: Record<string, unknown>): CitacaoLida | null {
+  const idExterno = (l['citada_id_externo'] as string | null | undefined) ?? null;
+  if (idExterno === null) return null;
+  return {
+    id: (l['citada_id'] as string | null) ?? null,
+    idExterno,
+    autorId: (l['citada_autor_id'] as string | null) ?? null,
+    direcao: (l['citada_direcao'] as Direcao | null) ?? null,
+  };
+}
+
 function montarMensagens(acervo: Acervo, linhas: Array<Record<string, unknown>>): MensagemLida[] {
   // Os cartoes da PAGINA INTEIRA em duas consultas (cartoes e valores), nunca uma por Mensagem.
   const cartoes = lerContatosCompartilhados(
@@ -405,6 +431,7 @@ function montarMensagens(acervo: Acervo, linhas: Array<Record<string, unknown>>)
       anexos: lerAnexos(acervo, id),
       contatosCompartilhados: cartoes.get(id) ?? [],
       edicoes: doId,
+      citacao: citacaoDeLinha(l),
       ...(doId.length > 0 ? { textoAtual: textoAtualDe(conteudo, doId) as string } : {}),
     };
   });
@@ -502,7 +529,8 @@ export function lerMensagens(acervo: Acervo, filtro: FiltroDeMensagem): Mensagem
   const onde = condicoes.length > 0 ? `WHERE ${condicoes.join(' AND ')}` : '';
   const ordem = filtro.ordem === 'recentes' ? 'DESC' : 'ASC';
   const linhas = acervo.preparar(
-      `SELECT m.id, m.conversa_id, m.fonte, m.autor_id, m.conteudo, m.direcao, m.ocorrida_em
+      `SELECT m.id, m.conversa_id, m.fonte, m.autor_id, m.conteudo, m.direcao, m.ocorrida_em,
+              m.citada_id, m.citada_id_externo, m.citada_autor_id, m.citada_direcao
          FROM mensagens m ${onde} ORDER BY m.ocorrida_em ${ordem}, m.id ${ordem}${limites.join('')}`,
     )
     .all(...valores) as Array<Record<string, unknown>>;
@@ -741,7 +769,8 @@ export function buscarMensagensComCorte(acervo: Acervo, filtro: FiltroDeBusca): 
   const marcador = idsOrdenados.map(() => '?').join(',');
   const linhas = acervo
     .preparar(
-      `SELECT m.id, m.conversa_id, m.fonte, m.autor_id, m.conteudo, m.direcao, m.ocorrida_em
+      `SELECT m.id, m.conversa_id, m.fonte, m.autor_id, m.conteudo, m.direcao, m.ocorrida_em,
+              m.citada_id, m.citada_id_externo, m.citada_autor_id, m.citada_direcao
          FROM mensagens m WHERE m.id IN (${marcador})`,
     )
     .all(...idsOrdenados) as Array<Record<string, unknown>>;

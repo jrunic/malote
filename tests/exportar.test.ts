@@ -27,6 +27,7 @@ function msg(sobre: Partial<MensagemLida>): MensagemLida {
     anexos: [],
     contatosCompartilhados: [],
     edicoes: [],
+    citacao: null,
     ...sobre,
   };
 }

@@ -25,6 +25,7 @@ test('exportar mostra o cartao em txt e traz o campo no json', () => {
     anexos: [],
     contatosCompartilhados: [{ id: 'x', posicao: 0, ...ANA }],
     edicoes: [],
+    citacao: null,
   };
   const exportar = (formato: 'txt' | 'json'): string => {
     const linhas: string[] = [];
