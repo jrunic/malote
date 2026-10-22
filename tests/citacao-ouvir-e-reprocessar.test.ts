@@ -9,12 +9,13 @@ import { resolverConfiguracao } from '../src/registro/configuracao-adaptador.js'
 import { registrarEnderecosDoVinculo } from '../src/registro/endereco-da-conta.js';
 import { abrirAcervo, abrirAcervoSomenteLeitura } from '../src/nucleo/acervo.js';
 import { declararEnderecosDaConta } from '../src/nucleo/endereco-da-conta.js';
+import { registrarConversa, registrarMensagem } from '../src/nucleo/escrita.js';
 import { caminhosDaConta, ouvir } from '../src/cli/ouvir.js';
 import { derramar } from '../src/cli/derrame.js';
 import { executar } from '../src/cli/index.js';
 
-// O endereco da propria conta chega a Citacao pelos caminhos que o Registro alimenta: o ouvinte ao vivo e o reprocessar do
-// derrame (o comando do estoque tem o teste dele). Cada um precisa de teste proprio: sao chamadores diferentes de uma mesma leitura.
+// O endereco da propria conta chega a Citacao pelos caminhos que o Registro alimenta: o ouvinte ao vivo, o reprocessar do
+// derrame e o comando do estoque. Cada um precisa de teste proprio: sao chamadores diferentes de uma mesma leitura.
 
 function instalacao(): { raiz: string; id: string; limpar: () => void } {
   const { raiz, limpar } = instalacaoTemporaria();
@@ -96,6 +97,55 @@ test('ouvinte reprocessar (o derrame) conhece a propria conta pelo Registro', ()
     });
     assert.equal(codigo, 0, linhas.join('\n'));
     assert.equal(direcaoDaCitada(raiz, id, 'D1'), 'enviada');
+  } finally {
+    limpar();
+  }
+});
+
+function gravarRespostaNoGrupo(raiz: string, id: string, idExterno: string): void {
+  const acervo = abrirAcervo(join(raiz, 'acervos'), id);
+  try {
+    const cv = registrarConversa(acervo, { fonte: 'whatsapp', idExterno: GRUPO, coletiva: true });
+    registrarMensagem(acervo, {
+      conversaId: cv, fonte: 'whatsapp', idExterno, ocorridaEm: Date.parse('2026-10-01T10:00:00Z'), agora: Date.parse('2026-10-21T10:00:00Z'),
+      direcao: 'recebida', bruto: JSON.stringify(respostaAMinhaMensagem(idExterno)),
+    });
+  } finally {
+    acervo.fechar();
+  }
+}
+
+function estocar(raiz: string, id: string): void {
+  const linhas: string[] = [];
+  const codigo = executar(['citacao', 'extrair', '--inquilino', id, '--com-efeito', '--confirmo'], {
+    dados: raiz,
+    estado: raiz,
+    escrever: (t: string) => linhas.push(t),
+  });
+  assert.equal(codigo, 0, linhas.join('\n'));
+}
+
+test('citacao extrair conhece a conta pelo Registro: com UMA conta, a citada da coletiva dela sai enviada', () => {
+  const { raiz, id, limpar } = instalacao();
+  try {
+    gravarRespostaNoGrupo(raiz, id, 'E1');
+    estocar(raiz, id);
+    assert.equal(direcaoDaCitada(raiz, id, 'E1'), 'enviada');
+  } finally {
+    limpar();
+  }
+});
+
+test('citacao extrair com DUAS contas: na coletiva nao ha como saber qual recebeu, e a direcao fica nula', () => {
+  const { raiz, id, limpar } = instalacao();
+  try {
+    const registro = abrirRegistro(raiz);
+    const outra = resolverConfiguracao(registro, id, 'whatsapp', 'outra');
+    registrarEnderecosDoVinculo(registro, outra.id, { telefone: '5565911110088', jid: '5565911110088@s.whatsapp.net', lid: null });
+    registro.fechar();
+    gravarRespostaNoGrupo(raiz, id, 'E2');
+    estocar(raiz, id);
+    assert.equal(direcaoDaCitada(raiz, id, 'E2'), null);
   } finally {
     limpar();
   }

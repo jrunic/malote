@@ -43,6 +43,7 @@ import { linhasDaMensagemEditada, textoParaExibir } from './edicoes-texto.js';
 import { carregarDecodificador } from '../adaptadores/whatsapp/conexao.js';
 import type { Decodificador } from '../adaptadores/whatsapp/edicao.js';
 import { extrairContatosCompartilhados } from '../adaptadores/whatsapp/extrair-contatos-compartilhados.js';
+import { extrairCitacoes } from '../adaptadores/whatsapp/extrair-citacoes.js';
 import { extrairImagensDeModelo } from '../adaptadores/whatsapp/extrair-imagem-de-modelo.js';
 import { formatarAnexos, tipoGuardado } from './anexos-texto.js';
 import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
@@ -384,6 +385,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote transcricao estado      --inquilino <id> [--json]     (contagem por estado; se o motor esta configurado)
   malote midia extrair-duracao --inquilino <id> [--json]        (extrai duração do Conteúdo Bruto já gravado)
   malote contato-compartilhado extrair --inquilino <id> [--com-efeito --confirmo] [--json]  (preenche os contatos enviados em Mensagens já gravadas; ensaio por padrão)
+  malote citacao extrair --inquilino <id> [--desde <data>] [--ate <data>] [--limite <n>] [--com-efeito --confirmo] [--json]  (preenche a Citação das Mensagens já gravadas que respondem a outra; ensaio por padrão)
   malote servir     --porta <n> [--endereco <ip>] [--exposto] [--trabalhadores <n>] [--prazo <segundos>]
                                         (leituras em workers, 4 por padrao, com prazo de 25 s; passou do prazo: 504;
                                          um Inquilino ocupa no maximo N-1 workers e metade da fila; as escritas ficam na thread principal)
@@ -1820,6 +1822,64 @@ function executarComAtor(
           );
           if (r.recusados > 0) escrever(`  ${r.recusados} cartao(oes) recusado(s) (ilegiveis ou sem nome).`);
           for (const [recurso, n] of Object.entries(r.nomesPorRecurso)) escrever(`  nome por ${recurso}: ${n}`);
+          if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
+        }
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
+    if (grupo === 'citacao' && sub === 'extrair') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
+      const comEfeito = temBandeira(argumentos, 'com-efeito');
+      if (comEfeito && !temBandeira(argumentos, 'confirmo')) {
+        throw new Error('Repita o comando com --confirmo para executar.');
+      }
+      const desde = opcao(argumentos, 'desde');
+      const ate = opcao(argumentos, 'ate');
+      const limiteTexto = opcao(argumentos, 'limite');
+      const limite = limiteTexto === undefined ? undefined : Number(limiteTexto);
+      if (limite !== undefined && (!Number.isInteger(limite) || limite <= 0)) {
+        escrever('--limite precisa ser um inteiro maior que zero.');
+        return 2;
+      }
+      // O endereco canonico da propria conta de cada Configuracao de WhatsApp do Inquilino. Na Conversa direta vale o da
+      // Configuracao dona; na coletiva (sem dona) so vale quando o Inquilino tem UMA conta com endereco conhecido, porque
+      // com duas nao ha como saber qual delas recebeu. Sem resposta, a direcao da citada que o Acervo nao tem fica nula.
+      const jidPorConfiguracao = new Map<string, string>();
+      for (const cfg of listarConfiguracoes(registro, inquilino)) {
+        const jid = cfg.fonte === 'whatsapp' ? lerEnderecosDaConta(registro, cfg.id)?.jid : undefined;
+        if (typeof jid === 'string') jidPorConfiguracao.set(cfg.id, jid);
+      }
+      const enderecosDaConta = (configuracaoId: string | null): readonly string[] => {
+        if (configuracaoId !== null) {
+          const jid = jidPorConfiguracao.get(configuracaoId);
+          return jid === undefined ? [] : [jid];
+        }
+        return jidPorConfiguracao.size === 1 ? [...jidPorConfiguracao.values()] : [];
+      };
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const r = extrairCitacoes(acervo, {
+          comEfeito,
+          enderecosDaConta,
+          ...(desde === undefined ? {} : { de: expandirData(desde, 'inicio') }),
+          ...(ate === undefined ? {} : { ate: expandirData(ate, 'fim') }),
+          ...(limite === undefined ? {} : { limite }),
+        });
+        if (temBandeira(argumentos, 'json')) {
+          escrever(JSON.stringify(r, null, 2));
+        } else {
+          // So CONTAGENS: id de Mensagem, endereco e texto nunca vao a relatorio.
+          escrever(
+            `${comEfeito ? 'Preenchido' : 'Ensaio'}: ${r.citam} Mensagem(ns) com Citacao ` +
+              `(${r.comVinculo} com a citada no Acervo, ${r.soPeloIdExterno} so pelo id externo)` +
+              `${comEfeito ? `, ${r.gravadas} gravada(s)` : ''}.`,
+          );
+          if (r.ilegiveis > 0) escrever(`  ${r.ilegiveis} com Conteudo Bruto ilegivel (seguem candidatas).`);
+          escrever(`  ${r.semContexto} Mensagem(ns) de WhatsApp sem o contexto de citacao (importacao de backup, ou que nao citam): ignoradas.`);
           if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
         }
         return 0;
