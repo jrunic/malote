@@ -132,6 +132,8 @@ export interface OpcoesDoReprocesso {
    * parado, entao quem o chama o carrega. Sem ele a edicao cifrada fica guardada, com a causa dita.
    */
   decodificar?: Decodificador;
+  /** O endereco canonico da propria conta (#1334), para a Citacao dizer se a citada e dela. */
+  enderecoDaConta?: string;
 }
 
 /** Troca atomica do arquivo (temporario e renomeacao); sem linhas, esvazia. */
@@ -201,6 +203,7 @@ export function reprocessarDescartados(
         agora,
         configuracao,
         ...(opcoes.decodificar !== undefined ? { decodificar: opcoes.decodificar } : {}),
+        ...(opcoes.enderecoDaConta !== undefined ? { enderecoDaConta: opcoes.enderecoDaConta } : {}),
       });
       if (r.descartados.length === 0) {
         resultado.gravados += 1;

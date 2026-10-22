@@ -187,6 +187,7 @@ import { lerDescartes, registrarDescartes } from './descartes.js';
 import { estadoDaGuarda, reprocessarDescartados } from './guarda-de-descartes.js';
 import { lerPulos } from './pulos.js';
 import { configuracaoPorApelido } from '../registro/configuracao-adaptador.js';
+import { lerEnderecosDaConta } from '../registro/endereco-da-conta.js';
 import { configuracaoComTelefoneEquivalente } from './telefone-da-conta.js';
 import {
   declararTelefoneDaConta,
@@ -1099,13 +1100,17 @@ function executarComAtor(
         return 0;
       }
       const acervoDaGuarda = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      const enderecoDaContaDaGuarda = lerEnderecosDaConta(registro, cfgDaGuarda.id)?.jid ?? undefined;
       try {
         const r = reprocessarDescartados(
           acervoDaGuarda,
           caminhoDaGuarda,
           { id: cfgDaGuarda.id, fonte: 'whatsapp' },
           Date.now(),
-          ambiente.decodificador !== undefined ? { decodificar: ambiente.decodificador } : {},
+          {
+            ...(ambiente.decodificador !== undefined ? { decodificar: ambiente.decodificador } : {}),
+            ...(enderecoDaContaDaGuarda !== undefined ? { enderecoDaConta: enderecoDaContaDaGuarda } : {}),
+          },
         );
         escrever(
           `Conta ${conta}: ${r.lidos} evento(s) lido(s), ${r.gravados} gravado(s), ` +
@@ -1155,6 +1160,7 @@ function executarComAtor(
         return 0;
       }
       const acervoDoDerrame = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      const enderecoDaContaDoDerrame = lerEnderecosDaConta(registro, cfgDoDerrame.id)?.jid ?? undefined;
       let gravados = 0;
       let edicoes = 0;
       let lotesFeitos = 0;
@@ -1168,6 +1174,7 @@ function executarComAtor(
             agora: Date.now(),
             configuracao: { id: cfgDoDerrame.id, fonte: 'whatsapp' },
             ...(ambiente.decodificador !== undefined ? { decodificar: ambiente.decodificador } : {}),
+            ...(enderecoDaContaDoDerrame !== undefined ? { enderecoDaConta: enderecoDaContaDoDerrame } : {}),
           });
           gravados += r.gravados;
           edicoes += r.edicoes;

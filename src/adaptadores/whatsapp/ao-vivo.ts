@@ -33,6 +33,7 @@ import { EdicaoImplausivelError, registrarEdicao } from '../../nucleo/edicao.js'
 import { decidirEdicao, lerEdicaoRecebida, type CausaDeEdicaoNaoGravada, type Decodificador } from './edicao.js';
 import { ehCifrada, naturezaDoStub, textoDoStub } from './stubs-ao-vivo.js';
 import { desembrulhar, VIRAM_MENSAGEM } from './conteudo-de-mensagem.js';
+import { citacaoParaGravar } from './citacao.js';
 
 /**
  * Recepcao ao vivo do WhatsApp: o evento vira escrita pelas portas do nucleo.
@@ -168,6 +169,11 @@ export interface OpcoesDeRecepcao {
    * sem ele a edicao cifrada nao se grava (causa `sem-decodificador`) e segue descartada e guardada. A edicao aberta nao o usa.
    */
   decodificar?: Decodificador;
+  /**
+   * O endereco CANONICO da propria conta (#1334). Com ele a Citacao diz se a citada foi enviada pela conta (sem autor,
+   * direcao `enviada`) ou recebida; sem ele a direcao da citada que o Acervo nao tem fica nula.
+   */
+  enderecoDaConta?: string;
 }
 
 export interface RelatoDeRecepcao {
@@ -773,6 +779,10 @@ function gravarUma(
   // Mensagem ao vivo, pelo mesmo indice unico que `registrarMensagem` consulta logo depois (a importacao ja faz o
   // mesmo antes de gravar).
   const jaExistia = idDeMensagemPorExterno(acervo, { fonte: FONTE, idExterno: m.key.id }) !== undefined;
+  // A Mensagem que ja existe nao regrava Citacao (a gravacao e idempotente), e nao cria Identificador a toa.
+  const citacao = jaExistia
+    ? undefined
+    : citacaoParaGravar(acervo, m.message, opcoes.enderecoDaConta === undefined ? [] : [opcoes.enderecoDaConta], { conversaId });
   const mensagemId = registrarMensagem(acervo, {
     conversaId,
     fonte: FONTE,
@@ -786,6 +796,7 @@ function gravarUma(
     direcao: m.key.fromMe ? 'enviada' : 'recebida',
     ...(autorId !== undefined ? { autorId } : {}),
     ...(texto !== undefined ? { conteudo: texto } : {}),
+    ...(citacao !== undefined ? { citacao } : {}),
   });
   relato.gravados += 1;
   if (!jaExistia && m.messageTimestamp * 1000 > opcoes.agora) relato.mensagensPelaJanela += 1;
