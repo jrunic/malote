@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3';
  * Politica completa das duas bases na ADR local
  * `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_ACERVO = 28;
+export const VERSAO_SCHEMA_ACERVO = 29;
 
 /**
  * Forma mais antiga que a maquina de migracao alcanca.
@@ -304,6 +304,12 @@ export function aplicarSchemaAcervo(db: Database): void {
       conteudo      TEXT,
       ocorrida_em   INTEGER NOT NULL,
       citada_id     TEXT,
+      -- A Citacao (#1334): o id externo da Mensagem citada (gravado mesmo quando ela nao esta no Acervo), o
+      -- Identificador do autor dela e a direcao dela. Sem chave estrangeira, como citada_id: o Identificador
+      -- do autor pode sair do Acervo sem que a Citacao perca o resto.
+      citada_id_externo TEXT,
+      citada_autor_id   TEXT,
+      citada_direcao    TEXT CHECK (citada_direcao IS NULL OR citada_direcao IN ('enviada', 'recebida')),
       -- Enviada pelo Titular ou recebida de outra Pessoa. NULL só é legítimo
       -- em Mensagem migrada de um Acervo anterior a esta coluna, cujo
       -- Conteudo Bruto nao permitiu calcular (ver passos 19 e 20 da
@@ -405,6 +411,8 @@ export function aplicarSchemaAcervo(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_mensagens_conversa ON mensagens(conversa_id, ocorrida_em);
     CREATE INDEX IF NOT EXISTS idx_mensagens_autor    ON mensagens(autor_id);
     CREATE INDEX IF NOT EXISTS idx_mensagens_momento  ON mensagens(ocorrida_em);
+    CREATE INDEX IF NOT EXISTS mensagens_por_citada_externa
+      ON mensagens (fonte, citada_id_externo) WHERE citada_id_externo IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_identificadores_pessoa ON identificadores(pessoa_id);
     -- A unicidade NAO pode ser restricao de tabela: o SQLite trata nulo como
     -- distinto de nulo em UNIQUE, entao a restricao de tabela sobre
