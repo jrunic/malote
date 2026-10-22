@@ -23,7 +23,7 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
-## [Não lançado]
+## [0.43.0] — 2026-10-22
 
 Muda a forma do Acervo (v28 para v29): três colunas novas em Mensagem e um índice parcial; a migração roda sozinha na primeira abertura. Contrato da API aditivo.
 
