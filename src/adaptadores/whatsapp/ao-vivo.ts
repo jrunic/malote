@@ -32,6 +32,8 @@ import { leituraDoModelo } from './imagem-de-modelo.js';
 import { EdicaoImplausivelError, registrarEdicao } from '../../nucleo/edicao.js';
 import { decidirEdicao, lerEdicaoRecebida, type CausaDeEdicaoNaoGravada, type Decodificador } from './edicao.js';
 import { ehCifrada, naturezaDoStub, textoDoStub } from './stubs-ao-vivo.js';
+import { desembrulhar, VIRAM_MENSAGEM } from './conteudo-de-mensagem.js';
+import { citacaoParaGravar } from './citacao.js';
 
 /**
  * Recepcao ao vivo do WhatsApp: o evento vira escrita pelas portas do nucleo.
@@ -167,6 +169,11 @@ export interface OpcoesDeRecepcao {
    * sem ele a edicao cifrada nao se grava (causa `sem-decodificador`) e segue descartada e guardada. A edicao aberta nao o usa.
    */
   decodificar?: Decodificador;
+  /**
+   * O endereco CANONICO da propria conta (#1334). Com ele a Citacao diz se a citada foi enviada pela conta (sem autor,
+   * direcao `enviada`) ou recebida; sem ele a direcao da citada que o Acervo nao tem fica nula.
+   */
+  enderecoDaConta?: string;
 }
 
 export interface RelatoDeRecepcao {
@@ -277,35 +284,6 @@ function ehOpaco(endereco: string | undefined): boolean {
 
 const FONTE = 'whatsapp';
 
-/**
- * Quais tipos de evento viram MENSAGEM no Acervo.
- *
- * Nem tudo que a plataforma entrega e mensagem. A captura mediu 42 de 288 como
- * `protocolMessage` — recibo, distribuicao de chave, edicao —, e o acervo do
- * produto anterior corretamente nao os guarda. Grava-los criaria Mensagens de
- * conteudo vazio que NENHUM outro caminho produz: o material exportado nunca as
- * tera, e a convergencia divergiria por construcao, medindo o defeito que o
- * proprio adaptador criou.
- *
- * Escolher o que vira Mensagem e semantica de Adaptador — a importacao tambem
- * escolhe, lendo linhas de mensagem real. Nao e recorte do Conteudo Bruto, que
- * continua preservado inteiro para o que entra.
- */
-const VIRAM_MENSAGEM = new Set([
-  'conversation',
-  'extendedTextMessage',
-  'imageMessage',
-  'videoMessage',
-  'audioMessage',
-  'stickerMessage',
-  'documentMessage',
-  'reactionMessage',
-  'contactMessage',
-  // O cartao MULTIPLO (varios contatos num envio, #1206): medido na espiga de 14/10/2026, chega por `messages.upsert`
-  // como assunto do evento, sozinho ou so com `messageContextInfo`. Descartado antes, e guardado cru.
-  'contactsArrayMessage',
-  'locationMessage',
-]);
 
 /**
  * Tipos de conta comercial que viram Mensagem SO quando a leitura do texto devolve um corpo nao
@@ -346,45 +324,6 @@ const COM_ANEXO = [
  */
 const ACOMPANHAM = new Set(['messageContextInfo', 'senderKeyDistributionMessage']);
 
-/**
- * Desembrulha dois envelopes, e so estes.
- *
- * O documento com legenda chega como `documentWithCaptionMessage.message.documentMessage`.
- * Medido em 06/10/2026 (documento real de uma Conversa direta ausente do Acervo) e provado
- * com o evento sintetico pela propria `receberEvento`.
- *
- * O envelope de MIDIA ASSOCIADA (`associatedChildMessage`, #1190) carrega a mesma midia em
- * outra forma: a versao em alta definicao de um video, ou o trecho de video de uma foto em
- * movimento. Medido em 17/10/2026 (3 eventos em 5 dias): o interior e uma Mensagem comum e a
- * associacao ao pai mora ao lado, em `messageContextInfo`. Diferente do documento com legenda,
- * ele so se abre quando o interior tem conteudo que VIRA Mensagem: aberto, um interior vazio
- * viraria tipo nulo, e tipo nulo vai para a gravacao de Mensagem, nao para o descarte (criaria
- * uma Mensagem vazia). Fechado, segue com o rotulo de sempre, contado e guardado cru.
- *
- * Os outros embrulhos que a biblioteca desembrulha (`ephemeralMessage`, `viewOnce*`,
- * `editedMessage`) nao foram medidos contra captura real, e a classificacao e medida, nunca
- * deduzida: `editedMessage` e edicao de Mensagem ja gravada, e trata-lo como nova duplicaria.
- * Seguem ignorados e contados. So para classificar e ler texto/Anexo: o Conteudo Bruto grava o
- * evento inteiro.
- */
-function desembrulhar(
-  message: Record<string, unknown> | undefined | null,
-): Record<string, unknown> | undefined | null {
-  const filho = message?.['associatedChildMessage'];
-  if (filho !== null && typeof filho === 'object') {
-    const interior = (filho as Record<string, unknown>)['message'];
-    if (interior !== null && typeof interior === 'object') {
-      const aberto = interior as Record<string, unknown>;
-      if (Object.keys(aberto).some((k) => VIRAM_MENSAGEM.has(k))) return aberto;
-    }
-    return message;
-  }
-  const embrulho = message?.['documentWithCaptionMessage'];
-  if (embrulho === null || typeof embrulho !== 'object') return message;
-  const interna = (embrulho as Record<string, unknown>)['message'];
-  if (interna === null || typeof interna !== 'object') return message;
-  return interna as Record<string, unknown>;
-}
 
 function tipoDeConteudo(rotulada: Record<string, unknown> | undefined | null): string | null {
   // `== null` de proposito: apanha ausente E nulo de uma vez. A Fonte entrega
@@ -840,6 +779,10 @@ function gravarUma(
   // Mensagem ao vivo, pelo mesmo indice unico que `registrarMensagem` consulta logo depois (a importacao ja faz o
   // mesmo antes de gravar).
   const jaExistia = idDeMensagemPorExterno(acervo, { fonte: FONTE, idExterno: m.key.id }) !== undefined;
+  // A Mensagem que ja existe nao regrava Citacao (a gravacao e idempotente), e nao cria Identificador a toa.
+  const citacao = jaExistia
+    ? undefined
+    : citacaoParaGravar(acervo, m.message, opcoes.enderecoDaConta === undefined ? [] : [opcoes.enderecoDaConta], { conversaId });
   const mensagemId = registrarMensagem(acervo, {
     conversaId,
     fonte: FONTE,
@@ -853,6 +796,7 @@ function gravarUma(
     direcao: m.key.fromMe ? 'enviada' : 'recebida',
     ...(autorId !== undefined ? { autorId } : {}),
     ...(texto !== undefined ? { conteudo: texto } : {}),
+    ...(citacao !== undefined ? { citacao } : {}),
   });
   relato.gravados += 1;
   if (!jaExistia && m.messageTimestamp * 1000 > opcoes.agora) relato.mensagensPelaJanela += 1;

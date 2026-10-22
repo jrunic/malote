@@ -974,6 +974,36 @@ const EDICAO_V28: PassoDeMigracao = {
   ],
 };
 
+/**
+ * v28 para v29 (#1334): a Citacao da Mensagem. Tres colunas novas em `mensagens` (o id externo da citada, o Identificador do
+ * autor dela e a direcao dela) e um indice PARCIAL por (Fonte, id externo da citada), que serve o vinculo tardio e so cobre
+ * a Mensagem que cita. `ALTER TABLE ADD COLUMN` nao recria tabela nem move linha, e as Mensagens existentes ficam com os
+ * campos nulos ate o comando do estoque rodar. Sem `exigeContexto`: qualquer processo que reabrir o Acervo migra sozinho.
+ * Fotografia congelada do DDL.
+ */
+const CITACAO_V29: PassoDeMigracao = {
+  de: 28,
+  para: 29,
+  descricao: 'acrescenta a Citacao da Mensagem (id externo, autor e direcao da citada) e o indice do vinculo tardio',
+  // Cada coluna so e acrescentada se faltar: os testes dos passos anteriores reproduzem a forma antiga a partir de um
+  // Acervo fresco (que ja a tem), e o ALTER TABLE ADD COLUMN nao tem IF NOT EXISTS.
+  aplicar: (db) => {
+    const existentes = new Set((db.prepare('PRAGMA table_info(mensagens)').all() as Array<{ name: string }>).map((c) => c.name));
+    const colunas: Array<[string, string]> = [
+      ['citada_id_externo', 'TEXT'],
+      ['citada_autor_id', 'TEXT REFERENCES identificadores(id) ON DELETE SET NULL'],
+      ['citada_direcao', "TEXT CHECK (citada_direcao IS NULL OR citada_direcao IN ('enviada', 'recebida'))"],
+    ];
+    for (const [nome, tipo] of colunas) {
+      if (!existentes.has(nome)) db.exec(`ALTER TABLE mensagens ADD COLUMN ${nome} ${tipo};`);
+    }
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS mensagens_por_citada_externa
+        ON mensagens (fonte, citada_id_externo) WHERE citada_id_externo IS NOT NULL;
+    `);
+  },
+};
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -993,6 +1023,7 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   ETIQUETA_V26,
   CONTATO_COMPARTILHADO_V27,
   EDICAO_V28,
+  CITACAO_V29,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {

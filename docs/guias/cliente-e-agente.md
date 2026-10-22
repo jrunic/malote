@@ -327,7 +327,7 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 Cada Mensagem das rotas de mensagens e de busca traz, além de `id`, `conversaId`, `fonte`, `autorId`, `conteudo`,
 `ocorridaEm` e `direcao`: `anexos` (cada um com a `transcricao`, quando há), `contatosCompartilhados` (nome, organização,
 telefones e e-mails do cartão) e `edicoes` (`texto`, `editadaEm` e `origem`, `cifrada` ou `aberta`), todas listas vazias
-quando não há. O `conteudo` é sempre o texto **original**; `textoAtual`, o texto da última edição, só existe na Mensagem
+quando não há, e `citacao` (`id`, `idExterno`, `autorId` e `direcao` da Mensagem que ela responde por citação), `null` quando não há. O `conteudo` é sempre o texto **original**; `textoAtual`, o texto da última edição, só existe na Mensagem
 editada. O `limite` não tem teto nem padrão nas rotas de mensagens e de anexos (na busca o padrão é 100): sem ele, a
 Conversa inteira vem numa resposta, e o único freio é o prazo de 25 s.
 

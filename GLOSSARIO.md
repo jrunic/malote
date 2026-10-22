@@ -296,6 +296,10 @@ O contato que alguém **envia dentro de uma Mensagem** (um, ou vários de uma ve
 O texto novo que alguém deu a uma Mensagem que já tinha enviado. **Pendura na Mensagem e a Mensagem não muda**: o texto e o Conteúdo Bruto dela seguem como foram gravados, e cada edição é um evento datado e imutável, com o texto novo, o instante da edição e se chegou cifrada ou aberta. A cifrada só se lê com o segredo que a Mensagem original guarda no Conteúdo Bruto; sem original, sem segredo ou sem texto reconhecível, a edição não é gravada e o evento continua guardado cru. Não é Mensagem nova: gravá-la como tal duplicaria o que já existe.
 *Evitar*: versão (colide com a versão do Acervo e do produto), correção, alteração, revisão.
 
+**Citação**:
+O vínculo de uma Mensagem com a Mensagem a que ela **responde pelo recurso de citação** da Fonte. **Pendura na Mensagem e a citada não muda.** Guarda o id externo da citada (sempre), o vínculo com a Mensagem citada quando ela está no Acervo, o autor dela e a direção (enviada pela conta ou recebida). Registrar o autor da citada cria o Identificador se faltar, e **nunca** cria Participação, nome nem Pessoa: ninguém foi observado na Conversa só por ter sido citado. A edição, a reação, a revogação e o pai de álbum não são Citação. Derivada do Conteúdo Bruto, que segue inteiro.
+*Evitar*: resposta (é o que o leitor faz, não o dado), reply, quote, thread.
+
 **Ator**:
 Quem ordenou uma Operação. Vocabulário fechado: `operador:<id>` e `acesso:<id>`, provados por credencial; `servico:<nome>`, declarado pelo deploy; e `local`, quando nenhuma credencial foi apresentada. É da sessão, não do comando. `indeterminado` é defeito, e `NULL` só nas Operações anteriores ao ciclo 11.
 *Evitar*: usuário, executor, autor (que é o autor de uma Mensagem).

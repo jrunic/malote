@@ -152,6 +152,7 @@ export function drenar(
   caminhoDaCorrespondencia?: string,
   aoDescartar?: (relato: RelatoDeRecepcao) => void,
   decodificar?: Decodificador,
+  enderecoDaConta?: string,
 ): void {
   for (let i = 0; i < LOTES_POR_DRENAGEM; i += 1) {
     const lote = lerDerrame(caminho)[0];
@@ -161,6 +162,7 @@ export function drenar(
         agora: agora(),
         configuracao,
         ...(decodificar !== undefined ? { decodificar } : {}),
+        ...(enderecoDaConta !== undefined ? { enderecoDaConta } : {}),
       });
       // O EVENTO DERRAMADO E CONTADO AQUI, E SO AQUI — nao ha dupla contagem.
       //
@@ -243,6 +245,9 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
   let configuracao: { id: string; fonte: 'whatsapp' };
   // O telefone que vale para PEDIR o codigo de pareamento: o --numero, ou o da Configuracao.
   let telefoneDaConfiguracao: string | undefined;
+  // O endereco canonico da propria conta (#1334), para a Citacao dizer se a citada e dela. Vem do Registro (o ultimo
+  // vinculo conferido) e e renovado quando o vinculo se identifica.
+  let enderecoDaConta: string | undefined;
   // Sem Destino, o Anexo ao vivo fica `nunca-obtido` (como hoje): recusar a
   // subida so por isso quebraria instalacao que nunca configurou um — a
   // mesma razao pela qual `midia trazer` RECUSA e o ouvinte so AVISA.
@@ -263,6 +268,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
       return 2;
     }
     configuracao = { id: cfg.id, fonte: 'whatsapp' };
+    enderecoDaConta = lerEnderecosDaConta(registro, cfg.id)?.jid ?? undefined;
     // Regra unica de declaracao do telefone (spec #1149): a Configuracao e a
     // fonte; o --numero nao e uma segunda declaracao concorrente. Nenhuma
     // mensagem daqui ecoa digitos: o journal do servico e dado pessoal.
@@ -383,6 +389,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
         ...(id.lid !== null ? { alternativo: id.lid } : {}),
       }),
     );
+    enderecoDaConta = id.jid;
     if (declarado.conflito) {
       escrever('[ouvinte] AVISO: o par de enderecos da conta ja estava gravado de outra forma; mantive o anterior.');
     }
@@ -567,6 +574,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
               agora: agora(),
               configuracao,
               ...(decodificar !== undefined ? { decodificar } : {}),
+              ...(enderecoDaConta !== undefined ? { enderecoDaConta } : {}),
             });
           } catch (erro) {
             // BANCO OCUPADO NAO MATA O OUVINTE, e SO ele e tratado aqui.
@@ -719,6 +727,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
             caminhos.correspondencia,
             (relato) => registrarDescartes(caminhos, relato, agora(), escrever),
             decodificar,
+            enderecoDaConta,
           );
         }),
     });
