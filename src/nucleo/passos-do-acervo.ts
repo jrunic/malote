@@ -991,7 +991,7 @@ const CITACAO_V29: PassoDeMigracao = {
     const existentes = new Set((db.prepare('PRAGMA table_info(mensagens)').all() as Array<{ name: string }>).map((c) => c.name));
     const colunas: Array<[string, string]> = [
       ['citada_id_externo', 'TEXT'],
-      ['citada_autor_id', 'TEXT'],
+      ['citada_autor_id', 'TEXT REFERENCES identificadores(id) ON DELETE SET NULL'],
       ['citada_direcao', "TEXT CHECK (citada_direcao IS NULL OR citada_direcao IN ('enviada', 'recebida'))"],
     ];
     for (const [nome, tipo] of colunas) {

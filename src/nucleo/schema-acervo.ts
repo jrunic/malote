@@ -305,8 +305,8 @@ export function aplicarSchemaAcervo(db: Database): void {
       ocorrida_em   INTEGER NOT NULL,
       citada_id     TEXT,
       -- A Citacao (#1334): o id externo da Mensagem citada (gravado mesmo quando ela nao esta no Acervo), o
-      -- Identificador do autor dela e a direcao dela. Sem chave estrangeira, como citada_id: o Identificador
-      -- do autor pode sair do Acervo sem que a Citacao perca o resto.
+      -- Identificador do autor dela e a direcao dela. O autor tem chave estrangeira (sai a nulo se o Identificador
+      -- sai) e entra na resolucao retroativa de endereco; citada_id nao tem, como sempre.
       citada_id_externo TEXT,
       citada_autor_id   TEXT,
       citada_direcao    TEXT CHECK (citada_direcao IS NULL OR citada_direcao IN ('enviada', 'recebida')),
@@ -319,7 +319,8 @@ export function aplicarSchemaAcervo(db: Database): void {
       bruto         TEXT,
       UNIQUE (fonte, id_externo),
       FOREIGN KEY (conversa_id) REFERENCES conversas(id) ON DELETE CASCADE,
-      FOREIGN KEY (autor_id) REFERENCES identificadores(id) ON DELETE SET NULL
+      FOREIGN KEY (autor_id) REFERENCES identificadores(id) ON DELETE SET NULL,
+      FOREIGN KEY (citada_autor_id) REFERENCES identificadores(id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS anexos (

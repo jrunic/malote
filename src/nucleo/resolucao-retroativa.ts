@@ -76,6 +76,9 @@ interface Par {
  */
 export const CHAVE_SIMPLES: ReadonlyArray<{ tabela: string; campo: string }> = [
   { tabela: 'mensagens', campo: 'autor_id' },
+  // O autor da Citacao (#1334): sem esta linha, a resolucao reponta o autor da Mensagem e deixa o autor da citada na forma
+  // alternativa, e quem compara os dois Identificadores erra sem aviso.
+  { tabela: 'mensagens', campo: 'citada_autor_id' },
 ];
 
 const TABELA_ATRIBUICOES = { tabela: 'atribuicoes_de_nome', campo: 'identificador_id' } as const;

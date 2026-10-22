@@ -26,6 +26,10 @@ test('o Acervo na v29 e o schema da Citacao: tres colunas novas na Mensagem e o 
         .get() as { sql: string } | undefined;
       assert.ok(indice, 'falta o indice do vinculo tardio');
       assert.match(indice.sql, /WHERE citada_id_externo IS NOT NULL/, 'o indice tem de ser parcial');
+      const chaves = migrado.db.prepare('PRAGMA foreign_key_list(mensagens)').all() as Array<{ from: string; table: string; on_delete: string }>;
+      const doAutorDaCitada = chaves.find((k) => k.from === 'citada_autor_id');
+      assert.equal(doAutorDaCitada?.table, 'identificadores', 'o autor da citada tem chave estrangeira');
+      assert.equal(doAutorDaCitada?.on_delete, 'SET NULL');
       const passo = migrado.db
         .prepare('SELECT conferencia FROM migracoes_aplicadas WHERE para = 29')
         .get() as { conferencia: string } | undefined;

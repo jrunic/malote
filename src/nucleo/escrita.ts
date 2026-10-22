@@ -12,6 +12,7 @@ import type {
   Presenca,
 } from './tipos.js';
 import { emOperacao } from './trilha.js';
+import { colunasDaCitacao, vincularCitantes, type CitacaoDeEntrada } from './citacao.js';
 
 /**
  * A porta de escrita do núcleo. É a ÚNICA entrada de escrita: Adaptador
@@ -561,6 +562,8 @@ export interface EntradaMensagem {
   conteudo?: string;
   ocorridaEm: number;
   citadaId?: string;
+  /** A Citacao (#1334): a Mensagem responde a outra pelo recurso de citacao da Fonte. */
+  citacao?: CitacaoDeEntrada;
   bruto?: string;
   /** Enviada pelo Titular ou recebida — obrigatorio, sem inferencia. */
   direcao: Direcao;
@@ -602,10 +605,15 @@ export function registrarMensagem(acervo: Acervo, entrada: EntradaMensagem): Men
   if (existente !== undefined) return existente;
 
   const id = randomUUID();
+  const citacao =
+    entrada.citacao === undefined
+      ? undefined
+      : colunasDaCitacao(acervo, { fonte: entrada.fonte, conversaId: entrada.conversaId }, entrada.citacao);
   acervo.preparar(
       `INSERT INTO mensagens
-         (id, conversa_id, fonte, id_externo, autor_id, conteudo, ocorrida_em, citada_id, direcao, bruto)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, conversa_id, fonte, id_externo, autor_id, conteudo, ocorrida_em, citada_id, direcao, bruto,
+          citada_id_externo, citada_autor_id, citada_direcao)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -615,10 +623,22 @@ export function registrarMensagem(acervo: Acervo, entrada: EntradaMensagem): Men
       entrada.autorId ?? null,
       entrada.conteudo ?? null,
       entrada.ocorridaEm,
-      entrada.citadaId ?? null,
+      citacao?.citadaId ?? entrada.citadaId ?? null,
       entrada.direcao,
       entrada.bruto ?? null,
+      citacao?.idExterno ?? null,
+      citacao?.autorId ?? null,
+      citacao?.direcao ?? null,
     );
+  // O vinculo tardio: quem ja citava esta Mensagem pelo id externo, antes de ela existir, ganha o vinculo agora.
+  vincularCitantes(acervo, {
+    id,
+    fonte: entrada.fonte,
+    conversaId: entrada.conversaId,
+    idExterno: entrada.idExterno,
+    autorId: entrada.autorId ?? null,
+    direcao: entrada.direcao,
+  });
   return id;
 }
 
