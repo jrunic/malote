@@ -199,7 +199,7 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
-- **Produção:** v0.41.0 (18/10/2026, tag `v0.41.0`, `production` em `3649513`, PR #37); Acervo v28 e Registro v8. `main` e `production` no mesmo SHA.
+- **Produção:** v0.44.0 (24/10/2026, tag `v0.44.0`): o ouvinte recolhe os Pendentes da Plataforma (#1151) e `ouvinte estado --json` traz `pendentes`; sem mudança de schema (Acervo v29, Registro v8, desde a v0.43.0). As releases anteriores estão no `CHANGELOG.md`.
 - **Suíte:** 2.205 testes (24/10/2026), 0 falhas e 1 pulado; lint limpo. O teste de entrada da CLI (`cli-entrada`) descarta todo `MALOTE_*` herdado antes de lançar o filho: sem isso, a máquina com o modo rede configurado (`MALOTE_SERVIDOR`, chave de acesso) reprovava 3 testes que o CI, sem essas variáveis, nunca via. Os testes de tempo (`despachante`, `servidor-sem-bloqueio`, `servir`) usam prazo com folga para subir um worker novo; se um oscilar sob carga, rodá-lo isolado antes de tratá-lo como regressão.
 - **O histórico de ciclos e releases** vive fora do repositório (documentos internos do autor); as releases estão no `CHANGELOG.md`.
 
