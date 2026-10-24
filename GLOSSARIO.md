@@ -340,6 +340,18 @@ Os eventos que a recepção ao vivo recebeu e **não conseguiu gravar** porque o
 O ato de gravar no Acervo o que está no Derrame, de volta pelas portas normais. Acontece sozinha depois de uma escrita que funcionou — o sucesso é o sinal de que a disputa passou —, e consome uma parte por vez, para não virar a própria disputa que causou o Derrame.
 *Evitar*: flush, retry, replay, reprocessamento automático.
 
+**Pendentes da Plataforma**:
+O que a plataforma guardou para entregar ao ouvinte quando ele conecta: mensagens, recibos, notificações, status e chamadas. A plataforma os **anuncia** ao criar a Conexão e os entrega em partes que o ouvinte precisa pedir; só ela declara o **fim**. Não é o Derrame (o que o ouvinte recebeu e não conseguiu gravar) nem a Guarda de Descartes.
+*Evitar*: fila offline, backlog, buffer, histórico.
+
+**Recolher os Pendentes**:
+O ato do ouvinte, a cada Conexão, de **liberar** o que já recebeu para a gravação e **pedir mais** Pendentes até a plataforma declarar o fim, com teto de pedidos, prazo e parada por falta de resposta. Cada Conexão termina com um **desfecho** (`fim-natural`, `recolheu`, `sem-resposta`, `teto`, `prazo`, `falha-de-envio` ou `encerrou-antes`); o aviso de fim que chega depois do teto, do prazo, da falta de resposta ou da falha de envio corrige o desfecho para `recolheu`. Só o fim declarado pela plataforma prova que os Pendentes acabaram.
+*Evitar*: drenar e Drenagem (já é o ato de gravar o Derrame), esvaziar (o modelo diz "o Derrame esvaziado"), flush, replay.
+
+**Pedido de Pendentes**:
+O pedido que o ouvinte envia à plataforma para receber mais Pendentes, de 100 itens por vez. A biblioteca envia um só; o ouvinte envia os seguintes.
+*Evitar*: lote (o lote é do Derrame; a parte que a plataforma entrega por pedido se diz "parte"), batch, retry.
+
 ### Espaço e retenção
 
 **Política de Retenção**:

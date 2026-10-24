@@ -23,6 +23,16 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [Não lançado]
+
+Não muda a forma do Acervo nem do Registro. `ouvinte estado --json` ganha um campo; contrato aditivo, saída padrão intacta.
+
+### Adicionado
+
+- **O ouvinte recolhe os Pendentes da Plataforma.** Depois de uma interrupção, a plataforma guarda o que não entregou e o anuncia ao criar a Conexão; a biblioteca de recepção pede uma só parte, de 100 itens, e o buffer inicial dela pode nunca fechar, e então nenhuma Mensagem chega ao Acervo com a Conexão saudável, enquanto o que já foi confirmado se perde na queda seguinte. Agora, depois que a parte inicial assenta, o ouvinte libera o que já recebeu e, a cada pausa de 4 s, pede mais Pendentes até a plataforma declarar o fim, com teto de pedidos (2 × anunciados ÷ 100 + 10, piso de 20), prazo de 10 min e parada em 3 pedidos sem resposta. A Conexão em que o fim chega sozinho não faz nada novo. Só o aviso de fim da plataforma prova que acabou; teto, prazo e falta de resposta não provam entrega. Decisão e risco: `docs/decisoes/20261023-ouvinte-recolhe-os-pendentes-da-plataforma.md`.
+- **`ouvinte estado --json` traz `pendentes`**: o estado dos Pendentes da última Conexão (anunciados e recebidos por tipo, falhas de decifra, pedidos, fim declarado e desfecho), só com tipos e números; `null` quando indisponível. A saída padrão não muda.
+- **O registro do ouvinte** ganha o aviso de pendentes com as contagens por tipo e **uma linha de resumo por Conexão** (desfecho, a Conexão, anunciados, recebidos, falhas de decifra, pedidos e nós por pedido), sem identificador nem conteúdo.
+
 ## [0.43.0] — 2026-10-22
 
 Muda a forma do Acervo (v28 para v29): três colunas novas em Mensagem e um índice parcial; a migração roda sozinha na primeira abertura. Contrato da API aditivo.

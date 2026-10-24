@@ -21,6 +21,30 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   vira zero, e a idade calculada vira alarme de silêncio em todas as contas. Sinal novo entra
   por `--json`, nunca na saída default. Medido em 09/09/2026, lendo o consumidor antes de
   mexer.
+- **O ouvinte recolhe os Pendentes da Plataforma, e só o fim declarado pela plataforma prova que eles acabaram (#1151).**
+  Ao criar a Conexão a plataforma anuncia quantos itens guardou e a biblioteca pede uma só parte, de 100 itens; a
+  plataforma entrega e espera o pedido seguinte, o aviso de fim pode não vir, o buffer inicial da biblioteca não fecha,
+  nenhuma Mensagem chega à gravação e o que **já foi confirmado** morre com a Conexão (medido em outubro de 2026 numa instalação:
+  48,8 h sem Mensagem; três episódios em 30 dias, de 8,8 h a 93,8 h). O recolhimento libera o buffer depois que a
+  parte inicial assenta (4 s sem nenhum nó, ou 60 s da criação do socket) e, **com anúncio**, pede mais a cada pausa de 4 s
+  até o fim, o teto de 2 × (anunciados ÷ 100) + 10 pedidos (piso de 20), 3 pedidos sem nenhum nó de volta ou 10 min.
+  **Teto, prazo e falta de resposta terminam o esforço e não provam entrega:** o desfecho diz "pode haver Mensagem
+  retida". O prazo e o teto só existem **com anúncio** (sem anúncio não há recolhimento). **O desfecho pode ser
+  corrigido:** o aviso de fim que chega depois do teto, do prazo, da falta de resposta ou da falha de envio o troca por
+  `recolheu`, e a Conexão passa a ter duas linhas de resumo no registro, com o mesmo `conexao=` (vale a última). A assinatura é na **criação** do socket, e não no `open`: o anúncio chega antes do `open` em 546 de 553
+  Conexões medidas. Conexão saudável (o fim chega antes da primeira pausa) não envia pedido nenhum e não libera nada
+  à força. Nó que chega durante o recolhimento reinicia a pausa de 4 s e conta como resposta, **sem separar o ao vivo
+  do pendente**: numa conta movimentada depois de uma parada a pausa pode não fechar, a liberação vem aos 60 s, e
+  `nosPorPedido` fica contaminado pelo tráfego ao vivo. Biblioteca sem a superfície que o recolhimento usa (enviar nó, perguntar e liberar o buffer, ouvir o
+  transporte) deixa o módulo inerte, e a subida nunca recusa. A causa só está parcialmente entendida (a plataforma
+  espera o pedido, ou espera a confirmação de um item que a biblioteca respondeu com retentativa), então o
+  recolhimento é um remédio que funcionou, e o resumo por Conexão registra as falhas de decifra e os nós por pedido
+  para separar as duas leituras. Risco e alternativas em
+  `docs/decisoes/20261023-ouvinte-recolhe-os-pendentes-da-plataforma.md`.
+- **O estado dos Pendentes é arquivo, só com tipos e números, e `null` é indisponível (#1151).** `ouvinte estado --json`
+  traz o campo `pendentes`; ausente, ilegível ou de forma fora do contrato lê como `null`, nunca como "sem pendentes".
+  **`em-andamento` com `atualizadoEm` velho e `ultimoSinalDaConexao` também parado é processo morto, não Pendentes
+  presos.** O campo não reusa `lotes`, que é do Derrame, e a saída default de `ouvinte estado` não muda.
 - **Grava no Acervo antes de tirar do Derrame, nunca o contrário.** Invertido, morrer no meio
   apaga o que nunca entrou; nesta ordem o pior caso é repetição, e a unicidade de
   `(fonte, id_externo)` a descarta. Vale para qualquer consumo de fila persistida.
