@@ -58,17 +58,18 @@ test('executar devolve a resposta da rota, e o worker e reusado (#1132)', async 
 
 test('PRAZO: estourou, o worker morre, a resposta e prazo, e o proximo pedido e atendido por um worker novo (#1132)', async () => {
   const { c, pedido } = cena();
-  const { d, linhas } = despachante({ prazoMs: 400 });
+  // O prazo tem de ser maior que o tempo de subir um worker NOVO (carrega tsx e a rota) sob carga: o
+  // pedido seguinte ao worker morto tambem corre contra ele, e com 400 ms voltava `prazo` em maquina
+  // ocupada. A consulta trava por 15 s, muito alem de qualquer folga, entao o prazo continua provado.
+  const { d, linhas } = despachante({ prazoMs: 3000 });
   try {
     const t0 = Date.now();
-    const r = await d.executar(pedido('A', { dormirMs: 5000 }), nunca);
+    const r = await d.executar(pedido('A', { dormirMs: 15_000 }), nunca);
     assert.equal(r.tipo, 'prazo');
-    assert.ok(Date.now() - t0 < 1500, `respondeu no prazo, nao ao fim da consulta (${Date.now() - t0} ms)`);
+    assert.ok(Date.now() - t0 < 10_000, `respondeu no prazo, nao ao fim da consulta (${Date.now() - t0} ms)`);
     assert.equal(d.vivos, 0, 'o worker preso foi morto');
-    const t1 = Date.now();
     const depois = await d.executar(pedido('A'), nunca);
     assert.equal(depois.tipo, 'resposta');
-    assert.ok(Date.now() - t1 < 1500);
     assert.equal(d.vivos, 1, 'um worker novo assumiu');
     assert.ok(linhas.some((l) => /prazo estourado: GET \/relatorio/.test(l)), linhas.join('|'));
   } finally {

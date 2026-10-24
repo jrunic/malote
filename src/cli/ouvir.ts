@@ -29,6 +29,7 @@ import { abrirCaptura } from './captura-de-retrato.js';
 import { anotarRetrato, pareceRetrato } from './retrato.js';
 import { registrarDescartes } from './descartes.js';
 import { criarMarcadorDoSinal } from './sinal-da-conexao.js';
+import { criarGravadorDosPendentes, linhaDeResumo, linhaDoAnuncio } from './estado-dos-pendentes.js';
 import { anotarPulos } from './pulos.js';
 import { atorDeServico, comAtor } from '../nucleo/ator.js';
 import {
@@ -67,6 +68,8 @@ export interface CaminhosDaConta {
   sinal: string;
   /** Serie diaria das Mensagens gravadas pela janela de relogio (#1204). Ver `descartes.ts`. */
   adiantadas: string;
+  /** O estado dos Pendentes da Plataforma da ultima Conexao (#1151). Ver `estado-dos-pendentes.ts`. */
+  pendentes: string;
 }
 
 /**
@@ -90,6 +93,7 @@ export function caminhosDaConta(raiz: string, conta: string): CaminhosDaConta {
       guarda: join(pasta, 'descartados.jsonl'),
       sinal: join(pasta, 'ultimo-sinal.txt'),
       adiantadas: join(pasta, 'instantes-adiantados.json'),
+      pendentes: join(pasta, 'pendentes.json'),
   };
 }
 
@@ -473,6 +477,10 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
   // arquivo ao lado do `ultimo-evento`. Falha dele nunca derruba a recepcao.
   const marcarSinal = criarMarcadorDoSinal({ caminho: caminhos.sinal, agora, avisar: escrever });
 
+  // O estado dos Pendentes da Plataforma de cada Conexao (#1151): estrangulado, em arquivo, e o resumo vai ao log.
+  // Falha dele nunca derruba a recepcao.
+  const gravarPendentes = criarGravadorDosPendentes({ caminho: caminhos.pendentes, agora, avisar: escrever });
+
   // O decodificador da edicao cifrada (#1246) vem do portao e e carregado ANTES do primeiro evento, porque `receberEvento` e
   // sincrono. Falha em carregar nunca impede de ouvir: a edicao cifrada segue descartada e guardada, com a causa dita.
   //
@@ -508,6 +516,12 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
         });
       },
       aoFrame: marcarSinal,
+      agora,
+      aoPendentes: ({ tipo, estado }) => {
+        gravarPendentes(estado, tipo === 'final');
+        if (tipo === 'anuncio') escrever(linhaDoAnuncio(estado));
+        if (tipo === 'final') escrever(linhaDeResumo(estado));
+      },
       // O aviso de metadados de grupo entra por um gancho que NAO e o de `aoReceber`: o Ator abre AQUI, pelo mesmo
       // motivo (o escopo nao atravessa o encanamento assincrono da biblioteca), senao a Operacao sairia
       // `indeterminado`. Uma Operacao por aviso. So CONTAGENS: assunto e descricao sao texto de conversa.

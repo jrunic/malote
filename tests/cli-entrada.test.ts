@@ -23,10 +23,13 @@ function invocarComEnv(
   caminhoDaCli: string,
   vars: Record<string, string>,
 ): { codigo: number; saida: string } {
+  // So as variaveis do proprio teste: nenhum MALOTE_* do ambiente de quem roda a suite (modo rede,
+  // chave de acesso, outra instalacao) chega ao filho.
+  const herdado = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('MALOTE_')));
   const r = spawnSync(
     process.execPath,
     ['--import', 'tsx', caminhoDaCli, 'operador', 'chave', 'criar'],
-    { encoding: 'utf8', env: { ...process.env, ...vars }, timeout: 60_000 },
+    { encoding: 'utf8', env: { ...herdado, ...vars }, timeout: 60_000 },
   );
   return { codigo: r.status ?? -1, saida: `${r.stdout ?? ''}${r.stderr ?? ''}` };
 }
@@ -82,6 +85,34 @@ test('MALOTE_RAIZ nao redireciona mais nada — MALOTE_HOME e a unica valvula', 
   } finally {
     rmSync(nova, { recursive: true, force: true });
     rmSync(isca, { recursive: true, force: true });
+  }
+});
+
+test('o modo rede do ambiente de quem roda a suite nao vaza para a CLI sob teste', () => {
+  // Quem desenvolve em maquina com o modo rede configurado tem MALOTE_SERVIDOR e a chave de acesso no
+  // ambiente; o filho herdava tudo e a CLI recusava `operador` ("operacao LOCAL"), reprovando os
+  // testes de entrada por culpa do ambiente. O CI nao as tem, entao so a maquina do autor via. Aqui o
+  // ambiente do PAI e poluido de proposito, para a medida nao depender de quem roda.
+  const anteriores = new Map<string, string | undefined>();
+  const poluicao = {
+    MALOTE_SERVIDOR: 'http://127.0.0.1:1',
+    MALOTE_CHAVE_DE_ACESSO: 'chave-de-mentira',
+    MALOTE_CHAVE_DE_ACESSO_OUTRA: 'chave-de-mentira',
+  };
+  const temp = mkdtempSync(join(tmpdir(), 'malote-ambiente-'));
+  try {
+    for (const [k, v] of Object.entries(poluicao)) {
+      anteriores.set(k, process.env[k]);
+      process.env[k] = v;
+    }
+    const r = invocarCli(join(RAIZ_DO_REPO, 'src', 'cli', 'index.ts'), join(temp, 'inst-ambiente'));
+    assert.match(r.saida, /Chave de Operador criada/, 'o modo rede do pai vazou para a CLI sob teste');
+  } finally {
+    for (const [k, v] of anteriores) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    rmSync(temp, { recursive: true, force: true });
   }
 });
 

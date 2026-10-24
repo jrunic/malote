@@ -165,6 +165,7 @@ import { caminhosDaConta, ouvir } from './ouvir.js';
 import { enderecoRecusado, servir } from './servir.js';
 import { lerUltimoEvento } from './ultimo-evento.js';
 import { lerSinalDaConexao } from './sinal-da-conexao.js';
+import { lerEstadoDosPendentes } from './estado-dos-pendentes.js';
 import {
   reenfileirarFalhas,
   incluirEstoqueEmTranscricao,
@@ -1062,6 +1063,11 @@ function executarComAtor(
             // morta": quem consome alarma por sinal PRESENTE e velho, jamais por ausencia. So o --json:
             // a saida default e contrato com o watchdog.
             ultimoSinalDaConexao: instanteOuNulo(lerSinalDaConexao(caminhosDoEstado.sinal)),
+            // O estado dos Pendentes da Plataforma da ultima Conexao (#1151), ou `null`. `null` e INDISPONIVEL (arquivo ausente
+            // ou ilegivel, ou biblioteca sem a superficie), NUNCA "sem pendentes". `em-andamento` com `atualizadoEm` velho e
+            // `ultimoSinalDaConexao` parado e processo morto, nao Pendentes presos. So o --json: a saida default e contrato
+            // com o watchdog. NAO reusa `lotes`, que e do Derrame.
+            pendentes: lerEstadoDosPendentes(caminhosDoEstado.pendentes),
           }),
         );
         return 0;
