@@ -4,6 +4,13 @@ import type { MensagemRecebida } from './ao-vivo.js';
 import type { Decodificador } from './edicao.js';
 import type { IdentidadeBrutaDoVinculo } from './identidade-da-conta.js';
 import { leituraDoModelo } from './imagem-de-modelo.js';
+import type { NoDoTransporte } from './pendentes.js';
+import {
+  ligarPendentes,
+  observarLogger,
+  type EventoDePendentes,
+  type PendentesLigados,
+} from './pendentes-na-conexao.js';
 
 /**
  * A conexao ao vivo do WhatsApp.
@@ -24,7 +31,13 @@ interface ConexaoAtualizada {
 }
 
 interface Socket {
-  ev: { on: (fluxo: string, ouvinte: (dado: never) => void) => void };
+  ev: {
+    on: (fluxo: string, ouvinte: (dado: never) => void) => void;
+    /** O buffer inicial da biblioteca esta ativo? OPCIONAL: os Pendentes (#1151) so se ligam se existir. */
+    isBuffering?: () => boolean;
+    /** Libera o buffer inicial. OPCIONAL, como acima. */
+    flush?: () => boolean;
+  };
   requestPairingCode: (numero: string) => Promise<string>;
   /** A identidade da PROPRIA conta, que a biblioteca preenche quando o socket abre. */
   user?: IdentidadeBrutaDoVinculo;
@@ -35,7 +48,9 @@ interface Socket {
    * bibliotecas falsas dos testes nao o tem, e uma versao futura pode nao o expor.
    * Distinto de `ev`, o emissor de dominio, que e bufferizado enquanto a Conexao sincroniza.
    */
-  ws?: { on?: (evento: string, ouvinte: () => void) => unknown };
+  ws?: { on?: (evento: string, ouvinte: (no: NoDoTransporte) => void) => unknown };
+  /** Envia um no cru pelo transporte. OPCIONAL: so o recolhimento dos Pendentes (#1151) o usa. */
+  sendNode?: (frame: unknown) => unknown;
   /** Envia conteudo pelo socket corrente. Tipado largo porque o conteudo
    *  (texto, imagem, documento) e vocabulario da biblioteca, nao do nucleo. */
   sendMessage: (
@@ -45,7 +60,9 @@ interface Socket {
 }
 
 interface Biblioteca {
-  default: (config: { auth: unknown }) => Socket;
+  default: (config: { auth: unknown; logger?: unknown }) => Socket;
+  /** A configuracao padrao da biblioteca; so o logger dela interessa, para contar as falhas de decifra (#1151). */
+  DEFAULT_CONNECTION_CONFIG?: { logger?: unknown };
   useMultiFileAuthState: (pasta: string) => Promise<{ state: unknown; saveCreds: () => void }>;
   DisconnectReason: { loggedOut: number; connectionClosed: number; connectionLost: number };
   /**
@@ -136,6 +153,14 @@ export interface OpcoesDeConexao {
    * Este modulo entrega valores brutos; quem normaliza e compara e o Adaptador.
    */
   aoIdentificar?: (identidade: IdentidadeBrutaDoVinculo) => 'seguir' | 'recusar';
+  /**
+   * O estado dos Pendentes da Plataforma de cada Conexao (#1151): abertura, anuncio, progresso e final. Presente
+   * liga o recolhimento (liberar o buffer inicial e pedir mais Pendentes ate a plataforma declarar o fim); ausente,
+   * a Conexao e a de sempre. Excecao daqui e engolida: o estado e observacao, e nunca custa Mensagem.
+   */
+  aoPendentes?: (evento: EventoDePendentes) => void;
+  /** O relogio do recolhimento dos Pendentes (#1151), em milissegundos. Por padrao, o do sistema; o ouvir passa o dele. */
+  agora?: () => number;
 }
 
 export interface Conexao {
@@ -263,6 +288,8 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
   // `enviar` nunca pode falar com um socket fechado por acreditar que o
   // primeiro continua valendo.
   let sockAtual: Socket | undefined;
+  // Os Pendentes do socket CORRENTE (#1151): um por socket, encerrado quando a Conexao religa ou para.
+  let pendentesAtual: PendentesLigados | undefined;
 
   const CODIGOS_DE_TRANSPORTE = new Set<number>([
     lib.DisconnectReason.connectionClosed,
@@ -295,8 +322,29 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
 
   const abrir = (): void => {
     if (parado) return;
-    const sock = lib.default({ auth: state });
+    pendentesAtual?.encerrar();
+    pendentesAtual = undefined;
+    // So com o gancho dos Pendentes o logger da biblioteca e embrulhado (para contar as falhas de decifra); sem ele,
+    // ou sem logger para embrulhar, o socket nasce exatamente como sempre nasceu.
+    const aoPendentes = opcoes.aoPendentes;
+    // Os Pendentes DESTE socket: o logger conta no recolhedor do socket que o recebeu, e nao no corrente, porque o
+    // socket antigo ainda pode logar uma falha depois da religacao.
+    let pendentesDoSocket: PendentesLigados | undefined;
+    const logger =
+      aoPendentes === undefined
+        ? undefined
+        : observarLogger(lib.DEFAULT_CONNECTION_CONFIG?.logger, () => pendentesDoSocket?.falhaDeDecifra());
+    const sock = lib.default(logger === undefined ? { auth: state } : { auth: state, logger });
     sockAtual = sock;
+    // Assinado de forma SINCRONA na criacao do socket: o anuncio e o fim costumam chegar antes do `open`.
+    if (aoPendentes !== undefined) {
+      pendentesDoSocket = ligarPendentes(sock, {
+        agora: opcoes.agora ?? Date.now,
+        aoPendentes,
+        contaFalhasDeDecifra: logger !== undefined,
+      });
+      pendentesAtual = pendentesDoSocket;
+    }
     sock.ev.on('creds.update', saveCreds as (dado: never) => void);
 
     // O SINAL DE VIDA (#1162). Assina no TRANSPORTE (`ws`), e nao em `ev`: `ev` e bufferizado enquanto a
@@ -472,6 +520,7 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
     parar: (): void => {
       parado = true;
       if (agendado !== undefined) clearTimeout(agendado);
+      pendentesAtual?.encerrar();
     },
     enviar: async (jid: string, conteudo: unknown): Promise<{ keyId: string } | undefined> => {
       if (sockAtual === undefined) return undefined;
