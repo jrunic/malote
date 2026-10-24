@@ -67,6 +67,8 @@ export interface CaminhosDaConta {
   sinal: string;
   /** Serie diaria das Mensagens gravadas pela janela de relogio (#1204). Ver `descartes.ts`. */
   adiantadas: string;
+  /** O estado dos Pendentes da Plataforma da ultima Conexao (#1151). Ver `estado-dos-pendentes.ts`. */
+  pendentes: string;
 }
 
 /**
@@ -90,6 +92,7 @@ export function caminhosDaConta(raiz: string, conta: string): CaminhosDaConta {
       guarda: join(pasta, 'descartados.jsonl'),
       sinal: join(pasta, 'ultimo-sinal.txt'),
       adiantadas: join(pasta, 'instantes-adiantados.json'),
+      pendentes: join(pasta, 'pendentes.json'),
   };
 }
 
