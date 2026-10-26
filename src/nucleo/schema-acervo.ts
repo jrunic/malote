@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3';
  * Politica completa das duas bases na ADR local
  * `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_ACERVO = 29;
+export const VERSAO_SCHEMA_ACERVO = 30;
 
 /**
  * Forma mais antiga que a maquina de migracao alcanca.
@@ -815,6 +815,34 @@ export function aplicarSchemaAcervo(db: Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_envios_fila ON envios(configuracao_id, estado, tentativas, solicitada_em);
+
+    -- Diario de Chegadas (v30): o que ENTROU no Acervo, na ordem em que entrou. So de acrescimo. AUTOINCREMENT: o
+    -- numero de sequencia nunca e reaproveitado, nem se linhas forem apagadas pela aparagem. Sem chave estrangeira
+    -- de proposito: a Chegada sobrevive a Conversa apagada, e a leitura com conteudo devolve conteudo nulo.
+    CREATE TABLE IF NOT EXISTS chegadas (
+      seq         INTEGER PRIMARY KEY AUTOINCREMENT,
+      tipo        TEXT NOT NULL
+        CHECK (tipo IN ('mensagem', 'edicao', 'anexo-disponivel', 'transicao-de-participacao', 'etiqueta', 'inicio-do-diario')),
+      origem      TEXT CHECK (origem IN ('ao-vivo', 'importacao', 'reprocesso')),
+      criado_em   INTEGER NOT NULL,
+      ocorrida_em INTEGER,
+      conversa_id TEXT,
+      mensagem_id TEXT,
+      autor_id    TEXT,
+      direcao     TEXT CHECK (direcao IS NULL OR direcao IN ('enviada', 'recebida')),
+      alvo_id     TEXT,
+      CHECK ((tipo = 'inicio-do-diario') = (origem IS NULL))
+    );
+
+    CREATE INDEX IF NOT EXISTS chegadas_por_conversa ON chegadas (conversa_id, seq);
+
+    -- A linha de controle do Diario: a epoca (sorteada quando o Diario nasce) e o Piso (o maior numero de sequencia ja
+    -- removido; nasce igual ao da Chegada inicio-do-diario).
+    CREATE TABLE IF NOT EXISTS diario_de_chegadas (
+      linha_unica INTEGER PRIMARY KEY CHECK (linha_unica = 1),
+      epoca       TEXT NOT NULL,
+      piso        INTEGER NOT NULL
+    );
 
   `);
 

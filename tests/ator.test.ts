@@ -83,7 +83,7 @@ test('as duas bases tem a coluna do Ator, e a forma subiu', () => {
   const c = cenario();
   try {
     const { acervo } = c.novoInquilino('Ahsoka');
-    assert.equal(VERSAO_SCHEMA_ACERVO, 29);
+    assert.equal(VERSAO_SCHEMA_ACERVO, 30);
     assert.equal(VERSAO_SCHEMA_REGISTRO, 8);
     for (const base of [acervo.db, c.registro.db]) {
       const colunas = base.prepare("SELECT name FROM pragma_table_info('operacoes')").all() as {

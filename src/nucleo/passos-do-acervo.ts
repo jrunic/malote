@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { PassoDeMigracao, PlanoDeMigracao } from './migracao.js';
 import { PISO_SCHEMA_ACERVO, VERSAO_SCHEMA_ACERVO } from './schema-acervo.js';
 
@@ -1004,6 +1005,51 @@ const CITACAO_V29: PassoDeMigracao = {
   },
 };
 
+/**
+ * v29 -> v30: o Diario de Chegadas (#1355). Cria a tabela das Chegadas, o indice por Conversa e a linha de controle
+ * (epoca e Piso), e semeia a Chegada `inicio-do-diario`. DDL congelado: nao importa do schema fresco. Idempotente
+ * (os testes dos passos anteriores reproduzem a forma antiga a partir de um Acervo fresco, que ja tem o Diario).
+ * Nao ha Chegada retroativa: o Diario comeca aqui.
+ */
+const CHEGADAS_V30: PassoDeMigracao = {
+  de: 29,
+  para: 30,
+  descricao: 'cria o Diario de Chegadas (so de acrescimo, com Marcador) e semeia a Chegada inicio-do-diario',
+  tabelasNovas: ['chegadas', 'diario_de_chegadas'],
+  aplicar: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS chegadas (
+        seq         INTEGER PRIMARY KEY AUTOINCREMENT,
+        tipo        TEXT NOT NULL
+          CHECK (tipo IN ('mensagem', 'edicao', 'anexo-disponivel', 'transicao-de-participacao', 'etiqueta', 'inicio-do-diario')),
+        origem      TEXT CHECK (origem IN ('ao-vivo', 'importacao', 'reprocesso')),
+        criado_em   INTEGER NOT NULL,
+        ocorrida_em INTEGER,
+        conversa_id TEXT,
+        mensagem_id TEXT,
+        autor_id    TEXT,
+        direcao     TEXT CHECK (direcao IS NULL OR direcao IN ('enviada', 'recebida')),
+        alvo_id     TEXT,
+        CHECK ((tipo = 'inicio-do-diario') = (origem IS NULL))
+      );
+      CREATE INDEX IF NOT EXISTS chegadas_por_conversa ON chegadas (conversa_id, seq);
+      CREATE TABLE IF NOT EXISTS diario_de_chegadas (
+        linha_unica INTEGER PRIMARY KEY CHECK (linha_unica = 1),
+        epoca       TEXT NOT NULL,
+        piso        INTEGER NOT NULL
+      );
+    `);
+    if (db.prepare('SELECT 1 FROM diario_de_chegadas').get() !== undefined) return;
+    const inicio = db
+      .prepare("INSERT INTO chegadas (tipo, origem, criado_em) VALUES ('inicio-do-diario', NULL, ?)")
+      .run(Date.now());
+    db.prepare('INSERT INTO diario_de_chegadas (linha_unica, epoca, piso) VALUES (1, ?, ?)').run(
+      randomUUID(),
+      Number(inicio.lastInsertRowid),
+    );
+  },
+};
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -1024,6 +1070,7 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CONTATO_COMPARTILHADO_V27,
   EDICAO_V28,
   CITACAO_V29,
+  CHEGADAS_V30,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {

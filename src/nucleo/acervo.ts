@@ -10,6 +10,7 @@ import {
   type ContextoDeMigracao,
 } from './migracao.js';
 import { PLANO_DO_ACERVO } from './passos-do-acervo.js';
+import { semearDiario } from './chegada.js';
 
 export { VERSAO_SCHEMA_ACERVO, PISO_SCHEMA_ACERVO };
 
@@ -148,12 +149,18 @@ export function abrirAcervo(
   // longa e o derrame (`cli/derrame.ts`), nao este numero.
   db.pragma('busy_timeout = 5000');
 
+  const acervo = montarAcervo(db, inquilinoId, caminho);
   const versaoAntes = versaoGravada(db);
 
   if (versaoAntes === undefined) {
-    // Base NOVA: a forma corrente vem do schema fresco, de uma vez so.
-    aplicarSchemaAcervo(db);
-    db.prepare('INSERT INTO versao_schema (versao) VALUES (?)').run(VERSAO_SCHEMA_ACERVO);
+    // Base NOVA: a forma corrente vem do schema fresco, de uma vez so, e o Diario de Chegadas nasce semeado (sem a
+    // Chegada inicial nao ha Marcador atual). O passo v30 faz o mesmo para o Acervo que sobe de forma anterior. Tudo
+    // numa transacao: nao existe Acervo criado pela metade, sem semente.
+    db.transaction(() => {
+      aplicarSchemaAcervo(db);
+      db.prepare('INSERT INTO versao_schema (versao) VALUES (?)').run(VERSAO_SCHEMA_ACERVO);
+      semearDiario(acervo, Date.now());
+    })();
   } else if (versaoAntes > VERSAO_SCHEMA_ACERVO) {
     db.close();
     throw new AcervoDeOutraVersaoError(caminho, versaoAntes, VERSAO_SCHEMA_ACERVO);
@@ -199,7 +206,7 @@ export function abrirAcervo(
      ON CONFLICT (linha_unica) DO NOTHING`,
   ).run(inquilinoId, agora);
 
-  return montarAcervo(db, inquilinoId, caminho);
+  return acervo;
 }
 
 /** Abre o Acervo sem permitir escrita. Usado pelos caminhos de consulta. */
