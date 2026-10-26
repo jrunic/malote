@@ -313,6 +313,7 @@ export function gravarMaterialLido(
       valor: resolverEndereco(acervo, 'whatsapp', ev.membroExterno),
     });
     const nasceu = registrarTransicao(acervo, {
+      origemDaChegada: 'importacao',
       conversaId,
       identificadorId,
       natureza,
@@ -354,6 +355,7 @@ export function gravarMaterialLido(
     let mensagemId: string;
     try {
       mensagemId = registrarMensagem(acervo, {
+        origemDaChegada: 'importacao',
         conversaId,
         fonte: 'whatsapp',
         idExterno: m.idExterno,
@@ -407,6 +409,7 @@ export function gravarMaterialLido(
         // interno. O adaptador não o conhece — o caminho da origem, que carrega
         // apelido e número, não atravessa.
         registrarAnexo(acervo, {
+          origemDaChegada: 'importacao',
           mensagemId,
           tipo: m.anexo.tipo,
           presenca: 'nunca-obtido',

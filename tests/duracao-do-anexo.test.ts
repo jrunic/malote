@@ -10,10 +10,12 @@ function anexoDeAudio(acervo: Parameters<typeof registrarAnexo>[0], bruto: strin
     fonte: 'whatsapp', idExterno: `conv-${Math.random()}`, coletiva: false, configuracao: CFG_WHATSAPP,
   });
   const mensagem = registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     direcao: 'recebida', conversaId: conversa, fonte: 'whatsapp', idExterno: `msg-${Math.random()}`,
     ocorridaEm: Date.now(), agora: Date.now(),
   });
   return registrarAnexo(acervo, {
+    origemDaChegada: 'importacao',
     mensagemId: mensagem, tipo: 'audio', presenca: 'presente', caminho: 'a.opus',
     bruto, ...(duracao !== undefined ? { duracao } : {}),
   });

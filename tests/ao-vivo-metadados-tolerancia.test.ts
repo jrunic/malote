@@ -20,7 +20,7 @@ test('evento de grupo 165 ms a frente do relogio (o caso medido) grava os metada
     const r = receberEvento(
       acervo,
       [eventoDeGrupo({ id: 'T1', tipo: 'GROUP_CHANGE_SUBJECT', parametros: ['Espiga 1160 B'], ts })],
-      { agora: AGORA, configuracao: CFG_WHATSAPP },
+      { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP },
     );
     assert.deepEqual(r.recusados, [], `a guarda recusou o evento: a #1204 nao foi entregue? ${JSON.stringify(r.recusados)}`);
     assert.equal(r.metadadosDeColetiva, 1);

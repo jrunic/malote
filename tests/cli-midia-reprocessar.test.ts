@@ -86,6 +86,7 @@ function instalacaoComUmElegivel(raiz: string, quantos = 1): { inquilino: string
     let primeiro = { mensagemId: '', anexoId: '' };
     for (let i = 1; i <= quantos; i += 1) {
       const mensagemId = registrarMensagem(acervo, {
+        origemDaChegada: 'importacao',
         conversaId, fonte: 'whatsapp', idExterno: `M${i}`, ocorridaEm: Date.UTC(2026, 8, 24 + i, 12), agora: Date.now(),
         direcao: 'recebida',
         bruto: JSON.stringify({
@@ -94,7 +95,7 @@ function instalacaoComUmElegivel(raiz: string, quantos = 1): { inquilino: string
           message: { imageMessage: { mediaKey: 'AAAA', directPath: '/x' } },
         }),
       });
-      const anexoId = registrarAnexo(acervo, { mensagemId, tipo: 'image', presenca: 'nunca-obtido', bruto: '{}' });
+      const anexoId = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo: 'image', presenca: 'nunca-obtido', bruto: '{}' });
       if (i === 1) primeiro = { mensagemId, anexoId };
     }
     return { inquilino, chave, ...primeiro };

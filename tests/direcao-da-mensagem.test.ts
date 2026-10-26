@@ -15,6 +15,7 @@ test('registrarMensagem grava a Direcao', () => {
       configuracao: CFG_WHATSAPP,
     });
     const id = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId,
       fonte: 'whatsapp',
       idExterno: 'ext-1',

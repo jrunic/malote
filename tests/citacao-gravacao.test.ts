@@ -26,6 +26,7 @@ function mensagem(
   extra: { direcao?: Direcao; autorId?: string; citacao?: { idExterno: string; autorId?: string; direcao?: Direcao }; fonte?: 'whatsapp' | 'instagram' } = {},
 ): string {
   return registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId,
     fonte: extra.fonte ?? 'whatsapp',
     idExterno,

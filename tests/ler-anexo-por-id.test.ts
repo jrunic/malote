@@ -14,11 +14,13 @@ test('lerAnexoPorId devolve o Anexo pelo id', () => {
       configuracao: CFG_WHATSAPP,
     });
     const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId, fonte: 'whatsapp', idExterno: 'm1',
       ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
     });
     const anexoId = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId, tipo: 'image', presenca: 'nunca-obtido',
     });
 
@@ -51,11 +53,13 @@ test('AnexoLido de audio sem Transcricao traz transcricao: null', () => {
       configuracao: CFG_WHATSAPP,
     });
     const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId, fonte: 'whatsapp', idExterno: 'm1',
       ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
     });
     const anexoId = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId, tipo: 'audio', presenca: 'presente', caminho: '/x/a1.opus',
     });
 
@@ -75,11 +79,13 @@ test('AnexoLido de audio com Transcricao concluida traz o texto e o motor', () =
       configuracao: CFG_WHATSAPP,
     });
     const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId, fonte: 'whatsapp', idExterno: 'm1',
       ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
     });
     const anexoId = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId, tipo: 'audio', presenca: 'presente', caminho: '/x/a1.opus',
     });
     acervo

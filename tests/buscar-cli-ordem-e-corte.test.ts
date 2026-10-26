@@ -16,6 +16,7 @@ function inquilinoComMensagens(n: number) {
   for (let i = 1; i <= n; i += 1) {
     const quando = Date.parse(`2026-03-${String(i).padStart(2, '0')}T12:00:00Z`);
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida', conversaId: conversa, fonte: 'whatsapp', idExterno: `m${i}`,
       ocorridaEm: quando, agora: quando + 1000, conteudo: `relatorio ${i}`,
     });

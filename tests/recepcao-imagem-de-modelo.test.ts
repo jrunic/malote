@@ -17,7 +17,7 @@ const modelo = (id: string, cabecalho: Record<string, unknown>): MensagemRecebid
 function cena() {
   const c = cenario();
   const { acervo } = c.novoInquilino('Titular de Teste');
-  const receber = (eventos: MensagemRecebida[]) => receberEvento(acervo, eventos, { agora: AGORA, configuracao: CFG_WHATSAPP });
+  const receber = (eventos: MensagemRecebida[]) => receberEvento(acervo, eventos, { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
   const anexos = () => acervo.db.prepare('SELECT mensagem_id AS mensagemId, tipo, presenca, bruto FROM anexos').all() as Array<{ mensagemId: string; tipo: string; presenca: string; bruto: string }>;
   const mensagens = () => acervo.db.prepare('SELECT id, conteudo, bruto FROM mensagens ORDER BY id_externo').all() as Array<{ id: string; conteudo: string | null; bruto: string }>;
   return { acervo, receber, anexos, mensagens, limpar: c.limpar };

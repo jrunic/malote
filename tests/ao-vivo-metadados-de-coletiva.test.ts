@@ -13,7 +13,7 @@ const T_CRIACAO = 1_791_922_202;
 const T_DESCRICAO = 1_791_922_211;
 const T_ASSUNTO_B = 1_791_922_324;
 const AGORA = (T_ASSUNTO_B + 600) * 1000;
-const OPCOES = { agora: AGORA, configuracao: CFG_WHATSAPP };
+const OPCOES = { origemDaChegada: 'ao-vivo' as const, agora: AGORA, configuracao: CFG_WHATSAPP };
 
 interface Linha {
   assunto: string | null;

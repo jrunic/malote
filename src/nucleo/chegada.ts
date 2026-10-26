@@ -145,6 +145,42 @@ export function registrarChegada(acervo: Acervo, e: EntradaDeChegada): number {
   return Number(info.lastInsertRowid);
 }
 
+/**
+ * Grava a Chegada de um fato que PENDE de uma Mensagem (a Edicao e o Anexo que ficou disponivel): a Conversa, o autor e a
+ * direcao saem da Mensagem, e uma leitura a mais entra no caminho de gravacao. Mensagem inexistente e erro: a porta que
+ * chama esta esta dentro da transacao do fato, e o erro a desfaz.
+ */
+export function registrarChegadaSobreMensagem(
+  acervo: Acervo,
+  e: {
+    tipo: 'edicao' | 'anexo-disponivel';
+    origem: OrigemDaChegada;
+    mensagemId: string;
+    alvoId: string;
+    criadoEm: number;
+    /** O instante do fato. Ausente, e o da Mensagem. */
+    ocorridaEm?: number;
+  },
+): number {
+  const m = acervo
+    .preparar('SELECT conversa_id, autor_id, direcao, ocorrida_em FROM mensagens WHERE id = ?')
+    .get(e.mensagemId) as
+    | { conversa_id: string; autor_id: string | null; direcao: DirecaoDaChegada | null; ocorrida_em: number }
+    | undefined;
+  if (m === undefined) throw new Error(`Chegada sobre Mensagem inexistente: ${e.mensagemId}`);
+  return registrarChegada(acervo, {
+    tipo: e.tipo,
+    origem: e.origem,
+    criadoEm: e.criadoEm,
+    ocorridaEm: e.ocorridaEm ?? m.ocorrida_em,
+    conversaId: m.conversa_id,
+    mensagemId: e.mensagemId,
+    ...(m.autor_id !== null ? { autorId: m.autor_id } : {}),
+    ...(m.direcao !== null ? { direcao: m.direcao } : {}),
+    alvoId: e.alvoId,
+  });
+}
+
 interface Controle {
   epoca: string;
   piso: number;

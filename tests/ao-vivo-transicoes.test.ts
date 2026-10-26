@@ -45,7 +45,7 @@ test('mensagem CIFRADA nao vira Mensagem — o lugar fica aberto para quem soube
     // sem conteudo TRAVA o identificador: `registrarMensagem` e primeiro
     // escritor vence, e o backup que trouxer a mesma mensagem decifrada e
     // descartado como ja existente. O envelope nao vale o lugar.
-    const r = receberEvento(acervo, [stub('AAA1', 2, ['0'])], { agora: AGORA, configuracao: CFG_WHATSAPP });
+    const r = receberEvento(acervo, [stub('AAA1', 2, ['0'])], { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
     assert.equal(r.gravados, 0);
     assert.equal(r.ignorados['cifrada'], 1);
     const n = acervo.db.prepare('SELECT COUNT(*) AS n FROM mensagens').get() as { n: number };
@@ -72,7 +72,7 @@ test('o stub de entrada vira Transicao, com o membro na forma canonica', () => {
     const r = receberEvento(
       acervo,
       [stub('bbb2', 'GROUP_PARTICIPANT_ADD', ['109876543210987@lid'])],
-      { agora: AGORA, configuracao: CFG_WHATSAPP },
+      { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP },
     );
     assert.equal(r.gravados, 1, 'o evento administrativo tambem e Mensagem, como no material');
     assert.equal(r.transicoes, 1);
@@ -104,7 +104,7 @@ test('um evento com dois membros vira duas Transicoes sob o mesmo identificador'
     const r = receberEvento(
       acervo,
       [stub('ccc3', 'GROUP_PARTICIPANT_LEAVE', ['201@lid', '202@lid'])],
-      { agora: AGORA, configuracao: CFG_WHATSAPP },
+      { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP },
     );
     assert.equal(r.transicoes, 2);
   } finally {
@@ -117,8 +117,8 @@ test('reprocessar o mesmo evento nao cria Transicao nova', () => {
   try {
     const { acervo } = c.novoInquilino('Rey');
     const evento = stub('ddd4', 'GROUP_PARTICIPANT_ADD', ['301@lid']);
-    const primeira = receberEvento(acervo, [evento], { agora: AGORA, configuracao: CFG_WHATSAPP });
-    const segunda = receberEvento(acervo, [evento], { agora: AGORA, configuracao: CFG_WHATSAPP });
+    const primeira = receberEvento(acervo, [evento], { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
+    const segunda = receberEvento(acervo, [evento], { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
     assert.equal(primeira.transicoes, 1);
     assert.equal(segunda.transicoes, 0, 'quem responde "ja existe" e o Acervo, nao o ouvinte');
     const n = acervo.db
@@ -138,6 +138,7 @@ test('parametro que nao e endereco nao vira Transicao — e e contado', () => {
     // um numero. Descartar em silencio esconderia a mudanca de forma do dia em
     // que a Fonte trocar o conteudo do campo.
     const r = receberEvento(acervo, [stub('eee5', 'GROUP_PARTICIPANT_ADD', ['0'])], {
+      origemDaChegada: 'ao-vivo',
       agora: AGORA, configuracao: CFG_WHATSAPP,
     });
     assert.equal(r.transicoes, 0);
@@ -182,7 +183,7 @@ test('a correspondencia se aprende ANTES de escrever — mesmo vindo depois no l
       },
     ];
 
-    const primeira = receberEvento(acervo, lote, { agora: AGORA, configuracao: CFG_WHATSAPP });
+    const primeira = receberEvento(acervo, lote, { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
     assert.equal(primeira.transicoes, 1);
     const valor = acervo.db
       .prepare(
@@ -192,7 +193,7 @@ test('a correspondencia se aprende ANTES de escrever — mesmo vindo depois no l
       .get() as { valor: string };
     assert.equal(valor.valor, TELEFONE, 'a Transicao nasce ja na forma canonica');
 
-    const segunda = receberEvento(acervo, lote, { agora: AGORA, configuracao: CFG_WHATSAPP });
+    const segunda = receberEvento(acervo, lote, { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
     assert.equal(segunda.transicoes, 0, 'reprocessar o mesmo lote nao cria linha nova');
     const n = acervo.db
       .prepare('SELECT COUNT(*) AS n FROM transicoes_de_participacao')
@@ -224,7 +225,7 @@ test('lote sem par de enderecos NAO abre Operacao de aprendizado', () => {
           message: { conversation: 'conversa direta nao traz par' },
         },
       ],
-      { agora: AGORA, configuracao: CFG_WHATSAPP },
+      { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP },
     );
     const n = acervo.db
       .prepare("SELECT COUNT(*) AS n FROM operacoes WHERE natureza = 'aprender-endereco-ao-vivo'")

@@ -26,10 +26,12 @@ function anexoNuncaObtido(
     configuracao: CFG_WHATSAPP,
   });
   const mensagemId = registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId, fonte: 'whatsapp', idExterno: opcoes.idExterno, ocorridaEm: opcoes.ocorridaEm ?? 1_700_000_000_000,
     agora: Date.now(), direcao: 'recebida', bruto: opcoes.mensagemBruto,
   });
   return registrarAnexo(acervo, {
+    origemDaChegada: 'importacao',
     mensagemId, tipo: opcoes.tipo, presenca: 'nunca-obtido', bruto: '{}',
   });
 }

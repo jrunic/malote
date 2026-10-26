@@ -27,10 +27,12 @@ test('de ponta a ponta: o comando cria o Anexo e o midia reprocessar --mensagem 
     const { acervo } = c.novoInquilino('Ahsoka');
     const conversaId = registrarConversa(acervo, { fonte: 'whatsapp', idExterno: '5565900000001@s.whatsapp.net', coletiva: false, configuracao: CFG_WHATSAPP });
     const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId, fonte: 'whatsapp', idExterno: 'MOD1', ocorridaEm: Date.parse('2026-10-14T10:00:00Z'), agora: Date.parse('2026-10-18T10:00:00Z'),
       direcao: 'recebida', bruto: BRUTO,
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId, fonte: 'whatsapp', idExterno: 'OUTRA', ocorridaEm: Date.parse('2026-10-14T11:00:00Z'), agora: Date.parse('2026-10-18T10:00:00Z'),
       direcao: 'recebida', bruto: BRUTO.replace('MOD1', 'OUTRA'),
     });

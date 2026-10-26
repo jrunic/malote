@@ -13,7 +13,7 @@ function semear(raiz: string, inquilino: string, texto: string): { conversa: str
   try {
     const conversa = registrarConversa(acervo, { fonte: 'whatsapp', idExterno: '120363000000000001@g.us', coletiva: true });
     const m = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '5565911110001@s.whatsapp.net' }).id;
-    registrarEtiqueta(acervo, { conversaId: conversa, identificadorId: m, texto, ocorridaEm: T0, fonte: 'whatsapp', idExterno: 'EV1' });
+    registrarEtiqueta(acervo, { origemDaChegada: 'importacao', conversaId: conversa, identificadorId: m, texto, ocorridaEm: T0, fonte: 'whatsapp', idExterno: 'EV1' });
     return { conversa };
   } finally {
     acervo.fechar();
@@ -76,6 +76,7 @@ test('GET /conversas/<id>/participantes traz etiqueta e etiquetaEm por rede', as
       // O membro precisa constar na presenca: uma Transicao de entrada o poe no universo.
       const { registrarTransicao } = await import('../src/nucleo/escrita.js');
       registrarTransicao(acervo, {
+        origemDaChegada: 'importacao',
         conversaId: conversa, identificadorId: m, natureza: 'entrou', ocorridaEm: T0 - 1000,
         fonte: 'whatsapp', idExterno: 'ADD1', codigoDaFonte: 'GROUP_PARTICIPANT_ADD',
       });
@@ -102,7 +103,7 @@ test('o cliente de rede: etiquetas por HTTP, flag sem valor sai 2 sem pedir nada
     const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
     try {
       const outro = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '5565911110002@s.whatsapp.net' }).id;
-      registrarEtiqueta(acervo, { conversaId: conversa, identificadorId: outro, texto: 'Outra', ocorridaEm: T0, fonte: 'whatsapp', idExterno: 'EV2' });
+      registrarEtiqueta(acervo, { origemDaChegada: 'importacao', conversaId: conversa, identificadorId: outro, texto: 'Outra', ocorridaEm: T0, fonte: 'whatsapp', idExterno: 'EV2' });
     } finally {
       acervo.fechar();
     }

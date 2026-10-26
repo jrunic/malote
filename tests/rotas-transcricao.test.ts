@@ -28,10 +28,12 @@ test('GET /mensagens inclui a Transcricao do Anexo de audio', async () => {
       fonte: 'whatsapp', idExterno: '111@s.whatsapp.net', coletiva: false, configuracao: CFG_WHATSAPP,
     });
     const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida', conversaId, fonte: 'whatsapp', idExterno: 'm1',
       ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
     });
     const anexoId = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId, tipo: 'audio', presenca: 'presente', caminho: '/x/a1.opus',
     });
     acervo
@@ -72,10 +74,12 @@ test('POST /transcricoes/solicitar aceita um Anexo elegível, com 202, e grava o
       fonte: 'whatsapp', idExterno: '111@s.whatsapp.net', coletiva: false, configuracao: CFG_WHATSAPP,
     });
     const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida', conversaId, fonte: 'whatsapp', idExterno: 'm1',
       ocorridaEm: Date.now(), agora: Date.now(),
     });
     const anexoId = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId, tipo: 'audio', presenca: 'presente', caminho: '/x/a1.opus',
     });
     acervo.fechar();
@@ -134,10 +138,12 @@ test('POST /transcricoes/solicitar recusa Anexo de outro Inquilino como 404, igu
       fonte: 'whatsapp', idExterno: '222@s.whatsapp.net', coletiva: false, configuracao: CFG_WHATSAPP,
     });
     const mensagemAlheia = registrarMensagem(acervoAlheio, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida', conversaId: conversaAlheia, fonte: 'whatsapp', idExterno: 'm2',
       ocorridaEm: Date.now(), agora: Date.now(),
     });
     const anexoAlheio = registrarAnexo(acervoAlheio, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemAlheia, tipo: 'audio', presenca: 'presente', caminho: '/x/alheio.opus',
     });
     acervoAlheio.fechar();
@@ -184,10 +190,12 @@ test('POST /transcricoes/solicitar recusa com 400 e o motivo, para Anexo não el
       fonte: 'whatsapp', idExterno: '111@s.whatsapp.net', coletiva: false, configuracao: CFG_WHATSAPP,
     });
     const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida', conversaId, fonte: 'whatsapp', idExterno: 'm1',
       ocorridaEm: Date.now(), agora: Date.now(),
     });
     const imagem = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId, tipo: 'image', presenca: 'presente', caminho: '/x/foto.jpg',
     });
     acervo.fechar();
@@ -236,10 +244,12 @@ test('POST /transcricoes/solicitar sob disputa de escrita: 500, sem derrubar o s
       fonte: 'whatsapp', idExterno: '111@s.whatsapp.net', coletiva: false, configuracao: CFG_WHATSAPP,
     });
     const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida', conversaId, fonte: 'whatsapp', idExterno: 'm1',
       ocorridaEm: Date.now(), agora: Date.now(),
     });
     const anexoId = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId, tipo: 'audio', presenca: 'presente', caminho: '/x/a1.opus',
     });
     acervo.fechar();

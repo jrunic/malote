@@ -34,8 +34,8 @@ test('gravar por caminho produz o mesmo tamanho e a mesma impressao que gravar p
     const porBytes = c.registrarAnexo(acervo, { tipo: 'image', ocorridaEm: AGORA });
     const porCaminho = c.registrarAnexo(acervo, { tipo: 'image', ocorridaEm: AGORA });
 
-    gravarArquivoDeAnexo(acervo, { anexoId: porBytes, destino, bytes: conteudo });
-    const r = gravarArquivoDeAnexoDeCaminho(acervo, { anexoId: porCaminho, destino, origem });
+    gravarArquivoDeAnexo(acervo, { origemDaChegada: 'importacao', anexoId: porBytes, destino, bytes: conteudo });
+    const r = gravarArquivoDeAnexoDeCaminho(acervo, { origemDaChegada: 'importacao', anexoId: porCaminho, destino, origem });
 
     const a = dadosDoAnexo(acervo, porBytes);
     const b = dadosDoAnexo(acervo, porCaminho);
@@ -59,7 +59,7 @@ test('vinculo rigido: a origem continua legivel e o arquivo e o MESMO inode', ()
     writeFileSync(origem, conteudo);
 
     const anexoId = c.registrarAnexo(acervo, { tipo: 'image', ocorridaEm: AGORA });
-    const r = gravarArquivoDeAnexoDeCaminho(acervo, { anexoId, destino, origem });
+    const r = gravarArquivoDeAnexoDeCaminho(acervo, { origemDaChegada: 'importacao', anexoId, destino, origem });
 
     assert.equal(r.modo, 'vinculo', 'caiu para copia no mesmo sistema de arquivos');
     // A origem PERMANECE: e o que sustenta "o Acervo antigo permanece intacto
@@ -95,7 +95,7 @@ test('sistema de arquivos diferente: cai para copia, e a origem continua intacta
     writeFileSync(origem, conteudo);
 
     const anexoId = c.registrarAnexo(acervo, { tipo: 'image', ocorridaEm: AGORA });
-    const r = gravarArquivoDeAnexoDeCaminho(acervo, { anexoId, destino, origem });
+    const r = gravarArquivoDeAnexoDeCaminho(acervo, { origemDaChegada: 'importacao', anexoId, destino, origem });
 
     assert.equal(r.modo, 'copia', 'vinculou atraves de sistemas de arquivos diferentes');
     const gravado = join(destino, r.caminho);

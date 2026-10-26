@@ -200,6 +200,7 @@ export function reprocessarDescartados(
         continue;
       }
       const r = receberEvento(acervo, [evento], {
+        origemDaChegada: 'reprocesso',
         agora,
         configuracao,
         ...(opcoes.decodificar !== undefined ? { decodificar: opcoes.decodificar } : {}),

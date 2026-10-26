@@ -212,6 +212,7 @@ function importarMaterialDeInstagramInterno(
       let mensagemId: string;
       try {
         mensagemId = registrarMensagem(acervo, {
+          origemDaChegada: 'importacao',
           conversaId,
           fonte: 'instagram',
           idExterno,
@@ -250,6 +251,7 @@ function importarMaterialDeInstagramInterno(
         // Presença explícita e SEM caminho: quem decide onde o arquivo cai é
         // o núcleo, e só quando o arquivo existe — o que é ciclo 5.
         registrarAnexo(acervo, {
+          origemDaChegada: 'importacao',
           mensagemId,
           tipo: anexo.tipo,
           nomeOriginal: anexo.nomeNaOrigem,

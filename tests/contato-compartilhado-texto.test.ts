@@ -32,6 +32,7 @@ function conversa(acervo: Acervo): string {
 
 function mensagem(acervo: Acervo, conversaId: string, idExterno: string, minuto: number): string {
   return registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId,
     fonte: 'whatsapp',
     idExterno,

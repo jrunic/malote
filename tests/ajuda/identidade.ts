@@ -106,6 +106,7 @@ export function semearIdentidade(acervo: Acervo): Sementes {
   const msg = (conversaId: string, autorId: string, quando: number): void => {
     n += 1;
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId,
       fonte: 'whatsapp',
       idExterno: `m-${n}`,

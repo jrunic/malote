@@ -35,6 +35,7 @@ test('registrar uma Transição a guarda com o instante que a Fonte declarou', (
     const { conversaId, identificadorId } = coletivaCom(acervo, '5565911111');
 
     const nasceu = registrarTransicao(acervo, {
+      origemDaChegada: 'importacao',
       conversaId,
       identificadorId,
       natureza: 'saiu',
@@ -62,6 +63,7 @@ test('registrar a MESMA Transição duas vezes não duplica, e o retorno diz iss
     const { acervo } = c.novoInquilino('Han Solo');
     const { conversaId, identificadorId } = coletivaCom(acervo, '5565922222');
     const entrada = {
+      origemDaChegada: 'importacao' as const,
       conversaId,
       identificadorId,
       natureza: 'saiu' as const,
@@ -94,6 +96,7 @@ test('a Transição NÃO toca a Participação — as duas coexistem', () => {
     const { conversaId, identificadorId } = coletivaCom(acervo, '5565933333');
 
     registrarTransicao(acervo, {
+      origemDaChegada: 'importacao',
       conversaId,
       identificadorId,
       natureza: 'saiu',
@@ -116,6 +119,7 @@ test('o detector acha Transição com instante impossível', () => {
     const { acervo } = c.novoInquilino('Lando');
     const { conversaId, identificadorId } = coletivaCom(acervo, '5565988888');
     registrarTransicao(acervo, {
+      origemDaChegada: 'importacao',
       conversaId,
       identificadorId,
       natureza: 'saiu',
@@ -167,6 +171,7 @@ test('a conferencia conta Transicao repetida sob identificadores de evento difer
     };
     const instante = Date.parse('2026-05-01T10:00:00Z');
     registrarTransicao(acervo, {
+      origemDaChegada: 'importacao',
       ...comum,
       ocorridaEm: instante,
       idExterno: 'ao-vivo-1',
@@ -178,6 +183,7 @@ test('a conferencia conta Transicao repetida sob identificadores de evento difer
     // justamente neles, e detector que responde zero com a duplicacao presente
     // e pior que nenhum: autoriza a conclusao errada.
     registrarTransicao(acervo, {
+      origemDaChegada: 'importacao',
       ...comum,
       ocorridaEm: instante + 693,
       idExterno: 'DOMATERIAL0000000001',
@@ -208,6 +214,7 @@ test('Transicoes distintas no mesmo segundo NAO sao contadas como repetidas', ()
     const instante = Date.parse('2026-05-01T10:00:00Z');
     for (const quem of [a, b]) {
       registrarTransicao(acervo, {
+        origemDaChegada: 'importacao',
         conversaId,
         identificadorId: quem.id,
         natureza: 'entrou',
@@ -252,8 +259,8 @@ test('a conferencia enxerga a mesma pessoa registrada nas duas formas de enderec
       idExterno: 'evento-unico',
       codigoDaFonte: 'GROUP_PARTICIPANT_ADD',
     };
-    registrarTransicao(acervo, { ...comum, identificadorId: antes.id });
-    registrarTransicao(acervo, { ...comum, identificadorId: depois.id });
+    registrarTransicao(acervo, { origemDaChegada: 'importacao', ...comum, identificadorId: antes.id });
+    registrarTransicao(acervo, { origemDaChegada: 'importacao', ...comum, identificadorId: depois.id });
 
     // Sem a correspondencia, o produto NAO tem como saber que sao a mesma
     // pessoa — e o detector nao pode inventar o que nao lhe disseram.

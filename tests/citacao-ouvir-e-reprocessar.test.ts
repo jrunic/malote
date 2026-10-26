@@ -107,6 +107,7 @@ function gravarRespostaNoGrupo(raiz: string, id: string, idExterno: string): voi
   try {
     const cv = registrarConversa(acervo, { fonte: 'whatsapp', idExterno: GRUPO, coletiva: true });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId: cv, fonte: 'whatsapp', idExterno, ocorridaEm: Date.parse('2026-10-01T10:00:00Z'), agora: Date.parse('2026-10-21T10:00:00Z'),
       direcao: 'recebida', bruto: JSON.stringify(respostaAMinhaMensagem(idExterno)),
     });

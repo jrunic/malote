@@ -119,7 +119,7 @@ test('o eco da mensagem enviada ao endereco alternativo cai na Conversa canonica
     receberEvento(
       acervo,
       [{ key: { remoteJid: OPACO, id: 'ECO-SINTETICO-1', fromMe: true }, messageTimestamp: 1_790_000_000, message: { conversation: 'oi' } }],
-      { agora: 1_790_000_100_000, configuracao: CFG_WHATSAPP },
+      { origemDaChegada: 'ao-vivo', agora: 1_790_000_100_000, configuracao: CFG_WHATSAPP },
     );
 
     const por = (id: string): number =>

@@ -16,13 +16,14 @@ type Acervo = Parameters<typeof registrarEtiqueta>[0];
 
 function entrou(acervo: Acervo, conversaId: string, identificadorId: string, instante: number, idExterno: string): void {
   registrarTransicao(acervo, {
+    origemDaChegada: 'importacao',
     conversaId, identificadorId, natureza: 'entrou', ocorridaEm: instante,
     fonte: 'whatsapp', idExterno, codigoDaFonte: 'GROUP_PARTICIPANT_ADD',
   });
 }
 
 function etiqueta(acervo: Acervo, conversaId: string, identificadorId: string, texto: string, ocorridaEm: number, idExterno: string): void {
-  registrarEtiqueta(acervo, { conversaId, identificadorId, texto, ocorridaEm, fonte: 'whatsapp', idExterno });
+  registrarEtiqueta(acervo, { origemDaChegada: 'importacao', conversaId, identificadorId, texto, ocorridaEm, fonte: 'whatsapp', idExterno });
 }
 
 function cenarioDeGrupo() {

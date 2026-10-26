@@ -24,7 +24,7 @@ function comAcervo(corpo: (acervo: Acervo, nova: (id: string, bruto: string) => 
     const { acervo } = c.novoInquilino('Ahsoka');
     const conversaId = registrarConversa(acervo, { fonte: 'whatsapp', idExterno: '5565900000001@s.whatsapp.net', coletiva: false, configuracao: CFG_WHATSAPP });
     corpo(acervo, (idExterno, bruto) =>
-      registrarMensagem(acervo, { conversaId, fonte: 'whatsapp', idExterno, ocorridaEm: Date.parse('2026-10-14T10:00:00Z'), agora: AGORA, direcao: 'recebida', bruto }),
+      registrarMensagem(acervo, { origemDaChegada: 'importacao', conversaId, fonte: 'whatsapp', idExterno, ocorridaEm: Date.parse('2026-10-14T10:00:00Z'), agora: AGORA, direcao: 'recebida', bruto }),
     );
   } finally {
     c.limpar();
@@ -42,7 +42,7 @@ test('o ensaio conta e nao escreve nada, nem Anexo nem Operacao', () => {
     nova('M4', NAO_RECONHECIDA);
     nova('M5', TEXTO);
     const comAnexo = nova('M6', COM_IMAGEM);
-    registrarAnexo(acervo, { mensagemId: comAnexo, tipo: 'image', presenca: 'nunca-obtido', bruto: '{}' });
+    registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: comAnexo, tipo: 'image', presenca: 'nunca-obtido', bruto: '{}' });
     const antes = anexos(acervo).length;
 
     const r = extrairImagensDeModelo(acervo, { comEfeito: false });
@@ -93,7 +93,7 @@ test('desfazer remove os Anexos criados e deixa os outros', () => {
   comAcervo((acervo, nova) => {
     nova('M1', COM_IMAGEM);
     nova('M2', COM_IMAGEM);
-    const alheio = registrarAnexo(acervo, { mensagemId: nova('M7', TEXTO), tipo: 'image', presenca: 'nunca-obtido', bruto: '{}' });
+    const alheio = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: nova('M7', TEXTO), tipo: 'image', presenca: 'nunca-obtido', bruto: '{}' });
     extrairImagensDeModelo(acervo, { comEfeito: true });
     const operacao = listarOperacoesCruas(acervo).find((o) => o.natureza === 'extrair-imagem-de-modelo');
     assert.ok(operacao);

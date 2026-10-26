@@ -21,18 +21,22 @@ test('lista Anexo nunca-obtido com o bruto da Mensagem, e ignora o presente (#10
       message: { videoMessage: { mediaKey: 'AAAA', directPath: '/x' } },
     });
     const mensagemNuncaObtida = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId, fonte: 'whatsapp', idExterno: 'M1', ocorridaEm: 1_700_000_000_000,
       agora: Date.now(), direcao: 'recebida', bruto: brutoAoVivo,
     });
     const anexoNuncaObtido = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemNuncaObtida, tipo: 'video', presenca: 'nunca-obtido', bruto: '{}',
     });
 
     const mensagemPresente = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId, fonte: 'whatsapp', idExterno: 'M2', ocorridaEm: 1_700_000_001_000,
       agora: Date.now(), direcao: 'recebida', bruto: '{}',
     });
     registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemPresente, tipo: 'image', presenca: 'presente', bruto: '{}',
       caminho: '/tanto/faz', tamanho: 10,
     });
@@ -60,15 +64,17 @@ test('filtro por fonte restringe a consulta', () => {
       configuracao: { id: 'cfg-ig', fonte: 'instagram' },
     });
     const mWa = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId: conversaWa, fonte: 'whatsapp', idExterno: 'W1', ocorridaEm: 1_700_000_000_000,
       agora: Date.now(), direcao: 'recebida', bruto: '{}',
     });
-    registrarAnexo(acervo, { mensagemId: mWa, tipo: 'video', presenca: 'nunca-obtido', bruto: '{}' });
+    registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: mWa, tipo: 'video', presenca: 'nunca-obtido', bruto: '{}' });
     const mIg = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId: conversaIg, fonte: 'instagram', idExterno: 'I1', ocorridaEm: 1_700_000_000_000,
       agora: Date.now(), direcao: 'recebida', bruto: '{}',
     });
-    registrarAnexo(acervo, { mensagemId: mIg, tipo: 'video', presenca: 'nunca-obtido', bruto: '{}' });
+    registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: mIg, tipo: 'video', presenca: 'nunca-obtido', bruto: '{}' });
 
     assert.equal(listarAnexosNuncaObtidosComBruto(acervo, { fonte: 'whatsapp' }).length, 1);
     assert.equal(listarAnexosNuncaObtidosComBruto(acervo).length, 2);
@@ -85,9 +91,10 @@ function tresAnexos(c: ReturnType<typeof cenario>) {
   const dia = (d: number, h = 12) => Date.UTC(2026, 8, d, h);
   const nova = (idExterno: string, ocorridaEm: number, tipo: string) => {
     const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId, fonte: 'whatsapp', idExterno, ocorridaEm, agora: Date.now(), direcao: 'recebida', bruto: '{}',
     });
-    const anexoId = registrarAnexo(acervo, { mensagemId, tipo, presenca: 'nunca-obtido', bruto: '{}' });
+    const anexoId = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo, presenca: 'nunca-obtido', bruto: '{}' });
     return { mensagemId, anexoId };
   };
   // Inseridas FORA da ordem de data, para a ordem do resultado nao ser a da insercao.
@@ -154,10 +161,11 @@ test('duas Mensagens no mesmo instante saem em ordem estavel, pelo id do Anexo',
     const anexos: string[] = [];
     for (const idExterno of ['A', 'B', 'C']) {
       const mensagemId = registrarMensagem(acervo, {
+        origemDaChegada: 'importacao',
         conversaId, fonte: 'whatsapp', idExterno, ocorridaEm: 1_700_000_000_000, agora: Date.now(),
         direcao: 'recebida', bruto: '{}',
       });
-      anexos.push(registrarAnexo(acervo, { mensagemId, tipo: 'image', presenca: 'nunca-obtido', bruto: '{}' }));
+      anexos.push(registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo: 'image', presenca: 'nunca-obtido', bruto: '{}' }));
     }
     const lidos = listarAnexosNuncaObtidosComBruto(acervo).map((x) => x.anexoId);
     assert.deepEqual(lidos, [...anexos].sort());

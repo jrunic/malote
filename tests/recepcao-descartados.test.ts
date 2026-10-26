@@ -29,7 +29,7 @@ function receber(eventos: MensagemRecebida[]) {
   const c = cenario();
   try {
     const { acervo } = c.novoInquilino('Titular de Teste');
-    return receberEvento(acervo, eventos, { agora: AGORA, configuracao: CFG_WHATSAPP });
+    return receberEvento(acervo, eventos, { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
   } finally {
     c.limpar();
   }

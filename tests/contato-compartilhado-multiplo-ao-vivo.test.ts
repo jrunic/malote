@@ -55,7 +55,7 @@ function comAcervo(corpo: (acervo: Acervo) => void): void {
   }
 }
 
-const opcoes = { agora: AGORA, configuracao: CFG_WHATSAPP };
+const opcoes = { origemDaChegada: 'ao-vivo' as const, agora: AGORA, configuracao: CFG_WHATSAPP };
 
 test('o cartao multiplo vira UMA Mensagem sem texto, o Conteudo Bruto inteiro e um cartao por elemento', () => {
   comAcervo((acervo) => {

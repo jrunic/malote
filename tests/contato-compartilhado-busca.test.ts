@@ -24,6 +24,7 @@ function conversa(acervo: Acervo, idExterno = '5565900000001@s.whatsapp.net'): s
 
 function mensagem(acervo: Acervo, cv: string, idExterno: string, minuto = 0, conteudo?: string): string {
   return registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId: cv,
     fonte: 'whatsapp',
     idExterno,

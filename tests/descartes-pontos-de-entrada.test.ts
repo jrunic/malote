@@ -167,7 +167,7 @@ test('falha ao gravar o contador NAO propaga e e contada no processo', () => {
   const { raiz, limpar } = instalacaoTemporaria();
   try {
     const { acervo } = c.novoInquilino('Titular de Teste');
-    const r = receberEvento(acervo, [descartavel('F1')], { agora: AGORA, configuracao: CFG_WHATSAPP });
+    const r = receberEvento(acervo, [descartavel('F1')], { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
     // Um ARQUIVO no lugar da pasta: criar o diretorio do contador falha com ENOTDIR.
     const bloqueio = join(raiz, 'bloqueio');
     writeFileSync(bloqueio, 'x');

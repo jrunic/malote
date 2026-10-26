@@ -27,6 +27,7 @@ test('Mensagem sem autor nao entra, e Conversa sem Mensagem devolve lista vazia 
   const { acervo, s, limpar } = acervoDeIdentidade();
   try {
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId: s.diretaDeBruno,
       fonte: 'whatsapp',
       idExterno: 'sistema-1',

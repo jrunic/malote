@@ -302,6 +302,7 @@ test('o executavel exporta por rede uma Conversa de mais de 1 MB inteira por pip
     try {
       for (let i = 0; i < 150; i += 1) {
         registrarMensagem(acervo, {
+          origemDaChegada: 'importacao',
           conversaId: c.conversaDeA,
           fonte: 'whatsapp',
           idExterno: `exp-${i}`,

@@ -22,6 +22,7 @@ function fixture() {
     configuracao: CFG,
   });
   registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
     conversaId: c1,
     fonte: 'whatsapp',
@@ -31,6 +32,7 @@ function fixture() {
     conteudo: 'envie o relatorio mensal',
   });
   registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
     conversaId: c2,
     fonte: 'whatsapp',
@@ -69,6 +71,7 @@ test('buscarMensagens acha por transcricao e marca a proveniencia', () => {
   const { c, acervo, c1 } = fixture();
   try {
     const m3 = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: c1,
       fonte: 'whatsapp',
@@ -78,6 +81,7 @@ test('buscarMensagens acha por transcricao e marca a proveniencia', () => {
       conteudo: 'oi, tudo bem?', // nao contem o termo buscado
     });
     const anexoId = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: m3, tipo: 'audio', presenca: 'presente', caminho: '/x/a1.opus',
     });
     acervo
@@ -99,6 +103,7 @@ test('buscarMensagens que casa no conteudo marca origemDaCorrespondencia como co
   const { c, acervo, c1 } = fixture();
   try {
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: c1,
       fonte: 'whatsapp',

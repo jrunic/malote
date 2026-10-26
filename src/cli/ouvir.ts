@@ -163,6 +163,8 @@ export function drenar(
     if (lote === undefined) return;
     try {
       const r = receberEvento(acervo, lote as MensagemRecebida[], {
+        // O derrame drenado pelo proprio ouvinte e recepcao ao vivo que o Acervo ocupado atrasou: continua `ao-vivo`.
+        origemDaChegada: 'ao-vivo',
         agora: agora(),
         configuracao,
         ...(decodificar !== undefined ? { decodificar } : {}),
@@ -585,6 +587,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
           let r;
           try {
             r = receberEvento(acervo, mensagens, {
+              origemDaChegada: 'ao-vivo',
               agora: agora(),
               configuracao,
               ...(decodificar !== undefined ? { decodificar } : {}),
@@ -692,7 +695,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
               .then((bytes) =>
                 comAtor(atorDeServico('ouvinte-whatsapp'), () => {
                   try {
-                    gravarArquivoDeAnexo(acervo, { anexoId: anexo.anexoId, destino, bytes });
+                    gravarArquivoDeAnexo(acervo, { origemDaChegada: 'ao-vivo', anexoId: anexo.anexoId, destino, bytes });
                     // MOVE, nunca apaga ("o produto nunca apaga o que moveu"),
                     // e so DEPOIS de gravar: se a escrita falhar, o staging
                     // continua no lugar para a proxima tentativa.

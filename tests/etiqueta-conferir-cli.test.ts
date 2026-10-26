@@ -21,6 +21,7 @@ test('pessoa conferir MEDE a etiqueta do mesmo evento sob duas formas, e a medic
       const tel = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '5565911110001@s.whatsapp.net' }).id;
       for (const quem of [lid, tel]) {
         registrarEtiqueta(acervo, {
+          origemDaChegada: 'importacao',
           conversaId: conversa, identificadorId: quem, texto: 'Torre A',
           ocorridaEm: Date.parse('2026-10-05T15:00:00Z'), fonte: 'whatsapp', idExterno: 'EV1',
         });

@@ -5,7 +5,7 @@ import { receberEvento } from '../src/adaptadores/whatsapp/ao-vivo.js';
 import { CFG_WHATSAPP } from './ajuda/configuracao.js';
 
 const AGORA = Date.parse('2026-09-12T12:00:00Z');
-const OPCOES = { agora: AGORA, configuracao: CFG_WHATSAPP };
+const OPCOES = { origemDaChegada: 'ao-vivo' as const, agora: AGORA, configuracao: CFG_WHATSAPP };
 
 const GRUPO = '120363000000000001@g.us';
 const OPACO = '109876543210987@lid';

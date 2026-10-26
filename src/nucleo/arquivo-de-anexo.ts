@@ -12,6 +12,7 @@ import {
 import { dirname, join } from 'node:path';
 import type { Acervo } from './acervo.js';
 import { caminhoDeMidia } from './caminho-de-midia.js';
+import { registrarChegadaSobreMensagem, type OrigemDaChegada } from './chegada.js';
 
 /**
  * Gravar o arquivo de um Anexo sob o Destino de Mídia.
@@ -37,6 +38,8 @@ export class DestinoInacessivelError extends Error {
 }
 
 export interface EntradaDeArquivo {
+  /** De onde o arquivo veio, para o Diario de Chegadas. */
+  origemDaChegada: OrigemDaChegada;
   anexoId: string;
   /** Raiz do Destino de Mídia deste Inquilino. */
   destino: string;
@@ -45,8 +48,8 @@ export interface EntradaDeArquivo {
 
 /** Devolve o caminho relativo gravado no Acervo. */
 export function gravarArquivoDeAnexo(acervo: Acervo, entrada: EntradaDeArquivo): string {
-  const linha = acervo.preparar('SELECT tipo FROM anexos WHERE id = ?').get(entrada.anexoId) as
-    { tipo: string } | undefined;
+  const linha = acervo.preparar('SELECT tipo, presenca, mensagem_id FROM anexos WHERE id = ?').get(entrada.anexoId) as
+    { tipo: string; presenca: string; mensagem_id: string } | undefined;
   if (linha === undefined) throw new Error(`Anexo desconhecido: ${entrada.anexoId}`);
 
   // O Inquilino vem do ACERVO em que a linha esta sendo escrita, nunca de
@@ -76,16 +79,31 @@ export function gravarArquivoDeAnexo(acervo: Acervo, entrada: EntradaDeArquivo):
   // por nome e tamanho sem abrir nada: mesma palavra, dois conceitos.
   const impressao = createHash('sha256').update(entrada.bytes).digest('hex');
 
-  acervo.preparar(
-      `UPDATE anexos
-          SET presenca = 'presente', caminho = ?, tamanho = ?, impressao = ?
-        WHERE id = ?`,
-    )
-    .run(relativo, tamanho, impressao, entrada.anexoId);
+  // O Anexo vira Chegada quando ELE passa a ter o arquivo: gravar de novo o que ja estava presente nao e fato novo.
+  acervo.db.transaction(() => {
+    acervo
+      .preparar(
+        `UPDATE anexos
+            SET presenca = 'presente', caminho = ?, tamanho = ?, impressao = ?
+          WHERE id = ?`,
+      )
+      .run(relativo, tamanho, impressao, entrada.anexoId);
+    if (linha.presenca !== 'presente') {
+      registrarChegadaSobreMensagem(acervo, {
+        tipo: 'anexo-disponivel',
+        origem: entrada.origemDaChegada,
+        mensagemId: linha.mensagem_id,
+        alvoId: entrada.anexoId,
+        criadoEm: Date.now(),
+      });
+    }
+  })();
   return relativo;
 }
 
 export interface EntradaDeArquivoPorCaminho {
+  /** De onde o arquivo veio, para o Diario de Chegadas. */
+  origemDaChegada: OrigemDaChegada;
   anexoId: string;
   /** Raiz do Destino de Mídia deste Inquilino. */
   destino: string;
@@ -137,8 +155,8 @@ export function gravarArquivoDeAnexoDeCaminho(
   acervo: Acervo,
   entrada: EntradaDeArquivoPorCaminho,
 ): { caminho: string; modo: ModoDeGravacao } {
-  const linha = acervo.preparar('SELECT tipo FROM anexos WHERE id = ?').get(entrada.anexoId) as
-    { tipo: string } | undefined;
+  const linha = acervo.preparar('SELECT tipo, presenca, mensagem_id FROM anexos WHERE id = ?').get(entrada.anexoId) as
+    { tipo: string; presenca: string; mensagem_id: string } | undefined;
   if (linha === undefined) throw new Error(`Anexo desconhecido: ${entrada.anexoId}`);
 
   // O Inquilino vem do ACERVO, pela mesma razão da porta de bytes: chamador que
@@ -174,11 +192,24 @@ export function gravarArquivoDeAnexoDeCaminho(
   const tamanho = statSync(absoluto).size;
   const impressao = impressaoDoArquivo(absoluto);
 
-  acervo.preparar(
-      `UPDATE anexos
-          SET presenca = 'presente', caminho = ?, tamanho = ?, impressao = ?
-        WHERE id = ?`,
-    )
-    .run(relativo, tamanho, impressao, entrada.anexoId);
+  // O Anexo vira Chegada quando ELE passa a ter o arquivo: gravar de novo o que ja estava presente nao e fato novo.
+  acervo.db.transaction(() => {
+    acervo
+      .preparar(
+        `UPDATE anexos
+            SET presenca = 'presente', caminho = ?, tamanho = ?, impressao = ?
+          WHERE id = ?`,
+      )
+      .run(relativo, tamanho, impressao, entrada.anexoId);
+    if (linha.presenca !== 'presente') {
+      registrarChegadaSobreMensagem(acervo, {
+        tipo: 'anexo-disponivel',
+        origem: entrada.origemDaChegada,
+        mensagemId: linha.mensagem_id,
+        alvoId: entrada.anexoId,
+        criadoEm: Date.now(),
+      });
+    }
+  })();
   return { caminho: relativo, modo };
 }

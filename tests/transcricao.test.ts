@@ -23,6 +23,7 @@ function mensagemDeTeste(acervo: import('../src/nucleo/acervo.js').Acervo): stri
     configuracao: CFG_WHATSAPP,
   });
   return registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     direcao: 'recebida',
     conversaId,
     fonte: 'whatsapp',
@@ -38,6 +39,7 @@ test('proximoElegivel acha audio presente sem linha em transcricoes', () => {
     const { acervo } = c.novoInquilino('Leia');
     const mensagemId = mensagemDeTeste(acervo);
     const anexoId = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId,
       tipo: 'audio',
       presenca: 'presente',
@@ -58,6 +60,7 @@ test('Anexo fora-de-escopo, nunca-obtido ou de outro tipo nunca sao elegiveis', 
     const { acervo } = c.novoInquilino('Leia');
     const mensagemId = mensagemDeTeste(acervo);
     const audioFora = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId,
       tipo: 'audio',
       presenca: 'presente',
@@ -66,8 +69,8 @@ test('Anexo fora-de-escopo, nunca-obtido ou de outro tipo nunca sao elegiveis', 
     acervo
       .preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`)
       .run(audioFora);
-    registrarAnexo(acervo, { mensagemId, tipo: 'audio', presenca: 'nunca-obtido' });
-    registrarAnexo(acervo, { mensagemId, tipo: 'image', presenca: 'presente', caminho: '/x/a3.jpg' });
+    registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo: 'audio', presenca: 'nunca-obtido' });
+    registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo: 'image', presenca: 'presente', caminho: '/x/a3.jpg' });
 
     assert.equal(proximoElegivel(acervo), undefined);
   } finally {
@@ -81,6 +84,7 @@ test('proximoElegivel tambem alcanca Anexo pendente orfao (processo morto antes 
     const { acervo } = c.novoInquilino('Leia');
     const mensagemId = mensagemDeTeste(acervo);
     const anexoId = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId,
       tipo: 'audio',
       presenca: 'presente',
@@ -104,6 +108,7 @@ test('marcarPendente e idempotente, marcarConcluida e marcarFalhou transitam o e
     const { acervo } = c.novoInquilino('Leia');
     const mensagemId = mensagemDeTeste(acervo);
     const anexoId = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId,
       tipo: 'audio',
       presenca: 'presente',
@@ -141,6 +146,7 @@ test('listarFalhas e reenfileirarFalhas, com Operacao gravada na trilha', () => 
     const { acervo } = c.novoInquilino('Leia');
     const mensagemId = mensagemDeTeste(acervo);
     const anexoId = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId,
       tipo: 'audio',
       presenca: 'presente',
@@ -187,14 +193,17 @@ test('incluirEstoqueEmTranscricao promove só o elegível, respeita o limite, e 
     // importam para este teste.
     // Três fora-de-escopo elegíveis (presente, com caminho).
     const elegivel1 = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a1.opus',
     });
     acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(elegivel1);
     const elegivel2 = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a2.opus',
     });
     acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(elegivel2);
     const elegivel3 = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a3.opus',
     });
     acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(elegivel3);
@@ -204,12 +213,14 @@ test('incluirEstoqueEmTranscricao promove só o elegível, respeita o limite, e 
     // (string | undefined), nunca aceita null — 'nunca-obtido' é o caso
     // natural de "sem arquivo" (mesmo padrão de tests/escrita.test.ts).
     const semArquivo = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'nunca-obtido',
     });
     acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(semArquivo);
 
     // Já pendente — não é fora-de-escopo, não entra na contagem.
     const jaPendente = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a5.opus',
     });
     acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'pendente')`).run(jaPendente);
@@ -251,8 +262,8 @@ test('contarTranscricoesPorEstado agrupa por estado — o sinal proprio do crite
   try {
     const { acervo } = c.novoInquilino('Leia');
     const mensagemId = mensagemDeTeste(acervo);
-    const a1 = registrarAnexo(acervo, { mensagemId, tipo: 'audio', presenca: 'presente', caminho: '/x/a1.opus' });
-    const a2 = registrarAnexo(acervo, { mensagemId, tipo: 'audio', presenca: 'presente', caminho: '/x/a2.opus' });
+    const a1 = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo: 'audio', presenca: 'presente', caminho: '/x/a1.opus' });
+    const a2 = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo: 'audio', presenca: 'presente', caminho: '/x/a2.opus' });
     marcarPendente(acervo, a1);
     marcarPendente(acervo, a2);
     marcarConcluida(acervo, a2, 'texto', 'whisper.cpp', 'small');
@@ -276,10 +287,12 @@ test('proximoElegivel escolhe o solicitado mesmo quando há Anexo pendente antes
     // comportamento garantido, e o único testado aqui, é que SOLICITAR
     // sempre vence sobre não-solicitado.
     const semSolicitacao = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/semsolicitacao.opus',
     });
     marcarPendente(acervo, semSolicitacao);
     const solicitado = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/solicitado.opus',
     });
 
@@ -297,9 +310,11 @@ test('dois pedidos em sequência são atendidos na ordem do pedido', () => {
   try {
     const { acervo } = c.novoInquilino('Leia');
     const primeiroPedido = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a.opus',
     });
     const segundoPedido = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/b.opus',
     });
 
@@ -325,11 +340,13 @@ test('solicitarTranscricao funciona sobre nunca-visto, fora-de-escopo e falhou; 
     const { acervo } = c.novoInquilino('Leia');
 
     const nuncaVisto = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a.opus',
     });
     assert.equal(solicitarTranscricao(acervo, nuncaVisto).aceita, true);
 
     const foraDeEscopo = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/b.opus',
     });
     acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado) VALUES (?, 'fora-de-escopo')`).run(foraDeEscopo);
@@ -338,6 +355,7 @@ test('solicitarTranscricao funciona sobre nunca-visto, fora-de-escopo e falhou; 
     assert.equal(estadoFora, 'pendente');
 
     const falhou = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/c.opus',
     });
     marcarPendente(acervo, falhou);
@@ -349,6 +367,7 @@ test('solicitarTranscricao funciona sobre nunca-visto, fora-de-escopo e falhou; 
     assert.equal(linhaFalhou.motivo_falha, null, 'o motivo da falha anterior é limpo');
 
     const concluida = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/d.opus',
     });
     marcarPendente(acervo, concluida);
@@ -372,11 +391,13 @@ test('solicitarTranscricao recusa Anexo inexistente, não-áudio, e sem arquivo 
     });
 
     const imagem = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'image', presenca: 'presente', caminho: '/x/foto.jpg',
     });
     assert.deepEqual(solicitarTranscricao(acervo, imagem), { aceita: false, motivoDeRecusa: 'nao-e-audio' });
 
     const semArquivo = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'nunca-obtido',
     });
     assert.deepEqual(solicitarTranscricao(acervo, semArquivo), { aceita: false, motivoDeRecusa: 'arquivo-ausente' });
@@ -390,6 +411,7 @@ test('solicitarTranscricao grava Operação, com o Anexo como Linha de Efeito', 
   try {
     const { acervo } = c.novoInquilino('Leia');
     const anexo = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagemDeTeste(acervo), tipo: 'audio', presenca: 'presente', caminho: '/x/a.opus',
     });
     solicitarTranscricao(acervo, anexo);

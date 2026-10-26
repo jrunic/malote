@@ -132,6 +132,7 @@ test('ao vivo: o contactMessage do topo do evento vira Contato Compartilhado', (
   try {
     const { acervo } = c.novoInquilino('Leia Organa');
     const r = receberEvento(acervo, [eventoComContato('V1', { displayName: 'Ana Souza', vcard: ANA })], {
+      origemDaChegada: 'ao-vivo',
       agora: AGORA,
       configuracao: CFG_WHATSAPP,
     });
@@ -148,9 +149,9 @@ test('ao vivo: o mesmo evento de novo (reentrega) nao cria nem altera cartao', (
   try {
     const { acervo } = c.novoInquilino('Leia Organa');
     const evento = eventoComContato('V1', { displayName: 'Ana Souza', vcard: ANA });
-    receberEvento(acervo, [evento], { agora: AGORA, configuracao: CFG_WHATSAPP });
+    receberEvento(acervo, [evento], { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
     const antes = acervo.db.prepare('SELECT id FROM contatos_compartilhados').all();
-    const r = receberEvento(acervo, [evento], { agora: AGORA, configuracao: CFG_WHATSAPP });
+    const r = receberEvento(acervo, [evento], { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
     assert.equal(r.contatosCompartilhados, 0);
     assert.deepEqual(acervo.db.prepare('SELECT id FROM contatos_compartilhados').all(), antes);
   } finally {
@@ -173,7 +174,7 @@ test('ao vivo: contactMessage dentro de uma citacao NAO e cartao enviado', () =>
         },
       },
     };
-    const r = receberEvento(acervo, [citacao], { agora: AGORA, configuracao: CFG_WHATSAPP });
+    const r = receberEvento(acervo, [citacao], { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
     assert.equal(r.gravados, 1, 'a resposta e uma Mensagem');
     assert.equal(r.contatosCompartilhados, 0);
     assert.equal(contar(acervo, 'contatos_compartilhados'), 0);
@@ -188,6 +189,7 @@ test('ao vivo: cartao sem nome no vCard usa o nome de exibicao do evento; sem ne
     const { acervo } = c.novoInquilino('Leia Organa');
     const semNome = 'BEGIN:VCARD\nVERSION:3.0\nFN:\nTEL:11999990000\nEND:VCARD';
     const r1 = receberEvento(acervo, [eventoComContato('V1', { displayName: 'Nome do Evento', vcard: semNome })], {
+      origemDaChegada: 'ao-vivo',
       agora: AGORA,
       configuracao: CFG_WHATSAPP,
     });
@@ -195,6 +197,7 @@ test('ao vivo: cartao sem nome no vCard usa o nome de exibicao do evento; sem ne
     assert.equal(cartoesDe(acervo, 'V1')[0]?.nome, 'Nome do Evento');
 
     const r2 = receberEvento(acervo, [eventoComContato('V2', { vcard: semNome })], {
+      origemDaChegada: 'ao-vivo',
       agora: AGORA,
       configuracao: CFG_WHATSAPP,
     });
@@ -212,6 +215,7 @@ test('convergencia: a mesma Mensagem pelo ao vivo e pelo backup termina com UM c
   try {
     const { acervo } = c.novoInquilino('Leia Organa');
     receberEvento(acervo, [eventoComContato('V1', { displayName: 'Ana Souza', vcard: ANA })], {
+      origemDaChegada: 'ao-vivo',
       agora: AGORA,
       configuracao: CFG_WHATSAPP,
     });
@@ -233,7 +237,7 @@ test('o Conteudo Bruto da Mensagem nao muda: o cartao e derivado, nunca editado'
   try {
     const { acervo } = c.novoInquilino('Leia Organa');
     const evento = eventoComContato('V1', { displayName: 'Ana Souza', vcard: ANA });
-    receberEvento(acervo, [evento], { agora: AGORA, configuracao: CFG_WHATSAPP });
+    receberEvento(acervo, [evento], { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
     const bruto = (acervo.db.prepare('SELECT bruto FROM mensagens').get() as { bruto: string }).bruto;
     assert.equal(bruto, JSON.stringify(evento));
   } finally {

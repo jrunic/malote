@@ -17,6 +17,7 @@ test('a resolucao retroativa reponta tambem o autor da Citacao, e o desfazer o d
     const alt = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '109876543210987@lid' });
     const conversaId = registrarConversa(acervo, { fonte: 'whatsapp', idExterno: '120363000000000001@g.us', coletiva: true });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId, fonte: 'whatsapp', idExterno: 'R1', ocorridaEm: AGORA - 1000, agora: AGORA, direcao: 'recebida',
       citacao: { idExterno: 'ANTIGA', autorId: alt.id, direcao: 'recebida' },
     });

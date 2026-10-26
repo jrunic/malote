@@ -13,6 +13,7 @@ import type {
 } from './tipos.js';
 import { emOperacao } from './trilha.js';
 import { colunasDaCitacao, vincularCitantes, type CitacaoDeEntrada } from './citacao.js';
+import { registrarChegada, registrarChegadaSobreMensagem, type OrigemDaChegada } from './chegada.js';
 
 /**
  * A porta de escrita do núcleo. É a ÚNICA entrada de escrita: Adaptador
@@ -443,6 +444,7 @@ export function registrarParticipacao(acervo: Acervo, entrada: EntradaParticipac
 }
 
 export interface EntradaTransicao {
+  origemDaChegada: OrigemDaChegada;
   conversaId: ConversaId;
   identificadorId: string;
   natureza: NaturezaDeTransicao;
@@ -470,6 +472,8 @@ export interface EntradaTransicao {
  * reimportacao afirmar que criou tudo de novo, quando nao criou nada.
  */
 export function registrarTransicao(acervo: Acervo, entrada: EntradaTransicao): boolean {
+  return acervo.db.transaction((): boolean => {
+  const id = randomUUID();
   const info = acervo.preparar(
       `INSERT INTO transicoes_de_participacao
          (id, conversa_id, identificador_id, natureza, ocorrida_em, fonte, id_externo, codigo_da_fonte)
@@ -477,7 +481,7 @@ export function registrarTransicao(acervo: Acervo, entrada: EntradaTransicao): b
        ON CONFLICT (fonte, id_externo, identificador_id) DO NOTHING`,
     )
     .run(
-      randomUUID(),
+      id,
       entrada.conversaId,
       entrada.identificadorId,
       entrada.natureza,
@@ -486,10 +490,22 @@ export function registrarTransicao(acervo: Acervo, entrada: EntradaTransicao): b
       entrada.idExterno,
       entrada.codigoDaFonte,
     );
-  return info.changes === 1;
+  if (info.changes !== 1) return false;
+  registrarChegada(acervo, {
+    tipo: 'transicao-de-participacao',
+    origem: entrada.origemDaChegada,
+    criadoEm: Date.now(),
+    ocorridaEm: entrada.ocorridaEm,
+    conversaId: entrada.conversaId,
+    autorId: entrada.identificadorId,
+    alvoId: id,
+  });
+  return true;
+  })();
 }
 
 export interface EntradaEtiqueta {
+  origemDaChegada: OrigemDaChegada;
   conversaId: ConversaId;
   identificadorId: string;
   /** O texto que a Fonte entregou. Vazio e a REMOCAO da etiqueta, nao um erro. */
@@ -534,6 +550,8 @@ export function registrarEtiqueta(acervo: Acervo, entrada: EntradaEtiqueta): boo
   if (conversa === undefined || conversa.coletiva !== 1) {
     throw new EtiquetaForaDeColetivaError(entrada.conversaId);
   }
+  return acervo.db.transaction((): boolean => {
+  const id = randomUUID();
   const info = acervo
     .preparar(
       `INSERT INTO etiquetas_de_participacao
@@ -542,7 +560,7 @@ export function registrarEtiqueta(acervo: Acervo, entrada: EntradaEtiqueta): boo
        ON CONFLICT (fonte, id_externo, identificador_id) DO NOTHING`,
     )
     .run(
-      randomUUID(),
+      id,
       entrada.conversaId,
       entrada.identificadorId,
       entrada.texto,
@@ -551,7 +569,18 @@ export function registrarEtiqueta(acervo: Acervo, entrada: EntradaEtiqueta): boo
       entrada.idExterno,
       entrada.bruto ?? null,
     );
-  return info.changes === 1;
+  if (info.changes !== 1) return false;
+  registrarChegada(acervo, {
+    tipo: 'etiqueta',
+    origem: entrada.origemDaChegada,
+    criadoEm: Date.now(),
+    ocorridaEm: entrada.ocorridaEm,
+    conversaId: entrada.conversaId,
+    autorId: entrada.identificadorId,
+    alvoId: id,
+  });
+  return true;
+  })();
 }
 
 export interface EntradaMensagem {
@@ -567,6 +596,8 @@ export interface EntradaMensagem {
   bruto?: string;
   /** Enviada pelo Titular ou recebida — obrigatorio, sem inferencia. */
   direcao: Direcao;
+  /** De onde a Mensagem veio, para o Diario de Chegadas. Obrigatoria: chamador que a esquecesse nao compila. */
+  origemDaChegada: OrigemDaChegada;
   /** Instante de referência para a checagem de plausibilidade. */
   agora: number;
   /**
@@ -604,45 +635,61 @@ export function registrarMensagem(acervo: Acervo, entrada: EntradaMensagem): Men
   });
   if (existente !== undefined) return existente;
 
-  const id = randomUUID();
-  const citacao =
-    entrada.citacao === undefined
-      ? undefined
-      : colunasDaCitacao(acervo, { fonte: entrada.fonte, conversaId: entrada.conversaId }, entrada.citacao);
-  acervo.preparar(
-      `INSERT INTO mensagens
-         (id, conversa_id, fonte, id_externo, autor_id, conteudo, ocorrida_em, citada_id, direcao, bruto,
-          citada_id_externo, citada_autor_id, citada_direcao)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
+  // A Mensagem e a Chegada entram juntas ou nao entram: uma transacao (ponto de salvamento, se ja houver uma aberta).
+  return acervo.db.transaction((): MensagemId => {
+    const id = randomUUID();
+    const citacao =
+      entrada.citacao === undefined
+        ? undefined
+        : colunasDaCitacao(acervo, { fonte: entrada.fonte, conversaId: entrada.conversaId }, entrada.citacao);
+    acervo.preparar(
+        `INSERT INTO mensagens
+           (id, conversa_id, fonte, id_externo, autor_id, conteudo, ocorrida_em, citada_id, direcao, bruto,
+            citada_id_externo, citada_autor_id, citada_direcao)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        entrada.conversaId,
+        entrada.fonte,
+        entrada.idExterno,
+        entrada.autorId ?? null,
+        entrada.conteudo ?? null,
+        entrada.ocorridaEm,
+        citacao?.citadaId ?? entrada.citadaId ?? null,
+        entrada.direcao,
+        entrada.bruto ?? null,
+        citacao?.idExterno ?? null,
+        citacao?.autorId ?? null,
+        citacao?.direcao ?? null,
+      );
+    // O vinculo tardio: quem ja citava esta Mensagem pelo id externo, antes de ela existir, ganha o vinculo agora.
+    vincularCitantes(acervo, {
       id,
-      entrada.conversaId,
-      entrada.fonte,
-      entrada.idExterno,
-      entrada.autorId ?? null,
-      entrada.conteudo ?? null,
-      entrada.ocorridaEm,
-      citacao?.citadaId ?? entrada.citadaId ?? null,
-      entrada.direcao,
-      entrada.bruto ?? null,
-      citacao?.idExterno ?? null,
-      citacao?.autorId ?? null,
-      citacao?.direcao ?? null,
-    );
-  // O vinculo tardio: quem ja citava esta Mensagem pelo id externo, antes de ela existir, ganha o vinculo agora.
-  vincularCitantes(acervo, {
-    id,
-    fonte: entrada.fonte,
-    conversaId: entrada.conversaId,
-    idExterno: entrada.idExterno,
-    autorId: entrada.autorId ?? null,
-    direcao: entrada.direcao,
-  });
-  return id;
+      fonte: entrada.fonte,
+      conversaId: entrada.conversaId,
+      idExterno: entrada.idExterno,
+      autorId: entrada.autorId ?? null,
+      direcao: entrada.direcao,
+    });
+    registrarChegada(acervo, {
+      tipo: 'mensagem',
+      origem: entrada.origemDaChegada,
+      criadoEm: Date.now(),
+      ocorridaEm: entrada.ocorridaEm,
+      conversaId: entrada.conversaId,
+      mensagemId: id,
+      ...(entrada.autorId !== undefined ? { autorId: entrada.autorId } : {}),
+      direcao: entrada.direcao,
+      alvoId: id,
+    });
+    return id;
+  })();
 }
 
 export interface EntradaAnexo {
+  /** De onde o Anexo veio, para o Diario de Chegadas (so gera Chegada o que nasce com o arquivo presente). */
+  origemDaChegada: OrigemDaChegada;
   mensagemId: MensagemId;
   tipo: string;
   tamanho?: number;
@@ -664,36 +711,49 @@ export interface EntradaAnexo {
  * seja indistinguível de "nunca existiu".
  */
 export function registrarAnexo(acervo: Acervo, entrada: EntradaAnexo): string {
-  const id = randomUUID();
-  acervo.preparar(
-      `INSERT INTO anexos
-         (id, mensagem_id, tipo, tamanho, nome_original, duracao, impressao, presenca, caminho,
-          bruto)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      id,
-      entrada.mensagemId,
-      entrada.tipo,
-      entrada.tamanho ?? null,
-      entrada.nomeOriginal ?? null,
-      entrada.duracao ?? null,
-      entrada.impressao ?? null,
-      entrada.presenca,
-      entrada.caminho ??
-        (entrada.presenca === 'presente'
-          ? // O Inquilino vem do ACERVO em que a linha esta sendo escrita,
-            // nunca de parametro: chamador que o errasse gravaria o arquivo
-            // na subarvore de outro Inquilino com a linha aqui.
-            caminhoDeMidia({
-              inquilinoId: acervo.inquilinoId,
-              anexoId: id,
-              tipo: entrada.tipo,
-            })
-          : null),
-      entrada.bruto ?? null,
-    );
-  return id;
+  return acervo.db.transaction((): string => {
+    const id = randomUUID();
+    acervo.preparar(
+        `INSERT INTO anexos
+           (id, mensagem_id, tipo, tamanho, nome_original, duracao, impressao, presenca, caminho,
+            bruto)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        entrada.mensagemId,
+        entrada.tipo,
+        entrada.tamanho ?? null,
+        entrada.nomeOriginal ?? null,
+        entrada.duracao ?? null,
+        entrada.impressao ?? null,
+        entrada.presenca,
+        entrada.caminho ??
+          (entrada.presenca === 'presente'
+            ? // O Inquilino vem do ACERVO em que a linha esta sendo escrita,
+              // nunca de parametro: chamador que o errasse gravaria o arquivo
+              // na subarvore de outro Inquilino com a linha aqui.
+              caminhoDeMidia({
+                inquilinoId: acervo.inquilinoId,
+                anexoId: id,
+                tipo: entrada.tipo,
+              })
+            : null),
+        entrada.bruto ?? null,
+      );
+    // So o Anexo que nasce com o arquivo presente e uma Chegada; o `nunca-obtido` vira Chegada quando o arquivo chega
+    // (`gravarArquivoDeAnexo`).
+    if (entrada.presenca === 'presente') {
+      registrarChegadaSobreMensagem(acervo, {
+        tipo: 'anexo-disponivel',
+        origem: entrada.origemDaChegada,
+        mensagemId: entrada.mensagemId,
+        alvoId: id,
+        criadoEm: Date.now(),
+      });
+    }
+    return id;
+  })();
 }
 
 /**

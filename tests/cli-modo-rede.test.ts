@@ -94,6 +94,7 @@ test('mensagens por rede, ponta a ponta: subprocesso consulta o servidor real', 
       configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId,
       fonte: 'whatsapp',
@@ -226,12 +227,13 @@ test('malote midia --saida em modo rede: subprocesso grava os bytes recebidos', 
       configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
     });
     const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId, fonte: 'whatsapp', idExterno: 'm-cli-midia',
       ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
     });
-    const anexoId = registrarAnexo(acervo, { mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
-    gravarArquivoDeAnexo(acervo, { anexoId, destino: destinoMidia, bytes: bytesOriginais });
+    const anexoId = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
+    gravarArquivoDeAnexo(acervo, { origemDaChegada: 'importacao', anexoId, destino: destinoMidia, bytes: bytesOriginais });
     acervo.fechar();
 
     const { criarServidor } = await import('../src/rede/servidor.js');

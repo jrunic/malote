@@ -1179,6 +1179,8 @@ function executarComAtor(
         // que os eventos chegaram.
         for (const lote of lotes) {
           const r = receberEvento(acervoDoDerrame, lote as never, {
+            // `ouvinte reprocessar` e comando do Operador sobre lote que ficou parado: pode ser antigo, e e reprocesso.
+            origemDaChegada: 'reprocesso',
             agora: Date.now(),
             configuracao: { id: cfgDoDerrame.id, fonte: 'whatsapp' },
             ...(ambiente.decodificador !== undefined ? { decodificar: ambiente.decodificador } : {}),

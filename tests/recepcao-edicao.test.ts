@@ -74,6 +74,7 @@ function cena(comDecodificador = true) {
   const { acervo } = c.novoInquilino('Titular de Teste');
   const receber = (eventos: MensagemRecebida[]) =>
     receberEvento(acervo, eventos, {
+      origemDaChegada: 'ao-vivo',
       agora: AGORA,
       configuracao: CFG_WHATSAPP,
       ...(comDecodificador ? { decodificar: decodificadorDeTeste } : {}),

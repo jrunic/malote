@@ -145,6 +145,7 @@ test('coletiva NUNCA ganha nome, mesmo que exista Identificador de mesmo valor q
     const intruso = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: 'grupo-1@g.us' }).id;
     registrarNome(acervo, { identificadorId: intruso, origem: 'whatsapp', nome: 'Nome Que Nao E do Grupo', autoridade: 'terceiro' });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId: s.grupo,
       fonte: 'whatsapp',
       idExterno: 'm-grupo-extra',

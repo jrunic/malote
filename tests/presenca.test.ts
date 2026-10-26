@@ -52,6 +52,7 @@ function tr(
   idExterno: string,
 ): void {
   registrarTransicao(acervo, {
+    origemDaChegada: 'importacao',
     conversaId,
     identificadorId,
     natureza,
@@ -82,6 +83,7 @@ test('o alcance vai do primeiro ao último evento DECLARADO', () => {
       { endereco: '5565922222', ativa: true },
     ]);
     registrarTransicao(acervo, {
+      origemDaChegada: 'importacao',
       conversaId,
       identificadorId: ids[0] as string,
       natureza: 'saiu',
@@ -91,6 +93,7 @@ test('o alcance vai do primeiro ao último evento DECLARADO', () => {
       codigoDaFonte: '7',
     });
     registrarTransicao(acervo, {
+      origemDaChegada: 'importacao',
       conversaId,
       identificadorId: ids[1] as string,
       natureza: 'saiu',

@@ -42,6 +42,7 @@ function anexoDeAudio(acervo: import('../src/nucleo/acervo.js').Acervo, caminho:
     configuracao: CFG_WHATSAPP,
   });
   const mensagemId = registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     direcao: 'recebida',
     conversaId,
     fonte: 'whatsapp',
@@ -49,7 +50,7 @@ function anexoDeAudio(acervo: import('../src/nucleo/acervo.js').Acervo, caminho:
     ocorridaEm: Date.parse('2026-09-01T12:00:00Z'),
     agora: Date.now(),
   });
-  return registrarAnexo(acervo, { mensagemId, tipo: 'audio', presenca: 'presente', caminho });
+  return registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo: 'audio', presenca: 'presente', caminho });
 }
 
 test('processarUmaVez sem configuracao do motor nao toca o Acervo', async () => {
