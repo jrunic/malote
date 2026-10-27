@@ -10,11 +10,14 @@
  *   7 = timeout — resultado DESCONHECIDO: o servidor pode ter concluído
  *       depois de o cliente desistir. Em somente leitura é inofensivo, mas a
  *       mensagem diz o que é.
+ *   8 = 410 — o Marcador do Diário de Chegadas expirou (aparado, de outra época
+ *       ou fora do Diário): não é erro de uso nem falha de rede, e quem lê pede
+ *       o ponto de partida e recomeça dali.
  *
  * Sem retry: consulta é leitura; quem decide repetir é quem chamou.
  */
 export interface CodigoDeFalha extends Error {
-  classe: 'credencial' | 'conexao' | 'servidor' | 'uso' | 'indeterminado';
+  classe: 'credencial' | 'conexao' | 'servidor' | 'uso' | 'indeterminado' | 'expirado';
   codigoDeSaida: number;
   /** Status HTTP quando a falha veio de uma resposta (so a classe `uso` o usa hoje). */
   status?: number;
@@ -55,6 +58,14 @@ function classificarResposta(status: number, corpo: string): void {
       3,
       'Credencial recusada — a Chave de Acesso está ausente, inválida ou revogada ' +
         '(o servidor não distingue as três, e este cliente não adivinha).',
+    );
+  }
+  if (status === 410) {
+    throw falha(
+      'expirado',
+      8,
+      'Marcador expirado: o Diário não garante mais esse Marcador. Peça o ponto de partida (--ponto-de-partida) e recomece dali.',
+      status,
     );
   }
   if (status >= 500) throw falha('servidor', 5, mensagemDeErroDoServidor(status));

@@ -538,6 +538,25 @@ export function lerMensagens(acervo: Acervo, filtro: FiltroDeMensagem): Mensagem
   return montarMensagens(acervo, linhas);
 }
 
+/**
+ * As Mensagens por id, na MESMA forma que `lerMensagens` entrega, em uma leitura so (a leitura de Chegadas com conteudo
+ * as usa). Id que nao existe no Acervo nao entra; a ordem e a do Acervo, nao a da lista. Interna: o modo rede nao tem
+ * rota de Mensagem por id.
+ */
+export function lerMensagensPorIds(acervo: Acervo, ids: readonly string[]): MensagemLida[] {
+  if (ids.length === 0) return [];
+  const linhas = acervo
+    .preparar(
+      `SELECT m.id, m.conversa_id, m.fonte, m.autor_id, m.conteudo, m.direcao, m.ocorrida_em,
+              m.citada_id, m.citada_id_externo, m.citada_autor_id, m.citada_direcao
+         FROM mensagens m
+        WHERE m.id IN (SELECT value FROM json_each(?))
+        ORDER BY m.ocorrida_em, m.id`,
+    )
+    .all(JSON.stringify(ids)) as Array<Record<string, unknown>>;
+  return montarMensagens(acervo, linhas);
+}
+
 /** A ordem da busca; o MESMO vocabulario de `mensagens`. */
 export type OrdemDaBusca = 'recentes' | 'cronologica';
 

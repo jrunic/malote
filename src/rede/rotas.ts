@@ -41,6 +41,19 @@ import {
 import { identificarPorValor } from '../nucleo/identificar.js';
 import { enriquecerPresenca } from '../nucleo/nomes-em-lote.js';
 import { acrescentarEtiquetas, LIMITE_DE_ETIQUETAS, listarEtiquetas } from '../nucleo/etiqueta-de-participacao.js';
+import {
+  lerChegadas,
+  LIMITE_DE_CHEGADAS,
+  MarcadorExpiradoError,
+  MarcadorInvalidoError,
+  ORIGENS_DA_CHEGADA,
+  pontoDePartida,
+  TIPOS_DE_CHEGADA,
+  type FiltroDeChegadas,
+  type OrigemDaChegada,
+  type TipoDeChegada,
+} from '../nucleo/chegada.js';
+import { lerChegadasComConteudo } from '../nucleo/chegadas-com-conteudo.js';
 import { lerPrecedenciasDeNome, type PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
 
 /**
@@ -798,6 +811,118 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
           }
         : {}),
     });
+    return;
+  }
+
+  // O Diario de Chegadas (#1355): o que entrou no Acervo, na ordem em que entrou, lido por Marcador. Verbo solto, como
+  // `etiquetas`: a lista de leituras da rede e por primeira palavra. Roda no worker de leitura (so `req.method` e `req.url`).
+  if (partes.length === 1 && partes[0] === 'chegadas') {
+    const q = url.searchParams;
+    const depois = q.get('depois');
+    const partida = q.get('ponto-de-partida');
+    if ((depois === null) === (partida === null)) {
+      json(res, 400, { erro: 'informe depois=<marcador> ou ponto-de-partida=1, e so um dos dois' });
+      return;
+    }
+    if (partida !== null) {
+      const filtros = ['conversa', 'configuracao', 'direcao', 'remetente', 'sem-remetente', 'tipo', 'origem', 'limite', 'conteudo'];
+      if (partida !== '1' || filtros.some((f) => q.has(f))) {
+        json(res, 400, { erro: 'ponto-de-partida=1 nao aceita filtros nem outro valor' });
+        return;
+      }
+      json(res, 200, { chegadas: [], proximo: pontoDePartida(ctx.acervo), ultima: true });
+      return;
+    }
+
+    const limiteTexto = q.get('limite');
+    if (limiteInvalido(limiteTexto) || (limiteTexto !== null && Number(limiteTexto) > LIMITE_DE_CHEGADAS)) {
+      json(res, 400, { erro: `limite precisa ser um inteiro de 1 a ${String(LIMITE_DE_CHEGADAS)}` });
+      return;
+    }
+    const direcao = q.get('direcao');
+    if (direcao !== null && direcao !== 'enviada' && direcao !== 'recebida') {
+      json(res, 400, { erro: 'direcao invalida — use "enviada" ou "recebida"' });
+      return;
+    }
+    const conteudo = q.get('conteudo');
+    if (conteudo !== null && conteudo !== '1') {
+      json(res, 400, { erro: 'conteudo so aceita 1' });
+      return;
+    }
+    const tiposTexto = q.get('tipo');
+    const tipos = tiposTexto === null ? undefined : tiposTexto.split(',');
+    if (tipos !== undefined && tipos.some((t) => !(TIPOS_DE_CHEGADA as readonly string[]).includes(t))) {
+      json(res, 400, { erro: `tipo invalido — use ${TIPOS_DE_CHEGADA.join(', ')}, separados por virgula` });
+      return;
+    }
+    const origensTexto = q.get('origem');
+    const origens = origensTexto === null ? undefined : origensTexto.split(',');
+    if (origens !== undefined && origens.some((o) => !(ORIGENS_DA_CHEGADA as readonly string[]).includes(o))) {
+      json(res, 400, { erro: `origem invalida — use ${ORIGENS_DA_CHEGADA.join(', ')}, separadas por virgula` });
+      return;
+    }
+    const remetente = q.get('remetente');
+    const semRemetenteTexto = q.get('sem-remetente');
+    if (remetente === '' || semRemetenteTexto === '' || semRemetenteTexto?.split(',').includes('')) {
+      json(res, 400, { erro: 'remetente vazio — informe o valor do Identificador' });
+      return;
+    }
+    const conversaParam = q.get('conversa');
+    let fonteDoRemetente: Fonte | undefined;
+    if (conversaParam !== null) {
+      fonteDoRemetente = fonteDaConversa(ctx.acervo, conversaParam as ConversaId);
+      if (fonteDoRemetente === undefined) {
+        naoEncontrado(res);
+        return;
+      }
+    }
+    const porFonte = fonteDoRemetente !== undefined ? { fonte: fonteDoRemetente } : {};
+    const autorIds = remetente === null ? undefined : identificadoresDoRemetente(ctx.acervo, { valor: remetente, ...porFonte });
+    const semAutorIds =
+      semRemetenteTexto === null
+        ? undefined
+        : semRemetenteTexto.split(',').flatMap((valor) => identificadoresDoRemetente(ctx.acervo, { valor, ...porFonte }));
+    let configuracaoId: string | undefined;
+    const configuracaoApelido = q.get('configuracao');
+    if (configuracaoApelido !== null) {
+      const registro = abrirRegistroSomenteLeitura(ctx.dados);
+      let resolucao;
+      try {
+        resolucao = resolverFiltroDeConfiguracao(registro, ctx.identidade.inquilinoId, configuracaoApelido);
+      } finally {
+        registro.fechar();
+      }
+      if (!resolucao.ok) {
+        json(res, 400, { erro: resolucao.erro });
+        return;
+      }
+      configuracaoId = resolucao.configuracao.id;
+    }
+
+    const filtro: FiltroDeChegadas = {
+      depois: depois as string,
+      ...(limiteTexto !== null ? { limite: Number(limiteTexto) } : {}),
+      ...(conversaParam !== null ? { conversaId: conversaParam } : {}),
+      ...(configuracaoId !== undefined ? { configuracaoId } : {}),
+      ...(direcao !== null ? { direcao } : {}),
+      ...(autorIds !== undefined ? { autorIds } : {}),
+      ...(semAutorIds !== undefined ? { semAutorIds } : {}),
+      ...(tipos !== undefined ? { tipos: tipos as TipoDeChegada[] } : {}),
+      ...(origens !== undefined ? { origens: origens as OrigemDaChegada[] } : {}),
+    };
+    try {
+      json(res, 200, conteudo === '1' ? lerChegadasComConteudo(ctx.acervo, filtro) : lerChegadas(ctx.acervo, filtro));
+    } catch (erro) {
+      if (erro instanceof MarcadorInvalidoError) {
+        json(res, 400, { erro: erro.message });
+        return;
+      }
+      if (erro instanceof MarcadorExpiradoError) {
+        json(res, 410, { erro: 'marcador expirado', motivo: erro.motivo });
+        return;
+      }
+      throw erro;
+    }
     return;
   }
 

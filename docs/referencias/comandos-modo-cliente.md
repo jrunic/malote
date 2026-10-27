@@ -29,7 +29,7 @@ local (veja a referência do servidor).
 
 - **O Inquilino vem da Chave.** `--inquilino` não existe no modo rede e é recusado (código 2). Para
   consultar uma instalação local, rode com `env -u MALOTE_SERVIDOR`. Hoje a recusa acontece em
-  `identificar`, `detalhar`, `anexos`, `etiquetas`, `exportar`, `enviar` e `envio estado`; em
+  `identificar`, `detalhar`, `anexos`, `etiquetas`, `chegadas`, `exportar`, `enviar` e `envio estado`; em
   `conversas`, `mensagens`, `buscar`, `pessoas`, `participantes`, `relatorio` e `configuracao listar` a
   flag é ignorada em silêncio e vale o Inquilino da Chave (#1284).
 - **Comando que só existe local é recusado antes de abrir qualquer base** (código 2, mensagem
@@ -51,7 +51,7 @@ local (veja a referência do servidor).
   opaco: nunca monte um à mão, e um cursor inválido é erro (código 6), não primeira página.
 - **Flag sem valor:** uma flag que pede valor e vem sem ele, no fim da linha ou seguida de outra flag, é erro de uso (código 2, antes de qualquer requisição). Não existe `--flag=valor`, então um valor que comece com `--` não pode ser passado.
 - **`--json`:** devolve o corpo da API. Sem ele, a saída é texto, no mesmo formato do modo local, em
-  `identificar`, `detalhar`, `anexos`, `etiquetas` e `exportar`; `conversas`, `mensagens`, `buscar`,
+  `identificar`, `detalhar`, `anexos`, `etiquetas`, `chegadas` e `exportar`; `conversas`, `mensagens`, `buscar`,
   `pessoas`, `participantes`, `relatorio` e `configuracao listar` imprimem o JSON da API com ou sem a flag.
 - **`--limite <n>`:** o servidor valida; valor que não é inteiro positivo é erro (código 6). Não há teto: sem
   `--limite`, `mensagens` devolve a Conversa inteira, e só o prazo de 25 s freia uma resposta enorme. O
@@ -77,6 +77,7 @@ Todos aceitam `--json`. As flags marcadas com `*` são obrigatórias.
 | `malote detalhar` | Uma Conversa por inteiro: id, natureza, nome do outro lado (direta) ou assunto, descrição, quem alterou e quando (coletiva), contagem de Mensagens e a primeira e a última. Na coletiva traz também o **`endereco`** do grupo na Fonte, o mesmo valor que `--para` aceita (a direta não tem o campo). Id inexistente e id de outro Inquilino respondem igual | `--conversa <id>`\* |
 | `malote participantes` | Participantes de uma Conversa coletiva, com nome e Pessoa; opcionalmente a posição numa data | `--conversa <id>`\* `--em <AAAA-MM-DD>` |
 | `malote etiquetas` | As etiquetas que os membros põem em si em cada grupo: as correntes não vazias, ou o histórico de um membro numa Conversa | `--conversa <id>` `--remetente <valor>` `--busca <texto>` `--historico` `--limite <n>` |
+| `malote chegadas` | O Diário de Chegadas: o que entrou no Acervo (Mensagem, Edição, Anexo que ficou disponível, entrada ou saída de participante, Etiqueta), **na ordem em que entrou** e não na em que aconteceu, lido por Marcador. Cada Chegada traz tipo, origem (`ao-vivo`, `importacao` ou `reprocesso`), o instante de gravação e o do fato, a Conversa, o autor e a direção; **não traz o texto**, a menos que se peça `--com-conteudo` | `--depois <marcador>` ou `--ponto-de-partida`\* `--conversa <id>` `--configuracao <apelido>` `--direcao enviada\|recebida` `--remetente <valor>` `--sem-remetente <valor>` `--tipo <tipos>` `--origem <origens>` `--limite <n>` `--com-conteudo` |
 | `malote configuracao listar` | Quais Configurações existem (apelido, fonte e, nas de WhatsApp, telefone, jid e lid), antes de filtrar por uma | — |
 | `malote relatorio` | Totais por Fonte e natureza | — |
 | `malote exportar` | Uma Conversa para um arquivo, txt ou json, com o nome de quem falou | `--conversa <id>`\* `--formato txt\|json` `--saida <arquivo>` `--sobrescrever` `--remetente <valor>` `--desde` `--ate` |
@@ -132,6 +133,7 @@ O contrato para automação: o código diz a **classe** da falha.
 | 5 | erro do servidor, incluindo `504` e `503` (abaixo) |
 | 6 | uso errado da API: `4xx` que não é `401` (cursor inválido, `--limite` inválido) |
 | 7 | **tempo esgotado, resultado desconhecido**: repetir uma consulta é seguro; repetir um `enviar` é seguro só com o mesmo `--identificador`. O cliente desiste em 30 s por requisição, antes do prazo de 25 s do servidor se este for aumentado com `servir --prazo`. Hoje o estouro na leitura do **corpo** de uma consulta sai 1, não 7 (#1285) |
+| 8 | **Marcador expirado** (`410`, só em `chegadas`): o Diário não garante mais o Marcador (aparado, de outra época ou fora do Diário). Não é erro de uso nem falha de rede: peça `--ponto-de-partida` e recomece dali |
 
 **`504` e `503` (código 5).** `504`: a consulta passou do prazo do servidor (25 s por padrão); **restrinja
 os filtros** (período, remetente, tipo) e não repita a mesma consulta. `503` (com `retry-after`): servidor
