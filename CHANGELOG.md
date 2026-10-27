@@ -23,6 +23,24 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [0.45.0] — 2026-10-27
+
+Muda a forma do Acervo (v29 para v30): nascem o Diário de Chegadas e a linha de controle dele; a migração roda sozinha na primeira abertura, é idempotente e não gera Chegada para o que já estava gravado. Não muda a forma do Registro. Contrato da API aditivo.
+
+### Adicionado
+
+- **O Diário de Chegadas.** Cada fato que o Acervo grava (uma Mensagem, uma Edição, um Anexo que passou a ter o arquivo, uma entrada ou saída de participante, uma Etiqueta de Participação) vira uma **Chegada**, na mesma transação do fato, com número de sequência que nunca se reaproveita. Quem acompanha o Acervo lê **pela ordem de gravação**, e não pela ordem em que as coisas aconteceram: a entrega atrasada (o que a plataforma guardou enquanto o ouvinte esteve fora, um backup importado, uma edição) passa a aparecer. A Chegada declara a origem (`ao-vivo`, `importacao` ou `reprocesso`) e não guarda o conteúdo. O Diário começa nesta versão; as Mensagens anteriores não geram Chegada.
+- **`malote chegadas` e `GET /chegadas`** leem o Diário por Marcador, no modo local e por rede: `--ponto-de-partida` devolve o Marcador de agora; `--depois <marcador>` devolve as Chegadas seguintes, com `proximo` e `ultima`. Filtros: `--conversa`, `--configuracao` (só Conversa direta), `--direcao`, `--remetente`, `--sem-remetente` (excluir o eco do próprio agente), `--tipo`, `--origem` e `--limite` (1 a 500). Verbo solto da rede, no worker de leitura.
+- **A leitura com conteúdo** (`--com-conteudo`, `conteudo=1`): cada Chegada de Mensagem, Edição e Anexo traz a Mensagem na forma que `mensagens` entrega, lida na hora (o Diário não guarda texto). A página é cortada em 1,5 MB, com ao menos uma Chegada, e o `proximo` acompanha a última incluída.
+- **O Marcador expirado é um erro à parte:** `410` na API e **código de saída 8** na CLI, distinto do uso errado e da falha de rede. O Marcador deixa de valer se foi aparado, se é de outra época (o Acervo foi recriado) ou se está além da última Chegada (o Acervo foi restaurado de uma cópia); quem lê pede o ponto de partida e recomeça dali.
+- **`malote chegadas aparar`** remove as Chegadas mais antigas que a retenção (30 dias; `--dias`), até o limite por passada (5.000; `--limite`). Ensaio por padrão; `--com-efeito --confirmo` aplica e grava uma Operação irreversível, só quando removeu algo. Só local.
+- **O ouvinte apara o Diário sozinho**, depois da subida (o primeiro passo, 10 minutos depois; nunca na subida) e a cada hora, em lotes de 5.000. Banco ocupado tenta de novo na hora seguinte.
+
+### Alterado
+
+- **Toda porta de escrita de fato exige a origem da Chegada** (`origemDaChegada`), e as portas abrem a própria transação em volta do fato e da Chegada. A gravação custa de 0,15 a 0,3 ms a mais por Mensagem (medido em bancada). Quem usa o núcleo como biblioteca precisa passar o campo; a CLI e a API não mudam.
+- **A criação de um Acervo novo passou a ser atômica:** o schema, a versão e a semente do Diário entram numa transação só.
+
 ## [0.44.0] — 2026-10-24
 
 Não muda a forma do Acervo nem do Registro. `ouvinte estado --json` ganha um campo; contrato aditivo, saída padrão intacta.
