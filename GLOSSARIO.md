@@ -308,6 +308,26 @@ Quem ordenou uma Operação. Vocabulário fechado: `operador:<id>` e `acesso:<id
 A classe de uma Operação quanto a desfazer: `por-efeito` (o `desfazer` reverte linha a linha, pelas portas do núcleo), `por-delegacao` (existe uma trilha semântica própria, como a da Mesclagem, e a Operação a referencia) e `irreversivel`. É uma declaração: `por-efeito` só se cumpre se o `desfazer` tem a porta de restauração da tabela.
 *Evitar*: undo, rollback.
 
+**Chegada**:
+O registro de que um fato entrou no Acervo, na ordem em que entrou: uma Mensagem, uma Edição, um Anexo que passou a ter o arquivo, uma Transição de Participação ou uma Etiqueta de Participação. Carrega o tipo, a **Origem da Chegada**, o instante de gravação e o do fato, a Conversa, o autor, a direção e o id do fato; **nunca o conteúdo**. Nasce na mesma transação do fato e só quando ele nasce: a reentrega não é Chegada. A única sem Conversa e sem origem é a `inicio-do-diario`, que marca o nascimento do Diário e nunca aparece numa leitura.
+*Evitar*: evento (é o que a Fonte entrega, e o que a Edição e a Etiqueta já chamam assim), log, journal, feed, notificação, fila.
+
+**Diário de Chegadas**:
+O conjunto das Chegadas de um Acervo, só de acréscimo, com número de sequência que nunca se reaproveita, nem apagando linhas. Existe para quem acompanha o Acervo ler **por ordem de gravação**: a ordem de `ocorridaEm` deixa passar a entrega atrasada (Pendentes da Plataforma, importação, edição). Começa na migração para o Acervo v30; as Mensagens anteriores não geram Chegada. Guarda 30 dias e é aparado em lotes.
+*Evitar*: Trilha (é a das Operações), histórico, journal, feed, fila.
+
+**Marcador**:
+O token opaco que a leitura do Diário devolve (`proximo`) e que o consumidor devolve em `--depois` para ler as Chegadas seguintes. Codifica a época do Diário e o número da última Chegada lida. É **válido** se for da época atual, maior ou igual ao Piso do Diário e menor ou igual à última Chegada gravada; fora disso é **expirado** (410, saída 8), e o consumidor pede o ponto de partida e recomeça dali. Malformado é erro de uso. Não é o Cursor.
+*Evitar*: cursor (é a paginação de listagem, por tempo), offset, checkpoint, token de sincronização.
+
+**Piso do Diário**:
+O maior número de sequência já removido do Diário; nasce igual ao da Chegada inicial. Todo Marcador abaixo dele é expirado. A aparagem remove sempre um prefixo da ordem de gravação e nunca a Chegada de maior número, de modo que o ponto de partida sobrevive a um Diário parado.
+*Evitar*: início, corte, retenção (esta é a política que decide o corte).
+
+**Origem da Chegada**:
+De onde o fato veio: `ao-vivo` (a recepção ao vivo, inclusive o que vem dos Pendentes da Plataforma e o Derrame que o próprio ouvinte drena), `importacao` (os importadores, a ingestão por varredura e o `trazer`) ou `reprocesso` (o `ouvinte reprocessar`, o reprocessamento de descartados, de mídia e de imagem de modelo). É declarada por quem chama a porta de escrita, nunca inferida. O atraso de uma Chegada se mede pelo instante de gravação menos o do fato; não existe origem "Pendentes".
+*Evitar*: fonte (é a Fonte), canal.
+
 **Cursor**:
 O token opaco (`proximo`) que a resposta traz para pedir a página seguinte de uma listagem de Conversas, de Mensagens ou de Anexos: ordem fixa, com desempate por id. O consumidor o devolve em `--antes` e nunca o monta; cursor inválido é erro, nunca primeira página. Não é o **Estado de Sincronização**.
 *Evitar*: offset, número de página.

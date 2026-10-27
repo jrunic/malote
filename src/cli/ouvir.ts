@@ -32,6 +32,7 @@ import { criarMarcadorDoSinal } from './sinal-da-conexao.js';
 import { criarGravadorDosPendentes, linhaDeResumo, linhaDoAnuncio } from './estado-dos-pendentes.js';
 import { anotarPulos } from './pulos.js';
 import { atorDeServico, comAtor } from '../nucleo/ator.js';
+import { iniciarAparagemDoDiario } from './aparagem-do-diario.js';
 import {
   identidadeDoVinculo,
   mesmoTelefone,
@@ -798,7 +799,24 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
       },
       Number.isInteger(INTERVALO_DE_ENVIO_MS) && INTERVALO_DE_ENVIO_MS > 0 ? INTERVALO_DE_ENVIO_MS : 5000,
     );
-    pararPollerDeEnvio = (): void => clearInterval(pollerDeEnvio);
+    // A aparagem do Diario de Chegadas (#1355): depois da subida, nunca nela. Os dois tempos so se mudam por ambiente nos
+    // testes; em producao valem os padroes (primeiro passo em 10 minutos, depois a cada hora).
+    const tempoDaAparagem = (nome: string): number | undefined => {
+      const n = Number(process.env[nome]);
+      return Number.isInteger(n) && n > 0 ? n : undefined;
+    };
+    const primeiroPassoDaAparagem = tempoDaAparagem('MALOTE_APARAGEM_PRIMEIRO_MS');
+    const intervaloDaAparagem = tempoDaAparagem('MALOTE_APARAGEM_INTERVALO_MS');
+    const pararAparagem = iniciarAparagemDoDiario(acervo, {
+      agora,
+      escrever,
+      ...(primeiroPassoDaAparagem !== undefined ? { primeiroPassoMs: primeiroPassoDaAparagem } : {}),
+      ...(intervaloDaAparagem !== undefined ? { intervaloMs: intervaloDaAparagem } : {}),
+    });
+    pararPollerDeEnvio = (): void => {
+      clearInterval(pollerDeEnvio);
+      pararAparagem();
+    };
 
     const parada = (sinal: string): void => {
       escrever(`[ouvinte] ${sinal} recebido; parando.`);

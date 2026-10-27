@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Acervo } from './acervo.js';
+import { emOperacao } from './trilha.js';
 
 /**
  * Diario de Chegadas: o registro, so de acrescimo, do que ENTROU no Acervo, na ORDEM EM QUE ENTROU.
@@ -205,6 +206,82 @@ function conferirMarcador(m: MarcadorDecodificado, c: Controle): void {
   if (m.epoca !== c.epoca) throw new MarcadorExpiradoError('outra-epoca');
   if (m.seq < c.piso) throw new MarcadorExpiradoError('abaixo-do-piso');
   if (m.seq > c.ultima) throw new MarcadorExpiradoError('acima-da-ultima');
+}
+
+/** Quanto o Diario guarda, em dias de instante de gravacao. */
+export const RETENCAO_PADRAO_DO_DIARIO_EM_DIAS = 30;
+
+/** O maximo de Chegadas que uma passada da aparagem remove: um lote curto, para nao segurar o escritor. */
+export const LOTE_DA_APARAGEM = 5000;
+
+const UM_DIA_EM_MS = 86_400_000;
+
+export interface OpcoesDeAparagem {
+  /** O relogio, em milissegundos. */
+  agora: number;
+  /** Retencao em dias; o padrao e `RETENCAO_PADRAO_DO_DIARIO_EM_DIAS`. */
+  dias?: number;
+  /** O maximo removido nesta passada; o padrao e `LOTE_DA_APARAGEM`. */
+  lote?: number;
+  /** `false` so conta o que removeria (o ensaio). O padrao e `true`. */
+  comEfeito?: boolean;
+}
+
+export interface ResultadoDaAparagem {
+  /** O que a passada removeu (ou removeria, no ensaio). */
+  removidas: number;
+  /** O Piso depois da passada (no ensaio, o de antes). */
+  piso: number;
+  /** Quantas Chegadas ficam no Diario depois da passada. */
+  restam: number;
+}
+
+/**
+ * Apara o Diario: remove as Chegadas mais antigas que a retencao e sobe o Piso para a ultima removida.
+ *
+ * Sempre um PREFIXO da ordem de gravacao: o Piso diz "tudo ate aqui foi removido", entao a passada para na primeira Chegada
+ * ainda dentro da retencao, mesmo que depois dela haja outra, mais antiga pelo relogio (relogio que andou para tras). Nunca
+ * remove a Chegada de maior numero: e ela que mantem o ponto de partida mesmo num Diario parado ha mais de 30 dias. Uma
+ * passada remove no maximo `lote`; quem quer esvaziar tudo repete enquanto `removidas` for igual ao lote.
+ *
+ * A Operacao (`aparar-chegadas`, irreversivel, sem efeito linha a linha: o Diario nao e dado de origem) so e gravada
+ * quando a passada remove alguma coisa. O tique que nao remove nada nao deixa rastro, porque a frota le a ausencia de
+ * Operacao como sinal, e uma por hora por Inquilino seria ruido.
+ */
+export function apararDiario(acervo: Acervo, opcoes: OpcoesDeAparagem): ResultadoDaAparagem {
+  const dias = opcoes.dias ?? RETENCAO_PADRAO_DO_DIARIO_EM_DIAS;
+  const lote = opcoes.lote ?? LOTE_DA_APARAGEM;
+  const corte = opcoes.agora - dias * UM_DIA_EM_MS;
+  const { piso, ultima } = lerControle(acervo);
+
+  const alvo = acervo
+    .preparar(
+      `SELECT COALESCE(
+                (SELECT MIN(seq) - 1
+                   FROM (SELECT seq, criado_em FROM chegadas WHERE seq >= @piso AND seq < @ultima ORDER BY seq LIMIT @lote)
+                  WHERE criado_em >= @corte),
+                (SELECT MAX(seq)
+                   FROM (SELECT seq FROM chegadas WHERE seq >= @piso AND seq < @ultima ORDER BY seq LIMIT @lote))
+              ) AS ate`,
+    )
+    .get({ piso, ultima, lote, corte }) as { ate: number | null };
+  const ate = alvo.ate;
+  const contar = (): number => (acervo.preparar('SELECT COUNT(*) AS n FROM chegadas').get() as { n: number }).n;
+  // `>=` no Piso: o Diario nasce com o Piso igual ao numero da `inicio-do-diario`, que ainda existe e e a primeira a sair.
+  if (ate === null || ate < piso) return { removidas: 0, piso, restam: contar() };
+
+  // Com o Piso ja em `ate`, nao ha linha a remover e nao ha Operacao a gravar.
+  const aRemover = (acervo.preparar('SELECT COUNT(*) AS n FROM chegadas WHERE seq <= ?').get(ate) as { n: number }).n;
+  if (aRemover === 0) return { removidas: 0, piso, restam: contar() };
+  if (opcoes.comEfeito === false) return { removidas: aRemover, piso, restam: contar() - aRemover };
+
+  let removidas = 0;
+  emOperacao(acervo, { natureza: 'aparar-chegadas', reversibilidade: 'irreversivel', registraEfeito: false }, () => {
+    removidas = acervo.preparar('DELETE FROM chegadas WHERE seq <= ?').run(ate).changes;
+    // `MAX`: uma passada concorrente que ja subiu o Piso mais alto nao pode ser desfeita por esta.
+    acervo.preparar('UPDATE diario_de_chegadas SET piso = MAX(piso, ?)').run(ate);
+  });
+  return { removidas, piso: ate, restam: contar() };
 }
 
 /** O ponto de partida: o Marcador da ultima Chegada gravada, sem Chegada nenhuma. */

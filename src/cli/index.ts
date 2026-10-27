@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { lerPedidoDeEtiquetas, formatarEtiquetas } from './etiquetas.js';
 import { lerPedidoDeChegadas, formatarChegadas } from './chegadas.js';
-import { lerChegadas, MarcadorExpiradoError, MarcadorInvalidoError, pontoDePartida, type FiltroDeChegadas } from '../nucleo/chegada.js';
+import { apararDiario, lerChegadas, LOTE_DA_APARAGEM, MarcadorExpiradoError, MarcadorInvalidoError, pontoDePartida, RETENCAO_PADRAO_DO_DIARIO_EM_DIAS, type FiltroDeChegadas } from '../nucleo/chegada.js';
 import { lerChegadasComConteudo } from '../nucleo/chegadas-com-conteudo.js';
 import { acrescentarEtiquetas, listarEtiquetas } from '../nucleo/etiqueta-de-participacao.js';
 import { execFileSync } from 'node:child_process';
@@ -415,6 +415,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote pessoas        --inquilino <id> --texto <nome>        (resolve texto em Pessoa; com MALOTE_SERVIDOR: por REDE, sem --inquilino)
   malote participantes  --inquilino <id> --conversa <id> [--em <AAAA-MM-DD>]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino)
   malote etiquetas      --inquilino <id> [--conversa <id>] [--remetente <valor>] [--busca <texto>] [--historico] [--limite <n>] [--json]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino; --historico exige --conversa e --remetente; sem filtro, so as correntes nao vazias, ate 100 por padrao e 1000 no maximo)
+  malote chegadas aparar --inquilino <id> [--dias <n>] [--limite <n>] [--com-efeito --confirmo] [--json]  (apara o Diario de Chegadas: remove as mais antigas que a retencao, 30 dias por padrao, ate o limite por passada; ensaio por padrao; SO local, e o ouvinte ja apara sozinho)
   malote chegadas       --inquilino <id> (--depois <marcador> | --ponto-de-partida) [--conversa <id>] [--configuracao <apelido>] [--direcao enviada|recebida] [--remetente <valor>] [--sem-remetente <valor>] [--tipo <tipos>] [--origem <origens>] [--limite <n>] [--com-conteudo] [--json]  (o Diario de Chegadas: o que entrou no Acervo, na ordem em que entrou; com MALOTE_SERVIDOR: por REDE, sem --inquilino; --ponto-de-partida devolve o Marcador de agora e nao aceita filtros; Marcador expirado sai por 8)
   malote relatorio                                              (SO em modo rede: totais por Fonte e natureza; local, use 'malote acervo relatar')
   malote conversas sem-endereco --inquilino <id> [--limite <n>]
@@ -696,6 +697,10 @@ export async function executarConsultaRede(
   else if (grupo === 'chegadas') {
     if (argumentos.includes('--inquilino')) {
       rede.escrever(MENSAGEM_SEM_INQUILINO_NA_REDE);
+      return 2;
+    }
+    if (argumentos[1] === 'aparar') {
+      rede.escrever('"chegadas aparar" escreve no Acervo e so existe local: rode com `env -u MALOTE_SERVIDOR`.');
       return 2;
     }
     const leitura = lerPedidoDeChegadas(argumentos);
@@ -2872,6 +2877,44 @@ function executarComAtor(
         acervo.fechar();
       }
       return 0;
+    }
+
+    if (grupo === 'chegadas' && sub === 'aparar') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
+      const comEfeito = temBandeira(argumentos, 'com-efeito');
+      if (comEfeito && !temBandeira(argumentos, 'confirmo')) {
+        throw new Error('Repita o comando com --confirmo para executar.');
+      }
+      const inteiro = (nome: string, padrao: number): number | undefined => {
+        const texto = opcao(argumentos, nome);
+        if (texto === undefined) return padrao;
+        const n = Number(texto);
+        return Number.isInteger(n) && n >= 1 ? n : undefined;
+      };
+      const dias = inteiro('dias', RETENCAO_PADRAO_DO_DIARIO_EM_DIAS);
+      const lote = inteiro('limite', LOTE_DA_APARAGEM);
+      if (dias === undefined || lote === undefined) {
+        escrever('--dias e --limite precisam ser inteiros maiores que zero.');
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const r = apararDiario(acervo, { agora: Date.now(), dias, lote, comEfeito });
+        if (temBandeira(argumentos, 'json')) {
+          escrever(JSON.stringify({ ...r, comEfeito, dias, limite: lote }, null, 2));
+        } else {
+          escrever(
+            `${comEfeito ? 'Aparado' : 'Ensaio'}: ${String(r.removidas)} Chegada(s) ${comEfeito ? 'removida(s)' : 'a remover'} ` +
+              `(mais antigas que ${String(dias)} dia(s), no maximo ${String(lote)} por passada); restam ${String(r.restam)}.`,
+          );
+          if (r.removidas === lote) escrever('O limite foi atingido: repita para continuar.');
+          if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
+        }
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
     }
 
     if (grupo === 'chegadas') {

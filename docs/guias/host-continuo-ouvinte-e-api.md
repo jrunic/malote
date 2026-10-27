@@ -198,6 +198,14 @@ A recepção descarta o que não vira Mensagem: protocolo sem dado, conteúdo ci
 - **Mídia:** o reprocessar não baixa mídia, e o Anexo de um evento reprocessado nasce sempre `nunca-obtido`. Para trazer os bytes, rode `malote midia reprocessar` logo depois, **dentro do prazo do tipo**, porque o endereço de download vence em dias e não em um prazo único (medido em 18/10/2026: figurinha e áudio baixam até cerca de 15 dias e respondem 404 aos 17-20 e 410 a partir de 21; vídeo e documento respondem 410 a partir de 21 dias; só a imagem baixa até cerca de 28 dias, 1 de 5 aos 29. Imagem de 25 a 28 dias baixou em 80% das tentativas). A imagem do cabeçalho de uma mensagem de modelo de conta comercial vira Anexo na recepção; para as já gravadas, `malote midia extrair-imagem-de-modelo` (ensaio por padrão) cria o Anexo e este comando baixa. O comando recusa (saída 2) sem recorte e sem `--tudo`: comece por `--ensaio`, que conta por tipo e por dia sem baixar, e baixe por faixa (`--desde`, `--ate`, `--tipo`, `--mensagem`) e com `--limite`, a Mensagem mais antiga primeiro. `--limite` sozinho já conta como recorte, e conta tentativas, não sucessos. O comando não tem freio nem retomada: um lote longo em fatias, com pausa e parada se uma fatia não recupera nada, é script de quem opera.
 - **Ver quanto há:** `ouvinte estado --json`, campo `guarda` (`eventos` e `bytes`). O comando lê o arquivo para contar, então o custo cresce com o teto.
 
+### 3.5 O Diário de Chegadas e a aparagem
+
+O Acervo guarda um **Diário de Chegadas**: o que entrou, na ordem em que entrou, que `malote chegadas` lê (veja o guia do cliente). Para o host, três coisas:
+
+- **O ouvinte apara sozinho.** Depois da subida (o primeiro passo, 10 minutos depois; nunca na subida), e a cada hora, o ouvinte remove do Diário o que passou de 30 dias, em lotes de 5.000 que se repetem enquanto vierem cheios. A linha do registro diz só quantas Chegadas saíram. O Diário de um Acervo de volume alto cresce da ordem de 100 mil Chegadas em 30 dias, algumas dezenas de MB.
+- **Inquilino sem ouvinte não apara sozinho.** Para ele, `malote chegadas aparar --inquilino <id>` (ensaio por padrão; `--com-efeito --confirmo` aplica; `--dias` e `--limite` ajustam). É local: por rede é recusado, e num shell com `MALOTE_SERVIDOR` definido use `env -u MALOTE_SERVIDOR malote chegadas aparar ...`. A Operação `aparar-chegadas` é irreversível e só é gravada quando algo foi removido.
+- **Importar um backup grande gera uma Chegada por fato**, com origem `importacao`. Elas saem com a aparagem; quem consome filtra por origem.
+
 ## 4. O servidor de consulta, como serviço
 
 ### 4.1 Chave de Acesso (quem consulta)
@@ -407,11 +415,12 @@ linhas (ver o guia de armazenamento).
 | situação | o que fazer |
 |---|---|
 | vínculo invalidado (unit sai com código 1) | leia a última linha do log: `1` também sai por Inquilino desconhecido e falha local de subida. Sendo vínculo invalidado, pareamento humano: rode o `ouvir` com `--numero` no terminal, confirme no aparelho, reinicie o unit |
-| trocar a versão | `git fetch && git checkout <tag-ou-branch>` + `npm ci` + `systemctl restart` dos units. **Release que muda a forma do Registro ou do Acervo** (a 0.31.0 mudou o Registro; a 0.39.0, o Acervo): faça cópia do `registro.db` e dos Acervos antes — o servidor e cada ouvinte migram as bases ao subir, com segurança entre vários abridores, mas a cópia é o que permite voltar |
+| trocar a versão | `git fetch && git checkout <tag-ou-branch>` + `npm ci` + `systemctl restart` dos units. **Release que muda a forma do Registro ou do Acervo** (a 0.31.0 mudou o Registro; a 0.39.0 e a 0.45.0, o Acervo): faça cópia do `registro.db` e dos Acervos antes — o servidor e cada ouvinte migram as bases ao subir, com segurança entre vários abridores, mas a cópia é o que permite voltar |
 | conferir o que o ouvinte derramou | `ouvinte estado --json` (campo derrame) e `ouvinte reprocessar` — recusa se o ouvinte estiver no ar |
 | ver o que a recepção não gravou como Mensagem | `ouvinte estado --json` (campo `descartes`): contagem por dia e por tipo, sem conteúdo. Serve para decidir com número se um tipo merece virar Mensagem. `protocolMessage` aparece por tipo do protocolo (`protocolMessage:REVOKE`, e assim por diante) |
 | segunda conta de WhatsApp | novo material importado com Configuração própria + novo unit `malote-ouvinte@<outra-conta>` |
 | revogar quem consulta | `acesso chave revogar` |
+| o Diário de Chegadas cresceu demais, ou o Inquilino não tem ouvinte | `malote chegadas aparar --inquilino <id>` (ensaio); repita com `--com-efeito --confirmo` |
 
 ## Notas de operação do host
 
