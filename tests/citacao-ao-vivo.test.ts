@@ -11,8 +11,8 @@ import type { Acervo } from '../src/nucleo/acervo.js';
 
 const QUANDO = Math.floor(Date.UTC(2026, 9, 21, 12) / 1000);
 const AGORA = Date.UTC(2026, 9, 21, 13);
-const COM_CONTA = { agora: AGORA, configuracao: CFG_WHATSAPP, enderecoDaConta: JID_DA_CONTA };
-const SEM_CONTA = { agora: AGORA, configuracao: CFG_WHATSAPP };
+const COM_CONTA = { origemDaChegada: 'ao-vivo' as const, agora: AGORA, configuracao: CFG_WHATSAPP, enderecoDaConta: JID_DA_CONTA };
+const SEM_CONTA = { origemDaChegada: 'ao-vivo' as const, agora: AGORA, configuracao: CFG_WHATSAPP };
 const OUTRO_LID = '109876543210999@lid';
 
 function original(id: string, quando = QUANDO): MensagemRecebida {

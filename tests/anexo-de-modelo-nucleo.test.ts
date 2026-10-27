@@ -17,6 +17,7 @@ function mensagem(acervo: Acervo, idExterno: string, bruto: string, fonte: 'what
     configuracao: fonte === 'whatsapp' ? CFG_WHATSAPP : { id: 'cfg-ig', fonte: 'instagram' },
   });
   return registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId, fonte, idExterno, ocorridaEm: Date.parse('2026-10-14T10:00:00Z'), agora: Date.parse('2026-10-18T10:00:00Z'),
     direcao: 'recebida', bruto,
   });
@@ -28,9 +29,9 @@ test('lista so a Mensagem de modelo do WhatsApp que ainda nao tem Anexo, com o b
     const { acervo } = c.novoInquilino('Ahsoka');
     const semAnexo = mensagem(acervo, 'M1', BRUTO_MODELO);
     const comNuncaObtido = mensagem(acervo, 'M2', BRUTO_MODELO);
-    registrarAnexo(acervo, { mensagemId: comNuncaObtido, tipo: 'image', presenca: 'nunca-obtido', bruto: '{}' });
+    registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: comNuncaObtido, tipo: 'image', presenca: 'nunca-obtido', bruto: '{}' });
     const comPresente = mensagem(acervo, 'M3', BRUTO_MODELO);
-    registrarAnexo(acervo, { mensagemId: comPresente, tipo: 'image', presenca: 'presente', bruto: '{}', caminho: 'a/b', tamanho: 3 });
+    registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: comPresente, tipo: 'image', presenca: 'presente', bruto: '{}', caminho: 'a/b', tamanho: 3 });
     mensagem(acervo, 'M4', BRUTO_TEXTO);
     mensagem(acervo, 'M5', BRUTO_MODELO, 'instagram');
 
@@ -47,9 +48,9 @@ test('removerAnexoNuncaObtido remove o nunca-obtido, recusa o presente e diz qua
   try {
     const { acervo } = c.novoInquilino('Ahsoka');
     const m = mensagem(acervo, 'M1', BRUTO_MODELO);
-    const nunca = registrarAnexo(acervo, { mensagemId: m, tipo: 'image', presenca: 'nunca-obtido', bruto: '{}' });
+    const nunca = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: m, tipo: 'image', presenca: 'nunca-obtido', bruto: '{}' });
     const m2 = mensagem(acervo, 'M2', BRUTO_MODELO);
-    const presente = registrarAnexo(acervo, { mensagemId: m2, tipo: 'image', presenca: 'presente', bruto: '{}', caminho: 'a/b', tamanho: 3 });
+    const presente = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: m2, tipo: 'image', presenca: 'presente', bruto: '{}', caminho: 'a/b', tamanho: 3 });
 
     assert.equal(removerAnexoNuncaObtido(acervo, nunca), 'removido');
     assert.equal(removerAnexoNuncaObtido(acervo, presente), 'ja-baixado');

@@ -101,7 +101,7 @@ export async function reprocessarMidiaNuncaObtida(
     relatorio.tentados += 1;
     try {
       const bytes = await baixar(mensagem);
-      gravarArquivoDeAnexo(acervo, { anexoId: candidato.anexoId, destino: destino as string, bytes });
+      gravarArquivoDeAnexo(acervo, { origemDaChegada: 'reprocesso', anexoId: candidato.anexoId, destino: destino as string, bytes });
       relatorio.recuperados += 1;
       relatorio.bytesRecuperados += bytes.length;
     } catch {

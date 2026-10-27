@@ -19,6 +19,7 @@ function cena() {
     registrarConversa(acervo, { fonte: 'whatsapp', idExterno, coletiva: false, configuracao: CFG_WHATSAPP });
   const mensagem = (cv: string, idExterno: string, minuto: number, conteudo?: string): string =>
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId: cv,
       fonte: 'whatsapp',
       idExterno,
@@ -29,6 +30,7 @@ function cena() {
     });
   const editar = (mensagemId: string, idExterno: string, texto: string, minuto: number): void => {
     registrarEdicao(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId,
       fonte: 'whatsapp',
       idExterno,
@@ -113,7 +115,7 @@ test('a edicao vence a transcricao e o cartao quando casam a mesma Mensagem', ()
     const cv = conversa('a@s.whatsapp.net');
     const m = mensagem(cv, 'M1', 1, 'oi');
     editar(m, 'EV-1', 'termocomum na edicao', 2);
-    const anexoId = registrarAnexo(acervo, { mensagemId: m, tipo: 'audio', presenca: 'presente', caminho: '/x/a1.opus' });
+    const anexoId = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: m, tipo: 'audio', presenca: 'presente', caminho: '/x/a1.opus' });
     acervo.preparar(`INSERT INTO transcricoes (anexo_id, estado, texto) VALUES (?, 'concluida', 'termocomum no audio')`).run(anexoId);
     registrarContatosCompartilhados(acervo, m, [{ nome: 'Termocomum Souza', organizacao: null, nomeComercial: null, valores: [] }]);
     const achadas = buscarMensagens(acervo, { texto: 'termocomum' });
@@ -215,6 +217,7 @@ const TEXTO_UNICO = 'palavraunicadaedicao';
 
 function semearEdicao(acervo: Acervo, conversaId: string): string {
   const m = registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId,
     fonte: 'whatsapp',
     idExterno: 'editada-1',
@@ -224,6 +227,7 @@ function semearEdicao(acervo: Acervo, conversaId: string): string {
     conteudo: 'texto original',
   });
   registrarEdicao(acervo, {
+    origemDaChegada: 'importacao',
     mensagemId: m,
     fonte: 'whatsapp',
     idExterno: 'EV-1',

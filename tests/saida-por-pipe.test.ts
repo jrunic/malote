@@ -50,6 +50,7 @@ function semearMensagensGrandes(c: CenarioDeRede): void {
   try {
     for (let i = 0; i < QUANTAS; i += 1) {
       registrarMensagem(acervo, {
+        origemDaChegada: 'importacao',
         conversaId: c.conversaDeA,
         fonte: 'whatsapp',
         idExterno: `grande-${i}`,

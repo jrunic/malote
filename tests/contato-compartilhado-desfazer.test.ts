@@ -24,6 +24,7 @@ function conversa(acervo: Acervo): string {
 
 function mensagem(acervo: Acervo, cv: string, idExterno: string, bruto: string): string {
   return registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId: cv,
     fonte: 'whatsapp',
     idExterno,
@@ -38,6 +39,7 @@ function mensagem(acervo: Acervo, cv: string, idExterno: string, bruto: string):
 function doBackup(acervo: Acervo, cv: string, idExterno: string, cartoes: string, nomes = ''): string {
   const id = mensagem(acervo, cv, idExterno, '{}');
   registrarAnexo(acervo, {
+    origemDaChegada: 'importacao',
     mensagemId: id,
     tipo: 'contact',
     presenca: 'nunca-obtido',

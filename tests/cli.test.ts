@@ -208,10 +208,12 @@ test('malote midia extrair-duracao extrai do bruto e relata em --json', () => {
       fonte: 'whatsapp', idExterno: 'conv-1', coletiva: false, configuracao: CFG_WHATSAPP,
     });
     const mensagem = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida', conversaId: conversa, fonte: 'whatsapp', idExterno: 'msg-1',
       ocorridaEm: Date.now(), agora: Date.now(),
     });
     registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagem, tipo: 'audio', presenca: 'presente', caminho: 'a.opus',
       bruto: '{"seconds":8}',
     });

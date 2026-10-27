@@ -180,6 +180,7 @@ test('registrar Mensagem exige instante plausível e rejeita o resto', () => {
     });
 
     const id = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
@@ -193,6 +194,7 @@ test('registrar Mensagem exige instante plausível e rejeita o resto', () => {
     assert.throws(
       () =>
         registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
           conversaId: conversa,
           fonte: 'whatsapp',
@@ -224,6 +226,7 @@ test('o erro de instante implausível carrega o motivo, para o relatório contar
 
     try {
       registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
         conversaId: conversa,
         fonte: 'whatsapp',
@@ -259,6 +262,7 @@ test('registrar a mesma Mensagem duas vezes não duplica', () => {
       ocorridaEm: EM_USO,
       agora: AGORA,
       direcao: 'recebida' as const,
+      origemDaChegada: 'importacao' as const,
     };
     const a = registrarMensagem(acervo, comum);
     const b = registrarMensagem(acervo, comum);
@@ -281,6 +285,7 @@ test('Mensagem sem autor conhecido é válida', () => {
       coletiva: false, configuracao: CFG_WHATSAPP,
     });
     const id = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
@@ -306,6 +311,7 @@ function conversaComMensagem(acervo: Parameters<typeof registrarAnexo>[0]): stri
     coletiva: false, configuracao: CFG_WHATSAPP,
   });
   return registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
     conversaId: conversa,
     fonte: 'whatsapp',
@@ -323,6 +329,7 @@ test('Anexo cujo arquivo não veio nasce como nunca-obtido, não omitido', () =>
     const mensagem = conversaComMensagem(acervo);
 
     registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagem,
       tipo: 'video',
       tamanho: 41_000_000,
@@ -346,6 +353,7 @@ test('descartar o Anexo preserva o Descritor e registra quando e por qual polít
     const { acervo } = c.novoInquilino('Leia Organa');
     const mensagem = conversaComMensagem(acervo);
     const anexo = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagem,
       tipo: 'video',
       tamanho: 41_000_000,
@@ -378,6 +386,7 @@ test('atualizarDuracaoDoAnexo grava a duração sem tocar em mais nada do Descri
     const { acervo } = c.novoInquilino('Leia Organa');
     const mensagem = conversaComMensagem(acervo);
     const anexo = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: mensagem,
       tipo: 'audio',
       tamanho: 34_565,
@@ -425,6 +434,7 @@ test('vincular Pessoa não escreve em Mensagem nenhuma', () => {
       coletiva: false, configuracao: CFG_WHATSAPP,
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
@@ -466,6 +476,7 @@ test('a porta responde existência sem que o Adaptador conheça o schema', () =>
 
     assert.equal(mensagemJaExiste(acervo, 'whatsapp', 'm1'), false);
     const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId,
       fonte: 'whatsapp',
@@ -488,7 +499,7 @@ test('a porta responde existência sem que o Adaptador conheça o schema', () =>
     assert.equal(participacaoJaExiste(acervo, conversaId, identificadorId), true);
 
     assert.equal(anexoJaExiste(acervo, mensagemId), false);
-    registrarAnexo(acervo, { mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
+    registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
     assert.equal(anexoJaExiste(acervo, mensagemId), true);
   } finally {
     c.limpar();

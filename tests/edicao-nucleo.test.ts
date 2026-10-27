@@ -12,6 +12,7 @@ function cena() {
   const { acervo } = c.novoInquilino('Titular de Teste');
   const conversaId = registrarConversa(acervo, { fonte: 'whatsapp', idExterno: GRUPO, coletiva: true });
   const mensagemId = registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId,
     fonte: 'whatsapp',
     idExterno: 'MSG-ORIGINAL',
@@ -22,6 +23,7 @@ function cena() {
     conteudo: 'texto original',
   });
   const edicao = (idExterno: string, texto: string, editadaEm = AGORA - 300_000) => ({
+    origemDaChegada: 'importacao' as const,
     mensagemId,
     fonte: 'whatsapp' as const,
     idExterno,
@@ -88,6 +90,7 @@ test('a leitura de varias Mensagens e uma consulta so, e Mensagem sem edicao nao
   const { c, acervo, mensagemId, conversaId, edicao } = cena();
   try {
     const outra = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId,
       fonte: 'whatsapp',
       idExterno: 'MSG-OUTRA',

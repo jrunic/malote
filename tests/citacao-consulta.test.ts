@@ -16,13 +16,16 @@ function povoar(acervo: Acervo): { conversaId: string; citante: string; citada: 
   const conversaId = registrarConversa(acervo, { fonte: 'whatsapp', idExterno: '120363000000000001@g.us', coletiva: true });
   const autor = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '5511900000001@s.whatsapp.net' }).id;
   const citada = registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId, fonte: 'whatsapp', idExterno: 'ORIG', ocorridaEm: OCORRIDA, agora: AGORA, direcao: 'recebida', autorId: autor, conteudo: 'pergunta sintetica',
   });
   const citante = registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId, fonte: 'whatsapp', idExterno: 'RESP', ocorridaEm: OCORRIDA + 1000, agora: AGORA, direcao: 'recebida',
     conteudo: 'resposta sintetica palavraunica', citacao: { idExterno: 'ORIG' },
   });
   const solta = registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId, fonte: 'whatsapp', idExterno: 'SOLTA', ocorridaEm: OCORRIDA + 2000, agora: AGORA, direcao: 'recebida', conteudo: 'sem citacao',
   });
   return { conversaId, citante, citada, autor, solta };
@@ -49,6 +52,7 @@ test('a citada fora do Acervo: id nulo, id externo e o que a Fonte deu', () => {
     const { acervo } = c.novoInquilino('Padme');
     const conversaId = registrarConversa(acervo, { fonte: 'whatsapp', idExterno: '120363000000000001@g.us', coletiva: true });
     const citante = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId, fonte: 'whatsapp', idExterno: 'RESP', ocorridaEm: OCORRIDA, agora: AGORA, direcao: 'recebida',
       citacao: { idExterno: 'ANTIGA', direcao: 'enviada' },
     });

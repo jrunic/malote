@@ -10,7 +10,7 @@ import type { Acervo } from '../src/nucleo/acervo.js';
 
 const DIRETA = '5511900000001@s.whatsapp.net';
 const AGORA = Date.parse('2026-10-13T20:12:03.835Z');
-const OPCOES = { agora: AGORA, configuracao: CFG_WHATSAPP };
+const OPCOES = { origemDaChegada: 'ao-vivo' as const, agora: AGORA, configuracao: CFG_WHATSAPP };
 
 function texto(id: string, segundos: number): MensagemRecebida {
   return { key: { remoteJid: DIRETA, id, fromMe: false }, messageTimestamp: segundos, message: { conversation: 'oi' } };

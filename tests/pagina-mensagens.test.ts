@@ -20,6 +20,7 @@ function tresNoMesmoInstante() {
   const INSTANTE = 1789506000000;
   const ids = ['msg-a', 'msg-b', 'msg-c'].map((externo) =>
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId,
       fonte: 'whatsapp',

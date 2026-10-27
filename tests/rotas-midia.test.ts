@@ -168,6 +168,7 @@ test('o mesmo valor de remetente em dois Inquilinos devolve, a cada chave, so o 
         bruto: '{}',
       });
       const msg = registrarMensagem(acervo, {
+        origemDaChegada: 'importacao',
         conversaId: conversa,
         fonte: 'whatsapp',
         idExterno: 'x-1',
@@ -177,7 +178,7 @@ test('o mesmo valor de remetente em dois Inquilinos devolve, a cada chave, so o 
         agora: Date.now(),
         direcao: 'recebida',
       });
-      registrarAnexo(acervo, { mensagemId: msg, tipo: 'image', presenca: 'nunca-obtido' });
+      registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: msg, tipo: 'image', presenca: 'nunca-obtido' });
     },
   });
   try {

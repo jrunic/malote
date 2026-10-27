@@ -35,6 +35,7 @@ function fixture() {
     metadadosDeColetiva: { assunto: 'Grupo de trabalho' },
   });
   registrarTransicao(acervo, {
+    origemDaChegada: 'importacao',
     conversaId: c1,
     identificadorId: id1,
     natureza: 'entrou',
@@ -44,6 +45,7 @@ function fixture() {
     codigoDaFonte: '15',
   });
   registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
     conversaId: c1,
     fonte: 'whatsapp',

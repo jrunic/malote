@@ -126,6 +126,7 @@ test('mesclar não escreve em Mensagem nenhuma', () => {
       coletiva: false, configuracao: CFG_INSTAGRAM,
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversa,
       fonte: 'instagram',

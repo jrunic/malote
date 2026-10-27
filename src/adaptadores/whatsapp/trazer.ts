@@ -85,6 +85,7 @@ export function trazerArquivos(
     let modo: 'vinculo' | 'copia';
     try {
       modo = gravarArquivoDeAnexoDeCaminho(acervo, {
+        origemDaChegada: 'importacao',
         anexoId: p.anexoId,
         destino: opcoes.destino,
         origem: arquivo,

@@ -112,7 +112,7 @@ test('de ponta a ponta com a biblioteca real: o envelope cifrado com protobuf vi
         },
       },
     };
-    const opcoes = { agora: AGORA, configuracao: CFG_WHATSAPP, decodificar: await carregarDecodificador() };
+    const opcoes = { origemDaChegada: 'ao-vivo' as const, agora: AGORA, configuracao: CFG_WHATSAPP, decodificar: await carregarDecodificador() };
     receberEvento(acervo, [original], opcoes);
     const r = receberEvento(acervo, [envelope], opcoes);
     assert.equal(r.edicoes, 1);

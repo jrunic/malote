@@ -43,7 +43,7 @@ test('mensagem com distribuicao de chave de grupo JUNTO do texto e gravada', () 
           },
         },
       ],
-      { agora: AGORA, configuracao: CFG_WHATSAPP },
+      { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP },
     );
 
     assert.equal(relato.gravados, 1, `foi ignorada: ${JSON.stringify(relato.ignorados)}`);
@@ -72,7 +72,7 @@ test('distribuicao de chave SOZINHA continua nao virando Mensagem', () => {
           message: { senderKeyDistributionMessage: { groupId: '120000000000000001@g.us' } },
         },
       ],
-      { agora: AGORA, configuracao: CFG_WHATSAPP },
+      { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP },
     );
     assert.equal(relato.gravados, 0);
     assert.equal(relato.ignorados['senderKeyDistributionMessage'], 1);

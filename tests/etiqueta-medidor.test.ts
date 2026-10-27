@@ -11,7 +11,7 @@ const LID = '109876543210987@lid';
 const TEL = '5565911110001@s.whatsapp.net';
 
 function evento(conversaId: string, identificadorId: string, texto: string, idExterno: string) {
-  return { conversaId, identificadorId, texto, ocorridaEm: T0, fonte: 'whatsapp' as const, idExterno };
+  return { origemDaChegada: 'importacao' as const, conversaId, identificadorId, texto, ocorridaEm: T0, fonte: 'whatsapp' as const, idExterno };
 }
 
 test('o MESMO evento sob as duas formas do mesmo membro e contado', () => {

@@ -17,7 +17,7 @@ function quem(acervo: Parameters<typeof registrarIdentificador>[0], valor: strin
 }
 
 function evento(conversaId: string, identificadorId: string, texto: string, idExterno: string) {
-  return { conversaId, identificadorId, texto, ocorridaEm: T0, fonte: 'whatsapp' as const, idExterno };
+  return { origemDaChegada: 'importacao' as const, conversaId, identificadorId, texto, ocorridaEm: T0, fonte: 'whatsapp' as const, idExterno };
 }
 
 function contar(acervo: Parameters<typeof registrarIdentificador>[0]): number {

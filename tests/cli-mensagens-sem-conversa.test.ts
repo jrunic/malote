@@ -24,6 +24,7 @@ test('malote mensagens sem --conversa lista atraves de todas as Conversas', () =
       fonte: 'whatsapp', idExterno: 'a@s.whatsapp.net', coletiva: false, configuracao: CFG_WHATSAPP,
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId, fonte: 'whatsapp', idExterno: 'm1',
       ocorridaEm: AGORA, agora: AGORA, direcao: 'recebida', conteudo: 'oi',
     });
@@ -51,10 +52,12 @@ test('malote mensagens --direcao recebida filtra sem --conversa', () => {
       fonte: 'whatsapp', idExterno: 'a@s.whatsapp.net', coletiva: false, configuracao: CFG_WHATSAPP,
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId, fonte: 'whatsapp', idExterno: 'm-enviada',
       ocorridaEm: AGORA, agora: AGORA, direcao: 'enviada',
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId, fonte: 'whatsapp', idExterno: 'm-recebida',
       ocorridaEm: AGORA + 1000, agora: AGORA + 1000, direcao: 'recebida',
     });
@@ -80,10 +83,12 @@ test('malote mensagens --conversa continua exigindo a Conversa e ordenando crono
       fonte: 'whatsapp', idExterno: 'a@s.whatsapp.net', coletiva: false, configuracao: CFG_WHATSAPP,
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId, fonte: 'whatsapp', idExterno: 'm1',
       ocorridaEm: AGORA, agora: AGORA, direcao: 'recebida',
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId, fonte: 'whatsapp', idExterno: 'm2',
       ocorridaEm: AGORA + 1000, agora: AGORA + 1000, direcao: 'recebida',
     });

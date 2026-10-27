@@ -32,6 +32,7 @@ function conversa(acervo: Acervo, n: number, criadaEm: string, coletiva = false)
 
 function mensagem(acervo: Acervo, conversaId: string, n: number, minutos: number): void {
   registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId,
     fonte: 'whatsapp',
     idExterno: `m${n}`,

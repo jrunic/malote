@@ -21,6 +21,7 @@ function mensagem(acervo: Acervo, idExterno: string): string {
     configuracao: CFG_WHATSAPP,
   });
   return registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId,
     fonte: 'whatsapp',
     idExterno,

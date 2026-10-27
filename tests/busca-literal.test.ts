@@ -17,6 +17,7 @@ function fixture(conteudos: string[]) {
   });
   conteudos.forEach((conteudo, i) => {
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',

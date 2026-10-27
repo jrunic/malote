@@ -80,6 +80,7 @@ function msg(
   ocorridaEm: number,
 ): void {
   registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId,
     fonte: 'whatsapp',
     idExterno,

@@ -18,7 +18,7 @@ function receber(conteudo: 'nulo' | 'ausente', id: string) {
         ...(conteudo === 'nulo' ? { message: null } : {}),
       },
     ],
-    { agora: AGORA, configuracao: CFG_WHATSAPP },
+    { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP },
   );
   const mensagens = (
     acervo.db.prepare('SELECT COUNT(*) AS n FROM mensagens').get() as { n: number }

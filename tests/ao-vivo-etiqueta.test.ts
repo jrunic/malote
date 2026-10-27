@@ -9,7 +9,7 @@ import { receberEvento } from '../src/adaptadores/whatsapp/ao-vivo.js';
 import { declararEnderecosDaConta } from '../src/nucleo/endereco-da-conta.js';
 
 const AGORA = Date.parse('2026-10-05T16:00:00Z');
-const OPCOES = { agora: AGORA, configuracao: CFG_WHATSAPP };
+const OPCOES = { origemDaChegada: 'ao-vivo' as const, agora: AGORA, configuracao: CFG_WHATSAPP };
 
 function contar(acervo: { db: { prepare: (s: string) => { get: () => unknown } } }, tabela: string): number {
   return (acervo.db.prepare(`SELECT COUNT(*) AS n FROM ${tabela}`).get() as { n: number }).n;

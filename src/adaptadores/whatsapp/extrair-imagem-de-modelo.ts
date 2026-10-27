@@ -56,7 +56,7 @@ export function extrairImagensDeModelo(acervo: Acervo, opcoes: { comEfeito: bool
 
   emOperacao(acervo, { natureza: 'extrair-imagem-de-modelo', reversibilidade: 'por-efeito' }, (op) => {
     for (const { mensagemId, conteudo } of plano) {
-      const anexoId = registrarAnexo(acervo, { mensagemId, tipo: 'image', presenca: 'nunca-obtido', bruto: JSON.stringify(conteudo) });
+      const anexoId = registrarAnexo(acervo, { origemDaChegada: 'reprocesso', mensagemId, tipo: 'image', presenca: 'nunca-obtido', bruto: JSON.stringify(conteudo) });
       op.valor({ tabela: 'anexos', chave: anexoId, campo: 'id', antes: null, depois: anexoId });
       relatorio.criados += 1;
     }

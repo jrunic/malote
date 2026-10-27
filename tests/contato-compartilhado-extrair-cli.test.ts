@@ -25,6 +25,7 @@ function instalacao(): { raiz: string; inquilino: string; limpar: () => void } {
     configuracao: CFG_WHATSAPP,
   });
   const mensagemId = registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId,
     fonte: 'whatsapp',
     idExterno: 'b1',
@@ -34,6 +35,7 @@ function instalacao(): { raiz: string; inquilino: string; limpar: () => void } {
     bruto: '{}',
   });
   registrarAnexo(acervo, {
+    origemDaChegada: 'importacao',
     mensagemId,
     tipo: 'contact',
     presenca: 'nunca-obtido',

@@ -170,7 +170,7 @@ function milissegundos(v: unknown): number | null {
 }
 
 export type DecisaoDeEdicao =
-  | { gravar: Omit<EntradaDeEdicao, 'agora' | 'toleranciaDeRelogioMs'> }
+  | { gravar: Omit<EntradaDeEdicao, 'agora' | 'toleranciaDeRelogioMs' | 'origemDaChegada'> }
   | { recusar: CausaDeEdicaoNaoGravada };
 
 /**

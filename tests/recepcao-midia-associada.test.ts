@@ -37,7 +37,7 @@ function envelope(id: string, interior: Record<string, unknown>, tipo = 'HD_VIDE
 function cena() {
   const c = cenario();
   const { acervo } = c.novoInquilino('Titular de Teste');
-  const receber = (eventos: MensagemRecebida[]) => receberEvento(acervo, eventos, { agora: AGORA, configuracao: CFG_WHATSAPP });
+  const receber = (eventos: MensagemRecebida[]) => receberEvento(acervo, eventos, { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
   const mensagens = () =>
     acervo.db.prepare('SELECT id_externo, conteudo, bruto FROM mensagens ORDER BY id_externo').all() as {
       id_externo: string;

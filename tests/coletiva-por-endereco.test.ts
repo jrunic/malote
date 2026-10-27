@@ -37,6 +37,7 @@ test('status@broadcast (feed agregado) continua coletiva — nao tocado pela #10
   try {
     const { acervo } = c.novoInquilino('Ahsoka');
     receberEvento(acervo, [texto('S1', 'status@broadcast')], {
+      origemDaChegada: 'ao-vivo',
       agora: AGORA,
       configuracao: CFG_WHATSAPP,
     });
@@ -55,6 +56,7 @@ test('lista de transmissao tambem — o sufixo e @broadcast, e nao so o feed agr
   try {
     const { acervo } = c.novoInquilino('Ahsoka');
     receberEvento(acervo, [texto('B1', '1681043162@broadcast')], {
+      origemDaChegada: 'ao-vivo',
       agora: AGORA,
       configuracao: CFG_WHATSAPP,
     });
@@ -72,6 +74,7 @@ test('endereco de status na forma <numero>@status NAO vira Conversa nenhuma (#10
   try {
     const { acervo } = c.novoInquilino('Ahsoka');
     const r = receberEvento(acervo, [texto('S2', '556599344486@status')], {
+      origemDaChegada: 'ao-vivo',
       agora: AGORA,
       configuracao: CFG_WHATSAPP,
     });
@@ -96,6 +99,7 @@ test('endereco de status na forma <lid>@lid.status TAMBEM nao vira Conversa (#10
   try {
     const { acervo } = c.novoInquilino('Ahsoka');
     const r = receberEvento(acervo, [texto('S3', '81999549198343@lid.status')], {
+      origemDaChegada: 'ao-vivo',
       agora: AGORA,
       configuracao: CFG_WHATSAPP,
     });
@@ -115,6 +119,7 @@ test('conversa direta comum NAO e afetada — a guarda nova nao pode alargar dem
   try {
     const { acervo } = c.novoInquilino('Ahsoka');
     receberEvento(acervo, [texto('D1', '5511000000002@s.whatsapp.net')], {
+      origemDaChegada: 'ao-vivo',
       agora: AGORA,
       configuracao: CFG_WHATSAPP,
     });

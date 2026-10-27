@@ -25,6 +25,7 @@ function mensagemComAnexos(
 ): string[] {
   contador += 1;
   const mensagemId = registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId,
     fonte: 'whatsapp',
     idExterno: `midia-${contador}`,
@@ -36,6 +37,7 @@ function mensagemComAnexos(
   });
   return anexos.map((a) =>
     registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId,
       tipo: a.tipo,
       presenca: a.presenca,

@@ -71,6 +71,7 @@ test('com Alcance, presentes e saidos trazem entrouEm e saiuEm, e o enriquecimen
     // Ana entra e fica; Bruno entra e sai; Edu nunca tem evento (cai em sem-informacao dentro do Alcance).
     const evento = (identificadorId: string, natureza: 'entrou' | 'saiu', quando: number, n: string) =>
       registrarTransicao(acervo, {
+        origemDaChegada: 'importacao',
         conversaId: s.grupo,
         identificadorId,
         natureza,

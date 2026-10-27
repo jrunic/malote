@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { lerPedidoDeEtiquetas, formatarEtiquetas } from './etiquetas.js';
+import { lerPedidoDeChegadas, formatarChegadas } from './chegadas.js';
+import { apararDiario, lerChegadas, LOTE_DA_APARAGEM, MarcadorExpiradoError, MarcadorInvalidoError, pontoDePartida, RETENCAO_PADRAO_DO_DIARIO_EM_DIAS, type FiltroDeChegadas } from '../nucleo/chegada.js';
+import { lerChegadasComConteudo } from '../nucleo/chegadas-com-conteudo.js';
 import { acrescentarEtiquetas, listarEtiquetas } from '../nucleo/etiqueta-de-participacao.js';
 import { execFileSync } from 'node:child_process';
 import {
@@ -412,6 +415,8 @@ Titular (nao exige chave enquanto nao houver rede):
   malote pessoas        --inquilino <id> --texto <nome>        (resolve texto em Pessoa; com MALOTE_SERVIDOR: por REDE, sem --inquilino)
   malote participantes  --inquilino <id> --conversa <id> [--em <AAAA-MM-DD>]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino)
   malote etiquetas      --inquilino <id> [--conversa <id>] [--remetente <valor>] [--busca <texto>] [--historico] [--limite <n>] [--json]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino; --historico exige --conversa e --remetente; sem filtro, so as correntes nao vazias, ate 100 por padrao e 1000 no maximo)
+  malote chegadas aparar --inquilino <id> [--dias <n>] [--limite <n>] [--com-efeito --confirmo] [--json]  (apara o Diario de Chegadas: remove as mais antigas que a retencao, 30 dias por padrao, ate o limite por passada; ensaio por padrao; SO local, e o ouvinte ja apara sozinho)
+  malote chegadas       --inquilino <id> (--depois <marcador> | --ponto-de-partida) [--conversa <id>] [--configuracao <apelido>] [--direcao enviada|recebida] [--remetente <valor>] [--sem-remetente <valor>] [--tipo <tipos>] [--origem <origens>] [--limite <n>] [--com-conteudo] [--json]  (o Diario de Chegadas: o que entrou no Acervo, na ordem em que entrou; com MALOTE_SERVIDOR: por REDE, sem --inquilino; --ponto-de-partida devolve o Marcador de agora e nao aceita filtros; Marcador expirado sai por 8)
   malote relatorio                                              (SO em modo rede: totais por Fonte e natureza; local, use 'malote acervo relatar')
   malote conversas sem-endereco --inquilino <id> [--limite <n>]
   malote conversa presenca      --inquilino <id> --conversa <id> --em <AAAA-MM-DD> [--json]
@@ -517,6 +522,7 @@ export const COMANDOS_DE_REDE = new Set([
   'detalhar',
   'anexos',
   'etiquetas',
+  'chegadas',
 ]);
 
 /**
@@ -681,6 +687,46 @@ export async function executarConsultaRede(
       } else {
         const corpo = JSON.parse(r.corpo) as { etiquetas: Parameters<typeof formatarEtiquetas>[0] };
         for (const l of formatarEtiquetas(corpo.etiquetas)) rede.escrever(l);
+      }
+      return 0;
+    } catch (e) {
+      rede.escrever((e as Error).message);
+      return (e as { codigoDeSaida?: number }).codigoDeSaida ?? 1;
+    }
+  }
+  else if (grupo === 'chegadas') {
+    if (argumentos.includes('--inquilino')) {
+      rede.escrever(MENSAGEM_SEM_INQUILINO_NA_REDE);
+      return 2;
+    }
+    if (argumentos[1] === 'aparar') {
+      rede.escrever('"chegadas aparar" escreve no Acervo e so existe local: rode com `env -u MALOTE_SERVIDOR`.');
+      return 2;
+    }
+    const leitura = lerPedidoDeChegadas(argumentos);
+    if (!leitura.ok) {
+      rede.escrever(leitura.erro);
+      return 2;
+    }
+    const { pedido } = leitura;
+    const qc = new URLSearchParams();
+    if (pedido.pontoDePartida) qc.set('ponto-de-partida', '1');
+    if (pedido.depois !== undefined) qc.set('depois', pedido.depois);
+    if (pedido.conversa !== undefined) qc.set('conversa', pedido.conversa);
+    if (pedido.configuracao !== undefined) qc.set('configuracao', pedido.configuracao);
+    if (pedido.direcao !== undefined) qc.set('direcao', pedido.direcao);
+    if (pedido.remetente !== undefined) qc.set('remetente', pedido.remetente);
+    if (pedido.semRemetente.length > 0) qc.set('sem-remetente', pedido.semRemetente.join(','));
+    if (pedido.tipos.length > 0) qc.set('tipo', pedido.tipos.join(','));
+    if (pedido.origens.length > 0) qc.set('origem', pedido.origens.join(','));
+    if (pedido.limite !== undefined) qc.set('limite', String(pedido.limite));
+    if (pedido.comConteudo) qc.set('conteudo', '1');
+    try {
+      const r = await pedirGet(rede.servidor, rede.chave, `/chegadas?${qc.toString()}`);
+      if (argumentos.includes('--json')) {
+        rede.escrever(JSON.stringify(JSON.parse(r.corpo), null, 2));
+      } else {
+        for (const l of formatarChegadas(JSON.parse(r.corpo) as Parameters<typeof formatarChegadas>[0])) rede.escrever(l);
       }
       return 0;
     } catch (e) {
@@ -1179,6 +1225,8 @@ function executarComAtor(
         // que os eventos chegaram.
         for (const lote of lotes) {
           const r = receberEvento(acervoDoDerrame, lote as never, {
+            // `ouvinte reprocessar` e comando do Operador sobre lote que ficou parado: pode ser antigo, e e reprocesso.
+            origemDaChegada: 'reprocesso',
             agora: Date.now(),
             configuracao: { id: cfgDoDerrame.id, fonte: 'whatsapp' },
             ...(ambiente.decodificador !== undefined ? { decodificar: ambiente.decodificador } : {}),
@@ -2825,6 +2873,117 @@ function executarComAtor(
         );
         if (temBandeira(argumentos, 'json')) escrever(JSON.stringify(r, null, 2));
         else for (const l of formatarIdentificacao(r)) escrever(l);
+      } finally {
+        acervo.fechar();
+      }
+      return 0;
+    }
+
+    if (grupo === 'chegadas' && sub === 'aparar') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
+      const comEfeito = temBandeira(argumentos, 'com-efeito');
+      if (comEfeito && !temBandeira(argumentos, 'confirmo')) {
+        throw new Error('Repita o comando com --confirmo para executar.');
+      }
+      const inteiro = (nome: string, padrao: number): number | undefined => {
+        const texto = opcao(argumentos, nome);
+        if (texto === undefined) return padrao;
+        const n = Number(texto);
+        return Number.isInteger(n) && n >= 1 ? n : undefined;
+      };
+      const dias = inteiro('dias', RETENCAO_PADRAO_DO_DIARIO_EM_DIAS);
+      const lote = inteiro('limite', LOTE_DA_APARAGEM);
+      if (dias === undefined || lote === undefined) {
+        escrever('--dias e --limite precisam ser inteiros maiores que zero.');
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        const r = apararDiario(acervo, { agora: Date.now(), dias, lote, comEfeito });
+        if (temBandeira(argumentos, 'json')) {
+          escrever(JSON.stringify({ ...r, comEfeito, dias, limite: lote }, null, 2));
+        } else {
+          escrever(
+            `${comEfeito ? 'Aparado' : 'Ensaio'}: ${String(r.removidas)} Chegada(s) ${comEfeito ? 'removida(s)' : 'a remover'} ` +
+              `(mais antigas que ${String(dias)} dia(s), no maximo ${String(lote)} por passada); restam ${String(r.restam)}.`,
+          );
+          if (r.removidas === lote) escrever('O limite foi atingido: repita para continuar.');
+          if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
+        }
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
+    if (grupo === 'chegadas') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino.');
+      const leitura = lerPedidoDeChegadas(argumentos);
+      if (!leitura.ok) {
+        escrever(leitura.erro);
+        return 2;
+      }
+      const { pedido } = leitura;
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        if (pedido.pontoDePartida) {
+          const marcador = pontoDePartida(acervo);
+          if (temBandeira(argumentos, 'json')) escrever(JSON.stringify({ chegadas: [], proximo: marcador, ultima: true }, null, 2));
+          else for (const l of formatarChegadas({ chegadas: [], proximo: marcador })) escrever(l);
+          return 0;
+        }
+        let fonteDoRemetente: Fonte | undefined;
+        if (pedido.conversa !== undefined) {
+          fonteDoRemetente = fonteDaConversa(acervo, pedido.conversa);
+          if (fonteDoRemetente === undefined) {
+            escrever(`Conversa desconhecida: ${pedido.conversa}`);
+            return 2;
+          }
+        }
+        const porFonte = fonteDoRemetente !== undefined ? { fonte: fonteDoRemetente } : {};
+        const autorIds =
+          pedido.remetente === undefined
+            ? undefined
+            : identificadoresDoRemetente(acervo, { valor: pedido.remetente, ...porFonte });
+        const semAutorIds =
+          pedido.semRemetente.length === 0
+            ? undefined
+            : pedido.semRemetente.flatMap((valor) => identificadoresDoRemetente(acervo, { valor, ...porFonte }));
+        let configuracaoId: string | undefined;
+        if (pedido.configuracao !== undefined) {
+          const resolucao = resolverFiltroDeConfiguracao(registro, inquilino, pedido.configuracao);
+          if (!resolucao.ok) {
+            escrever(resolucao.erro);
+            return 2;
+          }
+          configuracaoId = resolucao.configuracao.id;
+        }
+        const filtro: FiltroDeChegadas = {
+          depois: pedido.depois as string,
+          ...(pedido.limite !== undefined ? { limite: pedido.limite } : {}),
+          ...(pedido.conversa !== undefined ? { conversaId: pedido.conversa } : {}),
+          ...(configuracaoId !== undefined ? { configuracaoId } : {}),
+          ...(pedido.direcao !== undefined ? { direcao: pedido.direcao } : {}),
+          ...(autorIds !== undefined ? { autorIds } : {}),
+          ...(semAutorIds !== undefined ? { semAutorIds } : {}),
+          ...(pedido.tipos.length > 0 ? { tipos: pedido.tipos } : {}),
+          ...(pedido.origens.length > 0 ? { origens: pedido.origens } : {}),
+        };
+        const pagina = pedido.comConteudo ? lerChegadasComConteudo(acervo, filtro) : lerChegadas(acervo, filtro);
+        if (temBandeira(argumentos, 'json')) escrever(JSON.stringify(pagina, null, 2));
+        else for (const l of formatarChegadas(pagina)) escrever(l);
+      } catch (erro) {
+        if (erro instanceof MarcadorInvalidoError) {
+          escrever(erro.message);
+          return 2;
+        }
+        if (erro instanceof MarcadorExpiradoError) {
+          escrever(`${erro.message}`);
+          return 8;
+        }
+        throw erro;
       } finally {
         acervo.fechar();
       }

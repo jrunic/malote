@@ -109,12 +109,13 @@ test('requisicao HTTP responde normalmente enquanto uma transcricao esta em anda
       fonte: 'whatsapp', idExterno: '111@s.whatsapp.net', coletiva: false, configuracao: CFG_WHATSAPP,
     });
     const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida', conversaId, fonte: 'whatsapp', idExterno: 'm1',
       ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
     });
     const caminhoDoAudio = join(motor.pasta, 'a1.opus');
     writeFileSync(caminhoDoAudio, '');
-    registrarAnexo(acervo, { mensagemId, tipo: 'audio', presenca: 'presente', caminho: caminhoDoAudio });
+    registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo: 'audio', presenca: 'presente', caminho: caminhoDoAudio });
     acervo.fechar();
 
     process.env['MALOTE_WHISPER_BINARIO'] = motor.whisperBinario;

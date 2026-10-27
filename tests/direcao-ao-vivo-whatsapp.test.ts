@@ -6,7 +6,7 @@ import { mensagemDireta, mensagemEnviada } from './ajuda/evento-ao-vivo.js';
 import { CFG_WHATSAPP } from './ajuda/configuracao.js';
 
 const QUANDO = Math.floor(Date.UTC(2026, 8, 23) / 1000);
-const OPCOES = { agora: Date.UTC(2026, 8, 23, 12), configuracao: CFG_WHATSAPP };
+const OPCOES = { origemDaChegada: 'ao-vivo' as const, agora: Date.UTC(2026, 8, 23, 12), configuracao: CFG_WHATSAPP };
 
 test('recepcao ao vivo do WhatsApp grava a Direcao a partir de key.fromMe', () => {
   const c = cenario();

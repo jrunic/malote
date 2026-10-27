@@ -18,7 +18,7 @@ import { aprenderCorrespondencia, resolverEndereco } from '../src/nucleo/corresp
 import { CFG_WHATSAPP } from './ajuda/configuracao.js';
 
 const QUANDO = Math.floor(Date.UTC(2026, 8, 2) / 1000);
-const OPCOES = { agora: Date.UTC(2026, 8, 2, 12), configuracao: CFG_WHATSAPP };
+const OPCOES = { origemDaChegada: 'ao-vivo' as const, agora: Date.UTC(2026, 8, 2, 12), configuracao: CFG_WHATSAPP };
 
 function contar(acervo: Acervo, tabela: string): number {
   return (acervo.db.prepare(`SELECT COUNT(*) AS n FROM "${tabela}"`).get() as { n: number }).n;

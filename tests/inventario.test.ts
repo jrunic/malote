@@ -129,26 +129,30 @@ test('listarAnexosDeAudioSemDuracao devolve só Anexo de áudio, com bruto, sem 
     fonte: 'whatsapp', idExterno: 'conv-1', coletiva: false, configuracao: CFG_WHATSAPP,
   });
   const mensagem = registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     direcao: 'recebida', conversaId: conversa, fonte: 'whatsapp', idExterno: 'msg-1',
     ocorridaEm: Date.now(), agora: Date.now(),
   });
   // Elegível: áudio, sem duração, com bruto.
   const comBruto = registrarAnexo(acervo, {
+    origemDaChegada: 'importacao',
     mensagemId: mensagem, tipo: 'audio', presenca: 'presente', caminho: 'a.opus',
     bruto: '{"seconds":8}',
   });
   // Não elegível: já tem duração.
   registrarAnexo(acervo, {
+    origemDaChegada: 'importacao',
     mensagemId: mensagem, tipo: 'audio', presenca: 'presente', caminho: 'b.opus',
     duracao: 5, bruto: '{"seconds":5}',
   });
   // Não elegível: não é áudio.
   registrarAnexo(acervo, {
+    origemDaChegada: 'importacao',
     mensagemId: mensagem, tipo: 'image', presenca: 'presente', caminho: 'c.jpg',
     bruto: '{"seconds":99}',
   });
   // Não elegível: sem bruto, nada para extrair.
-  registrarAnexo(acervo, { mensagemId: mensagem, tipo: 'audio', presenca: 'nunca-obtido' });
+  registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: mensagem, tipo: 'audio', presenca: 'nunca-obtido' });
 
   const elegiveis = listarAnexosDeAudioSemDuracao(acervo);
   assert.equal(elegiveis.length, 1);

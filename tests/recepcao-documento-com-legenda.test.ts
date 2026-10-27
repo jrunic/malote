@@ -16,7 +16,7 @@ function receber(message: Record<string, unknown>, id: string) {
     messageTimestamp: Math.floor((AGORA - 60_000) / 1000),
     message,
   };
-  const relato = receberEvento(acervo, [evento], { agora: AGORA, configuracao: CFG_WHATSAPP });
+  const relato = receberEvento(acervo, [evento], { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
   const mensagem = acervo.db
     .prepare('SELECT conteudo, bruto FROM mensagens')
     .all() as { conteudo: string | null; bruto: string }[];

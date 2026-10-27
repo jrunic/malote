@@ -23,7 +23,7 @@ function instalacao(): { raiz: string; inquilino: string; limpar: () => void } {
   registro.fechar();
   const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
   const conversaId = registrarConversa(acervo, { fonte: 'whatsapp', idExterno: '5565900000001@s.whatsapp.net', coletiva: false, configuracao: CFG_WHATSAPP });
-  registrarMensagem(acervo, { conversaId, fonte: 'whatsapp', idExterno: 'M1', ocorridaEm: Date.parse('2026-10-14T10:00:00Z'), agora: AGORA, direcao: 'recebida', bruto: BRUTO });
+  registrarMensagem(acervo, { origemDaChegada: 'importacao', conversaId, fonte: 'whatsapp', idExterno: 'M1', ocorridaEm: Date.parse('2026-10-14T10:00:00Z'), agora: AGORA, direcao: 'recebida', bruto: BRUTO });
   acervo.fechar();
   return { raiz, inquilino, limpar };
 }

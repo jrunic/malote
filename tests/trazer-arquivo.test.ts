@@ -25,6 +25,7 @@ function umAnexo(acervo: Acervo): string {
     coletiva: false, configuracao: CFG_WHATSAPP,
   });
   const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
     conversaId,
     fonte: 'whatsapp',
@@ -33,6 +34,7 @@ function umAnexo(acervo: Acervo): string {
     agora: Date.now(),
   });
   return registrarAnexo(acervo, {
+    origemDaChegada: 'importacao',
     mensagemId,
     tipo: 'image',
     presenca: 'nunca-obtido',
@@ -48,6 +50,7 @@ test('gravar transita a Presença e põe o arquivo sob o Destino', () => {
     const anexoId = umAnexo(acervo);
 
     const caminho = gravarArquivoDeAnexo(acervo, {
+      origemDaChegada: 'importacao',
       anexoId,
       destino: d.raiz,
       bytes: Buffer.from('abcde'),
@@ -82,6 +85,7 @@ test('gravar com Destino inacessível recusa e não transita a Presença', () =>
     assert.throws(
       () =>
         gravarArquivoDeAnexo(acervo, {
+          origemDaChegada: 'importacao',
           anexoId,
           destino: '/caminho/que/nao/existe/em/lugar/nenhum',
           bytes: Buffer.from('abcde'),
@@ -105,11 +109,13 @@ test('o Inquilino do caminho vem do Acervo, e dois Inquilinos não se cruzam', (
     const han = c.novoInquilino('Han Solo');
     // A MESMA raiz de Destino para os dois — que o schema permite.
     const emLeia = gravarArquivoDeAnexo(leia.acervo, {
+      origemDaChegada: 'importacao',
       anexoId: umAnexo(leia.acervo),
       destino: d.raiz,
       bytes: Buffer.from('de leia'),
     });
     const emHan = gravarArquivoDeAnexo(han.acervo, {
+      origemDaChegada: 'importacao',
       anexoId: umAnexo(han.acervo),
       destino: d.raiz,
       bytes: Buffer.from('de han'),

@@ -38,6 +38,7 @@ function povoar(acervo: Parameters<typeof listarConversas>[0]) {
   });
 
   registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
     conversaId: direta,
     fonte: 'whatsapp',
@@ -48,6 +49,7 @@ function povoar(acervo: Parameters<typeof listarConversas>[0]) {
     agora: AGORA,
   });
   registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
     conversaId: direta,
     fonte: 'whatsapp',
@@ -58,6 +60,7 @@ function povoar(acervo: Parameters<typeof listarConversas>[0]) {
     agora: AGORA,
   });
   const naColetiva = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
     conversaId: coletiva,
     fonte: 'whatsapp',
@@ -142,6 +145,7 @@ test('filtrar por Pessoa alcança todos os Identificadores dela', () => {
       coletiva: false, configuracao: CFG_INSTAGRAM,
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversaInsta,
       fonte: 'instagram',
@@ -178,6 +182,7 @@ test('Mensagem com Anexo descartado continua no resultado, com a Presença expl�
     const { acervo } = c.novoInquilino('Leia Organa');
     const { coletiva, naColetiva } = povoar(acervo);
     const anexo = registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: naColetiva,
       tipo: 'video',
       tamanho: 41_000_000,

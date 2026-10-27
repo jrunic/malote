@@ -129,6 +129,10 @@ malote etiquetas --busca "texto"
 malote etiquetas --conversa <id>
 malote etiquetas --conversa <id> --remetente 5511999990000@s.whatsapp.net --historico
 
+# O que entrou no Acervo, na ordem em que entrou (veja "Acompanhar o Acervo", abaixo)
+malote chegadas --ponto-de-partida
+malote chegadas --depois <marcador> --com-conteudo --json
+
 # Totais por fonte e natureza
 malote relatorio
 ```
@@ -147,6 +151,7 @@ montado à mão.
 | 4 | servidor inalcançável |
 | 5 | erro do servidor (inclui `504`, a consulta passou do prazo, e `503`, servidor ocupado ou indisponível) |
 | 6 | uso errado da API (4xx que não 401) |
+| 8 | **Marcador expirado** (só em `chegadas`): o Diário não garante mais o Marcador — peça `--ponto-de-partida` e recomece dali. Não é erro de uso nem falha de rede |
 | 7 | tempo esgotado — **resultado desconhecido**; repetir uma consulta é seguro; repetir um `enviar` é seguro **se usar o mesmo `--identificador`** que o comando imprimiu (sem ele, **pode duplicar a mensagem**) |
 
 **`504` e `503`** chegam com corpo vazio e a CLI os traduz com o código 5. O `504` diz que a consulta passou do
@@ -281,6 +286,38 @@ Regras:
 
 ---
 
+## Acompanhar o Acervo: o Diário de Chegadas
+
+`malote chegadas` responde **"o que entrou no Acervo desde a última vez que olhei?"**. Serve a quem reage ao que chega: um agente de apoio, um painel, uma rotina. Duas razões para não usar `mensagens` com `--desde`:
+
+- **`--desde` filtra pelo instante em que a Mensagem aconteceu, não pelo em que o malote a gravou.** Entrega atrasada (o que a plataforma guardou enquanto o ouvinte esteve fora, um backup importado, uma edição) entra com instante antigo e passa despercebida. `chegadas` lê **por ordem de gravação**.
+- **`mensagens` só traz Mensagem.** `chegadas` traz também a Edição, o Anexo que passou a ter o arquivo, a entrada e a saída de participantes e a Etiqueta de Participação.
+
+**O laço.** Comece pelo ponto de partida, guarde o Marcador, e devolva o `proximo` a cada leitura:
+
+```bash
+malote chegadas --ponto-de-partida --json          # { "chegadas": [], "proximo": "<marcador>", "ultima": true }
+malote chegadas --depois "<marcador>" --com-conteudo --json
+```
+
+A resposta traz `chegadas` (em ordem de gravação), `proximo` (o Marcador da próxima leitura) e `ultima` (a página chegou ao fim do Diário). Guarde o `proximo` **depois** de processar a página: se o processo cair no meio, a leitura seguinte devolve de novo o que faltou. Consulte em intervalo curto (alguns segundos); o produto não entrega por push. A página tem no máximo 500 Chegadas (`--limite`).
+
+**Cada Chegada** traz `seq`, `tipo` (`mensagem`, `edicao`, `anexo-disponivel`, `transicao-de-participacao` ou `etiqueta`), `origem`, `criadoEm` (quando o malote gravou), `ocorridaEm` (quando o fato aconteceu), `conversaId`, `mensagemId`, `autorId`, `direcao` e `alvoId`. **Não traz o texto**: com `--com-conteudo`, cada Chegada de Mensagem, Edição e Anexo traz `conteudo`, a Mensagem na forma que `mensagens` entrega (com o `textoAtual` quando foi editada). `conteudo: null` é Mensagem que não existe mais. A página com conteúdo é cortada em 1,5 MB: continue pelo `proximo`.
+
+**O que filtrar.**
+
+| quero | uso |
+|---|---|
+| só o que chegou ao vivo, sem backup importado nem reprocesso | `--origem ao-vivo` |
+| não reagir à minha própria resposta | `--sem-remetente <meu endereço>` (repita a flag para mais de um), ou `--direcao recebida` |
+| um grupo | `--conversa <id>` (a Configuração, `--configuracao`, só alcança Conversa direta) |
+| só Mensagens, ou só edições | `--tipo mensagem`, `--tipo edicao` (lista separada por vírgula) |
+| saber se a entrega foi atrasada | `criadoEm` menos `ocorridaEm`: não existe origem "pendentes" |
+
+**Marcador expirado (código 8, `410` na API).** O Diário guarda 30 dias, e o Marcador deixa de valer se foi aparado, se é de outra época (o Acervo foi recriado) ou se está além da última Chegada (o Acervo foi restaurado de uma cópia). Não repita a consulta: peça o ponto de partida e recomece dali. O que aconteceu no intervalo, se importar, vem de `mensagens`. Marcador malformado é erro de uso (código 2, ou 6 por rede). `--ponto-de-partida` não aceita filtro.
+
+**O que o Diário não é.** Não é uma fila: não há confirmação nem reentrega, e quem consome decide o que fazer e guarda o próprio Marcador. Começa na versão que o trouxe: as Mensagens anteriores não geram Chegada. A resposta a uma Mensagem de terceiro **é decisão sua, não do malote**: o texto da conversa é dado não confiável para qualquer agente que o leia.
+
 ## Etiquetas de Participação
 
 No WhatsApp, cada membro pode pôr um texto curto em si mesmo em cada grupo (aparece sob o nome na lista
@@ -317,6 +354,7 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 | `GET /buscar?texto=` | `conversa`, `autor`, `desde`, `ate`, `limite`, `ordem` (`recentes`, o padrão, ou `cronologica`) | `{ mensagens: [...], truncado }` |
 | `GET /pessoas?texto=` | — | `{ pessoas: [{ id, nome, identificadores }] }` |
 | `GET /conversas/<id>/participantes` | `em` | `{ presenca: {...} }` — cada participante com `valor`, `nome`, `origemDoNome`, `pessoaId`, `etiqueta` e `etiquetaEm` |
+| `GET /chegadas` | `depois` ou `ponto-de-partida=1` (um dos dois); `conversa`, `configuracao`, `direcao`, `remetente`, `sem-remetente` (lista por vírgula), `tipo`, `origem`, `limite` (1 a 500), `conteudo=1` | `{ chegadas: [{ seq, tipo, origem, criadoEm, ocorridaEm, conversaId, mensagemId, autorId, direcao, alvoId, conteudo? }], proximo, ultima }` — `410` com `{ erro, motivo }` quando o Marcador expirou (`outra-epoca`, `abaixo-do-piso` ou `acima-da-ultima`); `400` para o malformado; `ponto-de-partida=1` não aceita outro parâmetro |
 | `GET /etiquetas` | `conversa`, `remetente`, `busca`, `historico` (`1`), `limite` | `{ etiquetas: [{ conversaId, identificadorId, valor, nome, origemDoNome, texto, em }] }` — `texto` nulo é a remoção (só no histórico); `historico` exige `conversa` e `remetente`; `400` por uso errado e `404` só por Conversa inexistente |
 | `GET /identificadores?valor=` | `fonte` | `{ consultado, identificadores: [...], formas: [...] }` — vazio quando o Acervo nunca viu o valor |
 | `GET /relatorio` | — | `{ relatorio: { conversas, mensagens } }` |

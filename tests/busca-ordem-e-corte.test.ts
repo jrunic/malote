@@ -18,6 +18,7 @@ function fixture(n: number) {
   for (let i = 1; i <= n; i += 1) {
     ids.push(
       registrarMensagem(acervo, {
+        origemDaChegada: 'importacao',
         direcao: 'recebida', conversaId: conversa, fonte: 'whatsapp', idExterno: `m${i}`,
         ocorridaEm: dia(i), agora: dia(i) + 1000, conteudo: `relatorio ${i}`,
       }),
@@ -29,10 +30,11 @@ function fixture(n: number) {
 /** Uma Mensagem sem o termo no texto, com o termo na TRANSCRICAO do audio. */
 function comTranscricao(acervo: ReturnType<typeof fixture>['acervo'], conversa: string, idExterno: string, quando: number): string {
   const m = registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     direcao: 'recebida', conversaId: conversa, fonte: 'whatsapp', idExterno,
     ocorridaEm: quando, agora: quando + 1000, conteudo: 'audio sem o termo',
   });
-  const anexo = registrarAnexo(acervo, { mensagemId: m, tipo: 'audio', presenca: 'presente', caminho: `/x/${idExterno}.opus` });
+  const anexo = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: m, tipo: 'audio', presenca: 'presente', caminho: `/x/${idExterno}.opus` });
   acervo
     .preparar(`INSERT INTO transcricoes (anexo_id, estado, texto) VALUES (?, 'concluida', 'mandei o relatorio por audio')`)
     .run(anexo);
@@ -108,7 +110,7 @@ test('conteudo e transcricao: o corte e da UNIAO, nas duas ordens', () => {
 test('a mesma Mensagem que casa no conteudo E na transcricao conta uma vez so', () => {
   const { c, acervo, ids } = fixture(2);
   try {
-    const anexo = registrarAnexo(acervo, { mensagemId: ids[0] as string, tipo: 'audio', presenca: 'presente', caminho: '/x/dup.opus' });
+    const anexo = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: ids[0] as string, tipo: 'audio', presenca: 'presente', caminho: '/x/dup.opus' });
     acervo
       .preparar(`INSERT INTO transcricoes (anexo_id, estado, texto) VALUES (?, 'concluida', 'relatorio de novo')`)
       .run(anexo);

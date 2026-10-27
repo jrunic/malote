@@ -28,6 +28,7 @@ function citando(id: string, stanzaId: string, participant?: string): string {
 
 function gravar(acervo: Acervo, cv: string, idExterno: string, bruto: string | undefined, quando = DIA, direcao: 'enviada' | 'recebida' = 'recebida'): string {
   return registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId: cv, fonte: 'whatsapp', idExterno, ocorridaEm: quando, agora: AGORA, direcao, ...(bruto !== undefined ? { bruto } : {}),
   });
 }
@@ -98,7 +99,7 @@ test('edicao, reacao, Mensagem de importacao e outra Fonte nao entram', () => {
     gravar(acervo, cv, 'BACKUP', JSON.stringify({ ZTEXT: 'x', ZSTANZAID: 'ORIG' }));
     gravar(acervo, cv, 'SEMBRUTO', undefined);
     const ig = registrarConversa(acervo, { fonte: 'instagram', idExterno: 'ig-1', coletiva: false, configuracao: { id: 'cfg-ig', fonte: 'instagram' } });
-    registrarMensagem(acervo, { conversaId: ig, fonte: 'instagram', idExterno: 'IG', ocorridaEm: DIA, agora: AGORA, direcao: 'recebida', bruto: citando('IG', 'X') });
+    registrarMensagem(acervo, { origemDaChegada: 'importacao', conversaId: ig, fonte: 'instagram', idExterno: 'IG', ocorridaEm: DIA, agora: AGORA, direcao: 'recebida', bruto: citando('IG', 'X') });
     const r = extrairCitacoes(acervo, { comEfeito: true, ...SEM_CONTA });
     assert.equal(r.citam, 0);
     assert.equal(r.gravou, false);
@@ -286,6 +287,7 @@ test('aplicarCitacao nunca sobrescreve uma Citacao que a Mensagem ja tem, e remo
   comAcervo((acervo, cv) => {
     const sem = gravar(acervo, cv, 'SEM', undefined);
     const com = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId: cv, fonte: 'whatsapp', idExterno: 'COM', ocorridaEm: DIA, agora: AGORA, direcao: 'recebida',
       citacao: { idExterno: 'PRIMEIRA', direcao: 'recebida' },
     });

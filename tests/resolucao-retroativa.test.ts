@@ -101,6 +101,7 @@ test('mensagem gravada na forma alternativa passa a responder pela canonica', ()
       coletiva: false, configuracao: CFG_WHATSAPP,
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
@@ -194,6 +195,7 @@ test('as tres tabelas que colidem fundem na linha do canonico, e os detectores z
     // O MESMO evento, a MESMA Conversa e o MESMO cartao, nas duas formas.
     for (const quem of [alt.id, canon.id]) {
       registrarTransicao(acervo, {
+        origemDaChegada: 'importacao',
         conversaId: conversa,
         identificadorId: quem,
         fonte: 'whatsapp',
@@ -264,6 +266,7 @@ test('par cujas duas formas pertencem a Pessoas diferentes e PULADO e proposto',
       coletiva: false, configuracao: CFG_WHATSAPP,
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
@@ -309,6 +312,7 @@ test('quando so o alternativo tem Pessoa, o vinculo MIGRA com a mesma procedenci
       coletiva: false, configuracao: CFG_WHATSAPP,
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
@@ -347,6 +351,7 @@ test('resolver duas vezes nao produz segunda linha em tabela de dado nenhuma', (
     const alt = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '555@alt' });
     const canon = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '555@canon' });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
@@ -399,6 +404,7 @@ test('o comando ensaia por padrao e nao escreve nada', () => {
     });
     const alt = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '777@alt' });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
@@ -447,6 +453,7 @@ test('o comando com efeito exige --confirmo e entao reconcilia', () => {
     });
     const alt = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '666@alt' });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',

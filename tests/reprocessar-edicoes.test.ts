@@ -58,7 +58,7 @@ function cena() {
   const raiz = mkdtempSync(join(tmpdir(), 'malote-reproc-edicao-'));
   const caminho = join(raiz, 'descartados.jsonl');
   const n = (tabela: string): number => (acervo.db.prepare(`SELECT COUNT(*) AS n FROM ${tabela}`).get() as { n: number }).n;
-  const receber = (e: MensagemRecebida[]) => receberEvento(acervo, e, { agora: AGORA, configuracao: cfg, decodificar: decodificadorDeTeste });
+  const receber = (e: MensagemRecebida[]) => receberEvento(acervo, e, { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: cfg, decodificar: decodificadorDeTeste });
   return { acervo, caminho, n, receber, limpar: () => { rmSync(raiz, { recursive: true, force: true }); c.limpar(); } };
 }
 

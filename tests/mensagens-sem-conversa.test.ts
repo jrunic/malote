@@ -20,6 +20,7 @@ test('GET /mensagens atravessa mais de uma Conversa e mais de uma Fonte, sem --c
         configuracao: CFG_INSTAGRAM,
       });
       registrarMensagem(acervo, {
+        origemDaChegada: 'importacao',
         conversaId: conversaInsta,
         fonte: 'instagram',
         idExterno: 'msg-ig-1',
@@ -64,6 +65,7 @@ test('GET /mensagens?direcao=recebida filtra', async () => {
     const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
     try {
       registrarMensagem(acervo, {
+        origemDaChegada: 'importacao',
         conversaId: c.conversaDeA,
         fonte: 'whatsapp',
         idExterno: 'msg-enviada',
@@ -93,6 +95,7 @@ test('GET /mensagens sem ordem explicita vem por recencia, e o cursor pagina sem
     try {
       for (const externo of ['msg-x', 'msg-y', 'msg-z']) {
         registrarMensagem(acervo, {
+          origemDaChegada: 'importacao',
           conversaId: c.conversaDeA,
           fonte: 'whatsapp',
           idExterno: externo,
@@ -126,6 +129,7 @@ test('GET /conversas/<id>/mensagens tambem aceita direcao', async () => {
     const acervo = abrirAcervo(join(c.raiz, 'acervos'), c.inquilinoA);
     try {
       registrarMensagem(acervo, {
+        origemDaChegada: 'importacao',
         conversaId: c.conversaDeA,
         fonte: 'whatsapp',
         idExterno: 'msg-enviada-na-conversa',
@@ -155,6 +159,7 @@ test('GET /conversas/<id>/mensagens?ordem=recentes SEM antes devolve a mais rece
       // antiga e uma bem mais recente, para o oraculo nao depender de ordem
       // de insercao nem de id.
       registrarMensagem(acervo, {
+        origemDaChegada: 'importacao',
         conversaId: c.conversaDeA,
         fonte: 'whatsapp',
         idExterno: 'msg-antiga',
@@ -164,6 +169,7 @@ test('GET /conversas/<id>/mensagens?ordem=recentes SEM antes devolve a mais rece
         direcao: 'recebida',
       });
       registrarMensagem(acervo, {
+        origemDaChegada: 'importacao',
         conversaId: c.conversaDeA,
         fonte: 'whatsapp',
         idExterno: 'msg-recente',

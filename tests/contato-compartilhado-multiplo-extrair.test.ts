@@ -37,6 +37,7 @@ function comAcervo(corpo: (acervo: Acervo, cv: string) => void): void {
 /** Mensagem ao vivo JA gravada, com o evento no bruto e SEM cartao (como as de antes desta tarefa, se existissem). */
 function doAoVivo(acervo: Acervo, cv: string, idExterno: string, message: Record<string, unknown>): string {
   return registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId: cv,
     fonte: 'whatsapp',
     idExterno,

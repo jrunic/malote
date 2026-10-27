@@ -23,6 +23,7 @@ function cena() {
   });
   const mensagem = (idExterno: string, conteudo: string | undefined, minuto: number): string =>
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId,
       fonte: 'whatsapp',
       idExterno,
@@ -33,6 +34,7 @@ function cena() {
     });
   const editar = (mensagemId: string, idExterno: string, texto: string, minuto: number): void => {
     registrarEdicao(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId,
       fonte: 'whatsapp',
       idExterno,

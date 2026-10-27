@@ -24,6 +24,7 @@ function conversa(acervo: Acervo): string {
 
 function mensagem(acervo: Acervo, cv: string, idExterno: string, bruto: string): string {
   return registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId: cv,
     fonte: 'whatsapp',
     idExterno,
@@ -38,6 +39,7 @@ function mensagem(acervo: Acervo, cv: string, idExterno: string, bruto: string):
 function doBackup(acervo: Acervo, cv: string, idExterno: string, cartoes: string, nomes = ''): string {
   const id = mensagem(acervo, cv, idExterno, '{}');
   registrarAnexo(acervo, {
+    origemDaChegada: 'importacao',
     mensagemId: id,
     tipo: 'contact',
     presenca: 'nunca-obtido',
@@ -109,6 +111,7 @@ test('a Mensagem que esta nos dois caminhos e extraida UMA vez', () => {
     const aoVivo = ANA.replace('FN:Ana Souza', 'FN:Ana Do Evento');
     const id = mensagem(acervo, cv, 'x1', JSON.stringify({ message: { contactMessage: { displayName: 'Ana', vcard: aoVivo } } }));
     registrarAnexo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId: id,
       tipo: 'contact',
       presenca: 'nunca-obtido',
@@ -159,6 +162,7 @@ test('Mensagem de OUTRA Fonte com a mesma chave no bruto nao e extraida', () => 
       configuracao: CFG_INSTAGRAM,
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId: cv,
       fonte: 'instagram',
       idExterno: 'ig-m1',

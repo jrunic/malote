@@ -9,7 +9,7 @@ import { etiquetasDosIdentificadores, etiquetasVigentesDaConversa } from '../src
 const T0 = Date.parse('2026-10-05T15:00:00Z');
 
 function evento(conversaId: string, identificadorId: string, texto: string, ocorridaEm: number, idExterno: string) {
-  return { conversaId, identificadorId, texto, ocorridaEm, fonte: 'whatsapp' as const, idExterno };
+  return { origemDaChegada: 'importacao' as const, conversaId, identificadorId, texto, ocorridaEm, fonte: 'whatsapp' as const, idExterno };
 }
 
 test('a porta devolve true quando a linha NASCEU e false quando o evento ja existia', () => {

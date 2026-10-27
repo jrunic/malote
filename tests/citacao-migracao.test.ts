@@ -9,8 +9,8 @@ import { CFG_WHATSAPP } from './ajuda/configuracao.js';
 
 const COLUNAS_NOVAS = ['citada_id_externo', 'citada_autor_id', 'citada_direcao'];
 
-test('o Acervo na v29 e o schema da Citacao: tres colunas novas na Mensagem e o indice parcial do vinculo tardio', () => {
-  assert.equal(VERSAO_SCHEMA_ACERVO, 29);
+test('o schema corrente (v29 em diante) tem a Citacao: tres colunas novas na Mensagem e o indice parcial do vinculo tardio', () => {
+  assert.ok(VERSAO_SCHEMA_ACERVO >= 29);
   const c = cenario();
   try {
     const { id, acervo } = c.novoInquilino('Padme');

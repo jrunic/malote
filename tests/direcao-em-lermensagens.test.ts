@@ -16,10 +16,12 @@ test('lerMensagens filtra por Direcao, e a devolve em cada Mensagem', () => {
       configuracao: CFG_WHATSAPP,
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId, fonte: 'whatsapp', idExterno: 'm-enviada',
       ocorridaEm: 1700000000000, agora: Date.now(), direcao: 'enviada',
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId, fonte: 'whatsapp', idExterno: 'm-recebida',
       ocorridaEm: 1700000001000, agora: Date.now(), direcao: 'recebida',
     });

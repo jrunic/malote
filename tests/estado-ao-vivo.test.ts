@@ -297,6 +297,7 @@ test('lookup de Mensagem encontra a existente e NAO cria a ausente', () => {
       configuracao: CFG_WHATSAPP,
     });
     const id = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
@@ -417,6 +418,7 @@ test('messages.update sem starred nao passa por processarFavoritos', () => {
       configuracao: CFG_WHATSAPP,
     });
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',
@@ -453,6 +455,7 @@ test('messages.update starred marca e desmarca Mensagem existente', () => {
       configuracao: CFG_WHATSAPP,
     });
     const mid = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
       conversaId: conversa,
       fonte: 'whatsapp',

@@ -22,6 +22,7 @@ function anexoDe(
   });
   const agora = Date.now();
   const mensagem = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
     conversaId: conversa,
     fonte,
@@ -29,7 +30,7 @@ function anexoDe(
     ocorridaEm: agora - 1_000,
     agora,
   });
-  return registrarAnexo(acervo, { mensagemId: mensagem, tipo: 'imagem', presenca });
+  return registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: mensagem, tipo: 'imagem', presenca });
 }
 
 test('listarAnexosPendentes traz so a Fonte pedida — e e por isso que o JOIN existe', () => {
@@ -69,6 +70,7 @@ test('listarAnexosPendentes traz so `nunca-obtido` — a Presenca E o cursor', (
       ['msg-3', 'descartado'],
     ] as Array<[string, Presenca]>) {
       const m = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
         conversaId: conversa,
         fonte: 'whatsapp',
@@ -76,7 +78,7 @@ test('listarAnexosPendentes traz so `nunca-obtido` — a Presenca E o cursor', (
         ocorridaEm: agora - 1_000,
         agora,
       });
-      registrarAnexo(acervo, { mensagemId: m, tipo: 'imagem', presenca });
+      registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId: m, tipo: 'imagem', presenca });
     }
 
     const pendentes = listarAnexosPendentes(acervo, { fonte: 'whatsapp' });

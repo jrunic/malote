@@ -16,6 +16,7 @@ function cena() {
   const conversaId = registrarConversa(acervo, { fonte: 'whatsapp', idExterno: GRUPO, coletiva: true });
   const mensagem = (idExterno: string, conteudo: string | undefined, deslocamento: number): string =>
     registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId,
       fonte: 'whatsapp',
       idExterno,
@@ -26,7 +27,7 @@ function cena() {
       ...(conteudo !== undefined ? { conteudo } : {}),
     });
   const editar = (mensagemId: string, idExterno: string, texto: string, editadaEm: number) =>
-    registrarEdicao(acervo, { mensagemId, fonte: 'whatsapp', idExterno, texto, editadaEm, origem: 'cifrada', bruto: '{}', agora: AGORA });
+    registrarEdicao(acervo, { origemDaChegada: 'importacao', mensagemId, fonte: 'whatsapp', idExterno, texto, editadaEm, origem: 'cifrada', bruto: '{}', agora: AGORA });
   return { c, acervo, conversaId, mensagem, editar };
 }
 
@@ -124,6 +125,7 @@ const TEXTO_NOVO = 'TEXTO-SINTETICO-DA-EDICAO';
 
 function mensagemDaCena(acervo: Acervo, conversaId: string, idExterno: string, minuto: number): string {
   return registrarMensagem(acervo, {
+    origemDaChegada: 'importacao',
     conversaId,
     fonte: 'whatsapp',
     idExterno,
@@ -139,6 +141,7 @@ test('GET /conversas/<id>/mensagens devolve as edicoes e o texto atual no JSON (
     semearMais: (acervo, s) => {
       const id = mensagemDaCena(acervo, s.diretaDeAna, 'editada-1', 500);
       registrarEdicao(acervo, {
+        origemDaChegada: 'importacao',
         mensagemId: id,
         fonte: 'whatsapp',
         idExterno: 'EV-1',
@@ -175,6 +178,7 @@ test('isolamento: a chave de OUTRO Inquilino nao ve edicao nenhuma do Titular (r
     semearMais: (acervo, s) => {
       const id = mensagemDaCena(acervo, s.diretaDeAna, 'editada-1', 500);
       registrarEdicao(acervo, {
+        origemDaChegada: 'importacao',
         mensagemId: id,
         fonte: 'whatsapp',
         idExterno: 'EV-1',

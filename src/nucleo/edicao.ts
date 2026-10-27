@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Acervo } from './acervo.js';
 import { motivoDaRejeicao } from './instante.js';
+import { registrarChegadaSobreMensagem, type OrigemDaChegada } from './chegada.js';
 import type { Fonte, MensagemId } from './tipos.js';
 
 /**
@@ -13,6 +14,8 @@ import type { Fonte, MensagemId } from './tipos.js';
 export type OrigemDaEdicao = 'cifrada' | 'aberta';
 
 export interface EntradaDeEdicao {
+  /** De onde a Edicao veio, para o Diario de Chegadas. Nao confundir com `origem`, que e a forma como a Edicao chegou (cifrada ou aberta). */
+  origemDaChegada: OrigemDaChegada;
   mensagemId: MensagemId;
   fonte: Fonte;
   /** O identificador do EVENTO de edicao, nao o da Mensagem editada. Com a Fonte, e o que torna a reentrega idempotente. */
@@ -77,12 +80,23 @@ export function registrarEdicao(acervo: Acervo, e: EntradaDeEdicao): ResultadoDo
     .get(e.fonte, e.idExterno);
   if (ja !== undefined) return { gravou: false };
 
-  acervo
-    .preparar(
-      `INSERT INTO edicoes (id, mensagem_id, fonte, id_externo, texto, editada_em, origem, bruto)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(randomUUID(), e.mensagemId, e.fonte, e.idExterno, e.texto, e.editadaEm, e.origem, e.bruto);
+  acervo.db.transaction(() => {
+    const id = randomUUID();
+    acervo
+      .preparar(
+        `INSERT INTO edicoes (id, mensagem_id, fonte, id_externo, texto, editada_em, origem, bruto)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, e.mensagemId, e.fonte, e.idExterno, e.texto, e.editadaEm, e.origem, e.bruto);
+    registrarChegadaSobreMensagem(acervo, {
+      tipo: 'edicao',
+      origem: e.origemDaChegada,
+      mensagemId: e.mensagemId,
+      alvoId: id,
+      criadoEm: Date.now(),
+      ocorridaEm: e.editadaEm,
+    });
+  })();
   return { gravou: true };
 }
 

@@ -20,7 +20,7 @@ function passarDuasVezes(e: MensagemRecebida) {
   const c = cenario();
   try {
     const { acervo } = c.novoInquilino('Titular de Teste');
-    const opcoes = { agora: AGORA, configuracao: CFG_WHATSAPP };
+    const opcoes = { origemDaChegada: 'ao-vivo' as const, agora: AGORA, configuracao: CFG_WHATSAPP };
     const primeira = receberEvento(acervo, [e], opcoes);
     const segunda = receberEvento(acervo, [e], opcoes);
     const n = (tabela: string): number =>
@@ -65,7 +65,7 @@ test('eventos de midia DIFERENTES continuam gravando um Anexo cada', () => {
         evento('DIF2', { imageMessage: { mimetype: 'image/jpeg', fileLength: '10' } }),
         evento('DIF3', { documentMessage: DOCUMENTO }),
       ],
-      { agora: AGORA, configuracao: CFG_WHATSAPP },
+      { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP },
     );
     const n = (acervo.db.prepare('SELECT COUNT(*) AS n FROM anexos').get() as { n: number }).n;
     assert.equal(n, 3);
@@ -79,7 +79,7 @@ test('Mensagem que ja existia SEM Anexo recebe o Anexo da reentrega', () => {
   const c = cenario();
   try {
     const { acervo } = c.novoInquilino('Titular de Teste');
-    const opcoes = { agora: AGORA, configuracao: CFG_WHATSAPP };
+    const opcoes = { origemDaChegada: 'ao-vivo' as const, agora: AGORA, configuracao: CFG_WHATSAPP };
     receberEvento(acervo, [evento('SEM1', { conversation: 'texto' })], opcoes);
     const r = receberEvento(
       acervo,

@@ -299,6 +299,27 @@ Duas regras atravessam o modelo inteiro:
 
 **Ciclo de vida** — nasce pela recepção ao vivo (e, depois, pelo reprocessamento do que o ouvinte guardou); imutável; removida junto com a Mensagem. A Operação que a grava é a da recepção, irreversível e sem efeito linha a linha: a Edição se refaz do bruto, e a proteção é o backup do Acervo.
 
+### Diário de Chegadas
+
+**Entidades / Objetos de Valor**
+
+- **Chegada** (raiz) — o registro de que um fato entrou no Acervo: número de sequência, tipo (`mensagem`, `edicao`, `anexo-disponivel`, `transicao-de-participacao`, `etiqueta` ou `inicio-do-diario`), Origem da Chegada (`ao-vivo`, `importacao` ou `reprocesso`), instante de gravação, instante do fato, Conversa, Mensagem, autor, direção e o id do fato. Nunca o conteúdo
+- **Controle do Diário** — a época (sorteada quando o Diário nasce) e o Piso
+- **Marcador** (objeto de valor) — a época e o número da última Chegada lida, opaco para quem lê
+
+**Invariantes**
+
+- **Só de acréscimo, e o número de sequência nunca se reaproveita**, nem apagando linhas. O `rowid` implícito do SQLite não serve: apagar a última linha e inserir outra reaproveita o número, e o consumidor perderia a Chegada seguinte.
+- **A Chegada nasce na mesma transação do fato, pela porta de escrita do núcleo, e só quando o fato nasce.** A reentrega não gera Chegada; a falha da Chegada desfaz o fato. O Anexo só vira Chegada quando passa a ter o arquivo (`nunca-obtido` não é Chegada; `descartado` baixado de novo é).
+- **A origem é declarada por quem chama e é obrigatória.** A única Chegada sem origem e sem Conversa é a `inicio-do-diario`, e o schema impõe nos dois sentidos.
+- **Não guarda conteúdo.** A leitura com conteúdo é uma junção feita na hora de responder, e mostra a Mensagem como ela está agora.
+- **O Marcador é válido se, e somente se,** é da época atual, maior ou igual ao Piso e menor ou igual à última Chegada gravada. O zero nunca é válido. Acima da última cobre o Acervo restaurado de uma cópia anterior (a época se mantém e a sequência volta).
+- **O Piso é o maior número já removido** e nasce no da `inicio-do-diario`. A aparagem remove um **prefixo** da ordem de gravação (para na primeira Chegada ainda dentro dos 30 dias, ainda que depois haja outra mais velha pelo relógio), em lotes de no máximo 5.000, e **nunca a Chegada de maior número**.
+- **Sem retroativo.** O Diário começa na migração para o Acervo v30; as Mensagens anteriores não geram Chegada, porque não existe o instante de gravação nem a origem delas.
+- Escopado a Inquilino: um Diário por Acervo, e nenhuma leitura o atravessa.
+
+**Ciclo de vida** — nasce semeado com o Acervo novo, ou pelo passo de migração v30, com a Chegada `inicio-do-diario`; cada Chegada nasce com o fato; nunca é alterada; é removida só pela aparagem.
+
 ### Anexo
 
 **Entidades / Objetos de Valor**
@@ -501,6 +522,7 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Saída:** um efeito contínuo — o instante do último evento recebido, gravado onde quem está **de fora** o lê sem abrir o Acervo; e, por evento, o que foi gravado, o que foi recusado com a causa, e o que foi ignorado contado por tipo
 - **Regras:** o que chega é gravado pelas **mesmas** portas que a importação usa, sem forma nova no núcleo — é isso que faz os dois caminhos convergirem sem código de convergência. Endereço é resolvido para a forma canônica **antes** de virar Referência Externa. Cada evento é gravado por inteiro ou não é gravado. O que a Fonte entrega sem conteúdo decifrável **não** vira Mensagem: gravar o envelope vazio travaria o identificador contra quem souber preenchê-lo depois. Reprocessar não duplica: quem responde *isto já existe* é o Acervo, e o receptor não guarda memória própria. Transição de Participação segue a mesma regra de sempre — só existe quando a Fonte declara o evento. O instante da Mensagem é o que o aparelho de quem a enviou declarou: a recepção tolera até 5 s à frente do relógio local, grava o instante **declarado** (nunca o do relógio) e conta as Mensagens que só entraram por causa da janela; além dela a Mensagem é recusada e guardada com o evento cru, e `ouvinte reprocessar-descartados` a regrava quando o relógio passa o instante
 - **A edição de Mensagem entra por ramo próprio, antes do descarte por tipo.** Chega cifrada (`secretEncryptedMessage`) ou aberta (`protocolMessage` de edição) e vira uma Edição ligada à Mensagem, sem Mensagem nova. A forma cifrada precisa do decodificador do texto claro, que só o portão da biblioteca fornece; sem ele, ou por qualquer causa que impeça a leitura, o evento segue descartado, contado por causa e guardado cru.
+- **Cada fato gravado é também uma Chegada, na mesma transação, com a origem de quem chamou:** a recepção ao vivo (e o Derrame que o próprio ouvinte drena) grava `ao-vivo`; o `ouvinte reprocessar` e o reprocessamento de descartados gravam `reprocesso`.
 - **O que não vira Mensagem é contado e guardado cru, e parte dele vira Mensagem.** O descarte é contado por dia e por tipo; o que não é ruído conhecido fica cru num arquivo fora do Acervo (modo 0600, com teto), e `reprocessar-descartados` o recupera depois de uma correção de classificação. A mensagem interativa e a de modelo de conta comercial viram Mensagem quando têm corpo de texto (o texto é só o corpo; o resto fica no Conteúdo Bruto), e a imagem do cabeçalho do modelo vira **um** Anexo `nunca-obtido` por Mensagem; sem corpo, seguem descartadas e guardadas, sem Anexo. O envelope de mídia associada vira Mensagem própria com Anexo de vídeo. O pai de álbum e cinco rótulos de protocolo só são contados. O instante da Mensagem ao vivo é o declarado pelo aparelho, com tolerância de 5 s de relógio adiantado só aqui (a importação a recusa).
 - **Não-funcionais:** o produto continua completo **sem** esta operação; importar e consultar não dependem dela. A recepção é **ingestão, não decisão**: grava uma Operação por evento, com o efeito desligado. Queda de conexão é rotina e não é sinal de parada — a religação é espaçada, com teto, e o sinal de que o receptor morreu é o instante do último evento parar de avançar. Cobertura não é promessa: o que a plataforma não reentrega é **lacuna declarada**, preenchível por importação de material posterior; **o que a plataforma entregou e a Conexão perdeu antes de gravar também é lacuna**, e é por isso que o ouvinte recolhe os Pendentes (regra abaixo)
 - **O ouvinte recolhe os Pendentes da Plataforma a cada Conexão.** O que a plataforma guardou enquanto o ouvinte esteve fora não vem sozinho: ela **anuncia** os Pendentes, entrega uma parte e espera o pedido seguinte, e só ela declara o **fim**. O produto **libera** o que já recebeu (para o confirmado não morrer com a Conexão) e **pede mais** até o fim, com teto, prazo e parada por falta de resposta. Teto, prazo e falta de resposta terminam o esforço e **não provam entrega**. O resultado de cada Conexão (anunciados, recebidos por tipo, pedidos, fim declarado, desfecho) fica num estado legível de fora, sem abrir o Acervo, e `null` ali é indisponível. Decisão e risco: `docs/decisoes/20261023-ouvinte-recolhe-os-pendentes-da-plataforma.md`.
@@ -589,6 +611,22 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Saída:** contagens (Mensagens de modelo, com imagem, com Anexo, a criar); com efeito, o Anexo `nunca-obtido` da imagem do cabeçalho de cada Mensagem de modelo de conta comercial já gravada
 - **Regras:** ensaio por padrão; com efeito exige confirmação. Reconhece só a forma medida e não duplica. Uma Operação por lote, que `desfazer-operacao` reverte enquanto o Anexo não foi baixado (o já baixado é recusado). Para baixar, `reprocessar-midia`.
 - **Não-funcionais:** idempotente; o relatório só traz contagens.
+
+### consultar-chegadas
+
+- **Ator:** humano ou agente, por Chave de Acesso (rede) ou local
+- **Entrada:** um Marcador (`depois`) ou o pedido do ponto de partida; opcionalmente a Conversa, a Configuração (só Conversa direta), a direção, o remetente, os remetentes a excluir (o eco do próprio agente), os tipos, as origens, o limite (1 a 500) e o pedido de conteúdo
+- **Saída:** as Chegadas depois do Marcador, em ordem de gravação, o `proximo` Marcador e se a página foi a última; com conteúdo, a Mensagem de cada Chegada de Mensagem, Edição e Anexo, na forma que a leitura de Mensagens entrega
+- **Regras:** Marcador malformado é erro de uso (400, saída 2); expirado é 410 e saída 8, distinto de qualquer falha de rede; o ponto de partida devolve o Marcador de agora e não aceita filtros; Conversa inexistente é 404. A leitura com conteúdo corta a página em 1,5 MB, devolve ao menos uma Chegada, e o `proximo` acompanha a última incluída. Mensagem que não existe mais leva `conteudo: null`.
+- **Não-funcionais:** somente leitura, no worker com prazo, com o escopo de Inquilino da Chave. Não grava Operação.
+
+### aparar-chegadas
+
+- **Ator:** o ouvinte, sozinho, e o humano (`malote chegadas aparar`)
+- **Entrada:** Inquilino; a retenção em dias (30 por padrão) e o lote (5.000 por padrão)
+- **Saída:** quantas Chegadas saíram, o Piso depois e quantas restam
+- **Regras:** remove o prefixo mais antigo que a retenção, nunca a Chegada de maior número, e sobe o Piso. O comando é ensaio por padrão; `--com-efeito --confirmo` aplica. O ouvinte apara depois da subida (primeiro passo em 10 minutos, depois a cada hora) e nunca nela, repetindo lotes curtos enquanto o lote vier cheio; banco ocupado tenta de novo na hora seguinte. Quem não tem ouvinte apara pelo comando.
+- **Não-funcionais:** grava uma Operação `irreversivel`, sem efeito linha a linha (o Diário não é dado de origem), **só quando removeu alguma linha**: o tique que não remove nada não deixa rastro. Só local; por rede é recusado.
 
 ### reprocessar-midia
 

@@ -288,11 +288,13 @@ test('GET /conversas/<id>/mensagens com favorito e configuracao filtra so as fav
         configuracao: { id: cfg.id, fonte: 'whatsapp' },
       });
       marcadaId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
         conversaId, fonte: 'whatsapp', idExterno: 'm1', conteudo: 'favoritada',
         ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
       });
       registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
         conversaId, fonte: 'whatsapp', idExterno: 'm2', conteudo: 'nao favoritada',
         ocorridaEm: Date.parse('2026-09-01T12:01:00Z'), agora: Date.now(),
@@ -549,12 +551,13 @@ test('GET /midia/<id> devolve os bytes com o content-type do tipo', async () => 
         configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
       });
       const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
         conversaId, fonte: 'whatsapp', idExterno: 'm-midia',
         ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
       });
-      anexoId = registrarAnexo(acervo, { mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
-      gravarArquivoDeAnexo(acervo, { anexoId, destino, bytes: bytesOriginais });
+      anexoId = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
+      gravarArquivoDeAnexo(acervo, { origemDaChegada: 'importacao', anexoId, destino, bytes: bytesOriginais });
     } finally {
       acervo.fechar();
     }
@@ -583,12 +586,13 @@ test('GET /midia/<id> de Anexo tipo video devolve 415 nomeando o tipo', async ()
         configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
       });
       const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
         conversaId, fonte: 'whatsapp', idExterno: 'm-video',
         ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
       });
-      anexoId = registrarAnexo(acervo, { mensagemId, tipo: 'video', presenca: 'nunca-obtido' });
-      gravarArquivoDeAnexo(acervo, { anexoId, destino, bytes: Buffer.from('bytes de video') });
+      anexoId = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo: 'video', presenca: 'nunca-obtido' });
+      gravarArquivoDeAnexo(acervo, { origemDaChegada: 'importacao', anexoId, destino, bytes: Buffer.from('bytes de video') });
     } finally {
       acervo.fechar();
     }
@@ -626,11 +630,12 @@ test('GET /midia/<id> de Anexo de OUTRO Inquilino devolve o mesmo 404 vazio', as
         configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
       });
       const mensagemId = registrarMensagem(acervoB, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
         conversaId, fonte: 'whatsapp', idExterno: 'm-de-b',
         ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
       });
-      anexoDeB = registrarAnexo(acervoB, { mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
+      anexoDeB = registrarAnexo(acervoB, { origemDaChegada: 'importacao', mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
     } finally {
       acervoB.fechar();
     }
@@ -656,11 +661,12 @@ test('GET /midia/<id> sem bytes (nunca-obtido) devolve 404 vazio', async () => {
         configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
       });
       const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
         conversaId, fonte: 'whatsapp', idExterno: 'm-sem-bytes',
         ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
       });
-      anexoId = registrarAnexo(acervo, { mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
+      anexoId = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
     } finally {
       acervo.fechar();
     }
@@ -688,13 +694,15 @@ test('GET /midia/<id> com presenca presente mas arquivo sumiu do disco devolve 4
         configuracao: { id: 'cfg-1', fonte: 'whatsapp' },
       });
       const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       direcao: 'recebida',
         conversaId, fonte: 'whatsapp', idExterno: 'm-sumido',
         ocorridaEm: Date.parse('2026-09-01T12:00:00Z'), agora: Date.now(),
       });
-      anexoId = registrarAnexo(acervo, { mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
+      anexoId = registrarAnexo(acervo, { origemDaChegada: 'importacao', mensagemId, tipo: 'image', presenca: 'nunca-obtido' });
       const { rmSync } = await import('node:fs');
       const relativo = gravarArquivoDeAnexo(acervo, {
+        origemDaChegada: 'importacao',
         anexoId, destino, bytes: Buffer.from('vai sumir'),
       });
       rmSync(join(destino, relativo));

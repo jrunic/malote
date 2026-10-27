@@ -32,6 +32,7 @@ import { criarMarcadorDoSinal } from './sinal-da-conexao.js';
 import { criarGravadorDosPendentes, linhaDeResumo, linhaDoAnuncio } from './estado-dos-pendentes.js';
 import { anotarPulos } from './pulos.js';
 import { atorDeServico, comAtor } from '../nucleo/ator.js';
+import { iniciarAparagemDoDiario } from './aparagem-do-diario.js';
 import {
   identidadeDoVinculo,
   mesmoTelefone,
@@ -163,6 +164,8 @@ export function drenar(
     if (lote === undefined) return;
     try {
       const r = receberEvento(acervo, lote as MensagemRecebida[], {
+        // O derrame drenado pelo proprio ouvinte e recepcao ao vivo que o Acervo ocupado atrasou: continua `ao-vivo`.
+        origemDaChegada: 'ao-vivo',
         agora: agora(),
         configuracao,
         ...(decodificar !== undefined ? { decodificar } : {}),
@@ -585,6 +588,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
           let r;
           try {
             r = receberEvento(acervo, mensagens, {
+              origemDaChegada: 'ao-vivo',
               agora: agora(),
               configuracao,
               ...(decodificar !== undefined ? { decodificar } : {}),
@@ -692,7 +696,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
               .then((bytes) =>
                 comAtor(atorDeServico('ouvinte-whatsapp'), () => {
                   try {
-                    gravarArquivoDeAnexo(acervo, { anexoId: anexo.anexoId, destino, bytes });
+                    gravarArquivoDeAnexo(acervo, { origemDaChegada: 'ao-vivo', anexoId: anexo.anexoId, destino, bytes });
                     // MOVE, nunca apaga ("o produto nunca apaga o que moveu"),
                     // e so DEPOIS de gravar: se a escrita falhar, o staging
                     // continua no lugar para a proxima tentativa.
@@ -795,7 +799,24 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
       },
       Number.isInteger(INTERVALO_DE_ENVIO_MS) && INTERVALO_DE_ENVIO_MS > 0 ? INTERVALO_DE_ENVIO_MS : 5000,
     );
-    pararPollerDeEnvio = (): void => clearInterval(pollerDeEnvio);
+    // A aparagem do Diario de Chegadas (#1355): depois da subida, nunca nela. Os dois tempos so se mudam por ambiente nos
+    // testes; em producao valem os padroes (primeiro passo em 10 minutos, depois a cada hora).
+    const tempoDaAparagem = (nome: string): number | undefined => {
+      const n = Number(process.env[nome]);
+      return Number.isInteger(n) && n > 0 ? n : undefined;
+    };
+    const primeiroPassoDaAparagem = tempoDaAparagem('MALOTE_APARAGEM_PRIMEIRO_MS');
+    const intervaloDaAparagem = tempoDaAparagem('MALOTE_APARAGEM_INTERVALO_MS');
+    const pararAparagem = iniciarAparagemDoDiario(acervo, {
+      agora,
+      escrever,
+      ...(primeiroPassoDaAparagem !== undefined ? { primeiroPassoMs: primeiroPassoDaAparagem } : {}),
+      ...(intervaloDaAparagem !== undefined ? { intervaloMs: intervaloDaAparagem } : {}),
+    });
+    pararPollerDeEnvio = (): void => {
+      clearInterval(pollerDeEnvio);
+      pararAparagem();
+    };
 
     const parada = (sinal: string): void => {
       escrever(`[ouvinte] ${sinal} recebido; parando.`);

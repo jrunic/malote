@@ -74,6 +74,7 @@ export async function cenarioDeRede(): Promise<CenarioDeRede> {
       // Conversa vazia responde igual a de uma inexistente — de proposito —, e
       // um cenario sem Mensagem nao distinguiria o dono de quem nao e.
       registrarMensagem(acervo, {
+        origemDaChegada: 'importacao',
         conversaId: conversa,
         fonte: 'whatsapp',
         idExterno: `msg-${idExterno}`,

@@ -67,6 +67,7 @@ function instalarComEtiquetas(): { raiz: string; id: string; conversa: string; l
   try {
     const m = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '5565911110001@s.whatsapp.net' }).id;
     registrarEtiqueta(acervo, {
+      origemDaChegada: 'importacao',
       conversaId: conversa, identificadorId: m, texto: 'Torre A',
       ocorridaEm: Date.parse('2026-10-05T15:00:00Z'), fonte: 'whatsapp', idExterno: 'EV1',
     });
@@ -140,6 +141,7 @@ test('participantes local traz a etiqueta de cada membro listado', () => {
     try {
       const m = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '5565911110001@s.whatsapp.net' }).id;
       registrarTransicao(acervo, {
+        origemDaChegada: 'importacao',
         conversaId: conversa, identificadorId: m, natureza: 'entrou',
         ocorridaEm: Date.parse('2026-10-05T14:00:00Z'), fonte: 'whatsapp', idExterno: 'ADD1', codigoDaFonte: 'GROUP_PARTICIPANT_ADD',
       });

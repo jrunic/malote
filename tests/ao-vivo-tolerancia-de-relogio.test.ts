@@ -46,7 +46,7 @@ function comAcervo(corpo: (acervo: Acervo) => void): void {
 test('o caso medido (165 ms a frente) entra, e o instante gravado e EXATAMENTE o declarado', () => {
   comAcervo((acervo) => {
     const declarado = Math.floor(AGORA / 1000) + 1;
-    const r = receberEvento(acervo, [texto('M1', declarado)], { agora: AGORA, configuracao: CFG_WHATSAPP });
+    const r = receberEvento(acervo, [texto('M1', declarado)], { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
     assert.deepEqual(r.recusados, []);
     assert.deepEqual(ocorridas(acervo), [declarado * 1000], 'o instante gravado nao e o declarado (foi ajustado ao relogio?)');
   });
@@ -54,12 +54,12 @@ test('o caso medido (165 ms a frente) entra, e o instante gravado e EXATAMENTE o
 
 test('a borda de 5 s e inclusiva; 6 s e recusado e a Operacao inteira se desfaz', () => {
   comAcervo((acervo) => {
-    const naBorda = receberEvento(acervo, [texto('B1', AGORA_REDONDO / 1000 + 5)], { agora: AGORA_REDONDO, configuracao: CFG_WHATSAPP });
+    const naBorda = receberEvento(acervo, [texto('B1', AGORA_REDONDO / 1000 + 5)], { origemDaChegada: 'ao-vivo', agora: AGORA_REDONDO, configuracao: CFG_WHATSAPP });
     assert.deepEqual(naBorda.recusados, []);
     assert.equal(contar(acervo, 'mensagens'), 1);
 
     const operacoesAntes = contar(acervo, 'operacoes');
-    const alem = receberEvento(acervo, [texto('B2', AGORA_REDONDO / 1000 + 6)], { agora: AGORA_REDONDO, configuracao: CFG_WHATSAPP });
+    const alem = receberEvento(acervo, [texto('B2', AGORA_REDONDO / 1000 + 6)], { origemDaChegada: 'ao-vivo', agora: AGORA_REDONDO, configuracao: CFG_WHATSAPP });
     assert.equal(alem.recusados.length, 1);
     assert.match(alem.recusados[0]?.causa ?? '', /instante no futuro/);
     assert.equal(contar(acervo, 'mensagens'), 1, 'a recusada entrou');
@@ -69,7 +69,7 @@ test('a borda de 5 s e inclusiva; 6 s e recusado e a Operacao inteira se desfaz'
 
 test('o limite INFERIOR nao muda: zero e anterior ao inicio da Fonte continuam recusados ao vivo', () => {
   comAcervo((acervo) => {
-    const r = receberEvento(acervo, [texto('Z1', 0), texto('Z2', 1_200_000_000)], { agora: AGORA, configuracao: CFG_WHATSAPP });
+    const r = receberEvento(acervo, [texto('Z1', 0), texto('Z2', 1_200_000_000)], { origemDaChegada: 'ao-vivo', agora: AGORA, configuracao: CFG_WHATSAPP });
     assert.equal(r.recusados.length, 2);
     assert.equal(contar(acervo, 'mensagens'), 0);
   });

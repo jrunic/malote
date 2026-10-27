@@ -71,6 +71,7 @@ export function cenario(): Cenario {
       coletiva: false, configuracao: CFG_WHATSAPP,
     });
     const mensagemId = registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
       conversaId,
       fonte: 'whatsapp',
       idExterno: `mensagem-${seq}`,
@@ -83,6 +84,7 @@ export function cenario(): Cenario {
     // 0 nasce texto — três Anexos "de imagem" viraram texto em silêncio, e o
     // recorte por tipo mediu outra coisa.
     return registrarAnexoNoAcervo(acervo, {
+      origemDaChegada: 'importacao',
       mensagemId,
       tipo: entrada.tipo,
       presenca: entrada.presenca ?? 'nunca-obtido',
@@ -114,6 +116,7 @@ export function cenario(): Cenario {
       // Bytes pequenos e conhecidos: o teste roda em qualquer máquina, e o
       // tamanho gravado passa a ser o do ARQUIVO, não o declarado acima.
       gravarArquivoDeAnexo(acervo, {
+        origemDaChegada: 'importacao',
         anexoId,
         destino,
         bytes: Buffer.from(`conteudo-${anexoId}`),

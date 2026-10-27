@@ -34,6 +34,7 @@ import { decidirEdicao, lerEdicaoRecebida, type CausaDeEdicaoNaoGravada, type De
 import { ehCifrada, naturezaDoStub, textoDoStub } from './stubs-ao-vivo.js';
 import { desembrulhar, VIRAM_MENSAGEM } from './conteudo-de-mensagem.js';
 import { citacaoParaGravar } from './citacao.js';
+import type { OrigemDaChegada } from '../../nucleo/chegada.js';
 
 /**
  * Recepcao ao vivo do WhatsApp: o evento vira escrita pelas portas do nucleo.
@@ -159,6 +160,12 @@ function descartar(
 
 export interface OpcoesDeRecepcao {
   agora: number;
+  /**
+   * De onde vem este lote, para o Diario de Chegadas. OBRIGATORIA: esta funcao serve a recepcao ao vivo, a drenagem do
+   * derrame pelo proprio ouvinte (`ao-vivo`) e os reprocessamentos de lote derramado e de descartados (`reprocesso`),
+   * e so quem chama sabe qual dos dois e. Chamador que a esquecesse nao compila.
+   */
+  origemDaChegada: OrigemDaChegada;
   /**
    * A Configuracao da conta que este processo escuta. OBRIGATORIA: um ouvinte
    * escuta UMA conta, e sem ela a Conversa direta nao sabe de qual fio e.
@@ -582,6 +589,7 @@ export function receberEvento(
           () =>
             registrarEdicao(acervo, {
               ...decisao.gravar,
+              origemDaChegada: opcoes.origemDaChegada,
               agora: opcoes.agora,
               toleranciaDeRelogioMs: TOLERANCIA_DE_RELOGIO_AO_VIVO_MS,
             }),
@@ -660,7 +668,7 @@ export function receberEvento(
         { natureza: 'receber-ao-vivo', reversibilidade: 'irreversivel', registraEfeito: false },
         () => {
           if (mudanca !== null && aGravar !== null) {
-            gravarEtiqueta(acervo, m, mudanca, aGravar, relato);
+            gravarEtiqueta(acervo, m, mudanca, aGravar, relato, opcoes.origemDaChegada);
             return;
           }
           // Os metadados entram ANTES da Mensagem e na mesma transacao: se a Mensagem for recusada, a Operacao
@@ -794,6 +802,7 @@ function gravarUma(
     toleranciaDeRelogioMs: TOLERANCIA_DE_RELOGIO_AO_VIVO_MS,
     bruto: JSON.stringify(m),
     direcao: m.key.fromMe ? 'enviada' : 'recebida',
+    origemDaChegada: opcoes.origemDaChegada,
     ...(autorId !== undefined ? { autorId } : {}),
     ...(texto !== undefined ? { conteudo: texto } : {}),
     ...(citacao !== undefined ? { citacao } : {}),
@@ -829,6 +838,7 @@ function gravarUma(
         ? ((conteudo as Record<string, unknown>)['seconds'] as number)
         : undefined;
     const anexoId = registrarAnexo(acervo, {
+      origemDaChegada: opcoes.origemDaChegada,
       mensagemId,
       tipo: tipoDoAnexo,
       presenca: 'nunca-obtido',
@@ -846,6 +856,7 @@ function gravarUma(
   const modelo = leituraDoModelo(m.message);
   if (modelo.tipo === 'imagem' && !anexoJaExiste(acervo, mensagemId)) {
     const anexoId = registrarAnexo(acervo, {
+      origemDaChegada: opcoes.origemDaChegada,
       mensagemId,
       tipo: 'image',
       presenca: 'nunca-obtido',
@@ -899,6 +910,7 @@ function gravarUma(
     const enderecoDoMembro = resolverEndereco(acervo, FONTE, alvo);
     const { id } = registrarIdentificador(acervo, { fonte: FONTE, valor: enderecoDoMembro });
     const nasceu = registrarTransicao(acervo, {
+      origemDaChegada: opcoes.origemDaChegada,
       conversaId,
       identificadorId: id,
       natureza,
@@ -961,6 +973,7 @@ function gravarEtiqueta(
   mudanca: MudancaDeEtiqueta,
   alvo: EtiquetaDecidida,
   relato: RelatoDeRecepcao,
+  origemDaChegada: OrigemDaChegada,
 ): void {
   const conversaId = registrarConversa(acervo, {
     fonte: FONTE,
@@ -970,6 +983,7 @@ function gravarEtiqueta(
   });
   const { id } = registrarIdentificador(acervo, { fonte: FONTE, valor: alvo.enderecoDoMembro });
   const nasceu = registrarEtiqueta(acervo, {
+    origemDaChegada,
     conversaId,
     identificadorId: id,
     texto: mudanca.texto,

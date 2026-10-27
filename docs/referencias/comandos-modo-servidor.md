@@ -177,7 +177,7 @@ etapas estão na seção 4.3 do [guia do host](../guias/host-continuo-ouvinte-e-
 ## Consulta local
 
 As mesmas consultas do modo cliente, lendo o Acervo direto, com `--inquilino <id>`:
-`conversas`, `mensagens`, `anexos`, `exportar`, `buscar`, `pessoas`, `participantes`, `etiquetas`, `identificar <valor>` e `detalhar`. Flags, formatos e o
+`conversas`, `mensagens`, `anexos`, `exportar`, `buscar`, `pessoas`, `participantes`, `etiquetas`, `chegadas`, `identificar <valor>` e `detalhar`. Flags, formatos e o
 significado de `--remetente` e `--autor` estão na [referência do modo cliente](comandos-modo-cliente.md); a
 diferença é o `--inquilino` e o fato de **`malote midia <id>`** (os bytes do Anexo) só existir por rede:
 local, o arquivo já está em disco, e o caminho vem no campo `caminho` de `mensagens --json`. A resposta de `buscar` traz `truncado`, e `ordem` aceita `recentes` (padrão) ou `cronologica`.
@@ -187,6 +187,7 @@ Além delas, só existem locais:
 | comando | o que faz |
 |---|---|
 | `conversas sem-endereco --inquilino <id> [--limite <n>]` | Os endereços que **ainda não têm Pessoa**, do que mais cobre Mensagens para o que menos (Mensagens, Conversas, nome, Fonte, valor e id). É a lista de trabalho de quem vincula: o endereço do próprio Titular costuma vir primeiro |
+| `chegadas aparar --inquilino <id> [--dias <n>] [--limite <n>] [--com-efeito --confirmo] [--json]` | Apara o Diário de Chegadas: remove as Chegadas mais antigas que a retenção (30 dias por padrão), até o limite por passada (5.000 por padrão), e sobe o Piso; nunca remove a de maior número. **Ensaio por padrão**; `--com-efeito --confirmo` aplica e grava uma Operação irreversível (só quando removeu algo). O ouvinte já apara sozinho, depois da subida e a cada hora; este comando é para o Inquilino sem ouvinte. Só local: por rede é recusado |
 | `conversa presenca --inquilino <id> --conversa <id> --em <AAAA-MM-DD> [--json]` | Quem estava na Conversa numa data, dentro do Alcance declarado |
 
 ## Códigos de saída
