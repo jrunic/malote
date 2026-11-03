@@ -8,7 +8,8 @@ import {
   desvincularIdentificador,
   vincularIdentificador,
 } from './identidade.js';
-import type { ProcedenciaDeVinculo } from './tipos.js';
+import type { Fonte, ProcedenciaDeVinculo } from './tipos.js';
+import { removerCorrespondencia } from './correspondencia.js';
 import { TABELAS_QUE_APONTAM_PARA_IDENTIFICADOR } from './resolucao-retroativa.js';
 
 /** A Operacao ja foi desfeita. O indice unico do schema e a guarda dura. */
@@ -215,6 +216,24 @@ function desfazerLinha(acervo: Acervo, l: LinhaDeEfeito, todas: LinhaDeEfeito[])
     return r === 'ja-baixado'
       ? 'o Anexo ja foi baixado; apagar midia baixada e Retencao, nao desfazer'
       : 'o Anexo ja nao existe';
+  }
+
+  // Correspondencia que o aprendizado do estoque criou (#1376): desfazer e remover o par, e so enquanto ele ainda
+  // aponta para o canonico que a Operacao gravou. O par refeito depois, para outro canonico, nao se toca.
+  if (
+    l.tabela === 'correspondencias_de_endereco' &&
+    l.campo === 'canonico' &&
+    l.antes === null &&
+    l.depois !== null
+  ) {
+    const [fonte, alternativo] = valoresDaChave(l.chave);
+    return removerCorrespondencia(acervo, {
+      fonte: fonte as Fonte,
+      alternativo: alternativo as string,
+      canonico: l.depois,
+    })
+      ? null
+      : 'o par ja nao existe — foi removido, ou passou a apontar para outro canonico';
   }
 
   if (l.tabela === 'identificadores' && l.campo === 'pessoa_id') {
