@@ -1,6 +1,10 @@
 import type { Acervo } from './acervo.js';
 import type { Fonte } from './tipos.js';
 
+/** A consulta de `enderecoEhCanonico`, exportada para o teste de plano de consulta fixar que ela usa o indice por canonico (v31). */
+export const SQL_ENDERECO_EH_CANONICO =
+  'SELECT 1 FROM correspondencias_de_endereco WHERE fonte = ? AND canonico = ? LIMIT 1';
+
 /**
  * Correspondencia entre duas formas do mesmo endereco numa Fonte.
  *

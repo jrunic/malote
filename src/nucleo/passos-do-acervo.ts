@@ -1050,6 +1050,23 @@ const CHEGADAS_V30: PassoDeMigracao = {
   },
 };
 
+/**
+ * v30 -> v31: o indice por (fonte, canonico) das correspondencias de endereco (#1376). A recepcao pergunta, a cada
+ * endereco de celular, se o valor e canonico de algum par, e sem o indice a pergunta varre a tabela inteira. Nao muda
+ * linha nenhuma. DDL congelado, idempotente (o schema fresco ja o tem).
+ */
+const INDICE_DE_CANONICO_V31: PassoDeMigracao = {
+  de: 30,
+  para: 31,
+  descricao: 'cria o indice por canonico das correspondencias de endereco',
+  aplicar: (db) => {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS correspondencias_por_canonico
+        ON correspondencias_de_endereco (fonte, canonico);
+    `);
+  },
+};
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -1071,6 +1088,7 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   EDICAO_V28,
   CITACAO_V29,
   CHEGADAS_V30,
+  INDICE_DE_CANONICO_V31,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {
