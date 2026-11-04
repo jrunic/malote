@@ -136,6 +136,41 @@ test('canonico de par LID na forma que CHEGOU, com a outra gravada: a que chegou
   });
 });
 
+test('so com evidencia, nenhuma forma gravada: devolve o endereco como veio, sem par e sem Operacao', () => {
+  comAcervo((acervo) => {
+    assert.equal(resolverEnderecoDeWhatsapp(acervo, COM_NOVE, undefined, { soComEvidencia: true }), COM_NOVE);
+    assert.deepEqual(pares(acervo), []);
+    assert.equal(listarOperacoesCruas(acervo).length, 0);
+  });
+});
+
+test('so com evidencia, com a outra forma gravada como Identificador: usa a gravada e aprende o par', () => {
+  comAcervo((acervo) => {
+    id(acervo, SEM_NOVE);
+    assert.equal(resolverEnderecoDeWhatsapp(acervo, COM_NOVE, undefined, { soComEvidencia: true }), SEM_NOVE);
+    assert.deepEqual(pares(acervo), [{ alternativo: COM_NOVE, canonico: SEM_NOVE }]);
+  });
+});
+
+test('so com evidencia, a forma que chegou JA e Identificador: a gravada e a evidencia, e o par e aprendido', () => {
+  comAcervo((acervo) => {
+    id(acervo, COM_NOVE);
+    assert.equal(resolverEnderecoDeWhatsapp(acervo, COM_NOVE, undefined, { soComEvidencia: true }), COM_NOVE);
+    assert.deepEqual(pares(acervo), [{ alternativo: SEM_NOVE, canonico: COM_NOVE }]);
+  });
+});
+
+test('so com evidencia, com a outra forma canonica de um par LID: usa-a e aprende o par', () => {
+  comAcervo((acervo) => {
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: LID, canonico: SEM_NOVE });
+    assert.equal(resolverEnderecoDeWhatsapp(acervo, COM_NOVE, undefined, { soComEvidencia: true }), SEM_NOVE);
+    assert.deepEqual(pares(acervo), [
+      { alternativo: LID, canonico: SEM_NOVE },
+      { alternativo: COM_NOVE, canonico: SEM_NOVE },
+    ]);
+  });
+});
+
 test('o endereco que ja e alternativo de um par resolve para o canonico sem aprender nada', () => {
   comAcervo((acervo) => {
     aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: COM_NOVE, canonico: SEM_NOVE });

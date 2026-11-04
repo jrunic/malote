@@ -13,6 +13,12 @@ const FONTE = 'whatsapp' as const;
 interface Escolha {
   canonico: string;
   alternativo: string;
+  /**
+   * Falso quando a escolha e so "a que chegou" (regra 3) E essa forma nao esta gravada como Identificador: o fato de um
+   * endereco ter chegado nao diz qual forma a plataforma usa (um Envio traz a forma que o OPERADOR digitou). Quando a
+   * que chegou JA e Identificador, a gravada e a evidencia.
+   */
+  deEvidencia: boolean;
 }
 
 /**
@@ -33,11 +39,11 @@ function escolher(acervo: Acervo, chegou: string, outra: string): Escolha | null
   const canonicaChegou = enderecoEhCanonico(acervo, FONTE, chegou);
   const canonicaOutra = enderecoEhCanonico(acervo, FONTE, outra);
   if (canonicaChegou && canonicaOutra) return null;
-  if (canonicaChegou) return { canonico: chegou, alternativo: outra };
-  if (canonicaOutra) return { canonico: outra, alternativo: chegou };
+  if (canonicaChegou) return { canonico: chegou, alternativo: outra, deEvidencia: true };
+  if (canonicaOutra) return { canonico: outra, alternativo: chegou, deEvidencia: true };
 
-  if (gravadaOutra) return { canonico: outra, alternativo: chegou };
-  return { canonico: chegou, alternativo: outra };
+  if (gravadaOutra) return { canonico: outra, alternativo: chegou, deEvidencia: true };
+  return { canonico: chegou, alternativo: outra, deEvidencia: gravadaChegou };
 }
 
 /**
@@ -52,10 +58,20 @@ function escolher(acervo: Acervo, chegou: string, outra: string): Escolha | null
  * envelope e nao relata efeito (medido, e fixado por teste). Na recepcao isso e o certo (entra na Operacao do evento);
  * numa Operacao `por-efeito` seria um par que o `desfazer` nao remove.
  *
+ * `soComEvidencia`: para o endereco que o OPERADOR escolheu (o destino de um Envio e o eco `fromMe` dele). Usa o par, o
+ * canonico ou o Identificador que o Acervo ja tem, mas NAO inventa canonica quando nenhuma forma esta gravada: a forma
+ * digitada por quem envia nao e evidencia da plataforma, e aprende-la tornaria permanente o `enviado` sem entrega da
+ * #1364 (o par `real para digitada` mandaria todo Envio futuro a forma que ja falhou).
+ *
  * Nunca recusa: o conflito de correspondencia e achado, e a recepcao grava a Mensagem assim mesmo. Quem impede o
  * conflito e a consulta da outra forma, abaixo; sem ela `aprenderCorrespondencia` lancaria.
  */
-export function resolverEnderecoDeWhatsapp(acervo: Acervo, endereco: string, op?: Operacao): string {
+export function resolverEnderecoDeWhatsapp(
+  acervo: Acervo,
+  endereco: string,
+  op?: Operacao,
+  opcoes: { soComEvidencia?: boolean } = {},
+): string {
   const resolvido = resolverEndereco(acervo, FONTE, endereco);
   if (resolvido !== endereco) return resolvido;
 
@@ -68,6 +84,7 @@ export function resolverEnderecoDeWhatsapp(acervo: Acervo, endereco: string, op?
 
   const escolha = escolher(acervo, endereco, outra);
   if (escolha === null) return endereco;
+  if (!escolha.deEvidencia && opcoes.soComEvidencia === true) return endereco;
 
   const par = { fonte: FONTE, alternativo: escolha.alternativo, canonico: escolha.canonico };
   if (op !== undefined) {
