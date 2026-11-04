@@ -10,6 +10,8 @@
 import type { Acervo } from '../../nucleo/acervo.js';
 import { colunasDaCitacao, type CitacaoDeEntrada } from '../../nucleo/citacao.js';
 import { resolverEndereco } from '../../nucleo/correspondencia.js';
+import type { Operacao } from '../../nucleo/trilha.js';
+import { resolverEnderecoDeWhatsapp } from './resolver-celular.js';
 import { registrarIdentificador } from '../../nucleo/escrita.js';
 import { desembrulhar, VIRAM_MENSAGEM } from './conteudo-de-mensagem.js';
 
@@ -86,6 +88,7 @@ export function citacaoParaGravar(
   message: Record<string, unknown> | null | undefined,
   enderecosDaConta: readonly string[],
   alvo: { conversaId: string },
+  op?: Operacao,
 ): CitacaoDeEntrada | undefined {
   const r = resolverCitacao(acervo, message, enderecosDaConta);
   if (r === undefined) return undefined;
@@ -94,7 +97,11 @@ export function citacaoParaGravar(
   }
   if (r.propria) return { idExterno: r.idExterno, direcao: 'enviada' };
   if (r.enderecoDoAutor === undefined) return { idExterno: r.idExterno };
-  const { id } = registrarIdentificador(acervo, { fonte: FONTE, valor: r.enderecoDoAutor });
+  // `resolverCitacao` SO LE (o ensaio a usa). Quem grava e quem aprende o par; dentro de Operacao `por-efeito`, passa `op`.
+  const { id } = registrarIdentificador(acervo, {
+    fonte: FONTE,
+    valor: resolverEnderecoDeWhatsapp(acervo, r.enderecoDoAutor, op),
+  });
   return {
     idExterno: r.idExterno,
     autorId: id,
