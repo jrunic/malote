@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import type { Acervo } from '../../nucleo/acervo.js';
 import { registrarConversa } from '../../nucleo/escrita.js';
 import { enderecoEhColetivo } from './ao-vivo.js';
+import { resolverEnderecoDeWhatsapp } from './resolver-celular.js';
 import { enderecoEhDestinatarioDeEnvio } from './destinatario-de-envio.js';
 import {
   type ConteudoDeEnvio,
@@ -144,9 +145,11 @@ export async function processarEnvios(
   // achado do dev-10).
   if (envio.conversaId === null) {
     const coletiva = enderecoEhColetivo(jid);
+    // O destino foi digitado pelo OPERADOR: nao e evidencia de qual forma a plataforma usa. Se o Acervo ja conhece o celular,
+    // a Conversa e a dele; se nao conhece, fica na forma pedida e nenhum par e inventado (#1364).
     const conversaId = registrarConversa(acervo, {
       fonte: FONTE,
-      idExterno: jid,
+      idExterno: resolverEnderecoDeWhatsapp(acervo, jid, undefined, { soComEvidencia: true }),
       coletiva,
       ...(coletiva ? {} : { configuracao: opcoes.configuracao }),
     });
