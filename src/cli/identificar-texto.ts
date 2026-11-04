@@ -7,6 +7,12 @@ export function formatarIdentificacao(r: Identificacao): string[] {
   const linhas: string[] = [];
   const onde = r.consultado.fonte === null ? '' : ` (fonte ${r.consultado.fonte})`;
   linhas.push(`Identificar ${r.consultado.valor}${onde}`);
+  const { valor } = r.consultado;
+  // O servidor de uma versao anterior (v0.45.0) nao manda `gravadas`: sem ela, a linha nao aparece, e o resto sai igual.
+  const gravadas = (r.consultado as { gravadas?: string[] }).gravadas ?? [];
+  if (gravadas.length > 0 && !gravadas.includes(valor)) {
+    linhas.push(`  Pedido: ${valor}. O Acervo guarda: ${gravadas.join(', ')}.`);
+  }
   if (r.identificadores.length === 0 && r.formas.length === 0) {
     linhas.push(
       '  O Acervo nunca viu este valor. Ele e comparado exato: use o valor do Identificador, com o sufixo da plataforma.',

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { identificarPorValor } from '../src/nucleo/identificar.js';
 import { aprenderCorrespondencia } from '../src/nucleo/correspondencia.js';
+import { registrarIdentificador } from '../src/nucleo/escrita.js';
 import {
   acervoDeIdentidade,
   PRECEDENCIA,
@@ -210,6 +211,47 @@ test('correspondencia nova entra na resposta sem mudar o que ja estava gravado (
       r.identificadores.map((i) => i.id),
       [s.dani],
     );
+  } finally {
+    limpar();
+  }
+});
+
+test('o celular pedido na forma que o Acervo nao guarda: a resposta traz as formas gravadas, e a pedida e outra (#1376)', () => {
+  const { acervo, limpar } = acervoDeIdentidade();
+  try {
+    const SEM_NOVE = '556599991234@s.whatsapp.net';
+    const COM_NOVE = '5565999991234@s.whatsapp.net';
+    registrarIdentificador(acervo, { fonte: 'whatsapp', valor: SEM_NOVE });
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: COM_NOVE, canonico: SEM_NOVE });
+
+    const pedida = identificarPorValor(acervo, { valor: COM_NOVE }, PRECEDENCIA);
+    assert.deepEqual(pedida.consultado, { valor: COM_NOVE, fonte: null, gravadas: [SEM_NOVE] });
+    assert.deepEqual(pedida.identificadores.map((i) => [i.valor, i.papel]), [[SEM_NOVE, 'canonico']]);
+
+    const gravada = identificarPorValor(acervo, { valor: SEM_NOVE }, PRECEDENCIA);
+    assert.deepEqual(gravada.consultado.gravadas, [SEM_NOVE], 'a pedida e a gravada: nada difere');
+
+    const nunca = identificarPorValor(acervo, { valor: '556511110000@s.whatsapp.net' }, PRECEDENCIA);
+    assert.deepEqual(nunca.consultado.gravadas, []);
+  } finally {
+    limpar();
+  }
+});
+
+test('gravadas traz toda forma com Identificador, o @lid inclusive: o texto nao se limita ao celular (#1376)', () => {
+  const { acervo, limpar } = acervoDeIdentidade();
+  try {
+    const SEM_NOVE = '556599991234@s.whatsapp.net';
+    const COM_NOVE = '5565999991234@s.whatsapp.net';
+    const LID_DO_CELULAR = '100000000000077@lid';
+    registrarIdentificador(acervo, { fonte: 'whatsapp', valor: SEM_NOVE });
+    registrarIdentificador(acervo, { fonte: 'whatsapp', valor: LID_DO_CELULAR });
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: COM_NOVE, canonico: SEM_NOVE });
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: LID_DO_CELULAR, canonico: SEM_NOVE });
+    const pedida = identificarPorValor(acervo, { valor: COM_NOVE }, PRECEDENCIA).consultado.gravadas;
+    assert.deepEqual([...pedida].sort(), [LID_DO_CELULAR, SEM_NOVE].sort());
+    const pelaLid = identificarPorValor(acervo, { valor: LID_DO_CELULAR }, PRECEDENCIA).consultado.gravadas;
+    assert.ok(pelaLid.includes(LID_DO_CELULAR) && pelaLid.includes(SEM_NOVE));
   } finally {
     limpar();
   }

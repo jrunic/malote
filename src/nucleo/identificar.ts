@@ -44,7 +44,12 @@ export interface IdentificadorIdentificado {
 }
 
 export interface Identificacao {
-  consultado: { valor: string; fonte: Fonte | null };
+  /**
+   * O valor pedido, a Fonte do filtro e as formas do endereco que estao GRAVADAS como Identificador (as que a
+   * correspondencia conhece e tem linha). `gravadas` nao traz o valor pedido quando o Acervo guarda a outra forma
+   * (o celular brasileiro com e sem o 9, #1376): quem consome ve que o pedido e uma e o Acervo guarda outra.
+   */
+  consultado: { valor: string; fonte: Fonte | null; gravadas: string[] };
   identificadores: IdentificadorIdentificado[];
   formas: FormaDeEndereco[];
 }
@@ -157,5 +162,6 @@ export function identificarPorValor(
   identificadores.sort((a, b) => ORDEM_DO_PAPEL[a.papel] - ORDEM_DO_PAPEL[b.papel] || a.valor.localeCompare(b.valor));
   formas.sort((a, b) => ORDEM_DO_PAPEL[a.papel] - ORDEM_DO_PAPEL[b.papel] || a.valor.localeCompare(b.valor));
 
-  return { consultado: { valor, fonte: fonteFiltro }, identificadores, formas };
+  const gravadas = [...new Set(formas.filter((f) => f.identificador !== null).map((f) => f.valor))];
+  return { consultado: { valor, fonte: fonteFiltro, gravadas }, identificadores, formas };
 }

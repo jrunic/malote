@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { subirCenaDeIdentidade, ANA, BRUNO, BRUNO_LID } from './ajuda/identidade.js';
+import { aprenderCorrespondencia } from '../src/nucleo/correspondencia.js';
+import { registrarIdentificador } from '../src/nucleo/escrita.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const j = (corpo: string): any => JSON.parse(corpo);
@@ -128,6 +130,24 @@ test('--fonte restringe a busca por rede, e uma Fonte sem o valor devolve vazio 
     const outra = j((await cena.pedir(`/identificadores?valor=${valor}&fonte=instagram`, cena.chave.valor)).corpo);
     assert.deepEqual(outra.identificadores, []);
     assert.deepEqual(outra.formas, []);
+  } finally {
+    cena.encerrar();
+  }
+});
+
+test('GET /identificadores com o celular pedido na outra forma devolve as formas gravadas em consultado.gravadas (#1376)', async () => {
+  const SEM_NOVE = '556599991234@s.whatsapp.net';
+  const COM_NOVE = '5565999991234@s.whatsapp.net';
+  const cena = await subirCenaDeIdentidade({
+    semearMais: (acervo) => {
+      registrarIdentificador(acervo, { fonte: 'whatsapp', valor: SEM_NOVE });
+      aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: COM_NOVE, canonico: SEM_NOVE });
+    },
+  });
+  try {
+    const r = await cena.pedir(`/identificadores?valor=${encodeURIComponent(COM_NOVE)}`, cena.chave.valor);
+    assert.equal(r.status, 200);
+    assert.deepEqual(j(r.corpo).consultado, { valor: COM_NOVE, fonte: null, gravadas: [SEM_NOVE] });
   } finally {
     cena.encerrar();
   }

@@ -9,6 +9,8 @@ import { identificarPorValor } from '../src/nucleo/identificar.js';
 import { instalacaoTemporaria } from './ajuda/instalacao.js';
 import { abrirRegistro, criarInquilino } from '../src/registro/registro.js';
 import { abrirAcervo } from '../src/nucleo/acervo.js';
+import { aprenderCorrespondencia } from '../src/nucleo/correspondencia.js';
+import { registrarIdentificador } from '../src/nucleo/escrita.js';
 import {
   semearIdentidade,
   subirCenaDeIdentidade,
@@ -178,5 +180,54 @@ test('o executavel identifica por rede, com o valor antes ou depois das opcoes (
     assert.equal(JSON.parse(b.stdout).identificadores[0].valor, BRUNO);
   } finally {
     cena.encerrar();
+  }
+});
+
+test('o texto diz a forma pedida e a forma gravada quando diferem, e nada quando sao a mesma (#1376)', () => {
+  const base = { fonte: null, identificadores: [], formas: [] };
+  const diferem = formatarIdentificacao({
+    ...base,
+    consultado: { valor: '5565999991234@s.whatsapp.net', fonte: null, gravadas: ['556599991234@s.whatsapp.net'] },
+    formas: [{ fonte: 'whatsapp', valor: '556599991234@s.whatsapp.net', papel: 'canonico', identificador: 'x' }],
+  }).join('\n');
+  assert.match(diferem, /Pedido: 5565999991234@s\.whatsapp\.net\. O Acervo guarda: 556599991234@s\.whatsapp\.net\./);
+  const iguais = formatarIdentificacao({
+    ...base,
+    consultado: { valor: '556599991234@s.whatsapp.net', fonte: null, gravadas: ['556599991234@s.whatsapp.net'] },
+    formas: [{ fonte: 'whatsapp', valor: '556599991234@s.whatsapp.net', papel: 'consultado', identificador: 'x' }],
+  }).join('\n');
+  assert.doesNotMatch(iguais, /Pedido:/);
+});
+
+test('o texto de uma resposta de servidor antigo, sem `gravadas`, sai como antes, sem a linha do pedido e sem lancar (#1376)', () => {
+  const corpoAntigo = { consultado: { valor: '5565999991234@s.whatsapp.net', fonte: null }, identificadores: [], formas: [] };
+  const linhas = formatarIdentificacao(corpoAntigo as never).join('\n');
+  assert.doesNotMatch(linhas, /Pedido:/);
+  assert.match(linhas, /nunca viu este valor/);
+});
+
+test('identificar LOCAL com o celular pedido na outra forma: o --json traz as gravadas e o texto traz a linha do pedido (#1376)', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const registro = abrirRegistro(raiz);
+    const inquilino = criarInquilino(registro, { titularNome: 'Teste' });
+    registro.fechar();
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino as never);
+    registrarIdentificador(acervo, { fonte: 'whatsapp', valor: '556599991234@s.whatsapp.net' });
+    aprenderCorrespondencia(acervo, {
+      fonte: 'whatsapp',
+      alternativo: '5565999991234@s.whatsapp.net',
+      canonico: '556599991234@s.whatsapp.net',
+    });
+    acervo.fechar();
+    const ambiente = (saida: string[]) => ({ dados: raiz, estado: raiz, escrever: (t: string) => saida.push(t) });
+    const json: string[] = [];
+    assert.equal(executar(['identificar', '5565999991234@s.whatsapp.net', '--inquilino', inquilino, '--json'], ambiente(json)), 0);
+    assert.deepEqual(JSON.parse(json.join('\n')).consultado.gravadas, ['556599991234@s.whatsapp.net']);
+    const texto: string[] = [];
+    assert.equal(executar(['identificar', '5565999991234@s.whatsapp.net', '--inquilino', inquilino], ambiente(texto)), 0);
+    assert.match(texto.join('\n'), /Pedido: 5565999991234@s\.whatsapp\.net\. O Acervo guarda: 556599991234@s\.whatsapp\.net\./);
+  } finally {
+    limpar();
   }
 });
