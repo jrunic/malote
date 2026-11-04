@@ -103,6 +103,8 @@ export interface OpcoesDoServidor {
   /** Prazo de uma leitura desde a chegada, em ms (padrao 25.000). */
   prazoMs?: number;
   filaMaxima?: number;
+  /** A previa do destino de um Envio (#1376); a compoe `src/cli/servir.ts`, porque a regra do celular e do adaptador. */
+  consultarDestinoDeEnvio?: ContextoDaRequisicao['consultarDestinoDeEnvio'];
   /** SO PARA TESTE: outro arquivo de worker, para provar que o `servir` recusa subir se ele nao carrega. */
   arquivoDoTrabalhador?: URL;
   /** SO PARA TESTE (ver `ContextoDaRequisicao` e `GanchoDeTesteDoServidor`). */
@@ -204,6 +206,7 @@ export function criarServidor(opcoes: OpcoesDoServidor): ServidorDeLeitura {
           acervo,
           identidade,
           dados: opcoes.dados,
+          ...(opcoes.consultarDestinoDeEnvio ? { consultarDestinoDeEnvio: opcoes.consultarDestinoDeEnvio } : {}),
           ...(opcoes.ganchoDeTeste ? { ganchoDeTeste: opcoes.ganchoDeTeste } : {}),
         });
       });

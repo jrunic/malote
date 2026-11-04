@@ -21,6 +21,8 @@ import { expandirData, procurarPessoas } from '../nucleo/consulta.js';
 import { ehPontoDeEntrada } from './entrada.js';
 import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
 import { executarEnviarRede, mascararEndereco } from './enviar-rede.js';
+import { linhasSobreOEndereco, type SobreOEndereco } from './aviso-do-endereco.js';
+import { consultarDestinoDeWhatsapp } from '../adaptadores/whatsapp/resolver-celular.js';
 import { enderecoEhDestinatarioDeEnvio } from '../adaptadores/whatsapp/destinatario-de-envio.js';
 import { resolverDestinoPorConversa } from '../nucleo/destino-de-envio.js';
 import { executarEnvioEstadoRede } from './envio-estado-rede.js';
@@ -1406,6 +1408,7 @@ function executarComAtor(
         // sempre explicita: nunca vem da Conversa, so e conferida contra ela (a direta e chaveada pela Configuracao).
         let destino: Parameters<typeof registrarEnvio>[1]['destino'] = { enderecoCru: para as string };
         const sobreODestino: { conversa?: string; redirecionadaDe?: string } = {};
+        const sobreOEndereco: SobreOEndereco = {};
         if (conversa !== undefined) {
           const r = resolverDestinoPorConversa(acervo, conversa as never);
           if (r.tipo === 'inexistente') {
@@ -1427,6 +1430,11 @@ function executarComAtor(
           destino = r.tipo === 'conversa' ? { conversaId: r.usada.id } : { enderecoCru: r.endereco };
           if (r.tipo === 'conversa') sobreODestino.conversa = r.usada.id;
           if (r.tipo === 'endereco' || r.usada.id !== r.dada.id) sobreODestino.redirecionadaDe = r.dada.id;
+        }
+        if (conversa === undefined) {
+          const consulta = consultarDestinoDeWhatsapp(acervo, para as string);
+          if (consulta.situacao === 'redirecionado') sobreOEndereco.enderecoUsado = consulta.usado;
+          if (consulta.situacao === 'desconhecido') sobreOEndereco.enderecoDesconhecido = true;
         }
         let conteudo: Parameters<typeof registrarEnvio>[1]['conteudo'];
         if (caminhoDeMidia === undefined) {
@@ -1461,6 +1469,7 @@ function executarComAtor(
               identificadorDeEnvio: r.identificadorDeEnvio,
               configuracao: apelido,
               ...sobreODestino,
+              ...sobreOEndereco,
             }),
           );
         } else {
@@ -1480,6 +1489,7 @@ function executarComAtor(
                 : `  O endereco canonico foi usado no lugar da Conversa ${sobreODestino.redirecionadaDe} (a canonica ainda nao existe; nasce quando a mensagem sai).`,
             );
           }
+          for (const linha of linhasSobreOEndereco(para as string, sobreOEndereco)) escrever(linha);
         }
         return 0;
       } catch (erro) {

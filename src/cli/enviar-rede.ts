@@ -5,6 +5,7 @@ import { pedirPost, type CodigoDeFalha } from './cliente.js';
 import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
 import { resolverChaveEm } from './chave-em.js';
 import { opcao, recusarBandeiras } from './bandeiras.js';
+import { linhasSobreOEndereco, mascararEndereco } from './aviso-do-endereco.js';
 
 /**
  * `malote enviar` no MODO REDE: pede o Envio ao servidor (`POST /envios/solicitar`) em vez
@@ -36,12 +37,7 @@ export interface RedeDeEnvio {
   timeoutMs?: number;
 }
 
-/** O endereco sem o numero inteiro na saida: so os 4 ultimos digitos e o sufixo. */
-export function mascararEndereco(endereco: string): string {
-  const i = endereco.lastIndexOf('@');
-  if (i < 0) return endereco;
-  return `...${endereco.slice(Math.max(0, i - 4), i)}${endereco.slice(i)}`;
-}
+export { mascararEndereco };
 
 export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio): Promise<number> {
   const escrever = rede.escrever;
@@ -209,6 +205,8 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
     configuracao?: string;
     conversa?: string;
     redirecionadaDe?: string;
+    enderecoUsado?: string;
+    enderecoDesconhecido?: boolean;
   };
   const envioId = lido.envioId ?? '?';
   escrever(
@@ -235,6 +233,7 @@ export async function executarEnviarRede(argumentos: string[], rede: RedeDeEnvio
             'nasce quando a mensagem sai).',
     );
   }
+  for (const linha of linhasSobreOEndereco(para ?? '', lido)) escrever(linha);
   if (lido.identificadorDeEnvio !== identificadorDeEnvio) {
     escrever(
       'Aviso: o servidor nao confirmou o identificador deste pedido (servidor sem repeticao segura). ' +
