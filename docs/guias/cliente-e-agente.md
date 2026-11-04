@@ -117,7 +117,8 @@ malote midia <anexoId> --saida ./foto.jpg
 # Resolução de pessoa: texto entra, id sai (os outros comandos pedem o id)
 malote pessoas --texto "Bail Organa"
 
-# Quem é este endereço? (com ou sem Pessoa; o valor é comparado exato)
+# Quem é este endereço? (com ou sem Pessoa; o valor é comparado exato. O celular brasileiro vale com e sem o 9,
+# mas sempre como endereço completo, com @s.whatsapp.net; a saída diz a forma gravada)
 malote identificar 5511999990000@s.whatsapp.net
 
 # Participantes de uma conversa coletiva (opcional: posição em uma data)
@@ -222,7 +223,8 @@ Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`
   só em modo rede; exige `--configuracao`.
 - `malote mensagens ... --remetente <valor>` — só o que aquele endereço escreveu. O valor é o do
   Identificador (LID ou JID), comparado exato, e **alcança a forma canônica e as alternativas** que a
-  correspondência de endereço conhece. Funciona sem Pessoa, e é o que `--autor` (id de Pessoa) não faz.
+  correspondência de endereço conhece, o que inclui as duas formas do celular brasileiro (com e sem o 9, sempre como
+  endereço completo). Funciona sem Pessoa, e é o que `--autor` (id de Pessoa) não faz.
   Valor desconhecido devolve lista vazia, nunca tudo.
 - `malote anexos --conversa <id> [--tipo T] [--remetente V] [--desde D] [--ate D] [--presenca P] [--limite N]
   [--antes TOKEN] [--json]` — os Anexos de **uma** Conversa, em ordem cronológica. Cada um traz o Descritor,
@@ -356,7 +358,7 @@ revelar a existência de Inquilinos alheios); rota desconhecida com chave válid
 | `GET /conversas/<id>/participantes` | `em` | `{ presenca: {...} }` — cada participante com `valor`, `nome`, `origemDoNome`, `pessoaId`, `etiqueta` e `etiquetaEm` |
 | `GET /chegadas` | `depois` ou `ponto-de-partida=1` (um dos dois); `conversa`, `configuracao`, `direcao`, `remetente`, `sem-remetente` (lista por vírgula), `tipo`, `origem`, `limite` (1 a 500), `conteudo=1` | `{ chegadas: [{ seq, tipo, origem, criadoEm, ocorridaEm, conversaId, mensagemId, autorId, direcao, alvoId, conteudo? }], proximo, ultima }` — `410` com `{ erro, motivo }` quando o Marcador expirou (`outra-epoca`, `abaixo-do-piso` ou `acima-da-ultima`); `400` para o malformado; `ponto-de-partida=1` não aceita outro parâmetro |
 | `GET /etiquetas` | `conversa`, `remetente`, `busca`, `historico` (`1`), `limite` | `{ etiquetas: [{ conversaId, identificadorId, valor, nome, origemDoNome, texto, em }] }` — `texto` nulo é a remoção (só no histórico); `historico` exige `conversa` e `remetente`; `400` por uso errado e `404` só por Conversa inexistente |
-| `GET /identificadores?valor=` | `fonte` | `{ consultado, identificadores: [...], formas: [...] }` — vazio quando o Acervo nunca viu o valor |
+| `GET /identificadores?valor=` | `fonte` | `{ consultado: { valor, fonte, gravadas }, identificadores: [...], formas: [...] }` — `gravadas` são as formas do endereço que têm Identificador (a gravada do celular, o `@lid` com linha); vazio quando o Acervo nunca viu o valor. Servidor anterior à #1376 não traz `gravadas` |
 | `GET /relatorio` | — | `{ relatorio: { conversas, mensagens } }` |
 | `GET /chaves` | — | `{ chaves: [...] }` — as chaves do próprio Inquilino |
 | `GET /configuracoes` | — | `{ configuracoes: [{ apelido, fonte, telefone, jid, lid }] }` — os três últimos só nas de WhatsApp, nulos até existirem |
@@ -444,6 +446,12 @@ malote enviar --configuracao agente --para <endereço> --documento relatorio.pdf
 ```
 
 - **A conta (`--configuracao`) é sempre explícita**, no pedido por `--para` e no por `--conversa`: nunca é inferida da Conversa, e a resposta diz qual conta falou. Num grupo de que duas contas participam, quem escolhe a conta é quem pede.
+- **O endereço que vai à plataforma é o que o Acervo guarda, e o produto decide isso ao processar o Envio.** Pedir pela forma
+  alternativa do celular brasileiro (com ou sem o 9) de um número que o Acervo conhece envia à forma gravada, e a resposta
+  diz qual (`enderecoUsado` no `--json`). Número que o Acervo não conhece em nenhuma das duas formas sai **como foi
+  pedido**, e a resposta avisa (`enderecoDesconhecido`): `enviado` não prova entrega nem que o endereço existe (o número
+  de MT com 13 dígitos saiu `enviado` e não chegou, #1364). Antes de enviar a um número novo, consulte
+  `malote identificar`. O grupo e o endereço opaco (`@lid`) saem como foram pedidos.
 - **`--conversa` é por Inquilino.** O id vem do Acervo da Chave que envia; o mesmo grupo tem ids diferentes em Inquilinos diferentes, e o id de outro Inquilino responde `404`. **Entre contas** (ler com uma chave e falar com a de outro Inquilino) use o endereço: `malote detalhar --conversa <id>` com a chave de leitura devolve `endereco` na coletiva, e `malote enviar --configuracao <a que fala> --para <endereco> --chave-em <VARIÁVEL>` envia com a outra chave.
 - No modo rede, o Inquilino vem da Chave de Acesso: `--inquilino` é recusado (código 2).
   Para enviar pela instalação local numa máquina que carrega o servidor, rode com
@@ -485,7 +493,9 @@ Resposta: `202` com `{"aceita": true, "envioId": "<id>", "identificadorDeEnvio":
 quando o pedido entrou na fila. Por `conversa`, a resposta traz também `conversa` (o id da Conversa em que o Envio
 ficou) e, se a Conversa dada era a forma alternativa de um endereço que tem Conversa canônica (a `@lid` de uma
 pessoa com Conversa de telefone), `redirecionadaDe` (o id que foi dado); se a canônica ainda não existe, vem só
-`redirecionadaDe`, e a Conversa nasce quando a mensagem sai. O `202` não confirma que a mensagem saiu: o Envio fica
+`redirecionadaDe`, e a Conversa nasce quando a mensagem sai. Por `para`, a resposta traz `enderecoUsado` (o endereço
+inteiro para onde o Envio iria, quando o Acervo guarda o número em outra forma) ou `enderecoDesconhecido: true` (quando
+não o conhece); o ouvinte decide o destino de fato ao processar, e a resposta é a prévia. O `202` não confirma que a mensagem saiu: o Envio fica
 `pendente` até o `malote ouvir` daquela Configuração processá-lo. Repetição do mesmo
 pedido com o mesmo `identificadorDeEnvio`: `200` com os mesmos campos e `"repetido": true`.
 

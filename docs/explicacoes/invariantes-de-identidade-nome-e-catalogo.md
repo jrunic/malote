@@ -70,6 +70,15 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   sendo o que a Fonte entregou. O par de testes é o desenho: um prova que a segunda
   escrita não cria linha, o outro **lê de volta** e prova que as marcas ficaram. Sem
   o segundo, normalizar na escrita passaria no primeiro.
+- **As duas formas do celular brasileiro são um par na correspondência de endereço, aprendido pelo Adaptador de
+  WhatsApp (#1376).** A regra (55, DDD, assinante de 8 dígitos começando em 6 a 9, com ou sem o 9) é uma só
+  (`celular-br.ts`), e `resolverEnderecoDeWhatsapp` é o único ponto que resolve e aprende: todo ponto do Adaptador de
+  WhatsApp que grava Identificador, Conversa ou participante passa por ele, e a guarda
+  (`tests/celular-pontos-de-entrada.test.ts`) fixa a lista por chamada, com o motivo de cada arquivo que grava sem
+  passar (a resolução retroativa, que só grava o canônico de um par já existente, e a identidade da conta, que recebe
+  o JID já resolvido). Fixo nunca ganha 9. O endereço que o OPERADOR digitou (o destino de um Envio) e toda Mensagem
+  `fromMe` (o produto não separa o eco de um Envio da Mensagem escrita no aparelho) só aprendem com evidência da
+  plataforma: o resolvedor não inventa a forma canônica quando nenhuma das duas está gravada.
 - **"Comparar dígitos serve a qualquer Fonte" tem limite, e o nono dígito brasileiro
   mora do lado de fora dele.** `nome-do-endereco.ts` (núcleo) já dizia, desde que
   nasceu: "traduzir a forma escrita do número na forma do endereço é vocabulário de
