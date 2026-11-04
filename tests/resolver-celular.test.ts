@@ -5,7 +5,11 @@ import { type Acervo } from '../src/nucleo/acervo.js';
 import { aprenderCorrespondencia, resolverEndereco } from '../src/nucleo/correspondencia.js';
 import { registrarIdentificador } from '../src/nucleo/escrita.js';
 import { emOperacao, linhasDaOperacao, listarOperacoesCruas } from '../src/nucleo/trilha.js';
-import { resolverEnderecoDeWhatsapp } from '../src/adaptadores/whatsapp/resolver-celular.js';
+import {
+  consultarDestinoDeWhatsapp,
+  destinoDeEnvioDeWhatsapp,
+  resolverEnderecoDeWhatsapp,
+} from '../src/adaptadores/whatsapp/resolver-celular.js';
 
 const SEM_NOVE = '556599991234@s.whatsapp.net';
 const COM_NOVE = '5565999991234@s.whatsapp.net';
@@ -249,5 +253,101 @@ test('sem op e sem Operacao aberta, aprender abre o envelope irreversivel UMA ve
     resolverEnderecoDeWhatsapp(acervo, SEM_NOVE);
     resolverEnderecoDeWhatsapp(acervo, '556532221234@s.whatsapp.net');
     assert.deepEqual(naturezas(), ['aprender-endereco-ao-vivo'], 'sem o que aprender, nenhuma Operacao nova');
+  });
+});
+
+test('consultar o destino: a forma que o Acervo guarda no lugar da pedida, sem escrever nada', () => {
+  comAcervo((acervo) => {
+    id(acervo, SEM_NOVE);
+    const antes = listarOperacoesCruas(acervo).length;
+    assert.deepEqual(consultarDestinoDeWhatsapp(acervo, COM_NOVE), { usado: SEM_NOVE, situacao: 'redirecionado' });
+    assert.deepEqual(pares(acervo), [], 'consultar nao aprende o par');
+    assert.equal(listarOperacoesCruas(acervo).length, antes, 'nem abre Operacao');
+  });
+});
+
+test('consultar o destino: a forma gravada pedida como esta e conhecida, e a gravada na forma improvavel vence a provavel', () => {
+  comAcervo((acervo) => {
+    id(acervo, COM_NOVE);
+    assert.deepEqual(consultarDestinoDeWhatsapp(acervo, COM_NOVE), { usado: COM_NOVE, situacao: 'conhecido' });
+    assert.deepEqual(consultarDestinoDeWhatsapp(acervo, SEM_NOVE), { usado: COM_NOVE, situacao: 'redirecionado' });
+  });
+});
+
+test('consultar o destino: a alternativa de um par, que o Acervo ja aprendeu, vai ao canonico', () => {
+  comAcervo((acervo) => {
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: COM_NOVE, canonico: SEM_NOVE });
+    assert.deepEqual(consultarDestinoDeWhatsapp(acervo, COM_NOVE), { usado: SEM_NOVE, situacao: 'redirecionado' });
+    assert.deepEqual(consultarDestinoDeWhatsapp(acervo, SEM_NOVE), { usado: SEM_NOVE, situacao: 'conhecido' });
+  });
+});
+
+test('consultar o destino: numero que o Acervo nao conhece em nenhuma das duas formas e desconhecido, e sai como foi pedido', () => {
+  comAcervo((acervo) => {
+    assert.deepEqual(consultarDestinoDeWhatsapp(acervo, COM_NOVE), { usado: COM_NOVE, situacao: 'desconhecido' });
+    assert.deepEqual(consultarDestinoDeWhatsapp(acervo, '556532221234@s.whatsapp.net'), {
+      usado: '556532221234@s.whatsapp.net',
+      situacao: 'desconhecido',
+    });
+    assert.deepEqual(pares(acervo), []);
+  });
+});
+
+test('o destino de um Envio so resolve telefone: grupo e opaco (mesmo com par) saem como foram pedidos, sem aviso', () => {
+  comAcervo((acervo) => {
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: LID, canonico: SEM_NOVE });
+    for (const e of ['120363000000000001@g.us', LID]) {
+      assert.deepEqual(consultarDestinoDeWhatsapp(acervo, e), { usado: e, situacao: 'nao-se-aplica' });
+      assert.equal(destinoDeEnvioDeWhatsapp(acervo, e), e);
+    }
+  });
+});
+
+test('consultar o destino concorda com o destino que o Envio usa, em todos os cenarios', () => {
+  const cenas: Array<(acervo: Acervo) => void> = [
+    () => undefined,
+    (a) => id(a, SEM_NOVE),
+    (a) => id(a, COM_NOVE),
+    (a) => aprenderCorrespondencia(a, { fonte: 'whatsapp', alternativo: COM_NOVE, canonico: SEM_NOVE }),
+    (a) => aprenderCorrespondencia(a, { fonte: 'whatsapp', alternativo: LID, canonico: SEM_NOVE }),
+    (a) => {
+      id(a, SEM_NOVE);
+      id(a, COM_NOVE);
+    },
+  ];
+  for (const preparar of cenas) {
+    for (const pedido of [SEM_NOVE, COM_NOVE, LID]) {
+      comAcervo((acervo) => {
+        preparar(acervo);
+        const consultado = consultarDestinoDeWhatsapp(acervo, pedido).usado;
+        assert.equal(destinoDeEnvioDeWhatsapp(acervo, pedido), consultado);
+      });
+    }
+  }
+});
+
+test('o destino de um Envio aprende o par quando o Acervo tem a evidencia, e nao inventa canonica quando nao tem', () => {
+  comAcervo((acervo) => {
+    assert.equal(destinoDeEnvioDeWhatsapp(acervo, COM_NOVE), COM_NOVE);
+    assert.deepEqual(pares(acervo), [], 'numero desconhecido: nenhum par (#1364)');
+    id(acervo, SEM_NOVE);
+    assert.equal(destinoDeEnvioDeWhatsapp(acervo, COM_NOVE), SEM_NOVE);
+    assert.deepEqual(pares(acervo), [{ alternativo: COM_NOVE, canonico: SEM_NOVE }]);
+  });
+});
+
+test('consultar o destino: a outra forma ja e alternativa de outro endereco, entao o Acervo conhece o numero e o pedido sai como veio', () => {
+  comAcervo((acervo) => {
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: SEM_NOVE, canonico: TERCEIRO });
+    assert.deepEqual(consultarDestinoDeWhatsapp(acervo, COM_NOVE), { usado: COM_NOVE, situacao: 'conhecido' });
+    assert.deepEqual(pares(acervo), [{ alternativo: SEM_NOVE, canonico: TERCEIRO }], 'e nada novo e aprendido');
+  });
+});
+
+test('consultar o destino: telefone que e o canonico de um par LID, sem Identificador, e conhecido', () => {
+  comAcervo((acervo) => {
+    const FIXO = '556532221234@s.whatsapp.net';
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: LID, canonico: FIXO });
+    assert.deepEqual(consultarDestinoDeWhatsapp(acervo, FIXO), { usado: FIXO, situacao: 'conhecido' });
   });
 });
