@@ -896,6 +896,13 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Regras:** só o que muda abre Operação (a segunda conexão não escreve nada). Conflito de correspondência é relatado e a primeira permanece. O Identificador é registrado **sem** Configuração: a coluna de Configuração de um Identificador é a do catálogo que sustenta o vínculo com a Pessoa, e a relação entre a Configuração e o endereço da conta vive no Registro. Não dá autor à Mensagem enviada nem cria Participação da própria conta.
 - **Não-funcionais:** Padrão
 
+### aprender-formas-do-celular
+- **Ator:** humano ou agente, por comando explícito do operador
+- **Entrada:** Inquilino; opcionalmente um limite de pares e o tamanho do lote
+- **Saída:** em contagens, os pares a criar, os números de celular examinados, os que já tinham par, os que não são celular brasileiro, os pares que seguem a forma canônica de um par LID existente e os conflitos; em lista (só no `--json`), os números com as duas formas gravadas, com as Mensagens e as Conversas de cada forma, e os que têm uma Conversa direta em cada forma
+- **Regras:** aprende, para o estoque, o par que a recepção aprende ao vivo: a forma gravada como Identificador é a canônica, a outra é a alternativa, e o canônico de um par LID existente é respeitado. **Exceção (o caso legado, medido em 0 nos quatro Acervos):** quando o canônico do par LID é a forma NÃO gravada, a forma gravada vira a alternativa, igual ao que a recepção faz; o relatório a conta (`legados`) e `identidade resolver-enderecos` reconcilia o que já apontava para ela. O número que já tem as duas formas gravadas fica sem par (a fusão é decisão do operador). Fixo, 13 dígitos com 9 seguido de 0 a 5 e número de outro país não ganham par. Ensaio por padrão; com efeito, abre UMA Operação `por-efeito` antes dos lotes, com uma transação por lote (o ouvinte segue no ar) e uma linha de efeito por par; o `desfazer` remove só os pares dela. A recepção reaprende o par na primeira Mensagem seguinte enquanto a versão que aprende estiver em produção. Repetir o comando não cria nada.
+- **Não-funcionais:** cobre o Acervo todo em páginas de leitura pelo índice `(fonte, valor)`, fora de transação; nenhuma tabela de dados além da de correspondências muda (a trilha ganha a Operação e as linhas de efeito). Um lote que falha deixa os anteriores gravados e a CLI relata o id da Operação parcial; repetir o comando completa o que falta numa segunda Operação (a volta inteira pede o `desfazer` das duas).
+
 ## Relações com outros contextos
 
 Nenhuma. Contexto único.

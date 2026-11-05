@@ -79,6 +79,11 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   o JID já resolvido). Fixo nunca ganha 9. O endereço que o OPERADOR digitou (o destino de um Envio) e toda Mensagem
   `fromMe` (o produto não separa o eco de um Envio da Mensagem escrita no aparelho) só aprendem com evidência da
   plataforma: o resolvedor não inventa a forma canônica quando nenhuma das duas está gravada.
+- **O estoque aprende o par pelo MESMO resolvedor da recepção (#1376).** `identidade aprender-formas-do-celular` chama
+  `resolverEnderecoDeWhatsapp` com `op`, e o ensaio usa `situacaoNoEstoque`, a mesma decisão vista sem escrever: nenhum
+  critério próprio. Os números com as duas formas gravadas ficam sem par e o ensaio os lista com as Mensagens de cada forma; a
+  Conversa direta que o aprendizado não une (uma por forma, da mesma Configuração) também é listada. O caso legado (o
+  canônico do par LID é a forma não gravada) é o único em que a retroativa acha o que reapontar logo depois do estoque.
 - **"Comparar dígitos serve a qualquer Fonte" tem limite, e o nono dígito brasileiro
   mora do lado de fora dele.** `nome-do-endereco.ts` (núcleo) já dizia, desde que
   nasceu: "traduzir a forma escrita do número na forma do endereço é vocabulário de
