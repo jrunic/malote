@@ -170,6 +170,12 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   É o que permite a rota de rede (`/envios/solicitar`) gravar só uma linha,
   sem precisar do mesmo mecanismo de escrita de domínio que criar Conversa
   exigiria.
+- **O endereço que o Envio manda à plataforma é decidido no PROCESSAMENTO, pela forma que o Acervo guarda, e nunca
+  montado a partir do telefone (#1364, #1376).** `processarEnvios` resolve o destino com `soComEvidencia`: o celular
+  brasileiro pedido na outra forma de um número gravado vai pela gravada; o número que o Acervo não conhece sai como
+  foi pedido, e nenhum par é inventado, porque aprender a forma digitada tornaria permanente o `enviado` sem entrega
+  (MT, 13 dígitos). Só telefone se resolve: grupo e `@lid` saem como pedidos. O aviso do pedido (CLI e rota) é só uma
+  previa dessa decisão, e a rota a recebe de `servir.ts`, porque a regra do celular é do adaptador.
 - **A fila de Envio prioriza por `tentativas` antes de `solicitada_em`.** Um
   Envio que já tentou e voltou indeterminado cede a vez aos que nunca
   tentaram — sem isso, um Envio problemático trava a fila inteira daquela

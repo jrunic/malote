@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import type { Acervo } from '../../nucleo/acervo.js';
 import { registrarConversa } from '../../nucleo/escrita.js';
 import { enderecoEhColetivo } from './ao-vivo.js';
+import { destinoDeEnvioDeWhatsapp, resolverEnderecoDeWhatsapp } from './resolver-celular.js';
 import { enderecoEhDestinatarioDeEnvio } from './destinatario-de-envio.js';
 import {
   type ConteudoDeEnvio,
@@ -112,9 +113,13 @@ export async function processarEnvios(
     return { processados: 1 };
   }
 
+  // O endereco que vai a plataforma e o que o Acervo guarda, e e decidido AQUI, ao processar, e nao ao registrar: cobre
+  // tambem o Envio pendente de antes da release. O numero que o Acervo nao conhece sai como foi pedido (#1364).
+  const destino = destinoDeEnvioDeWhatsapp(acervo, jid);
+
   let resultado: { keyId: string } | undefined;
   try {
-    resultado = await opcoes.enviar(jid, montado.payload);
+    resultado = await opcoes.enviar(destino, montado.payload);
   } catch (erro) {
     // Chegou aqui: NAO e falha de transporte (conexao.ts ja filtrou). E
     // definitiva — destinatario invalido, rejeicao da plataforma etc.
@@ -142,11 +147,15 @@ export async function processarEnvios(
   // A Conversa so e gravada/garantida AQUI, depois de confirmar que o envio
   // saiu — destinatario errado nunca deixa Conversa imortal no Acervo (#1112,
   // achado do dev-10).
-  if (envio.conversaId === null) {
+  // Tambem quando o Envio foi dado por Conversa e o destino mudou (a Conversa dada e a forma alternativa do celular): o
+  // eco cai na Conversa da forma gravada, e e nela que o Envio fica.
+  if (envio.conversaId === null || destino !== jid) {
     const coletiva = enderecoEhColetivo(jid);
+    // O destino foi digitado pelo OPERADOR: nao e evidencia de qual forma a plataforma usa. Se o Acervo ja conhece o celular,
+    // a Conversa e a dele; se nao conhece, fica na forma pedida e nenhum par e inventado (#1364).
     const conversaId = registrarConversa(acervo, {
       fonte: FONTE,
-      idExterno: jid,
+      idExterno: resolverEnderecoDeWhatsapp(acervo, jid, undefined, { soComEvidencia: true }),
       coletiva,
       ...(coletiva ? {} : { configuracao: opcoes.configuracao }),
     });

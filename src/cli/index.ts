@@ -21,6 +21,8 @@ import { expandirData, procurarPessoas } from '../nucleo/consulta.js';
 import { ehPontoDeEntrada } from './entrada.js';
 import { mimetypeDoCaminho } from './mimetype-do-caminho.js';
 import { executarEnviarRede, mascararEndereco } from './enviar-rede.js';
+import { linhasSobreOEndereco, type SobreOEndereco } from './aviso-do-endereco.js';
+import { consultarDestinoDeWhatsapp } from '../adaptadores/whatsapp/resolver-celular.js';
 import { enderecoEhDestinatarioDeEnvio } from '../adaptadores/whatsapp/destinatario-de-envio.js';
 import { resolverDestinoPorConversa } from '../nucleo/destino-de-envio.js';
 import { executarEnvioEstadoRede } from './envio-estado-rede.js';
@@ -46,6 +48,7 @@ import { linhasDaMensagemEditada, textoParaExibir } from './edicoes-texto.js';
 import { carregarDecodificador } from '../adaptadores/whatsapp/conexao.js';
 import type { Decodificador } from '../adaptadores/whatsapp/edicao.js';
 import { extrairContatosCompartilhados } from '../adaptadores/whatsapp/extrair-contatos-compartilhados.js';
+import { aprenderFormasDoCelular, EstoqueInterrompidoError } from '../adaptadores/whatsapp/aprender-formas-do-celular.js';
 import { extrairCitacoes } from '../adaptadores/whatsapp/extrair-citacoes.js';
 import { extrairImagensDeModelo } from '../adaptadores/whatsapp/extrair-imagem-de-modelo.js';
 import { formatarAnexos, tipoGuardado } from './anexos-texto.js';
@@ -438,6 +441,8 @@ Titular (nao exige chave enquanto nao houver rede):
                                     (promove a Pessoa o Identificador sem Pessoa que já tem
                                      nome utilizável; ensaio por padrão)
   malote identidade resolver-enderecos --inquilino <id> [--com-efeito --confirmo] [--json]
+  malote identidade aprender-formas-do-celular --inquilino <id> [--limite <n>] [--tamanho-do-lote <n>] [--com-efeito --confirmo] [--json]
+                                    (aprende o par das duas formas, com e sem o 9, dos celulares brasileiros já gravados; ensaio por padrão)
   malote operacao listar   --inquilino <id> --chave <valor>
   malote operacao ver      <id> --inquilino <id> --chave <valor>
   malote operacao desfazer <id> --inquilino <id> --chave <valor> [--com-efeito --confirmo]
@@ -1406,6 +1411,7 @@ function executarComAtor(
         // sempre explicita: nunca vem da Conversa, so e conferida contra ela (a direta e chaveada pela Configuracao).
         let destino: Parameters<typeof registrarEnvio>[1]['destino'] = { enderecoCru: para as string };
         const sobreODestino: { conversa?: string; redirecionadaDe?: string } = {};
+        const sobreOEndereco: SobreOEndereco = {};
         if (conversa !== undefined) {
           const r = resolverDestinoPorConversa(acervo, conversa as never);
           if (r.tipo === 'inexistente') {
@@ -1427,6 +1433,11 @@ function executarComAtor(
           destino = r.tipo === 'conversa' ? { conversaId: r.usada.id } : { enderecoCru: r.endereco };
           if (r.tipo === 'conversa') sobreODestino.conversa = r.usada.id;
           if (r.tipo === 'endereco' || r.usada.id !== r.dada.id) sobreODestino.redirecionadaDe = r.dada.id;
+        }
+        if (conversa === undefined) {
+          const consulta = consultarDestinoDeWhatsapp(acervo, para as string);
+          if (consulta.situacao === 'redirecionado') sobreOEndereco.enderecoUsado = consulta.usado;
+          if (consulta.situacao === 'desconhecido') sobreOEndereco.enderecoDesconhecido = true;
         }
         let conteudo: Parameters<typeof registrarEnvio>[1]['conteudo'];
         if (caminhoDeMidia === undefined) {
@@ -1461,6 +1472,7 @@ function executarComAtor(
               identificadorDeEnvio: r.identificadorDeEnvio,
               configuracao: apelido,
               ...sobreODestino,
+              ...sobreOEndereco,
             }),
           );
         } else {
@@ -1480,6 +1492,7 @@ function executarComAtor(
                 : `  O endereco canonico foi usado no lugar da Conversa ${sobreODestino.redirecionadaDe} (a canonica ainda nao existe; nasce quando a mensagem sai).`,
             );
           }
+          for (const linha of linhasSobreOEndereco(para as string, sobreOEndereco)) escrever(linha);
         }
         return 0;
       } catch (erro) {
@@ -3308,6 +3321,76 @@ function executarComAtor(
         acervo.fechar();
       }
       return 0;
+    }
+
+    if (grupo === 'identidade' && sub === 'aprender-formas-do-celular') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
+      const comEfeito = temBandeira(argumentos, 'com-efeito');
+      if (comEfeito && !temBandeira(argumentos, 'confirmo')) {
+        throw new Error('Repita o comando com --confirmo para executar.');
+      }
+      const inteiro = (nome: string): number | undefined | null => {
+        const texto = opcao(argumentos, nome);
+        if (texto === undefined) return undefined;
+        const n = Number(texto);
+        return Number.isInteger(n) && n >= 1 ? n : null;
+      };
+      const limite = inteiro('limite');
+      const tamanhoDoLote = inteiro('tamanho-do-lote');
+      if (limite === null || tamanhoDoLote === null) {
+        escrever('--limite e --tamanho-do-lote precisam ser inteiros maiores que zero.');
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        let r;
+        try {
+          r = aprenderFormasDoCelular(acervo, {
+            comEfeito,
+            ...(limite === undefined ? {} : { limite }),
+            ...(tamanhoDoLote === undefined ? {} : { tamanhoDoLote }),
+          });
+        } catch (erro) {
+          if (!(erro instanceof EstoqueInterrompidoError)) throw erro;
+          escrever(`Interrompido: ${erro.criados} par(es) criado(s) na Operacao ${erro.operacaoId}; repita o comando para completar.`);
+          escrever(`Para desfazer o que entrou: malote operacao desfazer ${erro.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
+          escrever(`Causa: ${String(erro.causa)}`);
+          return 1;
+        }
+        if (temBandeira(argumentos, 'json')) {
+          escrever(JSON.stringify(r, null, 2));
+          return 0;
+        }
+        // So CONTAGENS: o endereco de ninguem vai ao texto (o --json traz as listas, para o operador decidir a mao).
+        escrever(
+          comEfeito
+            ? `Aprendido: ${r.criados} par(es) criado(s) em ${r.celulares} celular(es).`
+            : `Ensaio: ${r.aCriar} par(es) a criar em ${r.celulares} celular(es) (${r.candidatos} Identificador(es) de telefone examinado(s)).`,
+        );
+        if (r.jaResolvidos > 0) escrever(`  ${r.jaResolvidos} numero(s) ja com o par.`);
+        if (r.conflitos > 0) escrever(`  ${r.conflitos} numero(s) cuja outra forma aponta para outro endereco: achado, sem par.`);
+        if (r.respeitados > 0) escrever(`  ${r.respeitados} par(es) seguem a forma canonica de um par LID que ja existia.`);
+        if (r.legados > 0) {
+          escrever(`  ${r.legados} deles deixam a forma gravada como alternativa: rode \`identidade resolver-enderecos\` depois para reconciliar.`);
+        }
+        if (r.naoCelular > 0) {
+          escrever(`  ${r.naoCelular} nao e celular brasileiro (fixo, 13 digitos com 9 seguido de 0 a 5, outro pais): sem par.`);
+        }
+        if (r.duasFormas.length > 0) {
+          escrever(`  ${r.duasFormas.length} numero(s) com as duas formas gravadas: sem par, decisao do operador (--json traz a lista).`);
+        }
+        if (r.conversasDuplicadas.length > 0) {
+          escrever(`  ${r.conversasDuplicadas.length} numero(s) com uma Conversa direta em cada forma (--json traz a lista).`);
+        }
+        if (r.operacaoId !== null) {
+          escrever(`Para desfazer: malote operacao desfazer ${r.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
+        }
+        if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
     }
 
     if (grupo === 'pessoa' && sub === 'remover-nomes-invalidos') {

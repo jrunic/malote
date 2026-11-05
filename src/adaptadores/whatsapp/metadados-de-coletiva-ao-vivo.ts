@@ -2,6 +2,7 @@
 import type { MensagemRecebida } from './ao-vivo.js';
 import type { Acervo } from '../../nucleo/acervo.js';
 import { resolverEndereco } from '../../nucleo/correspondencia.js';
+import { resolverEnderecoDeWhatsapp } from './resolver-celular.js';
 import { emOperacao } from '../../nucleo/trilha.js';
 import { lerMetadadosDeColetiva, registrarConversa, registrarMetadadosDeColetiva } from '../../nucleo/escrita.js';
 
@@ -158,7 +159,7 @@ export function gravarMetadadosDoEvento(acervo: Acervo, m: MensagemRecebida, mud
     bruto: JSON.stringify(m.key),
   });
   // O autor e o que o evento declara, na forma canonica quando o Acervo a conhece. Nunca por `fromMe`.
-  const alteradoPor = mudanca.autor === undefined ? undefined : resolverEndereco(acervo, FONTE, mudanca.autor);
+  const alteradoPor = mudanca.autor === undefined ? undefined : resolverEnderecoDeWhatsapp(acervo, mudanca.autor);
   const texto = mudanca.texto;
   return registrarMetadadosDeColetiva(acervo, conversaId, {
     ...(mudanca.acao === 'remover' ? { removerDescricao: true } : {}),
@@ -190,7 +191,7 @@ export function gravarAvisosDeGrupo(acervo: Acervo, avisos: readonly AvisoDeGrup
     const conversaId =
       lerMetadadosDeColetiva(acervo, FONTE, enderecoDaConversa).conversaId ??
       registrarConversa(acervo, { fonte: FONTE, idExterno: enderecoDaConversa, coletiva: true, bruto: a.bruto });
-    const alteradoPor = a.autor === undefined ? undefined : resolverEndereco(acervo, FONTE, a.autor);
+    const alteradoPor = a.autor === undefined ? undefined : resolverEnderecoDeWhatsapp(acervo, a.autor);
     const gravou = registrarMetadadosDeColetiva(acervo, conversaId, {
       ...(a.assunto !== undefined ? { assunto: a.assunto } : {}),
       ...(a.descricao !== undefined ? { descricao: a.descricao } : {}),

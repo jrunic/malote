@@ -19,9 +19,9 @@ import { registrarNome } from '../../nucleo/identidade.js';
 import { marcarMensagem } from '../../nucleo/marca-do-titular.js';
 import {
   aprenderCorrespondencia,
-  resolverEndereco,
   CorrespondenciaEmConflitoError,
 } from '../../nucleo/correspondencia.js';
+import { resolverEnderecoDeWhatsapp } from './resolver-celular.js';
 import { materialJaEntrou, registrarMaterialConcluido } from '../../nucleo/sincronizacao.js';
 import { relatorioVazio, type RelatorioDeImportacao } from '../relatorio.js';
 import {
@@ -171,7 +171,12 @@ export function gravarMaterialLido(
   // separadas de gente que ja estava la pelo telefone.
   for (const par of material.correspondencias) {
     try {
-      aprenderCorrespondencia(acervo, { fonte: 'whatsapp', ...par });
+      // O canonico do par e a forma do celular ja resolvida (a que o Acervo grava), nunca a crua do material.
+      aprenderCorrespondencia(acervo, {
+        fonte: 'whatsapp',
+        alternativo: par.alternativo,
+        canonico: resolverEnderecoDeWhatsapp(acervo, par.canonico),
+      });
     } catch (erro) {
       if (!(erro instanceof CorrespondenciaEmConflitoError)) throw erro;
       // Conflito e achado, nao motivo para abortar a importacao inteira.
@@ -182,7 +187,7 @@ export function gravarMaterialLido(
   const idPorConversaExterna = new Map<string, string>();
   for (const cru of material.conversas) {
     // O endereco e traduzido para a forma canonica ANTES de virar `id_externo`.
-    const c = { ...cru, idExterno: resolverEndereco(acervo, 'whatsapp', cru.idExterno) };
+    const c = { ...cru, idExterno: resolverEnderecoDeWhatsapp(acervo, cru.idExterno) };
     const conversaJaEstava = conversaJaExiste(acervo, 'whatsapp', c.idExterno);
     const id = registrarConversa(acervo, {
       fonte: 'whatsapp',
@@ -220,7 +225,7 @@ export function gravarMaterialLido(
       // Mesma traducao do endereco da Conversa, e pela mesma razao: gravar a
       // forma alternativa criaria uma segunda identidade para quem ja esta no
       // acervo pelo telefone.
-      const endereco = resolverEndereco(acervo, 'whatsapp', enderecoCru);
+      const endereco = resolverEnderecoDeWhatsapp(acervo, enderecoCru);
       const { id: identificadorId } = registrarIdentificador(acervo, {
         fonte: 'whatsapp',
         valor: endereco,
@@ -310,7 +315,7 @@ export function gravarMaterialLido(
 
     const { id: identificadorId } = registrarIdentificador(acervo, {
       fonte: 'whatsapp',
-      valor: resolverEndereco(acervo, 'whatsapp', ev.membroExterno),
+      valor: resolverEnderecoDeWhatsapp(acervo, ev.membroExterno),
     });
     const nasceu = registrarTransicao(acervo, {
       origemDaChegada: 'importacao',
@@ -347,7 +352,11 @@ export function gravarMaterialLido(
 
     let autorId: string | undefined;
     if (m.autorExterno !== undefined) {
-      autorId = registrarIdentificador(acervo, { fonte: 'whatsapp', valor: m.autorExterno }).id;
+      // O autor tambem passa pela resolucao: gravado cru, o mesmo celular na outra forma nascia como segunda identidade.
+      autorId = registrarIdentificador(acervo, {
+        fonte: 'whatsapp',
+        valor: resolverEnderecoDeWhatsapp(acervo, m.autorExterno),
+      }).id;
     }
 
     const jaExistia = mensagemJaExiste(acervo, 'whatsapp', m.idExterno);

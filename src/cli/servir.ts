@@ -5,6 +5,7 @@ import { criarServidor, PRAZO_PADRAO_MS, TRABALHADORES_PADRAO } from '../rede/se
 import { iniciarWorkerDeTranscricao } from './transcricao.js';
 import { configuracaoDoMotor } from './motor-de-transcricao.js';
 import type { Ambiente } from './index.js';
+import { consultarDestinoDeWhatsapp } from '../adaptadores/whatsapp/resolver-celular.js';
 
 /** Os unicos enderecos que nao exigem ato explicito. */
 const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost']);
@@ -67,6 +68,7 @@ export async function servir(argumentos: string[], ambiente: AmbienteDeServico):
     porta,
     trabalhadores,
     prazoMs: prazoSegundos * 1000,
+    consultarDestinoDeEnvio: consultarDestinoDeWhatsapp,
   });
   // Um worker precisa subir ANTES de aceitar pedido: se ele nao carrega (caminho, dependencia, import quebrado), toda
   // leitura viraria 503 com o servico `active`. Recusar a subida e falhar no deploy, e nao no primeiro pedido.

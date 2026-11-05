@@ -5,6 +5,8 @@ import {
   CorrespondenciaEmConflitoError,
   resolverEndereco,
 } from '../../nucleo/correspondencia.js';
+import { outraFormaDoCelular } from './celular-br.js';
+import { resolverEnderecoDeWhatsapp } from './resolver-celular.js';
 import {
   idDeConversaPorEndereco,
   idDeMensagemPorExterno,
@@ -68,11 +70,13 @@ export function processarEstadoDeConversa(
       opacosPulados += 1;
       continue;
     }
-    const conversaId = idDeConversaPorEndereco(acervo, {
-      fonte: 'whatsapp',
-      idExterno: resolvido,
-      configuracaoId: e.configuracaoId,
-    });
+    // Decide SO LENDO: o retrato traz TODAS as conversas da conta, e aprender par aqui abriria uma Operacao por numero sem
+    // Conversa. Procura na forma resolvida e, se nao ha, na outra forma do celular DESSA forma (o `id` pode ser um LID).
+    const procurar = (endereco: string): string | undefined =>
+      idDeConversaPorEndereco(acervo, { fonte: 'whatsapp', idExterno: endereco, configuracaoId: e.configuracaoId });
+    const outra = outraFormaDoCelular(resolvido);
+    const conversaId =
+      procurar(resolvido) ?? (outra === null ? undefined : procurar(resolverEndereco(acervo, 'whatsapp', outra)));
     if (conversaId === undefined) {
       opacosPulados += 1;
       continue;
@@ -131,6 +135,17 @@ function temStarred(dado: unknown): boolean {
   return false;
 }
 
+/** O contato com nome utilizavel: o nome e o endereco (o `jid`, ou o `id`); `undefined` quando o contato nao traz nome utilizavel. */
+function contatoNomeado(r: Record<string, unknown>): { name: string; bruto: string } | undefined {
+  const name = r['name'];
+  if (typeof name !== 'string' || name.length === 0) return undefined;
+  if (pareceValorSentinela(name)) return undefined;
+  const jid = r['jid'];
+  const id = r['id'];
+  const bruto = typeof jid === 'string' && jid.length > 0 ? jid : typeof id === 'string' ? id : '';
+  return bruto.length === 0 ? undefined : { name, bruto };
+}
+
 function processarContatos(
   acervo: Acervo,
   e: { dado: unknown },
@@ -163,7 +178,8 @@ function processarContatos(
             aprenderCorrespondencia(acervo, {
               fonte: 'whatsapp',
               alternativo: p.lid,
-              canonico: p.jid,
+              // O JID ja resolvido: o par LID aponta para a forma canonica do celular, nunca para a crua.
+              canonico: resolverEnderecoDeWhatsapp(acervo, p.jid),
             });
           } catch (erro) {
             if (!(erro instanceof CorrespondenciaEmConflitoError)) throw erro;
@@ -173,16 +189,38 @@ function processarContatos(
     );
   }
 
+  // O par dos celulares dos contatos nomeados e aprendido num envelope por LOTE, e SO quando ha o que aprender: a agenda chega
+  // inteira na subida do ouvinte e a cada reconexao, e um envelope por contato (ou um vazio por evento) encheria a trilha. So
+  // entra o celular cujo par ainda nao existe, e nao entra o contato que a leitura abaixo descarta por o nome repetir o numero.
+  const celulares: string[] = [];
   for (const cru of itens) {
     if (cru === null || typeof cru !== 'object') continue;
-    const r = cru as Record<string, unknown>;
-    const name = r['name'];
-    if (typeof name !== 'string' || name.length === 0) continue;
-    if (pareceValorSentinela(name)) continue;
-    const jid = r['jid'];
-    const id = r['id'];
-    const bruto = typeof jid === 'string' && jid.length > 0 ? jid : typeof id === 'string' ? id : '';
-    if (bruto.length === 0) continue;
+    const contato = contatoNomeado(cru as Record<string, unknown>);
+    if (contato === undefined || nomeRepeteONumeroBrasileiro(contato.name, contato.bruto)) continue;
+    const outra = outraFormaDoCelular(contato.bruto);
+    if (
+      outra !== null &&
+      resolverEndereco(acervo, 'whatsapp', contato.bruto) === contato.bruto &&
+      resolverEndereco(acervo, 'whatsapp', outra) === outra
+    ) {
+      celulares.push(contato.bruto);
+    }
+  }
+  if (celulares.length > 0) {
+    emOperacao(
+      acervo,
+      { natureza: 'aprender-endereco-ao-vivo', reversibilidade: 'irreversivel', registraEfeito: false },
+      () => {
+        for (const bruto of celulares) resolverEnderecoDeWhatsapp(acervo, bruto);
+      },
+    );
+  }
+
+  for (const cru of itens) {
+    if (cru === null || typeof cru !== 'object') continue;
+    const contato = contatoNomeado(cru as Record<string, unknown>);
+    if (contato === undefined) continue;
+    const { name, bruto } = contato;
     const canonico = resolverEndereco(acervo, 'whatsapp', bruto);
     if (nomeRepeteONumeroBrasileiro(name, canonico)) continue;
     const { id: identificadorId } = registrarIdentificador(acervo, {

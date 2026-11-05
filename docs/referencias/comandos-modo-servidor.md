@@ -46,6 +46,7 @@ serviço e saúde: [guia do host](../guias/host-continuo-ouvinte-e-api.md); onde
 Comando que altera muito, ou que não tem volta, **não faz nada por padrão: mostra o que faria**. Para
 valer, `--com-efeito` e `--confirmo` juntos. Vale para `pessoa propostas aplicar`,
 `pessoa remover-nomes-invalidos`, `pessoa promover-identificadores-nomeados`, `identidade resolver-enderecos`,
+`identidade aprender-formas-do-celular`,
 `contato-compartilhado extrair`, `citacao extrair`, `midia extrair-imagem-de-modelo`, `retencao aplicar` e `operacao desfazer`.
 `--com-efeito` sem `--confirmo` não executa, mas o código de saída varia: a maioria lança o erro e sai 1,
 `retencao aplicar` sai 2 e `operacao desfazer` cai no ensaio e sai 0.
@@ -169,6 +170,7 @@ etapas estão na seção 4.3 do [guia do host](../guias/host-continuo-ouvinte-e-
 | `pessoa remover-nomes-invalidos --inquilino <id> [--com-efeito --confirmo]` | Remove Atribuição de nome que repete o próprio endereço ou duplica outra por marca invisível. Ensaio por padrão. **O `desfazer` desta Operação não restaura os nomes** (#1283) |
 | `pessoa promover-identificadores-nomeados --inquilino <id> [--limite <n>] [--com-efeito --confirmo]` | Promove a Pessoa os Identificadores sem Pessoa que já têm nome utilizável. Ensaio por padrão; escreve no Acervo. Nunca foi medido em campo |
 | `pessoa precedencia --inquilino <id> [--origem <nome> --peso <n>] [--catalogo-preferido <apelido>]` | Ajusta a precedência entre as origens de nome, e qual catálogo é o preferido |
+| `identidade aprender-formas-do-celular --inquilino <id> [--limite <n>] [--tamanho-do-lote <n>] [--com-efeito --confirmo] [--json]` | Aprende o par das duas formas do celular brasileiro (com e sem o 9) dos números já gravados, para `identificar` e `--remetente` alcançarem o número pelas duas. O ensaio relata, em contagens, os pares a criar, os números que não são celular, os já resolvidos, os conflitos e os canônicos de par LID respeitados (e, entre eles, os legados, que a reconciliação `identidade resolver-enderecos` completa); o `--json` traz também os números com as duas formas gravadas (sem par, decisão do operador) e as Conversas diretas duplicadas. Com efeito, uma Operação `por-efeito` que `operacao desfazer` reverte; o ouvinte pode seguir no ar |
 | `identidade resolver-enderecos --inquilino <id> [--com-efeito --confirmo] [--json]` | Resolve, no Acervo existente, os endereços na forma alternativa para a canônica. Reversível |
 | `operacao listar --inquilino <id> --chave <valor>` | Lista as 50 Operações mais recentes da trilha (do Acervo e do Registro) |
 | `operacao ver <id> --inquilino <id> --chave <valor>` | O efeito linha a linha de uma Operação |

@@ -6,6 +6,7 @@ import {
   resolverEndereco,
   CorrespondenciaEmConflitoError,
 } from '../../nucleo/correspondencia.js';
+import { resolverEnderecoDeWhatsapp } from './resolver-celular.js';
 import {
   anexoJaExiste,
   idDeMensagemPorExterno,
@@ -525,7 +526,8 @@ export function receberEvento(
             aprenderCorrespondencia(acervo, {
               fonte: FONTE,
               alternativo: m.key.participant as string,
-              canonico: m.key.participantPn as string,
+              // A forma do celular ja resolvida: o par LID aponta para a canonica, nunca para a crua (cadeia).
+              canonico: resolverEnderecoDeWhatsapp(acervo, m.key.participantPn as string),
             });
           } catch (erro) {
             if (!(erro instanceof CorrespondenciaEmConflitoError)) throw erro;
@@ -726,7 +728,12 @@ function gravarUma(
   // 2. A Conversa: o endereco e traduzido para a forma canonica ANTES de virar
   //    `id_externo`. E o que faz a Conversa recebida encontrar a que a
   //    importacao criou, em vez de nascer duplicada.
-  const enderecoDaConversa = resolverEndereco(acervo, FONTE, m.key.remoteJid);
+  // TODA Mensagem `fromMe` entra aqui: o produto nao separa o eco de um Envio do operador (a forma que ELE digitou, sem
+  // evidencia) da Mensagem que o Titular escreveu no aparelho (a forma da plataforma). Na duvida nao inventa canonica; so
+  // aproveita o que o Acervo ja sabe (#1364). Separar o eco pelo `keyId` do Envio valeria so dentro do processo.
+  const enderecoDaConversa = resolverEnderecoDeWhatsapp(acervo, m.key.remoteJid, undefined, {
+    soComEvidencia: m.key.fromMe,
+  });
   const coletiva = enderecoEhColetivo(enderecoDaConversa);
   const conversaId = registrarConversa(acervo, {
     fonte: FONTE,
@@ -750,7 +757,7 @@ function gravarUma(
   //    escreveu.
   const enderecoDoAutor = m.key.fromMe
     ? undefined
-    : resolverEndereco(acervo, FONTE, m.key.participant ?? m.key.remoteJid);
+    : resolverEnderecoDeWhatsapp(acervo, m.key.participant ?? m.key.remoteJid);
 
   let autorId: string | undefined;
   if (enderecoDoAutor !== undefined && !enderecoDoAutor.endsWith('@broadcast')) {
@@ -907,7 +914,7 @@ function gravarUma(
         (relato.ignorados['parametro-sem-endereco'] ?? 0) + 1;
       continue;
     }
-    const enderecoDoMembro = resolverEndereco(acervo, FONTE, alvo);
+    const enderecoDoMembro = resolverEnderecoDeWhatsapp(acervo, alvo);
     const { id } = registrarIdentificador(acervo, { fonte: FONTE, valor: enderecoDoMembro });
     const nasceu = registrarTransicao(acervo, {
       origemDaChegada: opcoes.origemDaChegada,
@@ -981,7 +988,11 @@ function gravarEtiqueta(
     coletiva: true,
     bruto: JSON.stringify(m.key),
   });
-  const { id } = registrarIdentificador(acervo, { fonte: FONTE, valor: alvo.enderecoDoMembro });
+  // `decidirEtiqueta` decide SO LENDO (nao abre Operacao vazia por evento descartado); quem grava e quem aprende o par.
+  const { id } = registrarIdentificador(acervo, {
+    fonte: FONTE,
+    valor: resolverEnderecoDeWhatsapp(acervo, alvo.enderecoDoMembro),
+  });
   const nasceu = registrarEtiqueta(acervo, {
     origemDaChegada,
     conversaId,

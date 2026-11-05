@@ -1,5 +1,10 @@
 import type { Acervo } from './acervo.js';
 import type { Fonte } from './tipos.js';
+import type { Operacao } from './trilha.js';
+
+/** A consulta de `enderecoEhCanonico`, exportada para o teste de plano de consulta fixar que ela usa o indice por canonico (v31). */
+export const SQL_ENDERECO_EH_CANONICO =
+  'SELECT 1 FROM correspondencias_de_endereco WHERE fonte = ? AND canonico = ? LIMIT 1';
 
 /**
  * Correspondencia entre duas formas do mesmo endereco numa Fonte.
@@ -45,7 +50,11 @@ export class CorrespondenciaEmConflitoError extends Error {
  * o adaptador de recepcao, por exemplo, mantem a primeira e grava a Mensagem
  * assim mesmo, porque perder o que chegou seria pior que ter uma duvida.
  */
-export function aprenderCorrespondencia(acervo: Acervo, entrada: EntradaDeCorrespondencia): void {
+export function aprenderCorrespondencia(
+  acervo: Acervo,
+  entrada: EntradaDeCorrespondencia,
+  op?: Operacao,
+): void {
   const gravado = acervo.preparar(
       'SELECT canonico FROM correspondencias_de_endereco WHERE fonte = ? AND alternativo = ?',
     )
@@ -66,6 +75,44 @@ export function aprenderCorrespondencia(acervo: Acervo, entrada: EntradaDeCorres
        VALUES (?, ?, ?, ?)`,
     )
     .run(entrada.fonte, entrada.alternativo, entrada.canonico, new Date().toISOString());
+
+  // Com `op`, a linha de efeito e o que deixa o `desfazer` de uma Operacao `por-efeito` remover ESTE par e so ele. A
+  // recepcao ao vivo nao passa `op`: o aprendizado dela e irreversivel e sem efeito, como o do resto da correspondencia.
+  op?.valor({
+    tabela: 'correspondencias_de_endereco',
+    chave: JSON.stringify([entrada.fonte, entrada.alternativo]),
+    campo: 'canonico',
+    antes: null,
+    depois: entrada.canonico,
+  });
+}
+
+/**
+ * Remove UM par, e so se ele ainda aponta para o canonico dado. Usado por `desfazer`: o par refeito depois, para outro
+ * canonico, nao e tocado.
+ */
+export function removerCorrespondencia(acervo: Acervo, entrada: EntradaDeCorrespondencia): boolean {
+  return (
+    acervo
+      .preparar(
+        'DELETE FROM correspondencias_de_endereco WHERE fonte = ? AND alternativo = ? AND canonico = ?',
+      )
+      .run(entrada.fonte, entrada.alternativo, entrada.canonico).changes === 1
+  );
+}
+
+/** O valor e canonico de algum par? (a forma que o resto do Acervo ja usa). Usa o indice por canonico (v31). */
+export function enderecoEhCanonico(acervo: Acervo, fonte: Fonte, valor: string): boolean {
+  return acervo.preparar(SQL_ENDERECO_EH_CANONICO).get(fonte, valor) !== undefined;
+}
+
+/** O valor esta gravado como Identificador da Fonte? */
+export function enderecoTemIdentificador(acervo: Acervo, fonte: Fonte, valor: string): boolean {
+  return (
+    acervo
+      .preparar('SELECT 1 FROM identificadores WHERE fonte = ? AND valor = ? LIMIT 1')
+      .get(fonte, valor) !== undefined
+  );
 }
 
 /**

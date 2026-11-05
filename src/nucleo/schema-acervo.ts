@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3';
  * Politica completa das duas bases na ADR local
  * `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_ACERVO = 30;
+export const VERSAO_SCHEMA_ACERVO = 31;
 
 /**
  * Forma mais antiga que a maquina de migracao alcanca.
@@ -112,6 +112,11 @@ export function aplicarSchemaAcervo(db: Database): void {
       aprendida_em TEXT NOT NULL,
       PRIMARY KEY (fonte, alternativo)
     );
+
+    -- A pergunta "este valor e canonico de algum par?" e feita a cada endereco de celular que a recepcao resolve
+    -- (#1376). Sem este indice ela varre a tabela inteira (medido: 3,6 ms com 18 mil pares e 10,9 ms com 50 mil).
+    CREATE INDEX IF NOT EXISTS correspondencias_por_canonico
+      ON correspondencias_de_endereco (fonte, canonico);
 
     -- Identidade do Acervo: uma linha, sempre. É o que recusa abrir o arquivo
     -- de outro Inquilino quando a resolução de caminho falha.

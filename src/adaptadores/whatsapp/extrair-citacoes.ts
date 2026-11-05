@@ -122,7 +122,7 @@ export function extrairCitacoes(acervo: Acervo, opcoes: OpcoesDeExtracaoDeCitaco
 
   emOperacao(acervo, { natureza: 'extrair-citacoes', reversibilidade: 'por-efeito' }, (op) => {
     for (const item of plano) {
-      const entrada = citacaoParaGravar(acervo, item.message, enderecosDa(item.conversaId), { conversaId: item.conversaId });
+      const entrada = citacaoParaGravar(acervo, item.message, enderecosDa(item.conversaId), { conversaId: item.conversaId }, op);
       if (entrada === undefined) continue;
       const gravada = aplicarCitacao(acervo, item.mensagemId, { fonte: 'whatsapp', conversaId: item.conversaId }, entrada);
       if (gravada === null) continue;

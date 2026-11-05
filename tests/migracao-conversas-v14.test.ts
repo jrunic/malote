@@ -16,6 +16,10 @@ import { PLANO_DO_ACERVO } from '../src/nucleo/passos-do-acervo.js';
  */
 const V13 = `
   CREATE TABLE versao_schema (versao INTEGER NOT NULL);
+  CREATE TABLE correspondencias_de_endereco (
+    fonte TEXT NOT NULL, alternativo TEXT NOT NULL, canonico TEXT NOT NULL, aprendida_em TEXT NOT NULL,
+    PRIMARY KEY (fonte, alternativo)
+  );
   CREATE TABLE migracoes_aplicadas (
     de INTEGER NOT NULL, para INTEGER NOT NULL, descricao TEXT NOT NULL,
     aplicada_em TEXT NOT NULL, conferencia TEXT NOT NULL,

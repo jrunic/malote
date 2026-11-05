@@ -69,6 +69,14 @@ export interface ContextoDaRequisicao {
   identidade: IdentidadeDeAcesso;
   dados: string;
   /**
+   * Para onde um Envio ao endereco iria (a previa do aviso, #1376). Quem compoe e `src/cli/servir.ts`: a rede nao
+   * conhece a regra do celular. Ausente, a resposta do Envio nao leva aviso de endereco.
+   */
+  consultarDestinoDeEnvio?: (
+    acervo: Acervo,
+    endereco: string,
+  ) => { usado: string; situacao: 'redirecionado' | 'conhecido' | 'desconhecido' | 'nao-se-aplica' };
+  /**
    * SO PARA TESTE: chamado entre o exame de repeticao e o registro de um Envio, para um teste
    * simular o outro processo que ganha a corrida. Producao nunca o define.
    */
@@ -402,7 +410,7 @@ async function responderSolicitacaoDeEnvio(
       return;
     }
     // O que a resposta diz sobre o destino: a conta usada, e a Conversa (a usada, e de qual foi redirecionada).
-    const sobreODestino: Record<string, string> = { configuracao: apelido };
+    const sobreODestino: Record<string, string | boolean> = { configuracao: apelido };
     if (porConversa?.tipo === 'conversa') sobreODestino['conversa'] = porConversa.usada.id;
     if (porConversa !== undefined && (porConversa.tipo === 'endereco' || porConversa.usada.id !== porConversa.dada.id)) {
       sobreODestino['redirecionadaDe'] = porConversa.dada.id;
@@ -417,6 +425,12 @@ async function responderSolicitacaoDeEnvio(
     const escrita = abrirAcervo(pastaDeAcervos, inquilinoId);
     let stagingParaLimpar: string | undefined;
     try {
+      // O aviso de endereco so vale para `para`: a Conversa dada ja diz o que foi usado (#1323).
+      if (porConversa === undefined && ctx.consultarDestinoDeEnvio !== undefined) {
+        const consulta = ctx.consultarDestinoDeEnvio(escrita, para as string);
+        if (consulta.situacao === 'redirecionado') sobreODestino['enderecoUsado'] = consulta.usado;
+        if (consulta.situacao === 'desconhecido') sobreODestino['enderecoDesconhecido'] = true;
+      }
       const destino: DestinoDeEnvio =
         porConversa === undefined
           ? { enderecoCru: para as string }

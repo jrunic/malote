@@ -38,7 +38,7 @@ import {
   mesmoTelefone,
   type IdentidadeBrutaDoVinculo,
 } from '../adaptadores/whatsapp/identidade-da-conta.js';
-import { declararEnderecosDaConta } from '../nucleo/endereco-da-conta.js';
+import { declararContaDeWhatsapp } from '../adaptadores/whatsapp/declarar-conta.js';
 import {
   declararTelefoneDaConta,
   lerEnderecosDaConta,
@@ -390,11 +390,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
       registroDaConferencia.fechar();
     }
     const declarado = comAtor(atorDeServico('ouvinte-whatsapp'), () =>
-      declararEnderecosDaConta(acervo, {
-        fonte: 'whatsapp',
-        canonico: id.jid,
-        ...(id.lid !== null ? { alternativo: id.lid } : {}),
-      }),
+      declararContaDeWhatsapp(acervo, id),
     );
     enderecoDaConta = id.jid;
     if (declarado.conflito) {
