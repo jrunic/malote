@@ -23,6 +23,27 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [0.46.0] — 2026-11-05
+
+Muda a forma do Acervo (v30 para v31): nasce um índice por fonte e canônico na tabela de correspondências; a migração roda sozinha na primeira abertura, é idempotente e não perde linha. Não muda a forma do Registro. Contrato da API aditivo.
+
+### Adicionado
+
+- **O celular brasileiro vale com e sem o 9.** A recepção ao vivo, a importação, os metadados de coletiva, a citação e a identidade da conta aprendem o **par das duas formas** do mesmo celular (a forma já gravada é a canônica, a outra é a alternativa) na tabela de correspondências que já existia. `mensagens --remetente`, `identificar` e os demais filtros por remetente alcançam o número pelas duas formas; antes, o endereço com o 9 devolvia lista vazia quando o Acervo guardava o de 12 dígitos. A entrada é o endereço completo (`<dígitos>@s.whatsapp.net`). Fixo, 13 dígitos com 9 seguido de 0 a 5 e número de outro país não ganham par.
+- **`malote identidade aprender-formas-do-celular`** aprende o par dos celulares já gravados. Ensaio por padrão: conta, em números, os pares a criar, os que já têm par, os que não são celular, os conflitos e os que seguem a forma canônica de um par LID existente, e lista (no `--json`) os números com as duas formas gravadas e as Conversas diretas duplicadas. `--com-efeito --confirmo` abre uma Operação `por-efeito` em lotes (`--tamanho-do-lote`, `--limite`), com o ouvinte no ar, e `operacao desfazer` a reverte. Só local.
+- **`identificar` diz a forma pedida e a gravada** quando diferem (`Pedido: … O Acervo guarda: …`; `consultado.gravadas` no `--json` e em `GET /identificadores`). Um servidor anterior não manda o campo, e o cliente novo funciona do mesmo jeito.
+- **O pedido de Envio avisa o endereço que será usado**: `enderecoUsado` quando o Acervo guarda o celular na outra forma, `enderecoDesconhecido` quando não o conhece em forma nenhuma, no texto, no `--json` e na resposta de `POST /envios/solicitar`.
+
+### Alterado
+
+- **O ouvinte envia ao endereço que o Acervo guarda.** O destino é decidido ao processar o Envio (o que cobre os pedidos pendentes de antes da versão): o celular pedido na outra forma de um número gravado sai pela gravada, e o Envio por Conversa fica ligado à Conversa da forma gravada. O número que o Acervo não conhece em nenhuma forma sai como foi pedido, sem par inventado, porque o que o operador digitou não é evidência da plataforma. Grupo e endereço opaco saem como pedidos.
+- **A gravação resolve o celular antes de escrever**, em todo ponto que registra Identificador, Conversa ou participante de WhatsApp, e uma guarda de lista fechada reprova ponto novo que grave sem o resolvedor. O mesmo celular chegando nas duas formas não cria segundo Identificador, Conversa nem participante. O custo recorrente fica abaixo de 0,1 ms por Mensagem; a primeira Mensagem de um celular nunca visto custa até cerca de 0,3 ms a mais (medido: de 0,02 a 0,27 ms), uma vez por número.
+- **Toda Mensagem enviada pela própria conta (`fromMe`) só aprende o par com evidência da plataforma:** o resolvedor não inventa a forma canônica quando nenhuma das duas está gravada.
+
+### Corrigido
+
+- **`mensagens --remetente` e `identificar` com o 9 do celular devolviam vazio em silêncio** para quase dois terços dos números, que o Acervo guarda sem o 9.
+
 ## [0.45.0] — 2026-10-27
 
 Muda a forma do Acervo (v29 para v30): nascem o Diário de Chegadas e a linha de controle dele; a migração roda sozinha na primeira abertura, é idempotente e não gera Chegada para o que já estava gravado. Não muda a forma do Registro. Contrato da API aditivo.
