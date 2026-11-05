@@ -113,6 +113,42 @@ function decidir(
   };
 }
 
+export type SituacaoNoEstoque =
+  | 'nao-celular'
+  | 'ja-resolvido'
+  | 'conflito'
+  | 'duas-formas'
+  | 'cria'
+  | 'cria-respeitando-canonico'
+  | 'cria-legado';
+
+/**
+ * O que o estoque faria com o endereco, SEM escrever: a decisao de `resolverEnderecoDeWhatsapp` vista de fora, para o ensaio do
+ * comando que aprende o par dos celulares ja gravados.
+ *
+ * - `nao-celular`: fixo, 13 digitos com 9 seguido de 0 a 5, outro pais, opaco: nao ganha par;
+ * - `ja-resolvido`: o par das duas formas ja existe;
+ * - `conflito`: a outra forma e alternativa de outro endereco (achado, nao dado novo), ou as duas sao canonicas de pares;
+ * - `duas-formas`: as duas gravadas como Identificador: sem par, decisao do operador (vale tambem se, por defeito, ja ha par);
+ * - `cria`: nasce o par; `cria-respeitando-canonico`: nasce o par e a forma canonica e a de um par que ja existia;
+ * - `cria-legado`: como o anterior, mas o canonico do par que ja existia e a forma NAO gravada, e a gravada vira a
+ *   alternativa (o caso legado da spec, medido em 0 nos quatro Acervos). Quem le o Acervo depois reconcilia com
+ *   `identidade resolver-enderecos`: o mesmo par nasceria na primeira Mensagem ao vivo.
+ */
+export function situacaoNoEstoque(acervo: Acervo, endereco: string): SituacaoNoEstoque {
+  const outra = outraFormaDoCelular(endereco);
+  if (outra === null) return 'nao-celular';
+  if (enderecoTemIdentificador(acervo, FONTE, endereco) && enderecoTemIdentificador(acervo, FONTE, outra)) return 'duas-formas';
+  const deste = resolverEndereco(acervo, FONTE, endereco);
+  if (deste !== endereco) return deste === outra ? 'ja-resolvido' : 'conflito';
+  const daOutra = resolverEndereco(acervo, FONTE, outra);
+  if (daOutra !== outra) return daOutra === endereco ? 'ja-resolvido' : 'conflito';
+  const escolha = escolher(acervo, endereco, outra);
+  if (escolha === null) return 'conflito';
+  if (!enderecoEhCanonico(acervo, FONTE, endereco) && !enderecoEhCanonico(acervo, FONTE, outra)) return 'cria';
+  return !enderecoTemIdentificador(acervo, FONTE, escolha.canonico) ? 'cria-legado' : 'cria-respeitando-canonico';
+}
+
 const ehTelefone = (endereco: string): boolean => endereco.endsWith('@s.whatsapp.net');
 
 /**
