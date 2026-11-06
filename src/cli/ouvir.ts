@@ -30,6 +30,8 @@ import { anotarRetrato, pareceRetrato } from './retrato.js';
 import { registrarDescartes } from './descartes.js';
 import { criarMarcadorDoSinal } from './sinal-da-conexao.js';
 import { criarGravadorDosPendentes, linhaDeResumo, linhaDoAnuncio } from './estado-dos-pendentes.js';
+import { criarGravadorDosReenvios, montarGanchoDoReenvio } from './reenvios.js';
+import { lerBrutoDaMensagemEnviada } from '../nucleo/envio.js';
 import { anotarPulos } from './pulos.js';
 import { atorDeServico, comAtor } from '../nucleo/ator.js';
 import { iniciarAparagemDoDiario } from './aparagem-do-diario.js';
@@ -428,6 +430,11 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
   // Parar a conexao so existe depois de `conectar` retornar.
   let pararConexao: (() => void) | undefined;
 
+  // O contador dos pedidos de reenvio (#1420): serie por dia acumulada entre Conexoes, em arquivo, estrangulada a cada 5 s.
+  // Declarado ANTES dos tratadores de saida, que o PARAM: o que o estrangulamento segura so chega ao arquivo na parada.
+  // Falha dele nunca derruba a recepcao.
+  const gravadorDosReenvios = criarGravadorDosReenvios({ caminho: caminhos.reenvios, agora, avisar: escrever });
+
   // EXCECAO QUE ESCAPA DA BIBLIOTECA (#1173). Sem tratador o Node sai com 1, que o unit le como
   // "vinculo invalidado" e NAO reinicia. Aqui a saida e por um codigo que o supervisor reinicia, e a
   // linha diz que foi excecao, para nao se confundir com o vinculo invalidado no log. A queda de
@@ -449,6 +456,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
           `saindo com ${CODIGO_DE_EXCECAO_NAO_TRATADA} para o supervisor reiniciar.`,
       );
       pararPollerDeEnvio?.();
+      gravadorDosReenvios.parar();
       try {
         pararConexao?.();
       } catch {
@@ -503,6 +511,10 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
     escrever(`[ouvinte] decodificador de edicao indisponivel; edicoes cifradas ficam guardadas: ${String(erro)}`);
   }
 
+  // Grava o `desde` do contador dos reenvios se o arquivo nao existe (so isso: Conexao sem pedido nao escreve mais nada).
+  // So `writeFileSync` e `renameSync` na pasta de estado da conta, que o vinculo ja usa; nenhum `mkdir` recursivo.
+  gravadorDosReenvios.abrir();
+
   try {
     const conexao = await conectar({
       pastaDoVinculo: caminhos.vinculo,
@@ -524,6 +536,16 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
         if (tipo === 'anuncio') escrever(linhaDoAnuncio(estado));
         if (tipo === 'final') escrever(linhaDeResumo(estado));
       },
+      // O pedido de reenvio (#1420): a plataforma pede ao ouvinte a MESMA mensagem que o aparelho do destinatario nao
+      // decifrou. A leitura do Acervo e a porta do nucleo, que so devolve a Mensagem de um Envio DESTA Configuracao com
+      // a Referencia Externa pedida. O evento vai ao contador e ao log: a linha leva so o resultado, a idade e se o
+      // endereco do recibo bate, NUNCA endereco, nome, texto nem o identificador.
+      aoPedidoDeReenvio: montarGanchoDoReenvio({
+        configuracaoId: configuracao.id,
+        lerBruto: (configuracaoId, referencia) => lerBrutoDaMensagemEnviada(acervo, configuracaoId, referencia),
+        gravador: gravadorDosReenvios,
+        escrever,
+      }),
       // O aviso de metadados de grupo entra por um gancho que NAO e o de `aoReceber`: o Ator abre AQUI, pelo mesmo
       // motivo (o escopo nao atravessa o encanamento assincrono da biblioteca), senao a Operacao sairia
       // `indeterminado`. Uma Operacao por aviso. So CONTAGENS: assunto e descricao sao texto de conversa.
@@ -560,6 +582,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
         // Para o poller ANTES de fechar o Acervo — e nao marca Envio pendente
         // como falhou: a causa e do vinculo, nao do Envio (#1112, criterio 12).
         pararPollerDeEnvio?.();
+        gravadorDosReenvios.parar();
         fecharUmaVez();
         // Diferente de zero: o supervisor tem de saber que isto NAO foi uma
         // parada pedida. Vinculo invalidado exige pareamento humano.
@@ -815,6 +838,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
     pararPollerDeEnvio = (): void => {
       clearInterval(pollerDeEnvio);
       pararAparagem();
+      gravadorDosReenvios.parar();
     };
 
     const parada = (sinal: string): void => {
@@ -830,6 +854,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
     return await fim;
   } catch (causa) {
     escrever(`[ouvinte] nao consegui conectar: ${(causa as Error).message}`);
+    gravadorDosReenvios.parar();
     fecharUmaVez();
     return 1;
   } finally {

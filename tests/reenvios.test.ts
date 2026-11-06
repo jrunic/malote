@@ -8,6 +8,7 @@ import {
   criarGravadorDosReenvios,
   lerReenvios,
   linhaDoEventoDeReenvio,
+  montarGanchoDoReenvio,
   type ContagemDeReenvios,
 } from '../src/cli/reenvios.js';
 import type { EventoDeReenvio } from '../src/adaptadores/whatsapp/conexao.js';
@@ -467,4 +468,42 @@ test('a linha de log nao carrega endereco, nome, texto nem identificador, mesmo 
     linhaDoEventoDeReenvio({ tipo: 'pedido', resultado: JID, idadeSegundos: -3, enderecoDoRecibo: 'x' } as unknown as EventoDeReenvio),
     undefined,
   );
+});
+
+test('o gancho do ouvir pergunta a porta com a Configuracao DO OUVINTE e a referencia pedida', () => {
+  const perguntas: Array<[string, string]> = [];
+  const gancho = montarGanchoDoReenvio({
+    configuracaoId: 'cfg-do-ouvinte',
+    lerBruto: (cfg, ref) => {
+      perguntas.push([cfg, ref]);
+      return ref === 'REF-DA-MENSAGEM-ENVIADA' ? '{"bruto":true}' : undefined;
+    },
+    gravador: { aoEvento: () => undefined },
+    escrever: () => undefined,
+  });
+  assert.equal(gancho.lerDoAcervo('REF-DA-MENSAGEM-ENVIADA'), '{"bruto":true}');
+  assert.equal(gancho.lerDoAcervo('OUTRA'), undefined);
+  assert.deepEqual(perguntas, [
+    ['cfg-do-ouvinte', 'REF-DA-MENSAGEM-ENVIADA'],
+    ['cfg-do-ouvinte', 'OUTRA'],
+  ]);
+});
+
+test('o gancho do ouvir leva o evento ao contador E ao log, e evento fora do contrato nao escreve linha', () => {
+  const contados: EventoDeReenvio[] = [];
+  const linhas: string[] = [];
+  const gancho = montarGanchoDoReenvio({
+    configuracaoId: 'cfg',
+    lerBruto: () => undefined,
+    gravador: { aoEvento: (e) => contados.push(e) },
+    escrever: (l) => linhas.push(l),
+  });
+  gancho.aoEvento(pedido('achada-na-memoria'));
+  gancho.aoEvento({ tipo: 'recibo-falhou' });
+  gancho.aoEvento({ tipo: 'nada-disso' } as unknown as EventoDeReenvio);
+  assert.equal(contados.length, 3, 'o contador decide o que conta');
+  assert.deepEqual(linhas, [
+    '[ouvinte] pedido de reenvio: achada-na-memoria idade=30s endereco=igual',
+    '[ouvinte] reenvio: o recibo falhou',
+  ]);
 });

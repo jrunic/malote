@@ -1,6 +1,6 @@
 // src/cli/reenvios.ts
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import type { EventoDeReenvio } from '../adaptadores/whatsapp/conexao.js';
+import type { EventoDeReenvio, GanchoDoReenvio } from '../adaptadores/whatsapp/conexao.js';
 import { DIAS_GUARDADOS } from './vigilancia.js';
 
 /**
@@ -275,6 +275,27 @@ export function criarGravadorDosReenvios(opcoes: {
       } catch (erro) {
         avisarUmaVez('o contador', erro);
       }
+    },
+  };
+}
+
+/**
+ * O gancho que o `ouvir` passa a `conectar` (#1420). Compoe: a leitura do Acervo (a porta do nucleo, que so devolve a
+ * Mensagem de um Envio DESTA Configuracao) e o destino de cada evento (o contador e UMA linha de log, sem endereco).
+ * Mora aqui, e nao dentro do `ouvir`, para que o teste veja a Configuracao que chega a porta.
+ */
+export function montarGanchoDoReenvio(o: {
+  configuracaoId: string;
+  lerBruto: (configuracaoId: string, referenciaExterna: string) => string | undefined;
+  gravador: Pick<GravadorDosReenvios, 'aoEvento'>;
+  escrever: (linha: string) => void;
+}): GanchoDoReenvio {
+  return {
+    lerDoAcervo: (referenciaExterna) => o.lerBruto(o.configuracaoId, referenciaExterna),
+    aoEvento: (evento) => {
+      o.gravador.aoEvento(evento);
+      const linha = linhaDoEventoDeReenvio(evento);
+      if (linha !== undefined) o.escrever(linha);
     },
   };
 }
