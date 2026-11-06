@@ -71,6 +71,8 @@ export interface CaminhosDaConta {
   adiantadas: string;
   /** O estado dos Pendentes da Plataforma da ultima Conexao (#1151). Ver `estado-dos-pendentes.ts`. */
   pendentes: string;
+  /** O contador dos pedidos de reenvio, acumulado por dia (#1420). Ver `reenvios.ts`. */
+  reenvios: string;
 }
 
 /**
@@ -95,6 +97,7 @@ export function caminhosDaConta(raiz: string, conta: string): CaminhosDaConta {
       sinal: join(pasta, 'ultimo-sinal.txt'),
       adiantadas: join(pasta, 'instantes-adiantados.json'),
       pendentes: join(pasta, 'pendentes.json'),
+      reenvios: join(pasta, 'reenvios.json'),
   };
 }
 

@@ -172,6 +172,7 @@ import { enderecoRecusado, servir } from './servir.js';
 import { lerUltimoEvento } from './ultimo-evento.js';
 import { lerSinalDaConexao } from './sinal-da-conexao.js';
 import { lerEstadoDosPendentes } from './estado-dos-pendentes.js';
+import { lerReenvios } from './reenvios.js';
 import {
   reenfileirarFalhas,
   incluirEstoqueEmTranscricao,
@@ -1119,6 +1120,11 @@ function executarComAtor(
             // `ultimoSinalDaConexao` parado e processo morto, nao Pendentes presos. So o --json: a saida default e contrato
             // com o watchdog. NAO reusa `lotes`, que e do Derrame.
             pendentes: lerEstadoDosPendentes(caminhosDoEstado.pendentes),
+            // Os pedidos de reenvio que a plataforma fez ao ouvinte (#1420): serie por dia, acumulada entre Conexoes, so
+            // tipos e numeros. `null` e INDISPONIVEL (arquivo ausente, ilegivel ou sem `desde`), NUNCA "nenhum pedido":
+            // `desde` presente com `dias` sem o dia e que diz "nenhum pedido". So o --json: a saida default e contrato
+            // com o watchdog.
+            reenvios: lerReenvios(caminhosDoEstado.reenvios),
           }),
         );
         return 0;
