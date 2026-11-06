@@ -23,6 +23,17 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [Não lançado]
+
+Muda a forma do Acervo (v31 para v32): o Envio ganha um campo e um índice parcial; a migração roda sozinha na primeira abertura, é idempotente e não perde linha. Não muda a forma do Registro. `ouvinte estado --json` ganha um campo; contrato aditivo, saída padrão intacta.
+
+### Adicionado
+
+- **O ouvinte atende o Pedido de reenvio das mensagens que o malote enviou.** Quando o aparelho de quem recebeu um Envio não o decifra, a plataforma pede ao remetente a mesma mensagem, e até aqui o ouvinte não respondia (o destinatário ficava com "Aguardando mensagem"). Agora responde pela memória do envio (a mensagem como a biblioteca a montou, 256 entradas e 1 hora, que sobrevive à religação) e, depois de um reinício, pelo Acervo, só para a Mensagem cuja Referência Externa consta num Envio da própria Configuração e só na forma do eco local. O resto é "indisponível", e nenhuma falha derruba a Conexão. Corrige a recuperação, não a causa de o aparelho não decifrar. Decisão e risco: `docs/decisoes/20261106-ouvinte-atende-o-pedido-de-reenvio.md`.
+- **O Envio guarda a Referência Externa da Mensagem enviada** (Acervo v32), gravada no mesmo ato que o marca `enviado`, com índice parcial por Configuração e Referência Externa. Envios anteriores à migração ficam sem ela. A leitura do Envio (`envio estado` e a leitura por rede) não a expõe.
+- **`ouvinte estado --json` traz `reenvios`**: os Pedidos de reenvio por dia UTC (últimos 30 dias), acumulados entre Conexões e reinícios, com `desde` (o início da contagem) e, por dia, os pedidos, os achados por fonte, os não achados, os erros, o endereço do recibo diferente, os recibos cujo reenvio falhou e as recusas da biblioteca por limite e por mensagem que não é própria; só tipos e números, `null` quando indisponível. A saída padrão não muda.
+- **O registro do ouvinte** ganha uma linha por Pedido de reenvio (resultado, idade e se o endereço do recibo bate), sem endereço, nome, texto nem identificador.
+
 ## [0.46.0] — 2026-11-05
 
 Muda a forma do Acervo (v30 para v31): nasce um índice por fonte e canônico na tabela de correspondências; a migração roda sozinha na primeira abertura, é idempotente e não perde linha. Não muda a forma do Registro. Contrato da API aditivo.

@@ -318,7 +318,8 @@ o que vigia é o instante andar). Conta sem `ultimo-evento` registrado (nova, ou
 com código 1 e a linha `Conta <nome>: sem evento registrado.`, mesmo com `--json`: um alarme que trate
 saída diferente de 0 dispara nesse caso. Com `--json` vêm `conta`, `ultimoEvento`, `derramados`,
 `lotes`, `correspondencia`, `ultimoRetrato`, `pulos`, `descartes`, `instantesAdiantados` (as Mensagens
-gravadas só por causa da janela de relógio, por dia), `guarda` e `ultimoSinalDaConexao` — para painel,
+gravadas só por causa da janela de relógio, por dia), `guarda`, `ultimoSinalDaConexao` e `reenvios` (os Pedidos de reenvio por dia, só números;
+`null` é indisponível) — para painel,
 não para alarme de silêncio.
 
 O `--json` traz também `ultimoSinalDaConexao`: o instante do último frame que a Conexão recebeu
