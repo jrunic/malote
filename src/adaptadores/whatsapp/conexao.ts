@@ -4,6 +4,7 @@ import type { MensagemRecebida } from './ao-vivo.js';
 import type { Decodificador } from './edicao.js';
 import type { IdentidadeBrutaDoVinculo } from './identidade-da-conta.js';
 import { leituraDoModelo } from './imagem-de-modelo.js';
+import { criarMemoriaDoEnvio, type MemoriaDoEnvio } from './memoria-do-envio.js';
 import type { NoDoTransporte } from './pendentes.js';
 import {
   ligarPendentes,
@@ -11,6 +12,15 @@ import {
   type EventoDePendentes,
   type PendentesLigados,
 } from './pendentes-na-conexao.js';
+import {
+  causaSemConteudo,
+  criarRespostaAoPedido,
+  type ChaveDoPedidoDeReenvio,
+  type EventoDeReenvio,
+  type GanchoDoReenvio,
+} from './reenvio.js';
+
+export type { EventoDeReenvio, GanchoDoReenvio } from './reenvio.js';
 
 /**
  * A conexao ao vivo do WhatsApp.
@@ -56,11 +66,16 @@ interface Socket {
   sendMessage: (
     jid: string,
     content: unknown,
-  ) => Promise<{ key?: { id?: string } } | undefined>;
+  ) => Promise<{ key?: { id?: string }; message?: unknown } | undefined>;
 }
 
 interface Biblioteca {
-  default: (config: { auth: unknown; logger?: unknown }) => Socket;
+  default: (config: {
+    auth: unknown;
+    logger?: unknown;
+    /** A pergunta da biblioteca pela mensagem original de um pedido de reenvio (#1420). So com o gancho. */
+    getMessage?: (chave: ChaveDoPedidoDeReenvio | undefined) => Promise<unknown>;
+  }) => Socket;
   /** A configuracao padrao da biblioteca; so o logger dela interessa, para contar as falhas de decifra (#1151). */
   DEFAULT_CONNECTION_CONFIG?: { logger?: unknown };
   useMultiFileAuthState: (pasta: string) => Promise<{ state: unknown; saveCreds: () => void }>;
@@ -75,11 +90,16 @@ interface Biblioteca {
     tipo: 'buffer',
     opcoes: Record<string, never>,
   ) => Promise<Buffer>;
-  /** O protobuf das mensagens: so a leitura do texto claro da edicao cifrada (#1246) o usa. */
+  /**
+   * O protobuf das mensagens: a leitura do texto claro da edicao cifrada (#1246) e a reconstituicao do eco local na
+   * resposta ao pedido de reenvio (#1420), pelo inverso da serializacao (`fromObject`).
+   */
   proto: {
     Message: {
       decode: (bytes: Uint8Array) => unknown;
       toObject: (mensagem: unknown, opcoes: { longs: NumberConstructor; bytes: StringConstructor; enums: StringConstructor }) => Record<string, unknown>;
+      fromObject: (objeto: Record<string, unknown>) => unknown;
+      encode: (mensagem: unknown) => { finish: () => Uint8Array };
     };
   };
 }
@@ -159,8 +179,14 @@ export interface OpcoesDeConexao {
    * a Conexao e a de sempre. Excecao daqui e engolida: o estado e observacao, e nunca custa Mensagem.
    */
   aoPendentes?: (evento: EventoDePendentes) => void;
-  /** O relogio do recolhimento dos Pendentes (#1151), em milissegundos. Por padrao, o do sistema; o ouvir passa o dele. */
+  /** O relogio do recolhimento dos Pendentes (#1151) e da memoria do envio (#1420), em ms. Por padrao, o do sistema. */
   agora?: () => number;
+  /**
+   * O pedido de reenvio (#1420). Presente, o socket ganha a resposta a pergunta da biblioteca pela mensagem original
+   * (memoria do envio primeiro, depois `lerDoAcervo`), `enviar` guarda a mensagem montada na memoria, e o logger e
+   * embrulhado para contar a falha de reenvio por recibo e as recusas. Ausente, o socket nasce como sempre nasceu.
+   */
+  aoPedidoDeReenvio?: GanchoDoReenvio;
 }
 
 export interface Conexao {
@@ -291,6 +317,52 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
   // Os Pendentes do socket CORRENTE (#1151): um por socket, encerrado quando a Conexao religa ou para.
   let pendentesAtual: PendentesLigados | undefined;
 
+  // A MEMORIA DO ENVIO (#1420) vive AQUI, no escopo da Conexao, e nao em `abrir`: o socket e recriado a cada
+  // religacao, e um pedido de reenvio que chega depois dela ainda tem de achar a mensagem. So existe com o gancho.
+  const agora = opcoes.agora ?? Date.now;
+  const reenvio = opcoes.aoPedidoDeReenvio;
+  const memoriaDoEnvio: MemoriaDoEnvio | undefined = reenvio === undefined ? undefined : criarMemoriaDoEnvio({ agora });
+  const responderAoPedido =
+    reenvio === undefined || memoriaDoEnvio === undefined
+      ? undefined
+      : criarRespostaAoPedido({
+          memoria: memoriaDoEnvio,
+          proto: lib.proto,
+          gancho: reenvio,
+          agora,
+          registrar: opcoes.registrar,
+        });
+  // Depois de `parar`, o Acervo ja pode estar fechado: o pedido que um socket antigo ainda fizer fica sem resposta,
+  // sem ler e sem contar.
+  const getMessage =
+    responderAoPedido === undefined
+      ? undefined
+      : (chave: ChaveDoPedidoDeReenvio | undefined): Promise<unknown> =>
+          parado ? Promise.resolve(undefined) : responderAoPedido(chave);
+  // O logger de um socket antigo ainda pode escrever depois de `parar`, com o gravador de quem chamou ja fechado.
+  const emitirReenvio = (evento: EventoDeReenvio): void => {
+    if (parado) return;
+    try {
+      reenvio?.aoEvento(evento);
+    } catch {
+      // Contar e observacao: nunca custa o log nem a Conexao.
+    }
+  };
+  // Guardar e contabilidade da memoria, nunca do envio: nada daqui lanca, nem o registro da falha. Uma excecao que
+  // escapasse faria `enviar` rejeitar DEPOIS de a mensagem sair, e o Envio entregue seria marcado `falhou`.
+  const guardarNaMemoria = (keyId: string, mensagem: unknown, jid: string): void => {
+    if (memoriaDoEnvio === undefined || mensagem === undefined || mensagem === null) return;
+    try {
+      memoriaDoEnvio.guardar(keyId, mensagem, jid);
+    } catch (erro) {
+      try {
+        opcoes.registrar(`[reenvio] falhou ao guardar na memoria do envio (${causaSemConteudo(erro)})`);
+      } catch {
+        // Registrar tambem e observacao.
+      }
+    }
+  };
+
   const CODIGOS_DE_TRANSPORTE = new Set<number>([
     lib.DisconnectReason.connectionClosed,
     lib.DisconnectReason.connectionLost,
@@ -324,17 +396,30 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
     if (parado) return;
     pendentesAtual?.encerrar();
     pendentesAtual = undefined;
-    // So com o gancho dos Pendentes o logger da biblioteca e embrulhado (para contar as falhas de decifra); sem ele,
-    // ou sem logger para embrulhar, o socket nasce exatamente como sempre nasceu.
+    // So com o gancho dos Pendentes ou o do pedido de reenvio o logger da biblioteca e embrulhado (para contar as
+    // falhas de decifra, a falha de reenvio por recibo e as recusas); sem nenhum dos dois, ou sem logger para
+    // embrulhar, o socket nasce exatamente como sempre nasceu.
     const aoPendentes = opcoes.aoPendentes;
     // Os Pendentes DESTE socket: o logger conta no recolhedor do socket que o recebeu, e nao no corrente, porque o
     // socket antigo ainda pode logar uma falha depois da religacao.
     let pendentesDoSocket: PendentesLigados | undefined;
     const logger =
-      aoPendentes === undefined
+      aoPendentes === undefined && reenvio === undefined
         ? undefined
-        : observarLogger(lib.DEFAULT_CONNECTION_CONFIG?.logger, () => pendentesDoSocket?.falhaDeDecifra());
-    const sock = lib.default(logger === undefined ? { auth: state } : { auth: state, logger });
+        : observarLogger(lib.DEFAULT_CONNECTION_CONFIG?.logger, {
+            ...(aoPendentes !== undefined ? { aoFalhaDeDecifra: () => pendentesDoSocket?.falhaDeDecifra() } : {}),
+            ...(reenvio !== undefined
+              ? {
+                  aoReciboFalhou: () => emitirReenvio({ tipo: 'recibo-falhou' }),
+                  aoRecusa: (motivo: 'limite' | 'nao-propria') => emitirReenvio({ tipo: 'recusa', motivo }),
+                }
+              : {}),
+          });
+    const sock = lib.default({
+      auth: state,
+      ...(logger !== undefined ? { logger } : {}),
+      ...(getMessage !== undefined ? { getMessage } : {}),
+    });
     sockAtual = sock;
     // Assinado de forma SINCRONA na criacao do socket: o anuncio e o fim costumam chegar antes do `open`.
     if (aoPendentes !== undefined) {
@@ -521,13 +606,14 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
       parado = true;
       if (agendado !== undefined) clearTimeout(agendado);
       pendentesAtual?.encerrar();
+      // O conteudo em claro nao sobrevive a Conexao (#1420).
+      memoriaDoEnvio?.limpar();
     },
     enviar: async (jid: string, conteudo: unknown): Promise<{ keyId: string } | undefined> => {
       if (sockAtual === undefined) return undefined;
+      let resultado: Awaited<ReturnType<Socket['sendMessage']>>;
       try {
-        const resultado = await sockAtual.sendMessage(jid, conteudo);
-        if (resultado?.key?.id === undefined) return undefined;
-        return { keyId: resultado.key.id };
+        resultado = await sockAtual.sendMessage(jid, conteudo);
       } catch (erro) {
         const codigo = (erro as { output?: { statusCode?: number } })?.output?.statusCode;
         if (codigo !== undefined && CODIGOS_DE_TRANSPORTE.has(codigo)) {
@@ -535,6 +621,12 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
         }
         throw erro;
       }
+      const keyId = resultado?.key?.id;
+      if (keyId === undefined) return undefined;
+      // A mensagem MONTADA pela biblioteca, como ela a devolveu (#1420): e ela que o pedido de reenvio repete. Fora do
+      // `try` do envio, de proposito: falhar ao guardar nunca desfaz o envio, que ja saiu; o pedido dela cai para o Acervo.
+      guardarNaMemoria(keyId, resultado?.message, jid);
+      return { keyId };
     },
   };
 }

@@ -13,7 +13,7 @@ interface SocketFalso {
   ws: EventEmitter;
   frames: unknown[];
   flushes: () => number;
-  config: { auth: unknown; logger?: unknown };
+  config: { auth: unknown; logger?: unknown; getMessage?: (chave: unknown) => Promise<unknown> };
 }
 
 type Variante = 'completa' | 'sem-sendNode' | 'sem-config';
@@ -35,7 +35,7 @@ function biblioteca(
     child: (): object => loggerOriginal,
   };
   const lib = {
-    default: (config: { auth: unknown; logger?: unknown }) => {
+    default: (config: { auth: unknown; logger?: unknown; getMessage?: (chave: unknown) => Promise<unknown> }) => {
       const ouvintes = new Map<string, ((d: unknown) => void)[]>();
       const ws = new EventEmitter();
       const frames: unknown[] = [];
@@ -350,4 +350,81 @@ test('o relogio dos Pendentes e o da Conexao, quando ela o recebe', () =>
     assert.equal(eventos[0]?.tipo, 'abertura');
     assert.equal(eventos[0]?.estado.socketCriadoEm, 1_234_567);
     conexao.parar();
+  }));
+
+// ---- o gancho do pedido de reenvio (#1420) ----
+
+const GANCHO_INERTE = { lerDoAcervo: (): undefined => undefined, aoEvento: (): void => undefined };
+
+test('so os Pendentes: o socket ganha o logger e NAO ganha a resposta ao pedido de reenvio', () =>
+  comPasta(async (pasta) => {
+    const { sockets, lib } = biblioteca();
+    const conexao = await conectar({
+      pastaDoVinculo: pasta,
+      registrar: () => undefined,
+      aoTerminar: () => undefined,
+      carregarBiblioteca: () => Promise.resolve(lib),
+      aoReceber: () => undefined,
+      aoPendentes: () => undefined,
+    });
+    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth', 'logger']);
+    conexao.parar();
+  }));
+
+test('COM o gancho do pedido de reenvio o socket ganha o logger embrulhado e a resposta, nessa ordem', () =>
+  comPasta(async (pasta) => {
+    const { sockets, lib } = biblioteca();
+    const conexao = await conectar({
+      pastaDoVinculo: pasta,
+      registrar: () => undefined,
+      aoTerminar: () => undefined,
+      carregarBiblioteca: () => Promise.resolve(lib),
+      aoReceber: () => undefined,
+      aoPedidoDeReenvio: GANCHO_INERTE,
+    });
+    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth', 'logger', 'getMessage']);
+    assert.equal(typeof sockets[0]!.config.getMessage, 'function');
+    assert.equal(sockets[0]!.ws.eventNames().length, 0, 'sem o gancho dos Pendentes, o transporte nao e assinado');
+    conexao.parar();
+  }));
+
+test('so o gancho do pedido de reenvio e nenhum logger para embrulhar: `auth` e a resposta', () =>
+  comPasta(async (pasta) => {
+    const { sockets, lib } = biblioteca('sem-config');
+    const conexao = await conectar({
+      pastaDoVinculo: pasta,
+      registrar: () => undefined,
+      aoTerminar: () => undefined,
+      carregarBiblioteca: () => Promise.resolve(lib),
+      aoReceber: () => undefined,
+      aoPedidoDeReenvio: GANCHO_INERTE,
+    });
+    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth', 'getMessage']);
+    conexao.parar();
+  }));
+
+test('os dois ganchos: a falha de decifra conta nos Pendentes, e a falha de reenvio e as recusas no reenvio', () =>
+  comPasta(async (pasta) => {
+    const { sockets, lib, chamadasDoLogger } = biblioteca();
+    const pendentes: EventoDePendentes[] = [];
+    const reenvios: unknown[] = [];
+    const conexao = await conectar({
+      pastaDoVinculo: pasta,
+      registrar: () => undefined,
+      aoTerminar: () => undefined,
+      carregarBiblioteca: () => Promise.resolve(lib),
+      aoReceber: () => undefined,
+      aoPendentes: (e) => pendentes.push(e),
+      aoPedidoDeReenvio: { lerDoAcervo: () => undefined, aoEvento: (e) => reenvios.push(e) },
+    });
+    const logger = sockets[0]!.config.logger as {
+      error: (...a: unknown[]) => void;
+      child: () => { error: (...a: unknown[]) => void };
+    };
+    logger.error({ key: 'sintetica' }, 'failed to decrypt message');
+    logger.child().error({ key: 'sintetica', ids: ['A'] }, 'error in sending message again');
+    assert.equal(chamadasDoLogger.length, 2, 'o logger original continua recebendo tudo');
+    assert.deepEqual(reenvios, [{ tipo: 'recibo-falhou' }]);
+    conexao.parar();
+    assert.equal(pendentes.at(-1)?.estado.falhasDeDecifra, 1, 'a falha de reenvio nao entra como falha de decifra');
   }));
