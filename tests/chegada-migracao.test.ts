@@ -8,7 +8,7 @@ import { registrarConversa, registrarIdentificador } from '../src/nucleo/escrita
 import { CFG_WHATSAPP } from './ajuda/configuracao.js';
 
 test('o Acervo na v29 sobe para a v30 sem perder linha e ganha o Diario semeado, sem Chegada retroativa', () => {
-  assert.equal(VERSAO_SCHEMA_ACERVO, 31);
+  assert.equal(VERSAO_SCHEMA_ACERVO, 32);
   const c = cenario();
   try {
     const { id, acervo } = c.novoInquilino('Padme');
@@ -22,7 +22,7 @@ test('o Acervo na v29 sobe para a v30 sem perder linha e ganha o Diario semeado,
 
     const migrado = abrirAcervo(join(c.raiz, 'acervos'), id, { configuracoes: [CFG_WHATSAPP] });
     try {
-      assert.equal((migrado.db.prepare('SELECT versao FROM versao_schema').get() as { versao: number }).versao, 31);
+      assert.equal((migrado.db.prepare('SELECT versao FROM versao_schema').get() as { versao: number }).versao, 32);
       assert.equal((migrado.db.prepare('SELECT COUNT(*) AS n FROM conversas').get() as { n: number }).n, 1, 'perdeu Conversa');
       assert.equal(
         (migrado.db.prepare('SELECT COUNT(*) AS n FROM identificadores').get() as { n: number }).n,
