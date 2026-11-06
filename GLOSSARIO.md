@@ -405,7 +405,7 @@ A remoção do arquivo de um Anexo do disco, preservando o Descritor.
 - Uma **Operação** é desfeita no máximo uma vez.
 - Uma **Fonte** é servida por 1..N **Adaptadores**; cada **Adaptador** tem 1 **Estado de Sincronização** por conta.
 - Uma **Política de Retenção** produz N **Descartes** sobre **Anexos**.
-- Um **Envio** pertence a exatamente 1 **Configuração de Adaptador** e, quando concluído, é correlacionado pelo Identificador de Envio com a **Mensagem** que a recepção traz.
+- Um **Envio** pertence a exatamente 1 **Configuração de Adaptador** e, quando concluído, é correlacionado pelo Identificador de Envio com a **Mensagem** que a recepção traz, e **guarda a Referência Externa dessa Mensagem** (a da última tentativa), que é o que diz que o malote a enviou.
 - Um **Envio** tem exatamente 1 **Destinatário do Envio** (uma **Conversa**) e exatamente 1 **Conteúdo do Envio**.
 
 ## Diálogo de exemplo

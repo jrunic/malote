@@ -36,7 +36,7 @@ test('o Acervo na v31 sobe para a v32 com a Referencia Externa no Envio, sem per
       destino: { enderecoCru: '556599991235@s.whatsapp.net' },
       conteudo: { tipo: 'texto', texto: 'dois' },
     });
-    marcarEnvioEnviado(acervo, enviado.envioId);
+    marcarEnvioEnviado(acervo, enviado.envioId, 'REF-ANTES-DA-MIGRACAO');
     // Reproduz a forma da v31: sem o indice e sem a coluna, com a versao gravada 31.
     acervo.db.exec('DROP INDEX envios_por_referencia');
     acervo.db.exec('ALTER TABLE envios DROP COLUMN referencia_externa_da_mensagem');

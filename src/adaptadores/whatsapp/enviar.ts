@@ -161,7 +161,7 @@ export async function processarEnvios(
     });
     atualizarConversaDoEnvio(acervo, envio.envioId, conversaId);
   }
-  marcarEnvioEnviado(acervo, envio.envioId);
+  marcarEnvioEnviado(acervo, envio.envioId, resultado.keyId);
 
   return { processados: 1 };
 }

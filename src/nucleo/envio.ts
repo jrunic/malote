@@ -334,11 +334,17 @@ export function proximoEnvioPendente(
 /**
  * Marca "enviado" — chamado quando `sendMessage` devolve `key.id`. NAO espera
  * o eco de `messages.upsert`: o retorno ja confirma relay aceito.
+ *
+ * Grava no MESMO `UPDATE` a Referencia Externa da Mensagem enviada (#1420, Acervo v32): o identificador que a
+ * plataforma deu a mensagem. Ela e o discriminador do que o malote enviou; so a ULTIMA tentativa de um Envio fica
+ * guardada (se a contabilidade falha e a passada seguinte envia de novo, o identificador da primeira se perde).
  */
-export function marcarEnvioEnviado(acervo: Acervo, envioId: string): void {
+export function marcarEnvioEnviado(acervo: Acervo, envioId: string, referenciaExterna: string): void {
   acervo
-    .preparar(`UPDATE envios SET estado = 'enviado', concluida_em = ? WHERE id = ?`)
-    .run(new Date().toISOString(), envioId);
+    .preparar(
+      `UPDATE envios SET estado = 'enviado', concluida_em = ?, referencia_externa_da_mensagem = ? WHERE id = ?`,
+    )
+    .run(new Date().toISOString(), referenciaExterna, envioId);
 }
 
 /**
