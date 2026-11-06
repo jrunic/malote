@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import {
   ligarPendentes,
   observarLogger,
@@ -460,4 +461,67 @@ test('observarLogger: sem logger devolve undefined; contador que lanca nunca cus
     throw new Error('contador quebrou');
   }) as Record<string, (...a: unknown[]) => unknown>;
   assert.equal(envolvido['error']!({}, 'failed to decrypt message'), 'error-ok');
+});
+
+// ---- observarLogger: o pedido de reenvio (#1420) ----
+
+test('observarLogger conta a falha de reenvio por recibo (error) e as duas recusas (info), e repassa tudo', () => {
+  const { logger, chamadas } = loggerFalso();
+  const contagem: string[] = [];
+  const envolvido = observarLogger(logger, {
+    aoFalhaDeDecifra: () => contagem.push('decifra'),
+    aoReciboFalhou: () => contagem.push('recibo-falhou'),
+    aoRecusa: (motivo) => contagem.push(`recusa:${motivo}`),
+  }) as Record<string, (...a: unknown[]) => unknown>;
+  const chave = { remoteJid: 'sintetico', id: '' };
+  assert.equal(envolvido['error']!({ key: chave, ids: ['A', 'B'] }, 'error in sending message again'), 'error-ok');
+  assert.equal(envolvido['info']!({ key: chave }, 'will not send message again, as sent too many times'), 'info-ok');
+  assert.equal(envolvido['info']!({ key: chave }, 'recv retry for not fromMe message'), 'info-ok');
+  assert.equal(envolvido['error']!({ key: chave }, 'failed to decrypt message'), 'error-ok');
+  assert.deepEqual(contagem, ['recibo-falhou', 'recusa:limite', 'recusa:nao-propria', 'decifra']);
+  assert.equal(chamadas.length, 4, 'tudo foi repassado ao logger original');
+});
+
+test('observarLogger: cada linha so conta no nivel em que a biblioteca a escreve', () => {
+  const { logger } = loggerFalso();
+  const contagem: string[] = [];
+  const envolvido = observarLogger(logger, {
+    aoReciboFalhou: () => contagem.push('recibo-falhou'),
+    aoRecusa: (motivo) => contagem.push(`recusa:${motivo}`),
+  }) as Record<string, (...a: unknown[]) => unknown>;
+  envolvido['info']!({}, 'error in sending message again');
+  envolvido['error']!({}, 'will not send message again, as sent too many times');
+  envolvido['error']!({}, 'recv retry for not fromMe message');
+  assert.deepEqual(contagem, []);
+});
+
+test('observarLogger: gancho ausente deixa a linha passar sem contar, e o gancho que lanca nunca custa o log', () => {
+  const { logger, chamadas } = loggerFalso();
+  let decifra = 0;
+  const so = observarLogger(logger, { aoFalhaDeDecifra: () => (decifra += 1) }) as Record<
+    string,
+    (...a: unknown[]) => unknown
+  >;
+  so['error']!({}, 'error in sending message again');
+  so['info']!({}, 'will not send message again, as sent too many times');
+  assert.equal(decifra, 0);
+  const quebrado = observarLogger(logger, {
+    aoReciboFalhou: () => {
+      throw new Error('contador quebrou');
+    },
+    aoRecusa: () => {
+      throw new Error('contador quebrou');
+    },
+  }) as Record<string, (...a: unknown[]) => unknown>;
+  assert.equal(quebrado['error']!({}, 'error in sending message again'), 'error-ok');
+  assert.equal(quebrado['info']!({}, 'recv retry for not fromMe message'), 'info-ok');
+  assert.equal(chamadas.length, 4);
+});
+
+test('observarLogger: as linhas que conta sao as da biblioteca instalada, no nivel em que ela as escreve', () => {
+  const recv = readFileSync('node_modules/baileys/lib/Socket/messages-recv.js', 'utf8');
+  assert.match(recv, /logger\.error\(\{ key, ids, trace: error\.stack \}, 'error in sending message again'\)/);
+  assert.match(recv, /logger\.info\(\{ attrs, key \}, 'recv retry for not fromMe message'\)/);
+  assert.match(recv, /logger\.info\(\{ attrs, key \}, 'will not send message again, as sent too many times'\)/);
+  assert.match(recv, /getMessage\(\{ \.\.\.key, id \}\)/, 'a pergunta pela mensagem original, uma por identificador');
 });
