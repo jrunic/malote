@@ -441,3 +441,39 @@ export function contarEnviosPorEstado(acervo: Acervo): ContagemDeEnvio[] {
     n: linhas.find((l) => l.estado === estado)?.n ?? 0,
   }));
 }
+
+/**
+ * A leitura de `lerBrutoDaMensagemEnviada`, exportada para o teste de plano de consulta fixar que ela usa o indice
+ * parcial `envios_por_referencia` (Acervo v32) e o indice unico `(fonte, id_externo)` de `mensagens`.
+ *
+ * A coluna do Envio guarda so o identificador da Referencia Externa; a Fonte e a da Configuracao do Envio (WhatsApp),
+ * por isso a consulta fixa `m.fonte = 'whatsapp'`.
+ *
+ * O discriminador e o Envio: so a Mensagem cuja Referencia Externa consta num Envio DA MESMA Configuracao conta. O
+ * `direcao = 'enviada'` e a fonte `whatsapp` fecham o que o eco tem de ser; a Mensagem de outro aparelho da conta, sem
+ * Envio, e invisivel.
+ */
+export const SQL_BRUTO_DA_MENSAGEM_ENVIADA = `
+  SELECT m.bruto AS bruto
+    FROM envios e
+    JOIN mensagens m ON m.fonte = 'whatsapp' AND m.id_externo = e.referencia_externa_da_mensagem
+   WHERE e.configuracao_id = ?
+     AND e.referencia_externa_da_mensagem = ?
+     AND m.direcao = 'enviada'
+   LIMIT 1`;
+
+/**
+ * Devolve o Conteudo Bruto (texto JSON) da Mensagem que o malote enviou, ou `undefined`. SO devolve se existe um Envio
+ * da Configuracao dada com essa Referencia Externa (#1420): o Acervo sozinho nao distingue o que o malote enviou do que
+ * outro aparelho da mesma conta enviou. Nao lanca por ausencia; o erro de banco sobe ao chamador, que o trata.
+ */
+export function lerBrutoDaMensagemEnviada(
+  acervo: Acervo,
+  configuracaoId: string,
+  referenciaExterna: string,
+): string | undefined {
+  const linha = acervo.preparar(SQL_BRUTO_DA_MENSAGEM_ENVIADA).get(configuracaoId, referenciaExterna) as
+    | { bruto: string | null }
+    | undefined;
+  return linha?.bruto ?? undefined;
+}
