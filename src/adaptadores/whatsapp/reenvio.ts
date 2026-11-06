@@ -1,4 +1,6 @@
 // src/adaptadores/whatsapp/reenvio.ts
+import type { MemoriaDoEnvio } from './memoria-do-envio.js';
+
 /**
  * A RESPOSTA AO PEDIDO DE REENVIO (#1420).
  *
@@ -93,4 +95,93 @@ export function causaSemConteudo(erro: unknown): string {
   if (!(erro instanceof Error)) return typeof erro;
   const codigo = (erro as { code?: unknown }).code;
   return typeof codigo === 'string' ? `${erro.name} ${codigo}` : erro.name;
+}
+
+/** O endereco sem o sufixo de aparelho (`:N` antes do `@`): o mesmo usuario em outro aparelho e o mesmo endereco. */
+function semAparelho(endereco: string): string {
+  return endereco.replace(/:\d+@/, '@');
+}
+
+export interface OpcoesDaRespostaAoPedido {
+  memoria: MemoriaDoEnvio;
+  proto: ProtoDoReenvio;
+  gancho: GanchoDoReenvio;
+  agora: () => number;
+  registrar: (linha: string) => void;
+}
+
+/** A funcao que a biblioteca chama a cada identificador de um recibo de reenvio (`getMessage`). */
+export function criarRespostaAoPedido(
+  opcoes: OpcoesDaRespostaAoPedido,
+): (chave: ChaveDoPedidoDeReenvio | undefined) => Promise<unknown> {
+  const emitir = (evento: EventoDeReenvio): void => {
+    try {
+      opcoes.gancho.aoEvento(evento);
+    } catch {
+      // Contar e observacao: nunca custa a resposta.
+    }
+  };
+  const idade = (instanteMs: number | undefined): number | undefined =>
+    instanteMs === undefined ? undefined : Math.max(0, Math.floor((opcoes.agora() - instanteMs) / 1000));
+
+  const responder = (chave: ChaveDoPedidoDeReenvio | undefined): unknown => {
+    const identificador = typeof chave?.id === 'string' && chave.id !== '' ? chave.id : undefined;
+    const enderecoDoPedido = typeof chave?.remoteJid === 'string' ? chave.remoteJid : undefined;
+    // So a CONTAGEM: a biblioteca reenvia para o endereco do recibo, e conferi-lo tropecaria na forma de telefone
+    // contra o endereco opaco. O sufixo de aparelho nao conta como diferenca. O endereco nunca sai daqui.
+    const comparar = (enderecoDoEnvio: string | undefined): 'igual' | 'diferente' | 'desconhecido' =>
+      enderecoDoPedido === undefined || enderecoDoEnvio === undefined
+        ? 'desconhecido'
+        : semAparelho(enderecoDoPedido) === semAparelho(enderecoDoEnvio)
+          ? 'igual'
+          : 'diferente';
+    const naoAchada = (): undefined => {
+      emitir({ tipo: 'pedido', resultado: 'nao-achada', idadeSegundos: undefined, enderecoDoRecibo: 'desconhecido' });
+      return undefined;
+    };
+    if (identificador === undefined) return naoAchada();
+
+    let etapa = 'memoria';
+    try {
+      const lembranca = opcoes.memoria.buscar(identificador);
+      if (lembranca !== undefined) {
+        emitir({
+          tipo: 'pedido',
+          resultado: 'achada-na-memoria',
+          idadeSegundos: idade(lembranca.guardadaEm),
+          enderecoDoRecibo: comparar(lembranca.endereco),
+        });
+        return lembranca.mensagem;
+      }
+      etapa = 'acervo';
+      const bruto = opcoes.gancho.lerDoAcervo(identificador);
+      if (bruto === undefined) return naoAchada();
+      etapa = 'reconstituicao';
+      const eco = lerEcoLocal(opcoes.proto, bruto);
+      if (eco === undefined) return naoAchada();
+      emitir({
+        tipo: 'pedido',
+        resultado: 'achada-no-acervo',
+        idadeSegundos: idade(eco.instanteMs),
+        enderecoDoRecibo: comparar(eco.endereco),
+      });
+      return eco.mensagem;
+    } catch (erro) {
+      try {
+        opcoes.registrar(`[reenvio] falhou ao responder o pedido de reenvio (${etapa}: ${causaSemConteudo(erro)})`);
+      } catch {
+        // Registrar tambem e observacao.
+      }
+      emitir({ tipo: 'pedido', resultado: 'erro', idadeSegundos: undefined, enderecoDoRecibo: 'desconhecido' });
+      return undefined;
+    }
+  };
+
+  return (chave) => {
+    try {
+      return Promise.resolve(responder(chave));
+    } catch {
+      return Promise.resolve(undefined);
+    }
+  };
 }
