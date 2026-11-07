@@ -23,7 +23,7 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
-## [Não lançado]
+## [0.47.0] — 2026-11-07
 
 Muda a forma do Acervo (v31 para v32): o Envio ganha um campo e um índice parcial; a migração roda sozinha na primeira abertura, é idempotente e não perde linha. Não muda a forma do Registro. `ouvinte estado --json` ganha um campo; contrato aditivo, saída padrão intacta.
 
