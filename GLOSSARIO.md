@@ -203,7 +203,7 @@ vez**: resultado indeterminado nunca é descartado em silêncio.
 
 **Identificador de Envio**:
 Gerado e gravado antes de qualquer tentativa de envio — pelo produto, ou fornecido pelo solicitante no pedido — é o que permite decidir "já saiu"
-versus "falta tentar" sob a garantia ao menos uma vez, sem reenviar às cegas.
+versus "falta tentar" sob a garantia ao menos uma vez, sem reenviar às cegas (reenviar às cegas é uma **nova tentativa**, com identificador novo; não é o **Pedido de reenvio**, que repete a mesma mensagem com o mesmo identificador).
 *Evitar*: message id, token de idempotência, nonce.
 
 **Conteúdo do Envio**:
@@ -372,6 +372,10 @@ O ato do ouvinte, a cada Conexão, de **liberar** o que já recebeu para a grava
 O pedido que o ouvinte envia à plataforma para receber mais Pendentes, de 100 itens por vez. A biblioteca envia um só; o ouvinte envia os seguintes.
 *Evitar*: lote (o lote é do Derrame; a parte que a plataforma entrega por pedido se diz "parte"), batch, retry.
 
+**Pedido de reenvio**:
+O pedido que a plataforma faz ao remetente quando o aparelho do destinatário não conseguiu decifrar uma mensagem: repete **a mesma mensagem, com o mesmo identificador**. O ouvinte o atende para o que o próprio malote enviou, por duas fontes em ordem: a **memória do envio** (a mensagem exatamente como a biblioteca a montou, por até 1 hora) e, depois de um reinício, o Acervo, ligado pela Referência Externa da Mensagem enviada que o Envio guarda. O que nenhuma das duas tem, e o que outro aparelho da conta enviou, é "indisponível". "Achada" não é "reenviada", e atender o pedido corrige a recuperação, não a causa de o aparelho não decifrar. Não é a **nova tentativa de Envio** (identificador novo, garantia ao menos uma vez) nem os **Pendentes da Plataforma** (o que a plataforma entrega ao ouvinte ao conectar).
+*Evitar*: retry, replay, reenvio sozinho (ambíguo: ver **Identificador de Envio**).
+
 ### Espaço e retenção
 
 **Política de Retenção**:
@@ -405,7 +409,7 @@ A remoção do arquivo de um Anexo do disco, preservando o Descritor.
 - Uma **Operação** é desfeita no máximo uma vez.
 - Uma **Fonte** é servida por 1..N **Adaptadores**; cada **Adaptador** tem 1 **Estado de Sincronização** por conta.
 - Uma **Política de Retenção** produz N **Descartes** sobre **Anexos**.
-- Um **Envio** pertence a exatamente 1 **Configuração de Adaptador** e, quando concluído, é correlacionado pelo Identificador de Envio com a **Mensagem** que a recepção traz.
+- Um **Envio** pertence a exatamente 1 **Configuração de Adaptador** e, quando concluído, é correlacionado pelo Identificador de Envio com a **Mensagem** que a recepção traz, e **guarda a Referência Externa dessa Mensagem** (a da última tentativa), que é o que diz que o malote a enviou.
 - Um **Envio** tem exatamente 1 **Destinatário do Envio** (uma **Conversa**) e exatamente 1 **Conteúdo do Envio**.
 
 ## Diálogo de exemplo

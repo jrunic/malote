@@ -142,7 +142,7 @@ test('marcarEnvioEnviado grava o estado final e o instante de conclusao', () => 
       destino: { enderecoCru: '111@s.whatsapp.net' },
       conteudo: { tipo: 'texto', texto: 'oi' },
     });
-    marcarEnvioEnviado(acervo, r.envioId);
+    marcarEnvioEnviado(acervo, r.envioId, 'REF-ENVIO-TESTE');
 
     const linha = acervo
       .preparar('SELECT estado, concluida_em FROM envios WHERE id = ?')
@@ -461,7 +461,7 @@ test('repeticao DEPOIS do processamento: o destino ja virou Conversa e continua 
       bruto: '{}',
     });
     atualizarConversaDoEnvio(acervo, primeiro.envioId, conversaId);
-    marcarEnvioEnviado(acervo, primeiro.envioId);
+    marcarEnvioEnviado(acervo, primeiro.envioId, 'REF-PRIMEIRO');
     const repetido = registrarEnvio(acervo, entradaDeTexto('oi'));
     assert.equal(repetido.repetido, true, 'o destino cru ja foi zerado, e o endereco da Conversa e o mesmo');
     aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: '999@lid', canonico: PARA });

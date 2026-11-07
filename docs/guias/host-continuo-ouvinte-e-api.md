@@ -318,7 +318,8 @@ o que vigia é o instante andar). Conta sem `ultimo-evento` registrado (nova, ou
 com código 1 e a linha `Conta <nome>: sem evento registrado.`, mesmo com `--json`: um alarme que trate
 saída diferente de 0 dispara nesse caso. Com `--json` vêm `conta`, `ultimoEvento`, `derramados`,
 `lotes`, `correspondencia`, `ultimoRetrato`, `pulos`, `descartes`, `instantesAdiantados` (as Mensagens
-gravadas só por causa da janela de relógio, por dia), `guarda` e `ultimoSinalDaConexao` — para painel,
+gravadas só por causa da janela de relógio, por dia), `guarda`, `ultimoSinalDaConexao` e `reenvios` (os Pedidos de reenvio por dia, só números;
+`null` é indisponível) — para painel,
 não para alarme de silêncio.
 
 O `--json` traz também `ultimoSinalDaConexao`: o instante do último frame que a Conexão recebeu
@@ -415,7 +416,7 @@ linhas (ver o guia de armazenamento).
 | situação | o que fazer |
 |---|---|
 | vínculo invalidado (unit sai com código 1) | leia a última linha do log: `1` também sai por Inquilino desconhecido e falha local de subida. Sendo vínculo invalidado, pareamento humano: rode o `ouvir` com `--numero` no terminal, confirme no aparelho, reinicie o unit |
-| trocar a versão | `git fetch && git checkout <tag-ou-branch>` + `npm ci` + `systemctl restart` dos units. **Release que muda a forma do Registro ou do Acervo** (a 0.31.0 mudou o Registro; a 0.39.0 e a 0.45.0, o Acervo): faça cópia do `registro.db` e dos Acervos antes — o servidor e cada ouvinte migram as bases ao subir, com segurança entre vários abridores, mas a cópia é o que permite voltar |
+| trocar a versão | `git fetch && git checkout <tag-ou-branch>` + `npm ci` + `systemctl restart` dos units. **Release que muda a forma do Registro ou do Acervo** (a 0.31.0 mudou o Registro; a 0.39.0, a 0.43.0, a 0.45.0, a 0.46.0 e a 0.47.0, entre outras, o Acervo; a primeira linha da entrada de cada versão no `CHANGELOG.md` diz se a forma muda): faça cópia do `registro.db` e dos Acervos antes — o servidor e cada ouvinte migram as bases ao subir, com segurança entre vários abridores, mas a cópia é o que permite voltar |
 | conferir o que o ouvinte derramou | `ouvinte estado --json` (campo derrame) e `ouvinte reprocessar` — recusa se o ouvinte estiver no ar |
 | ver o que a recepção não gravou como Mensagem | `ouvinte estado --json` (campo `descartes`): contagem por dia e por tipo, sem conteúdo. Serve para decidir com número se um tipo merece virar Mensagem. `protocolMessage` aparece por tipo do protocolo (`protocolMessage:REVOKE`, e assim por diante) |
 | segunda conta de WhatsApp | novo material importado com Configuração própria + novo unit `malote-ouvinte@<outra-conta>` |

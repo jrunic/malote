@@ -220,16 +220,46 @@ export function ligarPendentes(
   };
 }
 
-const MENSAGEM_DE_FALHA_DE_DECIFRA = 'failed to decrypt message';
+/**
+ * As linhas da biblioteca (6.7.24) que o logger embrulhado conta, com o nivel em que ela as escreve. Fixadas contra
+ * `lib/Utils/decode-wa-message.js` (a falha de decifra) e `lib/Socket/messages-recv.js` (o pedido de reenvio, #1420):
+ * a falha de reenvio sai UMA vez por recibo (`error`, linha 560), mesmo quando nada foi achado; as duas recusas saem
+ * em `info` (linhas 564 e 568), antes de a biblioteca perguntar pela mensagem.
+ */
+export const LINHAS_DA_BIBLIOTECA = {
+  falhaDeDecifra: 'failed to decrypt message',
+  reciboFalhou: 'error in sending message again',
+  recusaNaoPropria: 'recv retry for not fromMe message',
+  recusaPorLimite: 'will not send message again, as sent too many times',
+} as const;
+
+/** O que o logger embrulhado conta. Cada gancho ausente e uma linha que passa sem contar. */
+export interface GanchosDoLogger {
+  aoFalhaDeDecifra?: () => void;
+  aoReciboFalhou?: () => void;
+  aoRecusa?: (motivo: 'limite' | 'nao-propria') => void;
+}
 
 /**
- * Embrulha o logger da biblioteca para CONTAR as falhas de decifra (so o numero: nenhum argumento da
- * chamada, que traz a chave com JID, e guardado). Tudo o mais passa intacto, inclusive os filhos
- * (`child`). Devolve `undefined` quando nao ha logger para embrulhar, e quem chama nao passa nenhum:
- * o socket usa o dele, e as falhas ficam INDISPONIVEIS no estado.
+ * Embrulha o logger da biblioteca para CONTAR linhas conhecidas (so o numero: nenhum argumento da chamada, que traz
+ * a chave com JID, e guardado). Tudo o mais passa intacto, inclusive os filhos (`child`). O embrulho intercepta o
+ * METODO, e nao o que o logger escreve: conta mesmo com o nivel desligado (o pino troca o metodo por um vazio, e o
+ * embrulho ainda o ve chamado). Devolve `undefined` quando nao ha logger para embrulhar, e quem chama nao passa
+ * nenhum: o socket usa o dele, e as contagens ficam INDISPONIVEIS.
+ *
+ * Aceita tambem so a funcao da falha de decifra, a forma do chamador dos Pendentes (#1151).
  */
-export function observarLogger(base: unknown, aoFalhaDeDecifra: () => void): object | undefined {
+export function observarLogger(base: unknown, ganchos: GanchosDoLogger | (() => void)): object | undefined {
   if (base === null || typeof base !== 'object') return undefined;
+  const g: GanchosDoLogger = typeof ganchos === 'function' ? { aoFalhaDeDecifra: ganchos } : ganchos;
+  const avisar = (f: (() => void) | undefined): void => {
+    if (f === undefined) return;
+    try {
+      f();
+    } catch {
+      // Contar e observacao: nunca custa o log.
+    }
+  };
   const envolver = (alvo: object): object =>
     new Proxy(alvo, {
       get(a, propriedade) {
@@ -238,12 +268,17 @@ export function observarLogger(base: unknown, aoFalhaDeDecifra: () => void): obj
         const funcao = valor as (...args: unknown[]) => unknown;
         if (propriedade === 'error') {
           return (...args: unknown[]): unknown => {
-            if (args.includes(MENSAGEM_DE_FALHA_DE_DECIFRA)) {
-              try {
-                aoFalhaDeDecifra();
-              } catch {
-                // Contar e observacao: nunca custa o log.
-              }
+            if (args.includes(LINHAS_DA_BIBLIOTECA.falhaDeDecifra)) avisar(g.aoFalhaDeDecifra);
+            if (args.includes(LINHAS_DA_BIBLIOTECA.reciboFalhou)) avisar(g.aoReciboFalhou);
+            return funcao.apply(a, args);
+          };
+        }
+        if (propriedade === 'info') {
+          return (...args: unknown[]): unknown => {
+            const aoRecusa = g.aoRecusa;
+            if (aoRecusa !== undefined) {
+              if (args.includes(LINHAS_DA_BIBLIOTECA.recusaPorLimite)) avisar(() => aoRecusa('limite'));
+              if (args.includes(LINHAS_DA_BIBLIOTECA.recusaNaoPropria)) avisar(() => aoRecusa('nao-propria'));
             }
             return funcao.apply(a, args);
           };

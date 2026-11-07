@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3';
  * Politica completa das duas bases na ADR local
  * `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_ACERVO = 31;
+export const VERSAO_SCHEMA_ACERVO = 32;
 
 /**
  * Forma mais antiga que a maquina de migracao alcanca.
@@ -812,6 +812,11 @@ export function aplicarSchemaAcervo(db: Database): void {
       tentativas             INTEGER NOT NULL DEFAULT 0,
       solicitada_em          TEXT NOT NULL,
       concluida_em           TEXT,
+      -- Referencia Externa da Mensagem enviada (v32, #1420): o identificador que a plataforma deu a mensagem, o mesmo
+      -- que a Mensagem do eco tera. Guarda so o identificador; a Fonte e implicita (a da Configuracao do Envio, que e
+      -- de WhatsApp). Gravada no mesmo UPDATE que marca enviado; nula nos Envios anteriores a v32 e nos
+      -- que nao enviaram. E o discriminador do que o malote enviou (o Acervo sozinho nao distingue de outro aparelho).
+      referencia_externa_da_mensagem TEXT,
       CHECK (conversa_id IS NOT NULL OR destino_cru IS NOT NULL),
       CHECK (conteudo_tipo != 'texto' OR conteudo_texto IS NOT NULL),
       CHECK (conteudo_tipo = 'texto' OR conteudo_caminho_arquivo IS NOT NULL),
@@ -820,6 +825,10 @@ export function aplicarSchemaAcervo(db: Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_envios_fila ON envios(configuracao_id, estado, tentativas, solicitada_em);
+
+    -- A porta que le a Mensagem enviada pergunta por (Configuracao, Referencia Externa) a cada pedido de reenvio (v32).
+    CREATE INDEX IF NOT EXISTS envios_por_referencia
+      ON envios(configuracao_id, referencia_externa_da_mensagem) WHERE referencia_externa_da_mensagem IS NOT NULL;
 
     -- Diario de Chegadas (v30): o que ENTROU no Acervo, na ordem em que entrou. So de acrescimo. AUTOINCREMENT: o
     -- numero de sequencia nunca e reaproveitado, nem se linhas forem apagadas pela aparagem. Sem chave estrangeira

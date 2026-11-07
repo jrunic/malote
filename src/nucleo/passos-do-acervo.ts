@@ -1067,6 +1067,29 @@ const INDICE_DE_CANONICO_V31: PassoDeMigracao = {
   },
 };
 
+/**
+ * v31 -> v32: o Envio guarda a Referencia Externa da Mensagem enviada (#1420) e ganha o indice parcial por
+ * (Configuracao, Referencia Externa). Coluna nula e indice: nenhuma linha muda, e os Envios anteriores ficam com a
+ * coluna nula (sem preenchimento retroativo). DDL congelado: nao importa do schema fresco. Idempotente: a coluna so e
+ * acrescentada se faltar (os testes dos passos anteriores reproduzem a forma antiga a partir de um Acervo fresco, que
+ * ja a tem, e o ALTER TABLE ADD COLUMN nao tem IF NOT EXISTS). Leve: sem contexto.
+ */
+const REFERENCIA_DO_ENVIO_V32: PassoDeMigracao = {
+  de: 31,
+  para: 32,
+  descricao: 'o Envio guarda a Referencia Externa da Mensagem enviada, com o indice parcial por Configuracao',
+  aplicar: (db) => {
+    const existentes = new Set((db.prepare('PRAGMA table_info(envios)').all() as Array<{ name: string }>).map((c) => c.name));
+    if (!existentes.has('referencia_externa_da_mensagem')) {
+      db.exec('ALTER TABLE envios ADD COLUMN referencia_externa_da_mensagem TEXT;');
+    }
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS envios_por_referencia
+        ON envios(configuracao_id, referencia_externa_da_mensagem) WHERE referencia_externa_da_mensagem IS NOT NULL;
+    `);
+  },
+};
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -1089,6 +1112,7 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CITACAO_V29,
   CHEGADAS_V30,
   INDICE_DE_CANONICO_V31,
+  REFERENCIA_DO_ENVIO_V32,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {
