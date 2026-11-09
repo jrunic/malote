@@ -199,8 +199,8 @@ Repositório expõe services systemd. Convenções:
 
 ## Estado Atual
 
-- **Produção:** v0.47.0 (07/11/2026, tag `v0.47.0`): o ouvinte atende o Pedido de reenvio das mensagens que o malote enviou (pela memória do envio e, depois de um reinício, pelo Acervo) e `ouvinte estado --json` traz `reenvios`; muda a forma do Acervo (v32: a Referência Externa da Mensagem enviada no Envio; Registro v8). As releases anteriores estão no `CHANGELOG.md`.
-- **Suíte:** 2.534 testes (07/11/2026), 0 falhas e 1 pulado; lint limpo. O teste de entrada da CLI (`cli-entrada`) descarta todo `MALOTE_*` herdado antes de lançar o filho: sem isso, a máquina com o modo rede configurado (`MALOTE_SERVIDOR`, chave de acesso) reprovava 3 testes que o CI, sem essas variáveis, nunca via. Os testes de tempo (`despachante`, `servidor-sem-bloqueio`, `servir`) usam prazo com folga para subir um worker novo; se um oscilar sob carga, rodá-lo isolado antes de tratá-lo como regressão.
+- **Produção:** v0.48.0 (09/11/2026, tag `v0.48.0`): quem fala por endereço opaco numa Conversa direta se acha pelo número (o par se aprende da Mensagem recebida, ao vivo e por `identidade aprender-pares-da-conversa-direta`), e a Conversa opaca congela quando o par é aprendido; não muda a forma do Acervo (v32) nem a do Registro (v8). As releases anteriores estão no `CHANGELOG.md`.
+- **Suíte:** 2.600 testes (09/11/2026), 0 falhas e 1 pulado; lint limpo. O teste de entrada da CLI (`cli-entrada`) descarta todo `MALOTE_*` herdado antes de lançar o filho: sem isso, a máquina com o modo rede configurado (`MALOTE_SERVIDOR`, chave de acesso) reprovava 3 testes que o CI, sem essas variáveis, nunca via. Os testes de tempo (`despachante`, `servidor-sem-bloqueio`, `servir`) usam prazo com folga para subir um worker novo; se um oscilar sob carga, rodá-lo isolado antes de tratá-lo como regressão.
 - **O histórico de ciclos e releases** vive fora do repositório (documentos internos do autor); as releases estão no `CHANGELOG.md`.
 
 ## Pendências

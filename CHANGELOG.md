@@ -23,7 +23,7 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
-## [Não lançado]
+## [0.48.0] — 2026-11-09
 
 Não muda a forma do Acervo (segue v32) nem a do Registro, e não acrescenta dependência. A recepção ao vivo passa a aprender um par a mais, e há um comando novo para o estoque.
 
