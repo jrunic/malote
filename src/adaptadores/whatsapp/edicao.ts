@@ -190,7 +190,9 @@ export function decidirEdicao(
 
   // O endereco da Conversa do envelope, resolvido pela MESMA rota da recepcao (o envelope traz a forma opaca e o Acervo
   // grava a canonica). Medido em 18/10/2026: 101 de 101 casam, em grupo e em conversa direta.
-  if (resolverEndereco(acervo, fonte, m.key.remoteJid) !== original.enderecoDaConversa) {
+  // Os DOIS lados resolvidos (#1439): a original que ficou na Conversa opaca guarda o opaco, e depois do par o envelope
+  // resolve para o telefone. So le (`resolverEndereco` do nucleo): a decisao da edicao nao abre Operacao.
+  if (resolverEndereco(acervo, fonte, m.key.remoteJid) !== resolverEndereco(acervo, fonte, original.enderecoDaConversa)) {
     return { recusar: 'outra-conversa' };
   }
 

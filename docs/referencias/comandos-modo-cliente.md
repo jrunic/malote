@@ -94,6 +94,12 @@ Observações:
   gravada quando diferem (`Pedido: … O Acervo guarda: …`; no `--json`, `consultado.gravadas`). O que o Acervo ainda
   não aprendeu (número de uma forma só que ninguém escreveu desde a versão que aprende o par) volta vazio até o
   operador rodar o aprendizado do estoque.
+- **Quem fala por endereço opaco (`…@lid`) numa Conversa direta também se acha pelo número**, em `--remetente` e em
+  `identificar`, depois que o par foi aprendido: o produto aprende o endereço do número do campo que a plataforma manda
+  com a Mensagem **recebida**, ao vivo e pelo aprendizado do estoque. A Mensagem enviada não o traz: o outro lado que só
+  recebeu da conta fica sem número até responder. Depois do par, as Mensagens novas desse outro lado ficam na Conversa do
+  número e as antigas na Conversa opaca (as duas Conversas não são unidas); `--remetente` com o número alcança as duas.
+  O número com as duas formas do celular gravadas como Identificador não ganha par, e cada forma responde só por si.
 - **`anexos`:** o id da última coluna é o que se passa a `malote midia`. Anexo `nunca-obtido` ou
   `descartado` aparece na lista, mas só `presente` tem bytes.
 - **`exportar`:** horários em UTC. O arquivo nasce como `<saida>.parcial` e só vira definitivo ao fim; se

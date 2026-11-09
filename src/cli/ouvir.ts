@@ -138,6 +138,16 @@ export interface AmbienteDeEscuta extends Ambiente {
 const LOTES_POR_DRENAGEM = 3;
 
 /**
+ * O conflito do par da Conversa direta (#1439): EVENTOS do lote cujo campo do companheiro contradiz o par do opaco. Conta
+ * eventos, nao pares (o contato que troca de numero da uma linha por lote com Mensagem dele). So a CONTAGEM, nunca o
+ * endereco, o nome ou o texto: e a linha que a medicao de campo conta, porque a recepcao mantem o conflito fora da trilha.
+ * Os comandos `ouvinte reprocessar` e `ouvinte reprocessar-descartados` NAO a escrevem (so a recepcao e a drenagem).
+ */
+function linhaDoConflitoDaDireta(n: number): string {
+  return `[ouvinte] correspondencia em conflito (direta): ${String(n)}`;
+}
+
+/**
  * Drena o derrame depois de uma escrita que funcionou.
  *
  * O GATILHO E O SUCESSO, e nao um temporizador. Escrita que passou e evidencia
@@ -204,6 +214,7 @@ export function drenar(
       if (r.recusados.length > 0) {
         escrever(`[ouvinte] drenagem, recusados: ${r.recusados.length}`);
       }
+      if (r.conflitosDaDireta > 0) escrever(linhaDoConflitoDaDireta(r.conflitosDaDireta));
     } catch (erro) {
       if (ehBancoOcupado(erro)) {
         escrever(
@@ -649,6 +660,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
           // efeito que so avanca com escrita nova o declararia morto.
           marcarUltimoEvento(caminhos.ultimoEvento, agora());
           if (r.recusados.length > 0) escrever(`[ouvinte] recusados: ${r.recusados.length}`);
+          if (r.conflitosDaDireta > 0) escrever(linhaDoConflitoDaDireta(r.conflitosDaDireta));
           // So o NUMERO: e a medicao de campo da janela de relogio (#1204), e o texto da Mensagem nunca entra em log.
           if (r.mensagensPelaJanela > 0) {
             escrever(`[ouvinte] mensagens aceitas pela tolerancia de relogio: ${r.mensagensPelaJanela}`);

@@ -49,6 +49,10 @@ import { carregarDecodificador } from '../adaptadores/whatsapp/conexao.js';
 import type { Decodificador } from '../adaptadores/whatsapp/edicao.js';
 import { extrairContatosCompartilhados } from '../adaptadores/whatsapp/extrair-contatos-compartilhados.js';
 import { aprenderFormasDoCelular, EstoqueInterrompidoError } from '../adaptadores/whatsapp/aprender-formas-do-celular.js';
+import {
+  aprenderParesDaConversaDireta,
+  EstoqueDoParInterrompidoError,
+} from '../adaptadores/whatsapp/aprender-pares-da-conversa-direta.js';
 import { extrairCitacoes } from '../adaptadores/whatsapp/extrair-citacoes.js';
 import { extrairImagensDeModelo } from '../adaptadores/whatsapp/extrair-imagem-de-modelo.js';
 import { formatarAnexos, tipoGuardado } from './anexos-texto.js';
@@ -444,6 +448,8 @@ Titular (nao exige chave enquanto nao houver rede):
   malote identidade resolver-enderecos --inquilino <id> [--com-efeito --confirmo] [--json]
   malote identidade aprender-formas-do-celular --inquilino <id> [--limite <n>] [--tamanho-do-lote <n>] [--com-efeito --confirmo] [--json]
                                     (aprende o par das duas formas, com e sem o 9, dos celulares brasileiros já gravados; ensaio por padrão)
+  malote identidade aprender-pares-da-conversa-direta --inquilino <id> [--limite <n>] [--tamanho-do-lote <n>] [--com-efeito --confirmo] [--json]
+                                    (aprende o telefone das Conversas diretas por forma opaca, do cru das Mensagens recebidas; ensaio por padrão)
   malote operacao listar   --inquilino <id> --chave <valor>
   malote operacao ver      <id> --inquilino <id> --chave <valor>
   malote operacao desfazer <id> --inquilino <id> --chave <valor> [--com-efeito --confirmo]
@@ -3392,6 +3398,94 @@ function executarComAtor(
         if (r.operacaoId !== null) {
           escrever(`Para desfazer: malote operacao desfazer ${r.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
         }
+        if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
+    if (grupo === 'identidade' && sub === 'aprender-pares-da-conversa-direta') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
+      const comEfeito = temBandeira(argumentos, 'com-efeito');
+      if (comEfeito && !temBandeira(argumentos, 'confirmo')) {
+        throw new Error('Repita o comando com --confirmo para executar.');
+      }
+      const inteiro = (nome: string): number | undefined | null => {
+        const texto = opcao(argumentos, nome);
+        if (texto === undefined) return undefined;
+        const n = Number(texto);
+        return Number.isInteger(n) && n >= 1 ? n : null;
+      };
+      const limite = inteiro('limite');
+      const tamanhoDoLote = inteiro('tamanho-do-lote');
+      if (limite === null || tamanhoDoLote === null) {
+        escrever('--limite e --tamanho-do-lote precisam ser inteiros maiores que zero.');
+        return 2;
+      }
+      // O que o `desfazer` cobre e o que NAO cobre (#1439, criterio 6): sai sempre, no ensaio e no efeito.
+      const cobre =
+        'O `operacao desfazer` remove os pares que esta Operacao criou (do opaco e do celular). Ele NAO impede o ouvinte de ' +
+        'reaprender o par na proxima Mensagem recebida do contato, as Mensagens gravadas entretanto ficam na Conversa por telefone, ' +
+        'e o que `identidade resolver-enderecos` repontar depois do estoque nao volta com ele.';
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        let r;
+        try {
+          r = aprenderParesDaConversaDireta(acervo, {
+            comEfeito,
+            ...(limite === undefined ? {} : { limite }),
+            ...(tamanhoDoLote === undefined ? {} : { tamanhoDoLote }),
+          });
+        } catch (erro) {
+          if (!(erro instanceof EstoqueDoParInterrompidoError)) throw erro;
+          escrever(
+            `Interrompido: ${erro.criados.doOpaco} par(es) do opaco e ${erro.criados.doCelular} do celular criado(s) na Operacao ${erro.operacaoId}; repita o comando para completar.`,
+          );
+          escrever(`Para desfazer o que entrou: malote operacao desfazer ${erro.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
+          escrever(cobre);
+          escrever(`Causa: ${String(erro.causa)}`);
+          return 1;
+        }
+        if (temBandeira(argumentos, 'json')) {
+          // O aviso do que o `desfazer` cobre vai tambem a quem so le o JSON (criterio 6).
+          escrever(JSON.stringify({ ...r, oQueODesfazerCobre: cobre }, null, 2));
+          return 0;
+        }
+        // So CONTAGENS: o endereco de ninguem vai ao texto (o --json traz as listas, para o operador decidir a mao).
+        escrever(
+          comEfeito
+            ? `Aprendido: ${r.criados.doOpaco} par(es) do opaco e ${r.criados.doCelular} do celular criado(s).`
+            : `Ensaio: ${r.paresDoOpacoACriar} par(es) do opaco e ${r.paresDoCelularACriar} do celular a criar (${r.examinadas} Conversa(s) direta(s) por forma opaca examinada(s), ${r.comRecebida} com Mensagem recebida).`,
+        );
+        if (r.paresDoOpacoJaIguais > 0) escrever(`  ${r.paresDoOpacoJaIguais} endereco(s) opaco(s) ja com o par.`);
+        if (r.soComEnviadas > 0) escrever(`  ${r.soComEnviadas} Conversa(s) sem Mensagem recebida: nada a aprender.`);
+        if (r.recebidasSemOCampo > 0) {
+          escrever(`  ${r.recebidasSemOCampo} Mensagem(ns) recebida(s) sem o telefone no cru (${r.conversasSemOCampo} Conversa(s) sem nenhuma).`);
+        }
+        const porMotivo = new Map<string, number>();
+        for (const c of r.conflitos) porMotivo.set(c.motivo, (porMotivo.get(c.motivo) ?? 0) + 1);
+        for (const [motivo, n] of porMotivo) escrever(`  ${n} conflito(s) ${motivo}: achado, sem par (--json traz a lista).`);
+        if (r.duasFormasGravadas.length > 0) {
+          escrever(`  ${r.duasFormasGravadas.length} telefone(s) com as duas formas gravadas: sem par, decisao do operador (--json traz a lista).`);
+        }
+        for (const [configuracao, n] of Object.entries(r.conversasOpacasQueCongelam)) {
+          const partidas = r.conversasPartidas.filter((p) => p.configuracaoId === configuracao).length;
+          escrever(
+            `  ${n} Conversa(s) opaca(s) deixam de receber na Configuracao ${configuracao}` +
+              (partidas > 0 ? `; ${partidas} ja tem Conversa por telefone e ficam partidas.` : '.'),
+          );
+        }
+        if (Object.keys(r.conversasOpacasQueCongelam).length > 0) {
+          escrever(
+            'O par vale para o Inquilino inteiro: a Conversa opaca de todas as Configuracoes deixa de receber, e as Mensagens novas do contato vao para a Conversa por telefone (uma nova, se ainda nao existe).',
+          );
+        }
+        if (r.operacaoId !== null) {
+          escrever(`Para desfazer: malote operacao desfazer ${r.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
+        }
+        escrever(cobre);
         if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
         return 0;
       } finally {

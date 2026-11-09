@@ -23,6 +23,20 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [0.48.0] — 2026-11-09
+
+Não muda a forma do Acervo (segue v32) nem a do Registro, e não acrescenta dependência. A recepção ao vivo passa a aprender um par a mais, e há um comando novo para o estoque.
+
+### Adicionado
+
+- **Quem fala por endereço opaco numa Conversa direta se acha pelo número.** A Mensagem **recebida** de uma Conversa direta por endereço opaco traz o endereço do número do outro lado num campo da plataforma; a recepção ao vivo grava o par (o opaco como forma alternativa, o número já resolvido pela regra do celular brasileiro como canônica) antes de escrever o evento, e só abre Operação quando o par é novo. A Mensagem enviada pela conta nunca ensina: quem a conta procura primeiro só ganha número quando responde. Depois do par, `identificar` e `mensagens --remetente` acham o outro lado pelo número (com e sem o 9) e pelo endereço opaco. Conflito (o opaco já aponta para outro número) mantém o primeiro, grava a Mensagem e vira uma linha no registro do ouvinte, só com a contagem. Decisão e risco: `docs/decisoes/20261108-par-da-conversa-direta-pelo-campo-do-companheiro.md`.
+- **`identidade aprender-pares-da-conversa-direta`** aprende o mesmo par para as Conversas que já estão no Acervo, lendo as Mensagens recebidas guardadas. Ensaio por padrão, com as Conversas partidas por Configuração; com `--com-efeito --confirmo`, uma Operação `por-efeito` que só cria pares (o da forma opaca e, quando falta, o das duas formas do celular). `operacao desfazer` os remove, mas não impede o ouvinte de reaprender o par na Mensagem recebida seguinte. O ouvinte pode seguir no ar.
+
+### Alterado
+
+- **A Conversa direta por endereço opaco congela quando o par é aprendido.** A partir do evento que traz o campo, inclusive ele, a Mensagem desse outro lado vai para a Conversa do número (a existente ou uma nova), e a opaca fica com o que já tinha; as duas não são unidas. A reentrega de um evento antigo depois do par pode criar a Conversa do número vazia. O par vale para o Inquilino inteiro, e congela também a Conversa opaca de outra Configuração com o mesmo outro lado.
+- **A edição de uma Mensagem que ficou na Conversa opaca continua valendo depois do par:** a Conversa da original e a do envelope se comparam pelo endereço resolvido dos dois lados.
+
 ## [0.47.0] — 2026-11-07
 
 Muda a forma do Acervo (v31 para v32): o Envio ganha um campo e um índice parcial; a migração roda sozinha na primeira abertura, é idempotente e não perde linha. Não muda a forma do Registro. `ouvinte estado --json` ganha um campo; contrato aditivo, saída padrão intacta.
