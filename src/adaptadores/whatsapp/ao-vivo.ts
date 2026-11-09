@@ -7,6 +7,7 @@ import {
   CorrespondenciaEmConflitoError,
 } from '../../nucleo/correspondencia.js';
 import { resolverEnderecoDeWhatsapp } from './resolver-celular.js';
+import { outraFormaDoCelular } from './celular-br.js';
 import {
   anexoJaExiste,
   idDeMensagemPorExterno,
@@ -190,6 +191,12 @@ export interface RelatoDeRecepcao {
   recusados: { idExterno: string; causa: string }[];
   /** Correspondencias que a Fonte contradisse. Achado, nao erro. */
   conflitos: { alternativo: string; gravado: string; novo: string }[];
+  /**
+   * Conflitos do par da Conversa DIRETA (#1439): EVENTOS cujo campo do companheiro contradiz o par do opaco (outro numero).
+   * Conta eventos, nao pares: o contato que troca de numero conta um por Mensagem recebida, para sempre. So contagem,
+   * nunca o endereco (o ouvinte o escreve numa linha de registro): o primeiro par fica e a Mensagem entra assim mesmo.
+   */
+  conflitosDaDireta: number;
   /** Tipos ignorados por nao serem Mensagem, contados por tipo. */
   ignorados: Record<string, number>;
   /**
@@ -309,17 +316,38 @@ const TELEFONE = /^\d+@s\.whatsapp\.net$/;
  *
  * O evento que NAO se decifra ensina tambem, de proposito: a biblioteca monta a chave, e o campo com ela, ANTES da
  * decifra (o atributo da stanza), entao o telefone e o mesmo que o da Mensagem legivel. E a regra da coletiva.
+ *
+ * O PRE-FILTRO e o do aprendizado da agenda (`estado-ao-vivo.ts`): so entra o opaco que AINDA NAO resolve, e por isso a
+ * Operacao de aprendizado so abre com par novo. Sem ele, toda Mensagem do contato abriria uma Operacao vazia (a coletiva,
+ * que nao o tem, abriu 21.655 em 7 dias para cerca de 126 pares). O opaco que ja tem par so e COMPARADO, lendo: o mesmo
+ * numero nao faz nada, outro numero e conflito, contado (por EVENTO) e nunca Operacao.
  */
-function paresDaConversaDireta(mensagens: readonly MensagemRecebida[]): Array<{ alternativo: string; telefone: string }> {
-  const pares: Array<{ alternativo: string; telefone: string }> = [];
+function paresDaConversaDireta(
+  acervo: Acervo,
+  mensagens: readonly MensagemRecebida[],
+): { novos: Array<{ alternativo: string; telefone: string }>; conflitos: number } {
+  const novos: Array<{ alternativo: string; telefone: string }> = [];
+  let conflitos = 0;
   for (const m of mensagens) {
     const { remoteJid, fromMe, senderPn } = m.key;
     // O opaco no endereco da Conversa e a direta: a coletiva tem endereco de grupo, e o autor dela segue pelo campo dele.
     if (fromMe || !ehOpaco(remoteJid)) continue;
     if (senderPn === undefined || !TELEFONE.test(senderPn)) continue;
-    pares.push({ alternativo: remoteJid, telefone: senderPn });
+    const gravado = resolverEndereco(acervo, FONTE, remoteJid);
+    if (gravado === remoteJid) novos.push({ alternativo: remoteJid, telefone: senderPn });
+    else if (!mesmoNumero(gravado, senderPn)) conflitos += 1;
   }
-  return pares;
+  return { novos, conflitos };
+}
+
+/**
+ * O telefone do campo e o numero que o par ja guarda? Le, sem resolver por `resolverEnderecoDeWhatsapp`: ele grava o par
+ * do celular quando falta, e abriria uma Operacao para um opaco que ja tem par. As formas com e sem o nono digito do
+ * mesmo celular contam como o mesmo numero; o par do opaco nunca aponta para uma forma alternativa (nenhuma cadeia nos
+ * quatro Acervos medidos em 08/11/2026), entao as duas formas do numero sao o que o resolvedor devolveria.
+ */
+function mesmoNumero(gravado: string, telefone: string): boolean {
+  return telefone === gravado || outraFormaDoCelular(telefone) === gravado;
 }
 
 
@@ -467,6 +495,7 @@ export function receberEvento(
     gravados: 0,
     recusados: [],
     conflitos: [],
+    conflitosDaDireta: 0,
     ignorados: {},
     descartados: [],
     transicoes: 0,
@@ -545,8 +574,9 @@ export function receberEvento(
   const comPar = mensagens.filter(
     (m) => m.key.participant !== undefined && m.key.participantPn !== undefined,
   );
-  const daDireta = paresDaConversaDireta(mensagens);
-  if (comPar.length > 0 || daDireta.length > 0) {
+  const daDireta = paresDaConversaDireta(acervo, mensagens);
+  relato.conflitosDaDireta += daDireta.conflitos;
+  if (comPar.length > 0 || daDireta.novos.length > 0) {
     emOperacao(
       acervo,
       {
@@ -572,7 +602,7 @@ export function receberEvento(
             });
           }
         }
-        for (const p of daDireta) {
+        for (const p of daDireta.novos) {
           try {
             aprenderCorrespondencia(acervo, {
               fonte: FONTE,
@@ -581,7 +611,10 @@ export function receberEvento(
               canonico: resolverEnderecoDeWhatsapp(acervo, p.telefone),
             });
           } catch (erro) {
+            // O mesmo opaco com OUTRO numero no mesmo lote: o primeiro fica, a Mensagem entra, e o achado e contado. O
+            // resolvedor ja rodou para o segundo numero: se e celular, o par das duas formas DELE fica (e verdadeiro).
             if (!(erro instanceof CorrespondenciaEmConflitoError)) throw erro;
+            relato.conflitosDaDireta += 1;
           }
         }
       },
