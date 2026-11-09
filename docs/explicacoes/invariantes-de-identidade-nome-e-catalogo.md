@@ -84,6 +84,34 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   critério próprio. Os números com as duas formas gravadas ficam sem par e o ensaio os lista com as Mensagens de cada forma; a
   Conversa direta que o aprendizado não une (uma por forma, da mesma Configuração) também é listada. O caso legado (o
   canônico do par LID é a forma não gravada) é o único em que a retroativa acha o que reapontar logo depois do estoque.
+- **O par da forma opaca na Conversa direta vem do campo que a plataforma manda com a Mensagem RECEBIDA (#1439).** Na
+  Conversa coletiva o par se aprende do autor (o campo irmão, desde a primeira passada da recepção); na direta, do campo do
+  companheiro, que a biblioteca em uso preenche em toda mensagem decodificada. Por isso a regra exige que a Mensagem não seja
+  da conta (`fromMe` falso) e não se apoia na ausência do campo: o número da própria conta apontaria o outro lado para o
+  Titular. Medido em 08/11/2026 nos quatro Acervos de produção: nenhuma das Mensagens enviadas em Conversa direta por
+  endereço opaco trazia o campo, os pares já conhecidos concordaram com ele em todos os casos e nenhuma Conversa trouxe mais
+  de um número depois da regra do celular. Quem o Titular procura primeiro e que ainda não respondeu fica sem número: não há
+  outra fonte do par na versão da biblioteca em uso.
+- **Ao vivo, o par só abre Operação quando é novo.** A primeira passada filtra os opacos que **ainda não resolvem**, o mesmo
+  pré-filtro do aprendizado da agenda; com o par gravado, só compara. Sem o filtro, cada Mensagem recebida de um outro lado por
+  endereço opaco abriria uma Operação vazia (medido: o aprendizado da coletiva abriu ~21,6 mil Operações em 7 dias numa conta
+  para ~126 pares novos). Conflito é linha do registro do ouvinte (`correspondencia em conflito (direta): <n>`), sem
+  endereço, nome nem texto, e nunca Operação.
+- **O par congela a Conversa por endereço opaco, e isso é declarado, não defeito.** A Conversa da Mensagem se resolve
+  **depois** da primeira passada, então o próprio evento que traz o campo já vai para a Conversa do número; a opaca deixa de
+  receber e de ter o `bruto` reescrito. A reentrega de evento antigo depois do par cria, se faltar, a Conversa do número
+  **vazia** (Identificador e Participação), porque a Mensagem já existe pelo id. O par vale para o Inquilino inteiro (a chave
+  é `fonte, alternativo`), então congela também a Conversa opaca de outra Configuração. Unir as Conversas partidas é outro
+  trabalho, com decisão própria.
+- **O estoque cria duas espécies de par e o `desfazer` remove as duas, mas não é volta.** `identidade
+  aprender-pares-da-conversa-direta` resolve o número pelo resolvedor com `op`, que aprende também o par do celular quando
+  falta (o número que só está no Conteúdo Bruto não é Identificador, e por isso o estoque do celular não o alcançou); o
+  relatório conta as duas espécies à parte. O `desfazer` remove as linhas da Operação, mas com o ouvinte novo no ar a Mensagem
+  recebida seguinte reaprende o par (o envelope ao vivo é irreversível), e as Mensagens gravadas entretanto ficam na Conversa
+  do número.
+- **A Edição compara o endereço da Conversa resolvido dos dois lados (#1439).** A original pode ter ficado na Conversa opaca
+  e o envelope da edição chega pelo opaco, que agora resolve para o número: comparar o resolvido com o gravado recusaria
+  como `outra-conversa` a edição de toda Mensagem antiga de um outro lado com par.
 - **"Comparar dígitos serve a qualquer Fonte" tem limite, e o nono dígito brasileiro
   mora do lado de fora dele.** `nome-do-endereco.ts` (núcleo) já dizia, desde que
   nasceu: "traduzir a forma escrita do número na forma do endereço é vocabulário de

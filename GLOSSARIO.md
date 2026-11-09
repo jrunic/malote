@@ -56,6 +56,22 @@ endereço do telefone e o endereço opaco que a plataforma usa em alguns eventos
 a Fonte entrega podem diferir pelo nono dígito do celular brasileiro; são a mesma conta.
 *Evitar*: número da conta, identidade da conta (é vocabulário do vínculo, não do produto).
 
+**Correspondência de endereço**:
+O par que diz que duas formas de endereço da mesma Fonte são um endereço só: a **forma alternativa**
+aponta para a **forma canônica**, e o produto grava, consulta e filtra pela canônica. No WhatsApp há
+duas espécies: o **par da forma opaca** (o endereço opaco que a plataforma usa em alguns eventos
+aponta para o endereço do número) e o **par do celular brasileiro** (as duas formas do número, com e
+sem o nono dígito). O par só se aprende do que a Fonte declara (o campo que a plataforma manda junto
+do evento, a forma do número que o Acervo já guarda), nunca de nome, horário ou ordem; o canônico é
+sempre a forma já resolvida, nunca uma forma que é ela mesma alternativa de outro par. Vale para o
+**Inquilino inteiro**, em todas as Configurações. O primeiro par gravado vence: um segundo canônico
+para a mesma forma alternativa é conflito e nunca é gravado (a recepção o conta na Conversa direta).
+Não une Conversas: a Conversa que nasceu na forma alternativa fica com o que já tinha, e o que chega
+depois do par vai para a da forma canônica; a Conversa da forma alternativa que deixa de receber é a
+**Conversa partida**. Não decide quem é a **Pessoa**: liga formas de endereço, não Identificadores a
+Pessoas.
+*Evitar*: mapeamento, alias, de-para, sinônimo, lid-jid, "o telefone do LID".
+
 **Destino de Mídia**:
 Onde os arquivos de Anexo de um Inquilino ficam — um caminho de sistema de arquivos, configurado por Inquilino. Caminho montado por rede é atendido como qualquer outro; transporte remoto próprio ficou fora do v1 (28/08/2026).
 *Evitar*: storage, bucket, pasta de mídia, backend, volume.
@@ -404,6 +420,7 @@ A remoção do arquivo de um Anexo do disco, preservando o Descritor.
 - Uma **Conversa** tem 0..N **Marcas do Titular**, do tipo `fixada`, no máximo uma.
 - Uma **Pessoa** tem 0..N **Identificadores**, possivelmente de **Fontes** diferentes.
 - Um **Identificador** pertence a 0..1 **Pessoa** e a exatamente 1 **Fonte**.
+- Uma **Correspondência de endereço** liga exatamente 1 forma alternativa a exatamente 1 forma canônica, numa **Fonte**, e vale para o **Inquilino** inteiro; uma forma alternativa tem no máximo 1 canônico.
 - Um **Anexo** tem exatamente 1 **Descritor** e exatamente 1 **Presença**.
 - Uma **Operação** tem 0..N **Linhas de Efeito** e aponta para 0..1 **Operação** que ela desfaz.
 - Uma **Operação** é desfeita no máximo uma vez.

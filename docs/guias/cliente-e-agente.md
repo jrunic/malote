@@ -226,6 +226,9 @@ Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`
   correspondência de endereço conhece, o que inclui as duas formas do celular brasileiro (com e sem o 9, sempre como
   endereço completo). Funciona sem Pessoa, e é o que `--autor` (id de Pessoa) não faz.
   Valor desconhecido devolve lista vazia, nunca tudo.
+  Quem a plataforma entrega por endereço opaco (`…@lid`) se acha também pelo número depois que ele mandou
+  uma Mensagem (a enviada pela conta não ensina): a partir daí as Mensagens novas dele ficam na Conversa do número, e
+  as antigas na Conversa opaca. Para ler tudo desse outro lado, use `--remetente` com o número, sem `--conversa`.
 - `malote anexos --conversa <id> [--tipo T] [--remetente V] [--desde D] [--ate D] [--presenca P] [--limite N]
   [--antes TOKEN] [--json]` — os Anexos de **uma** Conversa, em ordem cronológica. Cada um traz o Descritor,
   a Presença (`presente`, `nunca-obtido` ou `descartado`: o que não está em disco aparece, nunca some), o
