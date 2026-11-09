@@ -22,7 +22,9 @@ const PORTAS = [
 const CHAMADAS: Record<string, Record<string, number>> = {
   'src/adaptadores/contatos/importar.ts': { registrarIdentificador: 1 },
   'src/adaptadores/instagram/importar.ts': { registrarIdentificador: 2, registrarConversa: 1 },
-  'src/adaptadores/whatsapp/ao-vivo.ts': { registrarIdentificador: 3, registrarConversa: 2, aprenderCorrespondencia: 1 },
+  // `aprenderCorrespondencia: 2`: o par do autor da coletiva e o par do opaco da Conversa direta (#1439); os dois com o
+  // telefone resolvido por `resolverEnderecoDeWhatsapp`, na mesma primeira passada.
+  'src/adaptadores/whatsapp/ao-vivo.ts': { registrarIdentificador: 3, registrarConversa: 2, aprenderCorrespondencia: 2 },
   'src/adaptadores/whatsapp/citacao.ts': { registrarIdentificador: 1 },
   'src/adaptadores/whatsapp/declarar-conta.ts': { declararEnderecosDaConta: 1 },
   'src/adaptadores/whatsapp/enviar.ts': { registrarConversa: 1 },

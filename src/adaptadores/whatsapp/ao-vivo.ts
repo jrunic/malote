@@ -292,6 +292,36 @@ function ehOpaco(endereco: string | undefined): boolean {
 
 const FONTE = 'whatsapp';
 
+/**
+ * O campo do companheiro so vira par na forma de telefone INTEIRA: digitos e o sufixo de telefone, sem sufixo de
+ * aparelho (`<numero>:<n>@...`). A mesma regra do estoque (#1439, Plano 2). So o sufixo nao basta: o campo com aparelho
+ * viraria canonico, e a Mensagem do contato iria para uma Conversa e um Identificador com o aparelho no endereco, uma
+ * segunda identidade que o par venceria para sempre (medido na revisao do plano).
+ */
+const TELEFONE = /^\d+@s\.whatsapp\.net$/;
+
+/**
+ * Os pares da Conversa DIRETA que o lote ensina (#1439): o endereco opaco da Conversa (alternativo) e o telefone do
+ * companheiro que a Fonte declara junto (`senderPn`), que vira canonico depois de resolvido. So a Mensagem RECEBIDA ensina:
+ * a biblioteca preenche o campo em qualquer mensagem decodificada, e na enviada ele seria o telefone da PROPRIA conta, que
+ * apontaria o contato para o Titular (medido em 08/11/2026: 0 de 679 enviadas o trazem, e a regra nao se apoia nisso).
+ * Sem o campo, ou com ele vazio ou fora da forma de telefone (`TELEFONE`), nao ha par.
+ *
+ * O evento que NAO se decifra ensina tambem, de proposito: a biblioteca monta a chave, e o campo com ela, ANTES da
+ * decifra (o atributo da stanza), entao o telefone e o mesmo que o da Mensagem legivel. E a regra da coletiva.
+ */
+function paresDaConversaDireta(mensagens: readonly MensagemRecebida[]): Array<{ alternativo: string; telefone: string }> {
+  const pares: Array<{ alternativo: string; telefone: string }> = [];
+  for (const m of mensagens) {
+    const { remoteJid, fromMe, senderPn } = m.key;
+    // O opaco no endereco da Conversa e a direta: a coletiva tem endereco de grupo, e o autor dela segue pelo campo dele.
+    if (fromMe || !ehOpaco(remoteJid)) continue;
+    if (senderPn === undefined || !TELEFONE.test(senderPn)) continue;
+    pares.push({ alternativo: remoteJid, telefone: senderPn });
+  }
+  return pares;
+}
+
 
 /**
  * Tipos de conta comercial que viram Mensagem SO quando a leitura do texto devolve um corpo nao
@@ -509,10 +539,14 @@ export function receberEvento(
   //    Operacoes — a do evento e uma de aprendizado vazia, porque so Conversa
   //    coletiva traz o par. Num ouvinte que roda por meses, isso dobra a trilha
   //    com lixo, que e o que este envelope existe para evitar.
+  //
+  //    A Conversa DIRETA (#1439) entra no MESMO envelope: o par do opaco e aprendido antes do laco que escreve, e por
+  //    isso o proprio evento que traz o campo ja vai para a Conversa por telefone (o corte do criterio 7).
   const comPar = mensagens.filter(
     (m) => m.key.participant !== undefined && m.key.participantPn !== undefined,
   );
-  if (comPar.length > 0) {
+  const daDireta = paresDaConversaDireta(mensagens);
+  if (comPar.length > 0 || daDireta.length > 0) {
     emOperacao(
       acervo,
       {
@@ -536,6 +570,18 @@ export function receberEvento(
               gravado: erro.gravado,
               novo: erro.novo,
             });
+          }
+        }
+        for (const p of daDireta) {
+          try {
+            aprenderCorrespondencia(acervo, {
+              fonte: FONTE,
+              alternativo: p.alternativo,
+              // O telefone ja resolvido, como na coletiva: o par do opaco nunca aponta para a forma crua (cadeia).
+              canonico: resolverEnderecoDeWhatsapp(acervo, p.telefone),
+            });
+          } catch (erro) {
+            if (!(erro instanceof CorrespondenciaEmConflitoError)) throw erro;
           }
         }
       },
