@@ -25,6 +25,8 @@ const CHAMADAS: Record<string, Record<string, number>> = {
   // `aprenderCorrespondencia: 2`: o par do autor da coletiva e o par do opaco da Conversa direta (#1439); os dois com o
   // telefone resolvido por `resolverEnderecoDeWhatsapp`, na mesma primeira passada.
   'src/adaptadores/whatsapp/ao-vivo.ts': { registrarIdentificador: 3, registrarConversa: 2, aprenderCorrespondencia: 2 },
+  // O estoque do par da Conversa direta (#1439): o opaco aponta para o telefone JA resolvido por `resolverEnderecoDeWhatsapp`.
+  'src/adaptadores/whatsapp/aprender-pares-da-conversa-direta.ts': { aprenderCorrespondencia: 1 },
   'src/adaptadores/whatsapp/citacao.ts': { registrarIdentificador: 1 },
   'src/adaptadores/whatsapp/declarar-conta.ts': { declararEnderecosDaConta: 1 },
   'src/adaptadores/whatsapp/enviar.ts': { registrarConversa: 1 },
