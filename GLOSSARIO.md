@@ -66,11 +66,23 @@ do evento, a forma do número que o Acervo já guarda), nunca de nome, horário 
 sempre a forma já resolvida, nunca uma forma que é ela mesma alternativa de outro par. Vale para o
 **Inquilino inteiro**, em todas as Configurações. O primeiro par gravado vence: um segundo canônico
 para a mesma forma alternativa é conflito e nunca é gravado (a recepção o conta na Conversa direta).
-Não une Conversas: a Conversa que nasceu na forma alternativa fica com o que já tinha, e o que chega
-depois do par vai para a da forma canônica; a Conversa da forma alternativa que deixa de receber é a
-**Conversa partida**. Não decide quem é a **Pessoa**: liga formas de endereço, não Identificadores a
-Pessoas.
+O par não une Conversas por si: a Conversa que nasceu na forma alternativa fica com o que já tinha,
+e o que chega depois do par vai para a da forma canônica; a Conversa da forma alternativa que deixa
+de receber é a **Conversa partida**, que só uma Operação própria une. Não decide quem é a
+**Pessoa**: liga formas de endereço, não Identificadores a Pessoas.
 *Evitar*: mapeamento, alias, de-para, sinônimo, lid-jid, "o telefone do LID".
+
+**Conversa partida**:
+A Conversa direta da forma alternativa que deixou de receber quando o par da
+**Correspondência de endereço** foi aprendido: o histórico de quem fala fica em duas Conversas da
+mesma Configuração, a antiga e a da forma canônica. Só uma Operação própria a une, na mesma
+Configuração e com o par já gravado. Se a Conversa da forma canônica existe, as Mensagens passam a
+ela e a Conversa partida fica, vazia, com as Participações que tinha. Se não existe, a Conversa
+partida **é promovida**: o endereço dela passa a ser a forma canônica, e o id, as Mensagens e as
+Participações ficam. Mais de uma Conversa da forma canônica na mesma Configuração, ou duas Conversas
+partidas da mesma forma canônica, é conflito, e nada se une. A união não reescreve Chegada, Envio
+nem Conteúdo Bruto, e o `desfazer` dela não devolve o que chegou depois.
+*Evitar*: Conversa duplicada, Conversa órfã, mesclagem de Conversas, merge.
 
 **Destino de Mídia**:
 Onde os arquivos de Anexo de um Inquilino ficam — um caminho de sistema de arquivos, configurado por Inquilino. Caminho montado por rede é atendido como qualquer outro; transporte remoto próprio ficou fora do v1 (28/08/2026).

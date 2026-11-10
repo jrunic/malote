@@ -41,9 +41,14 @@ test('as invariantes da recepcao dizem que a Edicao compara o endereco resolvido
   assert.ok(!texto.includes('do envelope contra o gravado da original'), 'a frase antiga da Edicao continua la');
 });
 
-// "contato" esta no *Evitar* de Pessoa; o texto novo diz "quem fala" ou "o outro lado". "Contato Compartilhado" e outro termo.
+// "contato" esta no *Evitar* de Pessoa; o texto novo diz "quem fala" ou "o outro lado". "Contato Compartilhado" e outro termo,
+// e o nome do comando da uniao (#1440, fixado no contrato dos planos) e identificador, nao prosa: os dois saem antes da busca.
 const semContato = (trecho: string, onde: string): void => {
-  const achados = trecho.replace(/Contatos? Compartilhados?/g, '').match(/\bcontatos?\b/gi) ?? [];
+  const achados =
+    trecho
+      .replace(/Contatos? Compartilhados?/g, '')
+      .replace(/unir-conversas-do-contato/g, '')
+      .match(/\bcontatos?\b/gi) ?? [];
   assert.equal(achados.length, 0, `${onde} usa "contato", que o glossario manda evitar`);
 };
 const entre = (texto: string, de: string, ate: string): string => {
@@ -58,7 +63,7 @@ test('os textos novos nao usam "contato" (#1439)', () => {
   semContato(entre(g, '**Correspondência de endereço**:', '\n\n'), 'o verbete');
   const d = ler('docs', 'dominio', 'malote.md');
   semContato(entre(d, '- **A Conversa direta por endereço opaco aprende', '\n- '), 'a regra da recepcao');
-  semContato(entre(d, '### aprender-pares-da-conversa-direta', '\n## '), 'a operacao do estoque');
+  semContato(entre(d, '### aprender-pares-da-conversa-direta', '\n### '), 'a operacao do estoque');
   const i = ler('docs', 'explicacoes', 'invariantes-de-identidade-nome-e-catalogo.md');
   semContato(entre(i, '- **O par da forma opaca na Conversa direta', '- **"Comparar dígitos'), 'as invariantes');
   semContato(ler('docs', 'decisoes', '20261108-par-da-conversa-direta-pelo-campo-do-companheiro.md'), 'a ADR');

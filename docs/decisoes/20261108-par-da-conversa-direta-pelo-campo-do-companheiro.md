@@ -17,6 +17,8 @@ tags: [adr, decisao, adaptador, whatsapp, identidade, correspondencia, conversa-
 
 Aprovado — 2026-11-08. Não muda a forma do Acervo nem a do Registro e não acrescenta dependência. Complementa a regra do par do celular brasileiro (`docs/explicacoes/invariantes-de-identidade-nome-e-catalogo.md`).
 
+**Refinada em 2026-11-09** por [`20261109-uniao-da-conversa-partida.md`](20261109-uniao-da-conversa-partida.md): a decisão 4 e a alternativa "Unir as Conversas no mesmo ato". O resto vale como está.
+
 ## Contexto
 
 O WhatsApp entrega o outro lado de uma Conversa direta ora pelo endereço do número, ora por um endereço opaco. Quando é o opaco, o aplicativo mostra o número, mas o malote não o sabia: `identificar` devolvia o endereço opaco sem número, e `mensagens --remetente` com o número não achava nada. Na Conversa coletiva o par já se aprendia pelo campo que a plataforma manda com o autor.
@@ -33,7 +35,7 @@ Medido em novembro de 2026, só leitura, nos Acervos de uma instalação real:
 1. **A recepção ao vivo aprende o par da forma opaca na Conversa direta**: a Mensagem recebida (nunca a da conta), de Conversa por endereço opaco, com o campo, e cujo opaco ainda não resolve, grava o par (o opaco como alternativo, o número já resolvido pela regra do celular como canônico) antes de qualquer escrita de endereço do evento. Só abre Operação com par novo; com o par gravado, só compara.
 2. **Conflito não escreve e não interrompe:** o primeiro par vence, a Mensagem é gravada e o ouvinte registra uma linha só com a contagem.
 3. **O estoque tem comando próprio,** `identidade aprender-pares-da-conversa-direta`, irmão do aprendizado das formas do celular: ensaio por padrão, Operação `por-efeito` que só cria pares (as duas espécies), que o `desfazer` remove pelo caso que a tabela de correspondências já tem, e conferência independente.
-4. **Não se unem Conversas.** A Conversa por endereço opaco congela quando o par é aprendido, a partir do próprio evento que traz o campo, e isso se declara na documentação e no ensaio do estoque (as Conversas partidas, por Configuração). A união é decisão à parte.
+4. ~~**Não se unem Conversas.**~~ **A recepção não une Conversas** (refinado em 2026-11-09: a Conversa partida se une por uma Operação própria, à parte da recepção; ver a ADR `20261109-uniao-da-conversa-partida.md`). A Conversa por endereço opaco congela quando o par é aprendido, a partir do próprio evento que traz o campo, e isso se declara na documentação e no ensaio do estoque (as Conversas partidas, por Configuração). A união foi decidida à parte, em 2026-11-09.
 5. **A edição de uma Mensagem antiga continua valendo:** a Conversa da original e a do envelope se comparam pelo endereço resolvido dos dois lados.
 
 ## Consequências e riscos
@@ -48,7 +50,7 @@ Medido em novembro de 2026, só leitura, nos Acervos de uma instalação real:
 
 ## Alternativas consideradas
 
-- **Unir as Conversas no mesmo ato.** Mover Mensagens entre Conversas mexe em unicidade, Participações e Anexos; fica para decisão própria.
+- **Unir as Conversas no mesmo ato.** Mover Mensagens entre Conversas mexe em unicidade, Participações e Anexos; fica para decisão própria. **Decidido em 2026-11-09:** não no ato da recepção, e sim por Operação de estoque à parte, com ensaio, `desfazer` e o ouvinte no ar (ADR `20261109-uniao-da-conversa-partida.md`).
 - **Aprender também da Mensagem enviada.** O campo nunca veio nela; aceitá-lo deixaria o número da própria conta apontar o outro lado para o Titular.
 - **Esperar a linha 7.x da biblioteca**, que traz o campo alternativo por mensagem. Fora desta decisão (atualização de dependência com ADR própria).
 - **Não fazer nada.** O outro lado continua achado só pelo endereço opaco, que ninguém digita.
