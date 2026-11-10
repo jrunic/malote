@@ -3517,10 +3517,15 @@ function executarComAtor(
         'Conversa do numero ou na promovida, e a promovida desfeita que ja recebeu Mensagens do numero fica com elas sob o ' +
         'endereco opaco, e a Mensagem seguinte do numero abre uma Conversa nova.';
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      // Os enderecos da propria conta (jid e lid das Configuracoes do WhatsApp do Inquilino): so para o relatorio contar a Conversa da conta consigo mesma.
+      const enderecosDaConta = listarConfiguracoes(registro, inquilino as never)
+        .filter((c) => c.fonte === 'whatsapp')
+        .flatMap((c) => [c.jid, c.lid])
+        .filter((e): e is string => typeof e === 'string' && e.length > 0);
       try {
         let r;
         try {
-          r = unirConversasDoContato(acervo, { comEfeito, ...(limite === undefined ? {} : { limite }) });
+          r = unirConversasDoContato(acervo, { comEfeito, enderecosDaConta, ...(limite === undefined ? {} : { limite }) });
         } catch (erro) {
           if (!(erro instanceof UniaoInterrompidaError)) throw erro;
           escrever(
@@ -3551,12 +3556,13 @@ function executarComAtor(
           );
         }
         if (r.marcasALevar > 0) escrever(`  ${r.marcasALevar} marca(s) de Conversa a levar ao alvo.`);
+        if (r.daPropriaConta > 0) escrever(`  ${r.daPropriaConta} da(s) Conversa(s) acima e a da propria conta consigo mesma.`);
         if (r.promovidasQueViraramMover > 0) {
           escrever(`  ${r.promovidasQueViraramMover} promocao(oes) virou(aram) mover: a Conversa do numero nasceu durante a execucao.`);
         }
         const porMotivo = new Map<string, number>();
         for (const c of r.conflitos) porMotivo.set(c.motivo, (porMotivo.get(c.motivo) ?? 0) + 1);
-        for (const [motivo, n] of porMotivo) escrever(`  ${n} conflito(s) ${motivo}: nada e tocado (--json traz os ids).`);
+        for (const [motivo, n] of porMotivo) escrever(`  ${n} Conversa(s) opaca(s) em conflito ${motivo}: nada e tocado (--json traz os ids).`);
         if (r.operacaoId !== null) {
           escrever(`Para desfazer: malote operacao desfazer ${r.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
         }

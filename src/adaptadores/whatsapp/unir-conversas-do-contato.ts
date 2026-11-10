@@ -36,6 +36,8 @@ export interface OpcoesDaUniao {
   comEfeito: boolean;
   /** No maximo este numero de Conversas opacas (inteiro maior que zero). */
   limite?: number;
+  /** Os enderecos da propria conta (jid e lid das Configuracoes do Inquilino): so para o relatorio contar a Conversa da conta consigo mesma. */
+  enderecosDaConta?: readonly string[];
   /** SO PARA TESTE: simula o ouvinte entre o plano e a escrita. */
   ganchoDeTeste?: { aposOPlano?: () => void; antesDeUma?: (conversaOpacaId: string) => void };
 }
@@ -55,6 +57,8 @@ export interface RelatorioDaUniao {
   marcasLevadas: number;
   /** A Conversa do numero nasceu entre o plano e a escrita: a promocao virou mover (criterio 11). */
   promovidasQueViraramMover: number;
+  /** Das Conversas a mover ou promover, quantas sao a da propria conta consigo mesma (so contagem, sem endereco). */
+  daPropriaConta: number;
   operacaoId: string | null;
   gravou: boolean;
 }
@@ -116,9 +120,12 @@ export function unirConversasDoContato(acervo: Acervo, opcoes: OpcoesDaUniao): R
     identificadoresRegistrados: 0,
     marcasLevadas: 0,
     promovidasQueViraramMover: 0,
+    daPropriaConta: 0,
     operacaoId: null,
     gravou: false,
   };
+  const daConta = new Set(opcoes.enderecosDaConta ?? []);
+  const contaPropria = (o: { opaco: string; destino: string }): boolean => daConta.has(o.opaco) || daConta.has(o.destino);
   const daConfiguracao = (cfg: string): { aMover: number; aPromover: number; conflitos: number } =>
     (relatorio.porConfiguracao[cfg] ??= { aMover: 0, aPromover: 0, conflitos: 0 });
 
@@ -165,6 +172,7 @@ export function unirConversasDoContato(acervo: Acervo, opcoes: OpcoesDaUniao): R
       if (opcoes.limite !== undefined && plano.length >= opcoes.limite) continue;
       plano.push({ opacaId: o.id, opaco: o.opaco, configuracaoId: o.configuracaoId, destino: o.destino, acao: 'mover' });
       relatorio.aMover.conversas += 1;
+      if (contaPropria(o)) relatorio.daPropriaConta += 1;
       relatorio.aMover.mensagens += o.mensagens;
       relatorio.marcasALevar += marcas;
       daConfiguracao(o.configuracaoId).aMover += 1;
@@ -173,6 +181,7 @@ export function unirConversasDoContato(acervo: Acervo, opcoes: OpcoesDaUniao): R
     if (opcoes.limite !== undefined && plano.length >= opcoes.limite) continue;
     plano.push({ opacaId: o.id, opaco: o.opaco, configuracaoId: o.configuracaoId, destino: o.destino, acao: 'promover' });
     relatorio.aPromover.conversas += 1;
+    if (contaPropria(o)) relatorio.daPropriaConta += 1;
     relatorio.aPromover.mensagens += o.mensagens;
     const doNumero = identificadorDoEndereco(acervo, FONTE, o.destino);
     if (doNumero === null) relatorio.aPromover.identificadoresARegistrar += 1;

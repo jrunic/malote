@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import { COMANDOS_DE_REDE, executar } from '../src/cli/index.js';
 import { instalacaoComChave, instalacaoTemporaria, rodar } from './ajuda/instalacao.js';
 import { CFG_WHATSAPP } from './ajuda/configuracao.js';
-import { fotografar, montarAcervoDaUniao } from './ajuda/uniao-das-conversas.js';
+import { abrirRegistro } from '../src/registro/registro.js';
+import { configuracaoPorApelido } from '../src/registro/configuracao-adaptador.js';
+import { registrarEnderecosDoVinculo } from '../src/registro/endereco-da-conta.js';
+import { fotografar, montarAcervoDaUniao, OP_MOVER, TEL_MOVER } from './ajuda/uniao-das-conversas.js';
 import { abrirAcervo, abrirAcervoSomenteLeitura } from '../src/nucleo/acervo.js';
 import { listarOperacoesCruas } from '../src/nucleo/trilha.js';
 
@@ -53,8 +56,8 @@ test('o ensaio diz o que faria, em contagens, por Configuracao, o que o desfazer
     assert.ok(r.saida.includes(`  Configuracao ${CFG_WHATSAPP.id}: 2 a mover, 2 a promover, 3 conflito(s).`), r.saida);
     assert.match(r.saida, /^ {2}2 Identificador\(es\) do numero a registrar; 1 promovida\(s\) perdem o nome que a listagem mostra hoje/m);
     assert.match(r.saida, /^ {2}1 marca\(s\) de Conversa a levar ao alvo\.$/m);
-    assert.match(r.saida, /^ {2}2 conflito\(s\) varias-opacas-para-o-numero: nada e tocado \(--json traz os ids\)\.$/m);
-    assert.match(r.saida, /^ {2}1 conflito\(s\) alvo-ambiguo: nada e tocado \(--json traz os ids\)\.$/m);
+    assert.match(r.saida, /^ {2}2 Conversa\(s\) opaca\(s\) em conflito varias-opacas-para-o-numero: nada e tocado \(--json traz os ids\)\.$/m);
+    assert.match(r.saida, /^ {2}1 Conversa\(s\) opaca\(s\) em conflito alvo-ambiguo: nada e tocado \(--json traz os ids\)\.$/m);
     assert.ok(r.saida.includes(COBRE), r.saida);
     assert.match(r.saida, /Nada foi escrito\. Repita com --com-efeito --confirmo\./);
     assert.doesNotMatch(r.saida, VAZAMENTO);
@@ -153,3 +156,27 @@ test('a ajuda lista o comando, e ele nao esta na lista do modo rede', () => {
   assert.match(linhas.join('\n'), /malote identidade unir-conversas-do-contato --inquilino <id> \[--limite <n>\] \[--com-efeito --confirmo\] \[--json\]/);
   assert.equal(COMANDOS_DE_REDE.has('identidade'), false);
 });
+
+test('o comando passa os enderecos da propria conta: a Conversa da conta consigo mesma e contada, no texto e no --json', () => {
+  const { raiz, inquilino, limpar } = instalacao();
+  try {
+    assert.equal(rodar(raiz, ['configuracao', 'criar', '--inquilino', inquilino, '--fonte', 'whatsapp', '--configuracao', 'a', '--telefone', '556599990041']).codigo, 0);
+    const registro = abrirRegistro(raiz);
+    try {
+      const cfg = configuracaoPorApelido(registro, inquilino as never, 'whatsapp', 'a');
+      assert.ok(cfg);
+      registrarEnderecosDoVinculo(registro, cfg.id, { telefone: '556599990041', jid: TEL_MOVER, lid: OP_MOVER });
+    } finally {
+      registro.fechar();
+    }
+    const r = rodar(raiz, BASE(inquilino));
+    assert.equal(r.codigo, 0, r.saida);
+    assert.match(r.saida, /^ {2}1 da\(s\) Conversa\(s\) acima e a da propria conta consigo mesma\.$/m);
+    assert.doesNotMatch(r.saida, VAZAMENTO);
+    const json = JSON.parse(rodar(raiz, [...BASE(inquilino), '--json']).saida) as { daPropriaConta: number };
+    assert.equal(json.daPropriaConta, 1);
+  } finally {
+    limpar();
+  }
+});
+

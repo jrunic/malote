@@ -16,8 +16,7 @@ import {
   TEL_OUTRA_CFG,
   TEL_PROMOVER,
   TEL_PROMOVER_SEM9,
-  type Montagem,
-} from './ajuda/uniao-das-conversas.js';
+  type Montagem, OP_VAZIA } from './ajuda/uniao-das-conversas.js';
 import { type Acervo } from '../src/nucleo/acervo.js';
 import { listarConversas } from '../src/nucleo/consulta.js';
 import { detalharConversa } from '../src/nucleo/detalhe-da-conversa.js';
@@ -437,3 +436,29 @@ test('fronteira: o modulo nao toca tabela, nao chama o resolvedor que escreve e 
   assert.doesNotMatch(texto, /resolver-celular|resolverEnderecoDeWhatsapp|aprenderCorrespondencia/);
   assert.match(texto, /const destino = resolverEndereco\(acervo, FONTE, item\.opaco\)/);
 });
+
+test('a opaca vazia COM marca a levar entra no plano e leva a marca: nao e nada a fazer', () => {
+  comUniao((acervo, m) => {
+    acervo.db
+      .prepare("INSERT INTO marcas_de_conversa (conversa_id, marca, configuracao_id, observada_em) VALUES (?, 'fixada', ?, ?)")
+      .run(m.conversa['opVazia'], CFG_WHATSAPP.id, AGORA);
+    const ensaio = unirConversasDoContato(acervo, { comEfeito: false });
+    assert.deepEqual(ensaio.aMover, { conversas: 3, mensagens: 4 }, 'a vazia com marca a levar entra (so a vazia sem marca fica de fora)');
+    assert.equal(ensaio.marcasALevar, 2);
+    const r = unirConversasDoContato(acervo, { comEfeito: true });
+    assert.equal(r.marcasLevadas, 2);
+    assert.equal((linha(acervo, 'SELECT COUNT(*) AS n FROM marcas_de_conversa WHERE conversa_id = ?', m.conversa['alvoVazia']) as { n: number }).n, 1);
+    assert.equal(unirConversasDoContato(acervo, { comEfeito: false }).aMover.conversas, 0, 'depois de levar a marca, e nada a fazer');
+  });
+});
+
+test('a Conversa da propria conta consigo mesma e contada, so como contagem (a uniao a trata como as outras)', () => {
+  comUniao((acervo) => {
+    assert.equal(unirConversasDoContato(acervo, { comEfeito: false }).daPropriaConta, 0, 'sem os enderecos da conta, ninguem e da conta');
+    const r = unirConversasDoContato(acervo, { comEfeito: false, enderecosDaConta: [OP_MOVER, TEL_PROMOVER, '1@outro'] });
+    assert.equal(r.daPropriaConta, 2, 'a opaca de uma a mover e o numero de uma a promover');
+    assert.deepEqual(r.aMover, { conversas: 2, mensagens: 4 }, 'contar nao muda o plano');
+    assert.equal(unirConversasDoContato(acervo, { comEfeito: false, enderecosDaConta: [OP_VAZIA] }).daPropriaConta, 0, 'a vazia sem marca nao entra no plano, e nao conta');
+  });
+});
+
