@@ -323,7 +323,12 @@ function numeroDe(acervo: Acervo, telefone: string): string {
   return formasDoNumero(acervo, telefone).join('|');
 }
 
-function formasDoNumero(acervo: Acervo, telefone: string): string[] {
+/**
+ * As formas de um numero, DEPOIS do resolvedor (o par que ja existe e seguido; com e sem o 9 quando celular brasileiro), em
+ * ordem. Exportada para a uniao das Conversas do contato (#1440) achar a Conversa do numero pelas mesmas formas que o relatorio
+ * `conversasPartidas` deste estoque usa. So le.
+ */
+export function formasDoNumero(acervo: Acervo, telefone: string): string[] {
   const resolvido = resolverEndereco(acervo, FONTE, telefone);
   const outra = outraFormaDoCelular(resolvido);
   return outra === null ? [resolvido] : [resolvido, outra].sort();
