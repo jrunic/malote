@@ -23,13 +23,13 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
-## [Não lançado]
+## [0.49.0] — 2026-11-10
 
 Não muda a forma do Acervo (segue v32) nem a do Registro, e não acrescenta dependência. A recepção ao vivo não muda: há um comando novo que une a Conversa partida.
 
 ### Adicionado
 
-- **`identidade unir-conversas-do-contato` une a Conversa partida** que o par da forma opaca deixou. Para cada Conversa direta por endereço opaco com par já gravado, na mesma Configuração: com a Conversa do número, move as Mensagens para ela (e a marca de fixada que ela não tem), e a Conversa opaca fica, vazia, com as Participações; sem a Conversa do número, promove a opaca, trocando o endereço dela pelo do número e registrando o Identificador desse endereço, sem Pessoa e sem nome. Mais de uma Conversa do número na mesma Configuração, ou duas opacas para o mesmo número, é conflito e nada se toca. Ensaio por padrão, com as contagens por Configuração (inclusive quantas promovidas perdem o nome que a listagem mostra hoje) e sem endereço nem texto; com `--com-efeito --confirmo`, uma Operação `por-efeito` com uma transação curta por Conversa, e o ouvinte pode seguir no ar. Nenhuma Chegada, Envio ou Conteúdo Bruto muda. Decisão e risco: `docs/decisoes/20261109-uniao-da-conversa-partida.md`.
+- **`identidade unir-conversas-do-contato` une a Conversa partida** que o par da forma opaca deixou. Para cada Conversa direta por endereço opaco com par já gravado, na mesma Configuração: com a Conversa do número, move as Mensagens para ela (e a marca de fixada que ela não tem), e a Conversa opaca fica, vazia, com as Participações; sem a Conversa do número, promove a opaca, trocando o endereço dela pelo do número e registrando o Identificador desse endereço, sem Pessoa e sem nome. Mais de uma Conversa do número na mesma Configuração, ou duas opacas para o mesmo número, é conflito e nada se toca. Ensaio por padrão, com as contagens por Configuração (inclusive quantas promovidas perdem o nome que a listagem mostra hoje) e sem endereço nem texto; com `--com-efeito --confirmo`, uma Operação `por-efeito` com uma transação curta por Conversa, e o ouvinte pode seguir no ar. Nenhuma Chegada, Envio ou Conteúdo Bruto muda. Decisão e risco: `docs/decisoes/20261109-uniao-da-conversa-partida.md`. O relatório conta, à parte, quantas dessas Conversas são a da própria conta consigo mesma.
 - **`operacao desfazer` devolve a união linha a linha**, só enquanto o valor é o que a Operação gravou, e recusa o resto com a causa. Não devolve o que chegou depois na Conversa do número ou na promovida.
 
 ## [0.48.0] — 2026-11-09
