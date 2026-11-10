@@ -36,6 +36,8 @@ const CHAMADAS: Record<string, Record<string, number>> = {
   'src/adaptadores/whatsapp/estado-ao-vivo.ts': { registrarIdentificador: 1, aprenderCorrespondencia: 1 },
   'src/adaptadores/whatsapp/importar.ts': { registrarIdentificador: 3, registrarConversa: 1, aprenderCorrespondencia: 1 },
   'src/adaptadores/whatsapp/metadados-de-coletiva-ao-vivo.ts': { registrarConversa: 2, registrarMetadadosDeColetiva: 2 },
+  // A uniao das Conversas do contato (#1440): promove a Conversa opaca para o numero ja resolvido do par gravado.
+  'src/adaptadores/whatsapp/unir-conversas-do-contato.ts': { registrarIdentificadorComEfeito: 1, trocarEnderecoDeConversaDireta: 1 },
   'src/adaptadores/whatsapp/resolver-celular.ts': { aprenderCorrespondencia: 2 },
   'src/nucleo/endereco-da-conta.ts': { registrarIdentificador: 1, aprenderCorrespondencia: 1 },
   'src/nucleo/resolucao-retroativa.ts': { registrarIdentificador: 1 },
@@ -47,6 +49,8 @@ const CHAMADAS: Record<string, Record<string, number>> = {
 const SEM_RESOLVEDOR: Record<string, string> = {
   'src/adaptadores/contatos/importar.ts': 'outra Fonte (contatos do Google)',
   'src/adaptadores/instagram/importar.ts': 'outra Fonte (Instagram)',
+  'src/adaptadores/whatsapp/unir-conversas-do-contato.ts':
+    'so promove para o canonico de um par ja gravado (`resolverEndereco` do nucleo), que nasceu resolvido pelo resolvedor do celular no estoque do par; a porta de promocao recusa forma que nao e canonica',
   'src/adaptadores/whatsapp/resolver-celular.ts': 'e o proprio resolvedor',
   'src/nucleo/endereco-da-conta.ts': 'recebe o JID ja resolvido por `declararContaDeWhatsapp`, que o ouvinte usa',
   'src/nucleo/resolucao-retroativa.ts':
