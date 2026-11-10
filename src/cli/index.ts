@@ -53,6 +53,7 @@ import {
   aprenderParesDaConversaDireta,
   EstoqueDoParInterrompidoError,
 } from '../adaptadores/whatsapp/aprender-pares-da-conversa-direta.js';
+import { unirConversasDoContato, UniaoInterrompidaError } from '../adaptadores/whatsapp/unir-conversas-do-contato.js';
 import { extrairCitacoes } from '../adaptadores/whatsapp/extrair-citacoes.js';
 import { extrairImagensDeModelo } from '../adaptadores/whatsapp/extrair-imagem-de-modelo.js';
 import { formatarAnexos, tipoGuardado } from './anexos-texto.js';
@@ -450,6 +451,8 @@ Titular (nao exige chave enquanto nao houver rede):
                                     (aprende o par das duas formas, com e sem o 9, dos celulares brasileiros já gravados; ensaio por padrão)
   malote identidade aprender-pares-da-conversa-direta --inquilino <id> [--limite <n>] [--tamanho-do-lote <n>] [--com-efeito --confirmo] [--json]
                                     (aprende o telefone das Conversas diretas por forma opaca, do cru das Mensagens recebidas; ensaio por padrão)
+  malote identidade unir-conversas-do-contato --inquilino <id> [--limite <n>] [--com-efeito --confirmo] [--json]
+                                    (une a Conversa direta por forma opaca com par e a Conversa do número na mesma Configuração; ensaio por padrão)
   malote operacao listar   --inquilino <id> --chave <valor>
   malote operacao ver      <id> --inquilino <id> --chave <valor>
   malote operacao desfazer <id> --inquilino <id> --chave <valor> [--com-efeito --confirmo]
@@ -3482,6 +3485,78 @@ function executarComAtor(
             'O par vale para o Inquilino inteiro: a Conversa opaca de todas as Configuracoes deixa de receber, e as Mensagens novas do contato vao para a Conversa por telefone (uma nova, se ainda nao existe).',
           );
         }
+        if (r.operacaoId !== null) {
+          escrever(`Para desfazer: malote operacao desfazer ${r.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
+        }
+        escrever(cobre);
+        if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
+    if (grupo === 'identidade' && sub === 'unir-conversas-do-contato') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
+      const comEfeito = temBandeira(argumentos, 'com-efeito');
+      if (comEfeito && !temBandeira(argumentos, 'confirmo')) {
+        throw new Error('Repita o comando com --confirmo para executar.');
+      }
+      const textoDoLimite = opcao(argumentos, 'limite');
+      const limite = textoDoLimite === undefined ? undefined : Number(textoDoLimite);
+      if (limite !== undefined && !(Number.isInteger(limite) && limite >= 1)) {
+        escrever('--limite precisa ser um inteiro maior que zero.');
+        return 2;
+      }
+      // O que o `desfazer` cobre e o que NAO cobre (#1440, criterio 8 e Assumption 6): sai sempre, no ensaio e no efeito.
+      const cobre =
+        'O `operacao desfazer` devolve cada Mensagem movida a Conversa opaca, a marca levada e o endereco opaco da Conversa ' +
+        'promovida, e remove o Identificador do numero que esta Operacao registrou, cada um so enquanto o valor ainda e o que ' +
+        'ela gravou (o resto e recusado, com a causa). Ele NAO devolve o que chegou depois: a Mensagem nova do contato fica na ' +
+        'Conversa do numero ou na promovida, e a promovida desfeita que ja recebeu Mensagens do numero fica com elas sob o ' +
+        'endereco opaco, e a Mensagem seguinte do numero abre uma Conversa nova.';
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        let r;
+        try {
+          r = unirConversasDoContato(acervo, { comEfeito, ...(limite === undefined ? {} : { limite }) });
+        } catch (erro) {
+          if (!(erro instanceof UniaoInterrompidaError)) throw erro;
+          escrever(
+            `Interrompido: ${erro.relatorio.movidas} Conversa(s) movida(s) e ${erro.relatorio.promovidas} promovida(s) na Operacao ${erro.operacaoId}; repita o comando para completar.`,
+          );
+          escrever(`Para desfazer o que entrou: malote operacao desfazer ${erro.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
+          escrever(cobre);
+          escrever(`Causa: ${String(erro.causa)}`);
+          return 1;
+        }
+        if (temBandeira(argumentos, 'json')) {
+          // So ids de Conversa e contagens: nem endereco nem texto (criterio 5).
+          escrever(JSON.stringify({ ...r, oQueODesfazerCobre: cobre }, null, 2));
+          return 0;
+        }
+        // So CONTAGENS: endereco e texto de ninguem vao ao texto.
+        escrever(
+          comEfeito
+            ? `Unido: ${r.movidas} Conversa(s) movida(s) (${r.mensagensMovidas} Mensagem(ns)) e ${r.promovidas} promovida(s); ${r.identificadoresRegistrados} Identificador(es) do numero registrado(s); ${r.marcasLevadas} marca(s) levada(s).`
+            : `Ensaio: ${r.aMover.conversas} Conversa(s) a mover (${r.aMover.mensagens} Mensagem(ns)) e ${r.aPromover.conversas} a promover (${r.aPromover.mensagens} Mensagem(ns)), de ${r.opacasComPar} Conversa(s) direta(s) por forma opaca com par.`,
+        );
+        for (const [configuracao, n] of Object.entries(r.porConfiguracao)) {
+          escrever(`  Configuracao ${configuracao}: ${n.aMover} a mover, ${n.aPromover} a promover, ${n.conflitos} conflito(s).`);
+        }
+        if (r.aPromover.conversas > 0) {
+          escrever(
+            `  ${r.aPromover.identificadoresARegistrar} Identificador(es) do numero a registrar; ${r.aPromover.perdemONome} promovida(s) perdem o nome que a listagem mostra hoje (volta quando a Fonte entregar nome para o numero).`,
+          );
+        }
+        if (r.marcasALevar > 0) escrever(`  ${r.marcasALevar} marca(s) de Conversa a levar ao alvo.`);
+        if (r.promovidasQueViraramMover > 0) {
+          escrever(`  ${r.promovidasQueViraramMover} promocao(oes) virou(aram) mover: a Conversa do numero nasceu durante a execucao.`);
+        }
+        const porMotivo = new Map<string, number>();
+        for (const c of r.conflitos) porMotivo.set(c.motivo, (porMotivo.get(c.motivo) ?? 0) + 1);
+        for (const [motivo, n] of porMotivo) escrever(`  ${n} conflito(s) ${motivo}: nada e tocado (--json traz os ids).`);
         if (r.operacaoId !== null) {
           escrever(`Para desfazer: malote operacao desfazer ${r.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
         }
