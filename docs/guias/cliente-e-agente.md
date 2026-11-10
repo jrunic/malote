@@ -229,6 +229,8 @@ Comandos de consulta (somente leitura; a única escrita do cliente é o `enviar`
   Quem a plataforma entrega por endereço opaco (`…@lid`) se acha também pelo número depois que ele mandou
   uma Mensagem (a enviada pela conta não ensina): a partir daí as Mensagens novas dele ficam na Conversa do número, e
   as antigas na Conversa opaca. Para ler tudo desse outro lado, use `--remetente` com o número, sem `--conversa`.
+  Depois que o operador une as duas no servidor (`identidade unir-conversas-do-contato`, desde a v0.49.0), a Conversa
+  do número traz o histórico inteiro, e a opaca aparece vazia na listagem.
 - `malote anexos --conversa <id> [--tipo T] [--remetente V] [--desde D] [--ate D] [--presenca P] [--limite N]
   [--antes TOKEN] [--json]` — os Anexos de **uma** Conversa, em ordem cronológica. Cada um traz o Descritor,
   a Presença (`presente`, `nunca-obtido` ou `descartado`: o que não está em disco aparece, nunca some), o

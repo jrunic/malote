@@ -98,7 +98,8 @@ Observações:
   `identificar`, depois que o par foi aprendido: o produto aprende o endereço do número do campo que a plataforma manda
   com a Mensagem **recebida**, ao vivo e pelo aprendizado do estoque. A Mensagem enviada não o traz: o outro lado que só
   recebeu da conta fica sem número até responder. Depois do par, as Mensagens novas desse outro lado ficam na Conversa do
-  número e as antigas na Conversa opaca (as duas Conversas não são unidas); `--remetente` com o número alcança as duas.
+  número e as antigas na Conversa opaca até o operador unir as duas (`identidade unir-conversas-do-contato`, desde a
+  v0.49.0); `--remetente` com o número alcança as duas.
   O número com as duas formas do celular gravadas como Identificador não ganha par, e cada forma responde só por si.
 - **`anexos`:** o id da última coluna é o que se passa a `malote midia`. Anexo `nunca-obtido` ou
   `descartado` aparece na lista, mas só `presente` tem bytes.

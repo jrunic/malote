@@ -17,6 +17,9 @@ const PORTAS = [
   'aprenderCorrespondencia',
   'registrarMetadadosDeColetiva',
   'declararEnderecosDaConta',
+  // As portas da uniao das Conversas do contato (#1440): uma registra Identificador, a outra reescreve o endereco da Conversa.
+  'registrarIdentificadorComEfeito',
+  'trocarEnderecoDeConversaDireta',
 ] as const;
 
 const CHAMADAS: Record<string, Record<string, number>> = {
@@ -33,19 +36,27 @@ const CHAMADAS: Record<string, Record<string, number>> = {
   'src/adaptadores/whatsapp/estado-ao-vivo.ts': { registrarIdentificador: 1, aprenderCorrespondencia: 1 },
   'src/adaptadores/whatsapp/importar.ts': { registrarIdentificador: 3, registrarConversa: 1, aprenderCorrespondencia: 1 },
   'src/adaptadores/whatsapp/metadados-de-coletiva-ao-vivo.ts': { registrarConversa: 2, registrarMetadadosDeColetiva: 2 },
+  // A uniao das Conversas do contato (#1440): promove a Conversa opaca para o numero ja resolvido do par gravado.
+  'src/adaptadores/whatsapp/unir-conversas-do-contato.ts': { registrarIdentificadorComEfeito: 1, trocarEnderecoDeConversaDireta: 1 },
   'src/adaptadores/whatsapp/resolver-celular.ts': { aprenderCorrespondencia: 2 },
   'src/nucleo/endereco-da-conta.ts': { registrarIdentificador: 1, aprenderCorrespondencia: 1 },
   'src/nucleo/resolucao-retroativa.ts': { registrarIdentificador: 1 },
+  // A uniao das Conversas do contato (#1440): o Identificador do numero da Conversa promovida, que o Adaptador ja resolveu.
+  'src/nucleo/uniao-de-conversas.ts': { registrarIdentificador: 1 },
 };
 
 /** Quem grava e NAO passa pelo resolvedor do celular, e por que. Todo o resto de `src/adaptadores/whatsapp` TEM de passar. */
 const SEM_RESOLVEDOR: Record<string, string> = {
   'src/adaptadores/contatos/importar.ts': 'outra Fonte (contatos do Google)',
   'src/adaptadores/instagram/importar.ts': 'outra Fonte (Instagram)',
+  'src/adaptadores/whatsapp/unir-conversas-do-contato.ts':
+    'so promove para o canonico de um par ja gravado (`resolverEndereco` do nucleo), que nasceu resolvido pelo resolvedor do celular no estoque do par; a porta de promocao recusa forma que nao e canonica',
   'src/adaptadores/whatsapp/resolver-celular.ts': 'e o proprio resolvedor',
   'src/nucleo/endereco-da-conta.ts': 'recebe o JID ja resolvido por `declararContaDeWhatsapp`, que o ouvinte usa',
   'src/nucleo/resolucao-retroativa.ts':
     'so grava o canonico de um par que ja existe: os pares novos nascem resolvidos, e nos quatro Acervos medidos em 03/11/2026 nenhum canonico antigo e a forma nao gravada; a consulta de cadeia do campo (Plano 4) vigia o resto',
+  'src/nucleo/uniao-de-conversas.ts':
+    'grava o Identificador do numero da Conversa promovida, que o Adaptador da uniao acha pelas formas do numero ja resolvidas (o canonico de um par gravado), nunca um endereco cru da Fonte; a porta de promocao recusa endereco que nao e a forma canonica',
 };
 
 const semComentarios = (texto: string): string =>
@@ -83,9 +94,12 @@ test('so as chamadas da lista gravam endereco em src/ (por arquivo e por porta)'
 
 const semImports = (texto: string): string => texto.replace(/import\s+(type\s+)?[\s\S]*?from\s+'[^']*';/g, '');
 
-/** Referencias a uma porta que NAO sao chamada (alias por variavel, passar como valor); a definicao conta como chamada. */
+/**
+ * Referencias a uma porta que NAO sao chamada (alias por variavel, passar como valor); a definicao conta como chamada. O nome
+ * inteiro, e nao o prefixo: `registrarIdentificadorComEfeito` (#1440) e outra porta, e nao uso de `registrarIdentificador`.
+ */
 function usosComoValor(texto: string, porta: string): number {
-  return (semImports(texto).match(new RegExp(`(?<![\\w.])${porta}(?!\\s*\\()`, 'g')) ?? []).length;
+  return (semImports(texto).match(new RegExp(`(?<![\\w.])${porta}(?![\\w])(?!\\s*\\()`, 'g')) ?? []).length;
 }
 
 test('nenhuma porta de gravacao e importada com outro nome, em namespace ou usada como valor', () => {
@@ -126,6 +140,8 @@ test('o detector ve a chamada, nao ve a so de comentario e nao conta a definicao
   assert.equal(chamadas(semComentarios('/* registrarConversa(\n acervo) */'), 'registrarConversa'), 0);
   assert.equal(chamadas(semComentarios('export function registrarConversa(acervo: A) {}'), 'registrarConversa'), 0);
   assert.equal(chamadas(semComentarios('x.registrarConversa(acervo);'), 'registrarConversa'), 0);
+  assert.equal(chamadas(semComentarios('registrarIdentificadorComEfeito(acervo, x, op);'), 'registrarIdentificadorComEfeito'), 1);
+  assert.equal(chamadas(semComentarios('registrarIdentificadorComEfeito(acervo, x, op);'), 'registrarIdentificador'), 0);
 });
 
 test('o detector de uso como valor ve o alias por variavel e nao ve import, definicao nem chamada', () => {
@@ -134,4 +150,6 @@ test('o detector de uso como valor ve o alias por variavel e nao ve import, defi
   assert.equal(usosComoValor("import { registrarConversa } from './x.js';", 'registrarConversa'), 0);
   assert.equal(usosComoValor('export function registrarConversa(a: A) {}', 'registrarConversa'), 0);
   assert.equal(usosComoValor('registrarConversa(acervo, {});', 'registrarConversa'), 0);
+  assert.equal(usosComoValor('registrarConversaComEfeito(acervo, {});', 'registrarConversa'), 0);
+  assert.equal(usosComoValor('const f = registrarConversaComEfeito;', 'registrarConversa'), 0);
 });

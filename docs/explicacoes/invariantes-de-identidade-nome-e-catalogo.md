@@ -101,8 +101,8 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   **depois** da primeira passada, então o próprio evento que traz o campo já vai para a Conversa do número; a opaca deixa de
   receber e de ter o `bruto` reescrito. A reentrega de evento antigo depois do par cria, se faltar, a Conversa do número
   **vazia** (Identificador e Participação), porque a Mensagem já existe pelo id. O par vale para o Inquilino inteiro (a chave
-  é `fonte, alternativo`), então congela também a Conversa opaca de outra Configuração. Unir as Conversas partidas é outro
-  trabalho, com decisão própria.
+  é `fonte, alternativo`), então congela também a Conversa opaca de outra Configuração. A recepção nunca une as duas: a
+  Conversa partida se une por uma Operação à parte (`identidade unir-conversas-do-contato`, #1440).
 - **O estoque cria duas espécies de par e o `desfazer` remove as duas, mas não é volta.** `identidade
   aprender-pares-da-conversa-direta` resolve o número pelo resolvedor com `op`, que aprende também o par do celular quando
   falta (o número que só está no Conteúdo Bruto não é Identificador, e por isso o estoque do celular não o alcançou); o
@@ -112,6 +112,29 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
 - **A Edição compara o endereço da Conversa resolvido dos dois lados (#1439).** A original pode ter ficado na Conversa opaca
   e o envelope da edição chega pelo opaco, que agora resolve para o número: comparar o resolvido com o gravado recusaria
   como `outra-conversa` a edição de toda Mensagem antiga de um outro lado com par.
+- **A união da Conversa partida move ou promove, e nunca apaga nem reescreve a história (#1440).** Com a Conversa do número
+  na mesma Configuração, as Mensagens passam a ela e só a coluna da Conversa muda (identidade externa, conteúdo, Conteúdo
+  Bruto, instante, direção, autor, Citação, Anexo e Edição ficam); sem ela, a Conversa partida troca o endereço pelo do
+  número e fica com o id. A opaca vazia fica com as Participações (a Conversa direta tem duas; levar a do endereço opaco poria
+  um segundo Identificador do mesmo outro lado no alvo). As Chegadas não mudam: o Diário só acrescenta, e mover não é chegada,
+  então quem filtra o Diário pelo id da Conversa do número não vê as Chegadas das Mensagens movidas. O alvo é procurado pelas
+  duas formas do número e só na mesma Configuração: mover entre Configurações misturaria contas. Medido em 09/11/2026 numa
+  instalação real: 28 Conversas partidas com alvo (943 Mensagens) e 30 sem alvo (315) no Acervo maior, e 1 ambígua no outro.
+- **A Conversa promovida mostra o nome do Identificador exato do endereço novo, não o da Correspondência.** A listagem, o
+  detalhe e a busca por nome acham o Identificador pelo endereço da Conversa, e o nome não segue a Correspondência. Por isso a
+  promoção registra o Identificador do endereço do número (sem Pessoa e sem nome inventado) e o ensaio conta quantas perdem o
+  nome que mostram hoje (9 de 30 no Acervo maior, em 09/11/2026); o nome volta quando a Fonte entrega nome para o número.
+- **A união roda com o ouvinte no ar, uma Conversa por transação, e reclassifica sob o lock.** O ouvinte espera 5 s por
+  escrita e, acima disso, derrama o lote (o lote derramado perde a mídia). Cada Conversa é uma transação imediata que relê o
+  alvo antes de escrever: se o ouvinte criou a Conversa do número entre o plano e a escrita, a promoção vira movimento, e
+  nunca um erro do índice único das Conversas diretas. Mensagem que chega durante a união cai na Conversa que a recepção
+  resolve; repetir o comando a leva junto.
+- **O `desfazer` da união é item a item e confere o valor atual, antes do ramo genérico da resolução retroativa.** A tabela de
+  Mensagens está no inventário da retroativa, cujo ramo devolve o valor sem conferir; o caso da união vem antes e recusa, com a
+  causa, a Mensagem que já não está na Conversa que a Operação gravou, a Conversa que já não tem o endereço promovido e o
+  Identificador que ganhou uso. Ele não é volta total: o que chegou depois fica, e desfazer uma promoção devolve o endereço
+  opaco a uma Conversa que pode ter Mensagens das duas formas (com um par errado, a Mensagem seguinte do número cria uma
+  terceira Conversa).
 - **"Comparar dígitos serve a qualquer Fonte" tem limite, e o nono dígito brasileiro
   mora do lado de fora dele.** `nome-do-endereco.ts` (núcleo) já dizia, desde que
   nasceu: "traduzir a forma escrita do número na forma do endereço é vocabulário de
