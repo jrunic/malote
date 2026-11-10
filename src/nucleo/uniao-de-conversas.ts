@@ -1,4 +1,6 @@
 import type { Acervo } from './acervo.js';
+import { resolverEndereco } from './correspondencia.js';
+import { registrarIdentificador } from './escrita.js';
 import { nomesDoIdentificador } from './identidade.js';
 import type { Operacao } from './trilha.js';
 import type { Fonte } from './tipos.js';
@@ -164,4 +166,104 @@ export function levarMarcasDeConversa(acervo: Acervo, e: { de: string; para: str
     }
     return aLevar.length;
   })();
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Escrita: promover (trocar o endereco e registrar o Identificador do numero).
+
+/** O endereco novo ja e de outra Conversa direta da mesma Fonte e Configuracao (o indice unico das diretas recusaria). */
+export class EnderecoDeConversaOcupadoError extends Error {
+  constructor(
+    readonly conversaId: string,
+    readonly endereco: string,
+  ) {
+    super(`a Conversa ${conversaId} nao pode receber o endereco: ele ja e de outra Conversa direta na mesma Configuracao`);
+    this.name = 'EnderecoDeConversaOcupadoError';
+  }
+}
+
+/** A outra Conversa direta da Fonte e Configuracao que ja tem este endereco, ou undefined. */
+function outraDiretaComEndereco(acervo: Acervo, c: ConversaLida, endereco: string): string | undefined {
+  const linha = acervo
+    .preparar(
+      `SELECT id FROM conversas
+        WHERE fonte = ? AND id_externo = ? AND configuracao_id = ? AND coletiva = 0 AND id <> ? LIMIT 1`,
+    )
+    .get(c.fonte, endereco, c.configuracao_id, c.id) as { id: string } | undefined;
+  return linha?.id;
+}
+
+/**
+ * Troca o endereco de UMA Conversa direta (a promocao). Confere o indice unico das diretas ANTES de escrever e recusa com
+ * `EnderecoDeConversaOcupadoError`, nunca com o erro cru do indice: quem chama reclassifica (promover vira mover). Nao toca o
+ * Conteudo Bruto. Endereco atual diferente de `de` e erro de quem chama (o plano envelheceu sem ser relido). O endereco novo tem
+ * de ser a forma CANONICA (`resolverEndereco` o devolve igual): a forma alternativa criaria uma segunda identidade. So aqui: o
+ * `desfazer` devolve legitimamente o endereco de antes, que pode ser a forma alternativa.
+ */
+export function trocarEnderecoDeConversaDireta(
+  acervo: Acervo,
+  e: { conversaId: string; de: string; para: string },
+  op: Operacao,
+): void {
+  acervo.db.transaction(() => {
+    const c = lerConversa(acervo, e.conversaId);
+    if (c === undefined) throw new RangeError(`Conversa inexistente: ${e.conversaId}`);
+    if (c.coletiva !== 0) throw new RangeError('so a Conversa direta troca de endereco');
+    if (c.id_externo !== e.de) throw new RangeError('a Conversa ja nao tem o endereco de origem; releia antes de trocar');
+    if (e.de === e.para) throw new RangeError('o endereco novo e o mesmo');
+    if (resolverEndereco(acervo, c.fonte as Fonte, e.para) !== e.para) {
+      throw new RangeError('o endereco novo nao e a forma canonica; resolva antes de promover');
+    }
+    if (outraDiretaComEndereco(acervo, c, e.para) !== undefined) {
+      throw new EnderecoDeConversaOcupadoError(e.conversaId, e.para);
+    }
+    acervo.preparar('UPDATE conversas SET id_externo = ? WHERE id = ?').run(e.para, e.conversaId);
+    op.valor({ tabela: 'conversas', chave: e.conversaId, campo: 'id_externo', antes: e.de, depois: e.para });
+  })();
+}
+
+/**
+ * Registra o Identificador do endereco, sem Pessoa, sem nome e sem Participacao, pela porta que a recepcao ja usa. Idempotente:
+ * o que ja existe nao e relatado (o `desfazer` so remove o que esta Operacao criou).
+ */
+export function registrarIdentificadorComEfeito(
+  acervo: Acervo,
+  e: { fonte: Fonte; valor: string },
+  op: Operacao,
+): { id: string; criado: boolean } {
+  return acervo.db.transaction(() => {
+    const r = registrarIdentificador(acervo, { fonte: e.fonte, valor: e.valor });
+    if (r.criado) op.valor({ tabela: 'identificadores', chave: r.id, campo: 'id', antes: null, depois: r.id });
+    return { id: r.id, criado: r.criado };
+  })();
+}
+
+/**
+ * O que faz um Identificador estar EM USO: Pessoa, cada referencia do inventario da resolucao retroativa e o autor de uma
+ * Chegada. Conferido por EXISTS, e nunca deixado a chave estrangeira: as de `identificadores` sao em cascata ou anulam
+ * (`ON DELETE CASCADE`, `SET NULL`), entao um DELETE cru passaria e levaria junto, em silencio, o nome, a Participacao ou o autor
+ * da Mensagem. `chegadas.autor_id` nao tem chave nenhuma: sem a linha dele, a Chegada da Mensagem que ja saiu ficaria com autor
+ * orfao. `desvinculos` fica de fora de proposito: o registro do desfeito sobrevive ao Identificador.
+ */
+export const SQL_REMOVER_IDENTIFICADOR_SEM_USO = `DELETE FROM identificadores
+  WHERE id = ?
+    AND pessoa_id IS NULL
+    AND NOT EXISTS (SELECT 1 FROM atribuicoes_de_nome        WHERE identificador_id = identificadores.id)
+    AND NOT EXISTS (SELECT 1 FROM cartoes_de_catalogo        WHERE identificador_id = identificadores.id)
+    AND NOT EXISTS (SELECT 1 FROM etiquetas_de_participacao  WHERE identificador_id = identificadores.id)
+    AND NOT EXISTS (SELECT 1 FROM participacoes              WHERE identificador_id = identificadores.id)
+    AND NOT EXISTS (SELECT 1 FROM transicoes_de_participacao WHERE identificador_id = identificadores.id)
+    AND NOT EXISTS (SELECT 1 FROM mensagens                  WHERE autor_id = identificadores.id)
+    AND NOT EXISTS (SELECT 1 FROM mensagens                  WHERE citada_autor_id = identificadores.id)
+    AND NOT EXISTS (SELECT 1 FROM chegadas                   WHERE autor_id = identificadores.id)`;
+
+/** Remove o Identificador SO se nada o referencia. Usado pelo `desfazer` da linha que a uniao criou. */
+export function removerIdentificadorSemUso(
+  acervo: Acervo,
+  identificadorId: string,
+): 'removido' | 'em-uso' | 'ja-nao-existe' {
+  if (acervo.preparar(SQL_REMOVER_IDENTIFICADOR_SEM_USO).run(identificadorId).changes === 1) return 'removido';
+  return acervo.preparar('SELECT 1 FROM identificadores WHERE id = ?').get(identificadorId) === undefined
+    ? 'ja-nao-existe'
+    : 'em-uso';
 }
