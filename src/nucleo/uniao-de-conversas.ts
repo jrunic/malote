@@ -267,3 +267,63 @@ export function removerIdentificadorSemUso(
     ? 'ja-nao-existe'
     : 'em-uso';
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// As guardas do `desfazer`, uma por linha de efeito. `de` e `para` sao os da linha (antes e depois): devolver leva de `para` a
+// `de`. Devolvem `null` (desfeito) ou a causa da recusa, e nunca lancam por estado mudado.
+
+/**
+ * Linha `mensagens.conversa_id`: devolve a Mensagem a `de`, SO se ela ainda esta em `para` (a Conversa que a Operacao gravou).
+ */
+export function devolverMensagemDeConversa(
+  acervo: Acervo,
+  e: { mensagemId: string; de: string; para: string },
+): string | null {
+  if (lerConversa(acervo, e.de) === undefined) return 'a Conversa de origem ja nao existe';
+  const r = acervo
+    .preparar('UPDATE mensagens SET conversa_id = ? WHERE id = ? AND conversa_id = ?')
+    .run(e.de, e.mensagemId, e.para);
+  if (r.changes === 1) return null;
+  return acervo.preparar('SELECT 1 FROM mensagens WHERE id = ?').get(e.mensagemId) === undefined
+    ? 'a Mensagem ja nao existe'
+    : 'a Mensagem ja nao esta na Conversa que a Operacao gravou (mudou depois) e fica onde esta';
+}
+
+/**
+ * Linha `marcas_de_conversa.conversa_id`: devolve a marca a `de`, SO se ela ainda esta em `para` e `de` ainda nao tem a mesma
+ * (a chave primaria colidiria).
+ */
+export function devolverMarcaDeConversa(
+  acervo: Acervo,
+  e: { de: string; para: string; marca: string; configuracaoId: string },
+): string | null {
+  if (lerConversa(acervo, e.de) === undefined) return 'a Conversa de origem ja nao existe';
+  const jaNaOrigem = acervo
+    .preparar('SELECT 1 FROM marcas_de_conversa WHERE conversa_id = ? AND marca = ? AND configuracao_id = ?')
+    .get(e.de, e.marca, e.configuracaoId);
+  if (jaNaOrigem !== undefined) return 'a Conversa de origem ja tem essa marca de novo; a do destino fica';
+  const r = acervo
+    .preparar('UPDATE marcas_de_conversa SET conversa_id = ? WHERE conversa_id = ? AND marca = ? AND configuracao_id = ?')
+    .run(e.de, e.para, e.marca, e.configuracaoId);
+  return r.changes === 1 ? null : 'a marca ja nao esta na Conversa que a Operacao gravou (foi desfeita ou desmarcada)';
+}
+
+/**
+ * Linha `conversas.id_externo`: devolve o endereco `de` a Conversa, SO se ela ainda tem o `para` (o que a Operacao gravou) e
+ * nenhuma outra Conversa direta da mesma Configuracao passou a ter o `de`.
+ */
+export function devolverEnderecoDeConversaDireta(
+  acervo: Acervo,
+  e: { conversaId: string; de: string; para: string },
+): string | null {
+  const c = lerConversa(acervo, e.conversaId);
+  if (c === undefined) return 'a Conversa ja nao existe';
+  if (c.coletiva !== 0 || c.id_externo !== e.para) {
+    return 'a Conversa ja nao tem o endereco que a Operacao gravou (mudou depois) e fica como esta';
+  }
+  if (outraDiretaComEndereco(acervo, c, e.de) !== undefined) {
+    return 'o endereco anterior ja e de outra Conversa direta na mesma Configuracao; a Conversa fica com o endereco novo';
+  }
+  acervo.preparar('UPDATE conversas SET id_externo = ? WHERE id = ? AND id_externo = ?').run(e.de, e.conversaId, e.para);
+  return null;
+}

@@ -11,6 +11,12 @@ import {
 import type { Fonte, ProcedenciaDeVinculo } from './tipos.js';
 import { removerCorrespondencia } from './correspondencia.js';
 import { TABELAS_QUE_APONTAM_PARA_IDENTIFICADOR } from './resolucao-retroativa.js';
+import {
+  devolverEnderecoDeConversaDireta,
+  devolverMarcaDeConversa,
+  devolverMensagemDeConversa,
+  removerIdentificadorSemUso,
+} from './uniao-de-conversas.js';
 
 /** A Operacao ja foi desfeita. O indice unico do schema e a guarda dura. */
 export class OperacaoJaDesfeitaError extends Error {
@@ -234,6 +240,32 @@ function desfazerLinha(acervo: Acervo, l: LinhaDeEfeito, todas: LinhaDeEfeito[])
     })
       ? null
       : 'o par ja nao existe — foi removido, ou passou a apontar para outro canonico';
+  }
+
+  // Uniao das Conversas do contato (#1440): cada linha volta pela guarda da porta, SO enquanto o valor ainda e o que a Operacao
+  // gravou. ANTES do ramo da resolucao retroativa, de proposito: `mensagens` esta na lista dela, e la a linha com antes e depois
+  // seria devolvida sem conferir o valor atual (a Mensagem movida de novo voltaria em silencio).
+  if (l.tabela === 'mensagens' && l.campo === 'conversa_id' && l.antes !== null && l.depois !== null) {
+    return devolverMensagemDeConversa(acervo, { mensagemId: l.chave, de: l.antes, para: l.depois });
+  }
+  if (l.tabela === 'marcas_de_conversa' && l.campo === 'conversa_id' && l.antes !== null && l.depois !== null) {
+    const [, marca, configuracaoId] = valoresDaChave(l.chave);
+    return devolverMarcaDeConversa(acervo, {
+      de: l.antes,
+      para: l.depois,
+      marca: marca as string,
+      configuracaoId: configuracaoId as string,
+    });
+  }
+  if (l.tabela === 'conversas' && l.campo === 'id_externo' && l.antes !== null && l.depois !== null) {
+    return devolverEnderecoDeConversaDireta(acervo, { conversaId: l.chave, de: l.antes, para: l.depois });
+  }
+  if (l.tabela === 'identificadores' && l.campo === 'id' && l.antes === null && l.depois !== null) {
+    const r = removerIdentificadorSemUso(acervo, l.chave);
+    if (r === 'removido') return null;
+    return r === 'em-uso'
+      ? 'o Identificador ja tem uso (Pessoa, nome, Participacao, Mensagem ou cartao) e fica'
+      : 'o Identificador ja nao existe';
   }
 
   if (l.tabela === 'identificadores' && l.campo === 'pessoa_id') {
