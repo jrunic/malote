@@ -10,7 +10,7 @@ import {
   type ChaveDeAcessoCriada,
 } from '../../src/registro/chave-de-acesso.js';
 import { criarChaveDeOperador } from '../../src/registro/chave-operador.js';
-import { criarServidor } from '../../src/rede/servidor.js';
+import { criarServidor, type OpcoesDoServidor } from '../../src/rede/servidor.js';
 import { join } from 'node:path';
 import { CFG_WHATSAPP } from './configuracao.js';
 
@@ -52,7 +52,7 @@ export interface CenarioDeRede {
  * Porta efemera porque porta fixa faz execucoes concorrentes brigarem, e a
  * briga aparece como falha intermitente — a pior de diagnosticar.
  */
-export async function cenarioDeRede(): Promise<CenarioDeRede> {
+export async function cenarioDeRede(opcoesDoServidor: Omit<OpcoesDoServidor, 'dados' | 'porta'> = {}): Promise<CenarioDeRede> {
   const { raiz, limpar } = instalacaoTemporaria();
   const registro: Registro = abrirRegistro(raiz);
   const chaveDeOperador = criarChaveDeOperador(registro).valor;
@@ -93,7 +93,7 @@ export async function cenarioDeRede(): Promise<CenarioDeRede> {
   const inquilinoA = a.inquilino;
   const inquilinoB = b.inquilino;
 
-  const servidor: Server = criarServidor({ dados: raiz, porta: 0 });
+  const servidor: Server = criarServidor({ dados: raiz, porta: 0, ...opcoesDoServidor });
   servidor.listen(0, '127.0.0.1');
   // A porta so existe DEPOIS do evento: `address()` antes dele devolve null, e
   // o teste que lesse ali falharia de forma intermitente. Espera por EVENTO,

@@ -11,6 +11,7 @@ import { listarChavesDeAcesso } from '../registro/chave-de-acesso.js';
 import { configuracaoPorApelido, listarConfiguracoes, resolverFiltroDeConfiguracao } from '../registro/configuracao-adaptador.js';
 import { conversasMarcadas } from '../nucleo/marca-do-titular.js';
 import { lerDestinoDeMidia } from '../registro/destino-midia.js';
+import { lerDestinoRemotoDeMidia } from '../registro/destino-remoto.js';
 import type { IdentidadeDeAcesso } from '../registro/chave-de-acesso.js';
 import { ehFonte, PRESENCAS } from '../nucleo/tipos.js';
 import type { ConversaId, Fonte, InquilinoId } from '../nucleo/tipos.js';
@@ -69,6 +70,11 @@ export interface ContextoDaRequisicao {
   identidade: IdentidadeDeAcesso;
   dados: string;
   /**
+   * O arquivo local do Anexo falta e o Inquilino tem Destino Remoto: a rota pede que a thread principal busque no
+   * Servico de Armazenamento (o worker e sincrono). Quem o define e `executarLeitura`; ausente, a rota responde 404.
+   */
+  pedirMidiaRemota?: (anexo: { anexoId: string; tipo: string }) => void;
+  /**
    * Para onde um Envio ao endereco iria (a previa do aviso, #1376). Quem compoe e `src/cli/servir.ts`: a rede nao
    * conhece a regra do celular. Ausente, a resposta do Envio nao leva aviso de endereco.
    */
@@ -117,7 +123,7 @@ function naoEncontrado(res: ServerResponse): void {
  * `video` fica de fora: recusado com sinal dedicado (415), nunca chega aqui.
  * Tipo desconhecido cai em `application/octet-stream` — generico, nao quebra.
  */
-const CONTENT_TYPE_POR_TIPO: Record<string, string> = {
+export const CONTENT_TYPE_POR_TIPO: Record<string, string> = {
   image: 'image/jpeg',
   audio: 'audio/opus',
   document: 'application/octet-stream',
@@ -1400,8 +1406,10 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
 
     const registro = abrirRegistroSomenteLeitura(ctx.dados);
     let destino;
+    let temDestinoRemoto: boolean;
     try {
       destino = lerDestinoDeMidia(registro, ctx.identidade.inquilinoId);
+      temDestinoRemoto = lerDestinoRemotoDeMidia(registro, ctx.identidade.inquilinoId) !== undefined;
     } finally {
       registro.fechar();
     }
@@ -1414,9 +1422,14 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     try {
       bytes = readFileSync(join(destino.endereco, anexo.caminho));
     } catch {
-      // Presenca diz 'presente' e o arquivo nao esta la — disco perdeu o
-      // dado sem o banco saber. Mesma classe "sem bytes disponiveis" dos
-      // demais 404, nao um caso novo.
+      // A leitura local FALHOU (arquivo ausente por qualquer razao, inclusive removido entre a consulta e a leitura).
+      // Com Destino Remoto, o arquivo pode estar la: a thread principal pergunta ao Servico de Armazenamento.
+      if (temDestinoRemoto && ctx.pedirMidiaRemota !== undefined) {
+        ctx.pedirMidiaRemota({ anexoId: anexo.id, tipo: anexo.tipo });
+        return;
+      }
+      // Sem Destino Remoto: Presenca diz 'presente' e o arquivo nao esta la — disco perdeu o dado sem o banco saber.
+      // Mesma classe "sem bytes disponiveis" dos demais 404, nao um caso novo.
       naoEncontrado(res);
       return;
     }

@@ -34,6 +34,12 @@ export interface RespostaDeLeitura {
   status: number;
   cabecalhos: Record<string, string>;
   corpo: string | Uint8Array;
+  /**
+   * O worker e SINCRONO e a leitura do remoto nao e: quando o arquivo local de um Anexo falta e o Inquilino tem Destino
+   * Remoto, a rota nao responde, pede isto, e a thread principal busca no Servico de Armazenamento e responde ela
+   * (`status` 0 e corpo vazio nao valem). So a rota `midia` o usa.
+   */
+  buscarNoServico?: { anexoId: string; tipo: string };
 }
 
 export type MensagemDoTrabalhador =

@@ -307,9 +307,28 @@ test('o nucleo, o registro, os adaptadores e a rede nao importam o Servico de Ar
     ...arquivosDe('src/rede'),
   ]) {
     for (const alvo of importados(arquivo)) {
-      if (/(^|\/)(servico-de-armazenamento|motor-de-armazenamento|armazenamento)\.js$/.test(alvo)) {
+      if (/(^|\/)(servico-de-armazenamento|motor-de-armazenamento|armazenamento|entrega-de-anexo|servidor-do-servico|cliente-do-armazenamento)\.js$/.test(alvo)) {
         violacoes.push(`${arquivo} importa ${alvo}`);
       }
+    }
+  }
+  assert.deepEqual(violacoes, [], violacoes.join('; '));
+});
+
+test('o canal local do Servico: o cliente so e importado por servir.ts, e o servidor do soquete so por armazenamento.ts', () => {
+  const quemImporta = (alvo: RegExp): string[] =>
+    arquivosDe('src').filter((arquivo) => importados(arquivo).some((i) => alvo.test(i)));
+  assert.deepEqual(quemImporta(/(^|\/)cliente-do-armazenamento\.js$/), [join('src', 'cli', 'servir.ts')]);
+  assert.deepEqual(quemImporta(/(^|\/)servidor-do-servico\.js$/), [join('src', 'cli', 'armazenamento.ts')]);
+});
+
+test('o servidor de leitura e a transcricao nao sabem do rclone: so o tipo da porta (nucleo/midia-remota) os liga ao Servico', () => {
+  const violacoes: string[] = [];
+  for (const arquivo of [join('src', 'rede', 'servidor.ts'), join('src', 'rede', 'rotas.ts'), join('src', 'cli', 'transcricao.ts')]) {
+    const fonte = readFileSync(arquivo, 'utf8');
+    if (/rclone/i.test(fonte)) violacoes.push(`${arquivo} cita o rclone`);
+    for (const alvo of importados(arquivo)) {
+      if (/motor-de-armazenamento|servico-de-armazenamento|entrega-de-anexo/.test(alvo)) violacoes.push(`${arquivo} importa ${alvo}`);
     }
   }
   assert.deepEqual(violacoes, [], violacoes.join('; '));
