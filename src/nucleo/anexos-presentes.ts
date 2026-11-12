@@ -113,3 +113,51 @@ export const SQL_RESUMO_DE_PRESENTES = `
 export function resumoDePresentes(acervo: Acervo): ResumoDePresentes {
   return acervo.preparar(SQL_RESUMO_DE_PRESENTES).get() as ResumoDePresentes;
 }
+
+export interface SituacaoDoAnexo {
+  id: string;
+  presenca: string;
+  tipo: string;
+  caminho: string | null;
+  tamanho: number | null;
+  impressao: string | null;
+  transcricaoPorFazer: boolean;
+}
+
+const TAMANHO_DO_LOTE = 500;
+
+export const SQL_SITUACAO_DOS_ANEXOS = `
+  SELECT a.id AS id, a.presenca AS presenca, a.tipo AS tipo, a.caminho AS caminho, a.tamanho AS tamanho,
+         a.impressao AS impressao,
+         (a.tipo = 'audio' AND a.presenca = 'presente' AND (t.anexo_id IS NULL OR t.estado = 'pendente'))
+           AS transcricao_por_fazer
+    FROM anexos a LEFT JOIN transcricoes t ON t.anexo_id = a.id
+   WHERE a.id IN (SELECT value FROM json_each(?))`;
+
+/** A situacao atual dos Anexos pedidos, em lotes de tamanho fixo (o SQL e constante). Anexo que nao existe nao aparece. */
+export function situacaoDosAnexos(acervo: Acervo, ids: readonly string[]): Map<string, SituacaoDoAnexo> {
+  const achados = new Map<string, SituacaoDoAnexo>();
+  for (let i = 0; i < ids.length; i += TAMANHO_DO_LOTE) {
+    const linhas = acervo.preparar(SQL_SITUACAO_DOS_ANEXOS).all(JSON.stringify(ids.slice(i, i + TAMANHO_DO_LOTE))) as Array<{
+      id: string;
+      presenca: string;
+      tipo: string;
+      caminho: string | null;
+      tamanho: number | null;
+      impressao: string | null;
+      transcricao_por_fazer: number;
+    }>;
+    for (const l of linhas) {
+      achados.set(l.id, {
+        id: l.id,
+        presenca: l.presenca,
+        tipo: l.tipo,
+        caminho: l.caminho,
+        tamanho: l.tamanho,
+        impressao: l.impressao,
+        transcricaoPorFazer: l.transcricao_por_fazer === 1,
+      });
+    }
+  }
+  return achados;
+}

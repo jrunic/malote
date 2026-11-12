@@ -8,6 +8,7 @@ import {
   listarAnexosDescartados,
   listarAnexosPresentes,
   resumoDePresentes,
+  situacaoDosAnexos,
 } from '../src/nucleo/anexos-presentes.js';
 import { descartarAnexo } from '../src/nucleo/escrita.js';
 
@@ -135,6 +136,35 @@ test('o plano da consulta anda pela chave primaria e nao pelo indice de Presenca
     const texto = plano.map((p) => p.detail).join('\n');
     assert.ok(!texto.includes('idx_anexos_presenca'), texto);
     assert.ok(!texto.includes('USE TEMP B-TREE FOR ORDER BY'), `ordenou fora do indice:\n${texto}`);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('a situacao dos Anexos pedidos traz a Presenca, o caminho e a transcricao por fazer; o que nao existe nao aparece', () => {
+  const c = cenario();
+  try {
+    const { acervo, destino } = c.inquilinoComArquivos();
+    const presentes = listarAnexosPresentes(acervo, { limite: 10 });
+    const audio = c.registrarAnexo(acervo, { tipo: 'audio', ocorridaEm: INSTANTE + 20 });
+    gravarArquivoDeAnexo(acervo, { origemDaChegada: 'importacao', anexoId: audio, destino, bytes: Buffer.from('audio-situacao') });
+    const naoObtido = c.registrarAnexo(acervo, { tipo: 'image', ocorridaEm: INSTANTE + 21 });
+
+    const ids = [...presentes.map((a) => a.id), audio, naoObtido, 'nao-existe'];
+    const s = situacaoDosAnexos(acervo, ids);
+    assert.equal(s.size, ids.length - 1);
+    assert.equal(s.get(presentes[0]?.id as string)?.presenca, 'presente');
+    assert.equal(s.get(presentes[0]?.id as string)?.transcricaoPorFazer, false);
+    assert.equal(s.get(audio)?.transcricaoPorFazer, true);
+    assert.equal(s.get(naoObtido)?.presenca, 'nunca-obtido');
+    assert.equal(s.get(naoObtido)?.caminho, null);
+
+    // Mais de um lote: o SQL e constante, os lotes sao de 500.
+    const muitos = Array.from({ length: 1_200 }, (_, i) => `x-${i}`);
+    assert.equal(situacaoDosAnexos(acervo, [...muitos, ...presentes.map((a) => a.id)]).size, presentes.length);
+
+    descartarAnexo(acervo, presentes[0]?.id as string, { politica: 'teste' });
+    assert.equal(situacaoDosAnexos(acervo, [presentes[0]?.id as string]).get(presentes[0]?.id as string)?.presenca, 'descartado');
   } finally {
     c.limpar();
   }

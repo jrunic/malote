@@ -63,7 +63,23 @@ export interface ResumoDaLocalizacao {
   copiasLocaisRemovidas: number;
   duplicatas: number;
   falhos: number;
+  divergencias: number;
   ultimaVerificacaoEm: string | null;
+  /** A verificacao mais antiga de um Anexo que AINDA tem copia local: e o que a frota compara com a Escolha 5 (3 dias com a trava fechada). */
+  verificacaoMaisAntigaComCopiaLocalEm: string | null;
+  /** Quando a divergencia mais antiga foi detectada: a idade que o criterio 17 pede, alem da contagem. */
+  divergenciaMaisAntigaEm: string | null;
+  /** O instante da ultima conferencia por amostra: sem ele a frota nao sabe se a conferencia roda. */
+  ultimaConferenciaEm: string | null;
+}
+
+export interface Passada {
+  grupo: string;
+  concluidaEm: string;
+  pendentes: number;
+  bytesPendentes: number;
+  /** Instante de modificacao do arquivo local pendente mais antigo; null quando nao ha pendente. */
+  maisAntigoMs: number | null;
 }
 
 export interface Localizacao {
@@ -115,6 +131,28 @@ const SCHEMA = `
     tentativas          INTEGER NOT NULL,
     ultimo_erro         TEXT NOT NULL,
     ultima_tentativa_em TEXT NOT NULL
+  );
+
+  -- O que a conferencia achou de errado no remoto: arquivo que sumiu, hash que mudou.
+  CREATE TABLE IF NOT EXISTS divergencias (
+    anexo_id      TEXT PRIMARY KEY,
+    motivo        TEXT NOT NULL,
+    detectada_em  TEXT NOT NULL
+  );
+
+  -- Pequenos fatos do servico (hoje: o instante da ultima conferencia por amostra).
+  CREATE TABLE IF NOT EXISTS meta (
+    chave TEXT PRIMARY KEY,
+    valor TEXT NOT NULL
+  );
+
+  -- O fim de cada passada de envio (por grupo de tipos), para o estado nao precisar varrer o Acervo.
+  CREATE TABLE IF NOT EXISTS passadas (
+    grupo           TEXT PRIMARY KEY,
+    concluida_em    TEXT NOT NULL,
+    pendentes       INTEGER NOT NULL,
+    bytes_pendentes INTEGER NOT NULL,
+    mais_antigo_ms  INTEGER
   );
 `;
 
@@ -253,6 +291,8 @@ export function registrarLocalizacao(base: Localizacao, nova: NovaLocalizacao): 
     )
     .run(nova.anexoId, nova.remoto, nova.caminhoRemoto, nova.idNoRemoto, nova.tamanho, nova.hash, nova.verificadaEm);
   base.preparar('DELETE FROM falhas_de_envio WHERE anexo_id = ?').run(nova.anexoId);
+  // Reenviar CURA a divergencia (o remoto voltou a ter o arquivo certo): ela nao pode ficar no estado como alarme permanente.
+  base.preparar('DELETE FROM divergencias WHERE anexo_id = ?').run(nova.anexoId);
 }
 
 const TAMANHO_DO_LOTE = 500;
@@ -294,18 +334,106 @@ export function candidatasAPerderACopiaLocal(
   base: Localizacao,
   verificadasAte: string,
   limite: number,
+  depoisDoAnexoId = '',
 ): LocalizacaoDoAnexo[] {
   const linhas = base
     .preparar(
       `SELECT anexo_id, remoto, caminho_remoto, id_no_remoto, tamanho, hash, verificada_em,
               copia_local_removida_em, duplicatas
          FROM localizacoes
-        WHERE copia_local_removida_em IS NULL AND verificada_em <= ?
-        ORDER BY verificada_em, anexo_id
+        WHERE copia_local_removida_em IS NULL AND verificada_em <= ? AND anexo_id > ?
+        ORDER BY anexo_id
         LIMIT ?`,
     )
-    .all(verificadasAte, limite) as LinhaDeLocalizacao[];
+    .all(verificadasAte, depoisDoAnexoId, limite) as LinhaDeLocalizacao[];
   return linhas.map(deLinha);
+}
+
+/** Tira a Localizacao (o arquivo remoto ja foi apagado, ou nunca existiu) e as pendencias dela. */
+export function removerLocalizacao(base: Localizacao, anexoId: string): void {
+  for (const tabela of ['localizacoes', 'falhas_de_envio', 'divergencias']) {
+    base.preparar(`DELETE FROM ${tabela} WHERE anexo_id = ?`).run(anexoId);
+  }
+}
+
+/** Uma amostra ao acaso das Localizacoes que ja nao tem copia local: o remoto e a unica copia delas. */
+export function amostrarSemCopiaLocal(base: Localizacao, quantidade: number): LocalizacaoDoAnexo[] {
+  const linhas = base
+    .preparar(
+      `SELECT anexo_id, remoto, caminho_remoto, id_no_remoto, tamanho, hash, verificada_em,
+              copia_local_removida_em, duplicatas
+         FROM localizacoes
+        WHERE copia_local_removida_em IS NOT NULL
+        ORDER BY RANDOM()
+        LIMIT ?`,
+    )
+    .all(quantidade) as LinhaDeLocalizacao[];
+  return linhas.map(deLinha);
+}
+
+export function registrarDivergencia(base: Localizacao, anexoId: string, motivo: string, em: string): void {
+  base
+    .preparar(
+      `INSERT INTO divergencias (anexo_id, motivo, detectada_em) VALUES (?, ?, ?)
+       ON CONFLICT (anexo_id) DO UPDATE SET motivo = excluded.motivo`,
+    )
+    .run(anexoId, motivo.slice(0, 200), em);
+}
+
+export function limparDivergencia(base: Localizacao, anexoId: string): void {
+  base.preparar('DELETE FROM divergencias WHERE anexo_id = ?').run(anexoId);
+}
+
+/** Os que, dentre os pedidos, tem divergencia registrada, em lotes de tamanho fixo (o SQL e constante). */
+export function idsComDivergencia(base: Localizacao, anexoIds: readonly string[]): Set<string> {
+  const achados = new Set<string>();
+  for (let i = 0; i < anexoIds.length; i += TAMANHO_DO_LOTE) {
+    const linhas = base
+      .preparar('SELECT anexo_id FROM divergencias WHERE anexo_id IN (SELECT value FROM json_each(?))')
+      .all(JSON.stringify(anexoIds.slice(i, i + TAMANHO_DO_LOTE))) as Array<{ anexo_id: string }>;
+    for (const l of linhas) achados.add(l.anexo_id);
+  }
+  return achados;
+}
+
+export function registrarConferencia(base: Localizacao, em: string): void {
+  base
+    .preparar(
+      `INSERT INTO meta (chave, valor) VALUES ('ultima_conferencia_em', ?)
+       ON CONFLICT (chave) DO UPDATE SET valor = excluded.valor`,
+    )
+    .run(em);
+}
+
+export function registrarPassada(base: Localizacao, p: Passada): void {
+  base
+    .preparar(
+      `INSERT INTO passadas (grupo, concluida_em, pendentes, bytes_pendentes, mais_antigo_ms)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (grupo) DO UPDATE SET
+         concluida_em = excluded.concluida_em, pendentes = excluded.pendentes,
+         bytes_pendentes = excluded.bytes_pendentes, mais_antigo_ms = excluded.mais_antigo_ms`,
+    )
+    .run(p.grupo, p.concluidaEm, p.pendentes, p.bytesPendentes, p.maisAntigoMs);
+}
+
+export function lerPassadas(base: Localizacao): Passada[] {
+  const linhas = base
+    .preparar('SELECT grupo, concluida_em, pendentes, bytes_pendentes, mais_antigo_ms FROM passadas ORDER BY grupo')
+    .all() as Array<{
+    grupo: string;
+    concluida_em: string;
+    pendentes: number;
+    bytes_pendentes: number;
+    mais_antigo_ms: number | null;
+  }>;
+  return linhas.map((l) => ({
+    grupo: l.grupo,
+    concluidaEm: l.concluida_em,
+    pendentes: l.pendentes,
+    bytesPendentes: l.bytes_pendentes,
+    maisAntigoMs: l.mais_antigo_ms,
+  }));
 }
 
 export function registrarFalhaDeEnvio(base: Localizacao, anexoId: string, erro: string, em: string): void {
@@ -335,12 +463,26 @@ export function resumoDaLocalizacao(base: Localizacao): ResumoDaLocalizacao {
     ultima: string | null;
   };
   const falhos = (base.preparar('SELECT COUNT(*) AS n FROM falhas_de_envio').get() as { n: number }).n;
+  const divergencias = (base.preparar('SELECT COUNT(*) AS n FROM divergencias').get() as { n: number }).n;
+  const maisAntiga = base
+    .preparar(
+      `SELECT (SELECT MIN(verificada_em) FROM localizacoes WHERE copia_local_removida_em IS NULL) AS com_copia,
+              (SELECT MIN(detectada_em) FROM divergencias) AS divergencia`,
+    )
+    .get() as { com_copia: string | null; divergencia: string | null };
+  const conferencia = base.preparar("SELECT valor FROM meta WHERE chave = 'ultima_conferencia_em'").get() as
+    | { valor: string }
+    | undefined;
   return {
     enviados: l.enviados,
     bytesEnviados: l.bytes_enviados,
     copiasLocaisRemovidas: l.removidas,
     duplicatas: l.duplicatas,
     falhos,
+    divergencias,
     ultimaVerificacaoEm: l.ultima,
+    verificacaoMaisAntigaComCopiaLocalEm: maisAntiga.com_copia,
+    divergenciaMaisAntigaEm: maisAntiga.divergencia,
+    ultimaConferenciaEm: conferencia?.valor ?? null,
   };
 }
