@@ -17,6 +17,7 @@ export const BANDEIRAS: ReadonlySet<string> = new Set([
   'ajuda',
   'versao',
   'confirmo',
+  'descartar-localizacao',
   'com-efeito',
   'reprocessar',
   'exposto',

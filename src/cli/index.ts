@@ -69,6 +69,8 @@ import {
 } from '../registro/registro.js';
 import { abrirAcervo } from '../nucleo/acervo.js';
 import { recriarAcervo } from '../nucleo/recriar.js';
+import { lerLocalizacaoParaConsumidor } from './localizacao-para-consumidores.js';
+import { descartarLocalizacao } from '../registro/localizacao.js';
 import { versaoDoAcervoEmDisco } from '../nucleo/acervo.js';
 import { passosAplicados } from '../nucleo/migracao.js';
 import {
@@ -180,7 +182,7 @@ import { emOperacao, lerOperacao, listarOperacoes } from '../nucleo/trilha.js';
 import { conferirSeDesfazivel, desfazerOperacao } from '../nucleo/desfazer.js';
 import { caminhosDaConta, ouvir } from './ouvir.js';
 import { enderecoRecusado, servir } from './servir.js';
-import { armazenamento } from './armazenamento.js';
+import { armazenamento, servicoVivo as servicoDeArmazenamentoVivo } from './armazenamento.js';
 import { lerUltimoEvento } from './ultimo-evento.js';
 import { lerSinalDaConexao } from './sinal-da-conexao.js';
 import { lerEstadoDosPendentes } from './estado-dos-pendentes.js';
@@ -444,7 +446,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote conversas sem-endereco --inquilino <id> [--limite <n>]
   malote conversa presenca      --inquilino <id> --conversa <id> --em <AAAA-MM-DD> [--json]
   malote acervo migrar  --inquilino <id>              (sobe a forma do Acervo, e diz o que fez)
-  malote acervo recriar --inquilino <id> --confirmo   (apaga o Acervo E os arquivos deste Inquilino)
+  malote acervo recriar --inquilino <id> --confirmo [--descartar-localizacao]   (apaga o Acervo E os arquivos deste Inquilino; com Destino Remoto recusa sem --descartar-localizacao)
   malote pessoa listar      --inquilino <id> [--incluir-absorvidas]
   malote pessoa propostas   --inquilino <id> [--produtor telefone|email|nome|multiplos-enderecos] [--limite <n>] [--json]
   malote pessoa propostas aplicar --inquilino <id> [--produtor <nome>] [--com-efeito --confirmo] [--json]
@@ -1843,9 +1845,18 @@ function executarComAtor(
           `Anexos: ${r.total.anexos}  (${r.total.anexosPresentes} presentes, ` +
             `${r.total.anexosNuncaObtidos} nunca obtidos, ${r.total.anexosDescartados} descartados)`,
         );
+        const localizacao = lerLocalizacaoParaConsumidor(ambiente.estado, inquilino, acervo);
         escrever(
           `Bytes: ${r.total.bytesPresentes} presentes de ${r.total.bytesDeclarados} declarados`,
         );
+        if (localizacao !== undefined && !localizacao.ilegivel && localizacao.bytesSoNoRemoto > 0) {
+          escrever(
+            `  ${localizacao.bytesSoNoRemoto} desses bytes ja so existem no Destino Remoto (a copia local saiu)`,
+          );
+        }
+        if (localizacao?.ilegivel === true) {
+          escrever('  A base da Localizacao esta em outra forma: rode "malote armazenamento reconstruir" antes de confiar na conferencia do disco.');
+        }
         if (r.total.anexosSemTamanhoDeclarado > 0) {
           escrever(
             `  ${r.total.anexosSemTamanhoDeclarado} Anexos sem tamanho declarado pelo material`,
@@ -1871,7 +1882,9 @@ function executarComAtor(
         if (destino === undefined) {
           escrever('Destino de Midia nao configurado: nao ha disco a conferir.');
         } else {
-          const d = conferirDisco(acervo, destino.endereco);
+          const d = conferirDisco(acervo, destino.endereco, {
+            ...(localizacao !== undefined && !localizacao.ilegivel ? { comLocalizacao: localizacao.anexoIds } : {}),
+          });
           if (!d.conferiu) {
             escrever('Destino inacessivel: NAO foi possivel conferir o disco.');
           } else {
@@ -1880,6 +1893,9 @@ function executarComAtor(
                 `${d.arquivosSemAnexo.length} arquivos sem Anexo, ` +
                 `${d.tamanhoDivergente.length} com tamanho diferente`,
             );
+            if (d.soNoRemoto.length > 0) {
+              escrever(`  ${d.soNoRemoto.length} presentes sem arquivo local, mas com Localizacao no Destino Remoto (nao e perda)`);
+            }
           }
         }
       } finally {
@@ -1915,10 +1931,16 @@ function executarComAtor(
         }
         try {
           const r = relatarAcervo(acervo, { agora: Date.now() });
-          // Contagens e bytes. Nunca titulo de Conversa, nunca texto.
+          // Com Destino Remoto, parte dos Anexos presentes ja so existe la: "em disco" e o presente MENOS o que so esta no remoto.
+          const localizacao = lerLocalizacaoParaConsumidor(ambiente.estado, i.id, acervo);
+          const soNoRemoto = localizacao !== undefined && !localizacao.ilegivel ? localizacao.bytesSoNoRemoto : 0;
+          const emDisco = r.total.bytesPresentes - soNoRemoto;
+          // Contagens e bytes. Nunca titulo de Conversa, nunca texto. Sem `Math.max`: um resultado negativo e dado
+          // inconsistente (a Localizacao diz mais bytes so no remoto que os presentes) e aparece como esta.
           escrever(
-            `${i.id}  ${r.total.anexos} anexos  ${r.total.bytesPresentes} bytes em disco  ` +
-              `${r.total.bytesDeclarados} declarados`,
+            `${i.id}  ${r.total.anexos} anexos  ${emDisco} bytes em disco  ` +
+              `${r.total.bytesDeclarados} declarados` +
+              (soNoRemoto > 0 ? `  ${soNoRemoto} bytes so no remoto` : ''),
           );
         } finally {
           acervo.fechar();
@@ -3911,6 +3933,9 @@ function executarComAtor(
           comEfeito: true,
         });
         escrever(`Descartados: ${r.descartados} Anexos (${r.bytesLiberados} bytes liberados)`);
+        if (r.semArquivoLocal > 0) {
+          escrever(`  ${r.semArquivoLocal} ja nao tinham arquivo local (com Destino Remoto, o Servico de Armazenamento apaga a copia remota)`);
+        }
         if (r.falhas > 0) escrever(`  ${r.falhas} falharam e seguem presentes`);
       } finally {
         acervoDaPolitica.fechar();
@@ -3983,6 +4008,28 @@ function executarComAtor(
         );
       }
 
+      // Com Destino Remoto, os arquivos que ja saíram do disco so existem la, e recriar deixaria o remoto orfao em silencio.
+      // So se recria com a escolha explicita de descartar a Localizacao junto.
+      const localizacaoDoRecriar = lerLocalizacaoParaConsumidor(ambiente.estado, inquilino);
+      // A base existe, ainda que sem envios (so falhas ou divergencias): ela aponta para Anexos que o recriar apaga, e e
+      // descartada junto. Recusar so vale quando ha Localizacao (ou ela esta ilegivel): ai o remoto ficaria orfao.
+      const existeBaseDaLocalizacao = localizacaoDoRecriar !== undefined;
+      const temLocalizacao = localizacaoDoRecriar?.ilegivel === true || (localizacaoDoRecriar?.enviados ?? 0) > 0;
+      if (temLocalizacao && !temBandeira(argumentos, 'descartar-localizacao')) {
+        throw new Error(
+          `Este Inquilino tem Anexos com Localizacao no Destino Remoto. Recriar apagaria o Acervo e os arquivos locais, ` +
+            'e a midia que so existe no remoto ficaria orfa, sem nada que a reivindique. ' +
+            'Se e isso mesmo, repita com --descartar-localizacao: a base da Localizacao e descartada junto ' +
+            '(os arquivos no remoto NAO sao apagados pelo malote). Com o Servico de Armazenamento parado.',
+        );
+      }
+      if (existeBaseDaLocalizacao) {
+        const vivo = servicoDeArmazenamentoVivo(ambiente.estado);
+        if (vivo !== undefined) {
+          throw new Error(`O Servico de Armazenamento esta no ar (pid ${vivo}): pare-o antes de recriar (a base da Localizacao dele e descartada junto).`);
+        }
+      }
+
       if (!temBandeira(argumentos, 'confirmo')) {
         escrever(
           'Recriar apaga o Acervo deste Inquilino por inteiro, e tambem os arquivos ' +
@@ -4010,12 +4057,26 @@ function executarComAtor(
             antes: null,
             depois: new Date().toISOString(),
           });
+          // O mapa dos arquivos no remoto vai embora: a Operacao diz que existiu e quanto, para o remoto nao ficar orfao em silencio.
+          if (existeBaseDaLocalizacao) {
+            op.valor({
+              tabela: 'localizacoes',
+              chave: inquilino,
+              campo: 'descartada',
+              antes: localizacaoDoRecriar.ilegivel ? 'ilegivel' : `${localizacaoDoRecriar.enviados} Anexos com Localizacao`,
+              depois: null,
+            });
+          }
         },
       );
 
       recriarAcervo(join(ambiente.dados, 'acervos'), inquilino, {
         ...(destinoDoRecriar !== undefined ? { destino: destinoDoRecriar.endereco } : {}),
       });
+      if (existeBaseDaLocalizacao) {
+        descartarLocalizacao(ambiente.estado, inquilino);
+        escrever('A base da Localizacao deste Inquilino foi descartada; os arquivos no Destino Remoto continuam la.');
+      }
       escrever(`Acervo do Inquilino ${inquilino} recriado. Reimporte o material.`);
       if (destinoDoRecriar !== undefined) {
         escrever('Os arquivos de Anexo deste Inquilino tambem foram apagados.');

@@ -486,3 +486,31 @@ export function resumoDaLocalizacao(base: Localizacao): ResumoDaLocalizacao {
     ultimaConferenciaEm: conferencia?.valor ?? null,
   };
 }
+
+/** Os Anexos que tem Localizacao: o que a conferencia de disco usa para nao acusar como perdido o que so esta no remoto. */
+export function anexoIdsComLocalizacao(base: Localizacao): Set<string> {
+  const ids = new Set<string>();
+  for (const l of base.preparar('SELECT anexo_id FROM localizacoes').all() as Array<{ anexo_id: string }>) ids.add(l.anexo_id);
+  return ids;
+}
+
+/**
+ * Os Anexos cuja copia local ja saiu, com o tamanho verificado. O relatorio de espaco os cruza com o Acervo: so conta como
+ * "so no remoto" o que ainda e `presente` (o descartado pela retencao mantem a Localizacao ate o Servico apagar no remoto).
+ */
+export function copiasLocaisRemovidas(base: Localizacao): Array<{ anexoId: string; tamanho: number }> {
+  return (
+    base
+      .preparar('SELECT anexo_id, tamanho FROM localizacoes WHERE copia_local_removida_em IS NOT NULL')
+      .all() as Array<{ anexo_id: string; tamanho: number }>
+  ).map((l) => ({ anexoId: l.anexo_id, tamanho: l.tamanho }));
+}
+
+/**
+ * Descarta a base da Localizacao de um Inquilino (o arquivo e os auxiliares do SQLite). SO COM O SERVICO PARADO e quando
+ * o Operador escolheu explicitamente (`acervo recriar --descartar-localizacao`): o arquivo no remoto NAO e tocado.
+ */
+export function descartarLocalizacao(raizDeEstado: string, inquilinoId: string): void {
+  const caminho = caminhoDaLocalizacao(raizDeEstado, inquilinoId);
+  for (const sufixo of ['', '-wal', '-shm']) rmSync(`${caminho}${sufixo}`, { force: true });
+}
