@@ -266,3 +266,51 @@ test('so motor-de-transcricao.ts referencia as variaveis do motor de transcricao
   }
   assert.deepEqual(violacoes, [], violacoes.join('; '));
 });
+
+const VARIAVEIS_DO_RCLONE = ['MALOTE_RCLONE_BINARIO', 'MALOTE_RCLONE_PORTA'];
+const PORTAO_DO_RCLONE = join('src', 'cli', 'motor-de-armazenamento.ts');
+
+test('so motor-de-armazenamento.ts referencia as variaveis do rclone', () => {
+  const violacoes: string[] = [];
+  for (const arquivo of [
+    ...arquivosDe('src/nucleo'),
+    ...arquivosDe('src/registro'),
+    ...arquivosDe('src/adaptadores'),
+    ...arquivosDe('src/rede'),
+    ...arquivosDe('src/cli'),
+  ]) {
+    if (arquivo === PORTAO_DO_RCLONE) continue;
+    const fonte = readFileSync(arquivo, 'utf8');
+    for (const variavel of VARIAVEIS_DO_RCLONE) {
+      if (fonte.includes(variavel)) violacoes.push(`${arquivo} referencia ${variavel}`);
+    }
+  }
+  assert.deepEqual(violacoes, [], violacoes.join('; '));
+});
+
+test('so o portao do rclone cria processo para o rclone', () => {
+  const violacoes: string[] = [];
+  for (const arquivo of arquivosDe('src')) {
+    if (arquivo === PORTAO_DO_RCLONE) continue;
+    const fonte = readFileSync(arquivo, 'utf8');
+    if (/rclone/i.test(fonte) && /node:child_process/.test(fonte)) violacoes.push(arquivo);
+  }
+  assert.deepEqual(violacoes, [], `fora do portao: ${violacoes.join('; ')}`);
+});
+
+test('o nucleo, o registro, os adaptadores e a rede nao importam o Servico de Armazenamento nem o portao do rclone', () => {
+  const violacoes: string[] = [];
+  for (const arquivo of [
+    ...arquivosDe('src/nucleo'),
+    ...arquivosDe('src/registro'),
+    ...arquivosDe('src/adaptadores'),
+    ...arquivosDe('src/rede'),
+  ]) {
+    for (const alvo of importados(arquivo)) {
+      if (/(^|\/)(servico-de-armazenamento|motor-de-armazenamento|armazenamento)\.js$/.test(alvo)) {
+        violacoes.push(`${arquivo} importa ${alvo}`);
+      }
+    }
+  }
+  assert.deepEqual(violacoes, [], violacoes.join('; '));
+});
