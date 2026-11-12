@@ -180,6 +180,7 @@ import { emOperacao, lerOperacao, listarOperacoes } from '../nucleo/trilha.js';
 import { conferirSeDesfazivel, desfazerOperacao } from '../nucleo/desfazer.js';
 import { caminhosDaConta, ouvir } from './ouvir.js';
 import { enderecoRecusado, servir } from './servir.js';
+import { armazenamento } from './armazenamento.js';
 import { lerUltimoEvento } from './ultimo-evento.js';
 import { lerSinalDaConexao } from './sinal-da-conexao.js';
 import { lerEstadoDosPendentes } from './estado-dos-pendentes.js';
@@ -409,6 +410,12 @@ Titular (nao exige chave enquanto nao houver rede):
   malote servir     --porta <n> [--endereco <ip>] [--exposto] [--trabalhadores <n>] [--prazo <segundos>]
                                         (leituras em workers, 4 por padrao, com prazo de 25 s; passou do prazo: 504;
                                          um Inquilino ocupa no maximo N-1 workers e metade da fila; as escritas ficam na thread principal)
+  malote armazenamento servir
+  malote armazenamento passada --inquilino <id> [--grupo video|resto|todos] [--limite <n>] [--ensaio]
+  malote armazenamento apagar-local --inquilino <id>
+  malote armazenamento conferir --inquilino <id> [--amostra <n>]
+  malote armazenamento reconstruir --inquilino <id> [--confirmo]
+  malote armazenamento estado --inquilino <id> [--json]
   malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--limite <n>] [--antes <cursor>] [--tudo] [--json]
                                         (a primeira pagina de 500; ha mais: o aviso traz o cursor para --antes, e --tudo percorre as paginas)
   malote mensagens  --inquilino <id> [--conversa <id>] [--desde D] [--ate D] [--fonte <nome>] [--direcao enviada|recebida] [--remetente <valor>] [--limite <n>] [--json]
@@ -1057,6 +1064,11 @@ function executarComAtor(
         return 2;
       }
       escrever('O servidor nao roda por esta porta. Invoque `malote servir` no terminal.');
+      return 2;
+    }
+
+    if (grupo === 'armazenamento') {
+      escrever('O armazenamento remoto nao roda por esta porta. Invoque `malote armazenamento` no terminal.');
       return 2;
     }
 
@@ -4162,6 +4174,9 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
     void ouvir(argumentos, ambiente).then(encerrar);
   } else if (argumentos[0] === 'servir') {
     void servir(argumentos, ambiente).then(encerrar);
+  } else if (argumentos[0] === 'armazenamento') {
+    // Processo proprio, como `servir` e `ouvir`: o Servico de Armazenamento nao termina sozinho.
+    void armazenamento(argumentos, ambiente).then(encerrar);
   } else if (ehReprocessarQueGravaEdicao(argumentos)) {
     // #1246: os dois reprocessos gravam edicao, e o decodificador do portao e assincrono. Carregado antes de despachar,
     // para `executar()` continuar sincrona.

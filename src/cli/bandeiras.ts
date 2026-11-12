@@ -35,6 +35,7 @@ export const VALORES_FECHADOS: Readonly<Record<string, readonly string[]>> = {
   fixada: ['true', 'false'],
   ordem: ['recentes', 'cronologica'],
   'apagar-local': ['sim', 'nao'],
+  grupo: ['video', 'resto', 'todos'],
 };
 
 /**

@@ -136,6 +136,23 @@ ambiente: `MALOTE_WHISPER_BINARIO`, `MALOTE_WHISPER_MODELO`, `MALOTE_FFMPEG_BINA
 `MALOTE_TRANSCRICAO_IDIOMA`, `MALOTE_TRANSCRICAO_THREADS` e `MALOTE_TRANSCRICAO_INTERVALO_MS`.
 Sem elas, a fila fica parada e o `servir` diz isso ao subir.
 
+## Armazenamento remoto de mídia
+
+O **Serviço de Armazenamento** sobe a mídia de um Inquilino para o Destino Remoto, verifica pelo hash de conteúdo (SHA-256, a Impressão de Anexo) e só então deixa a cópia local sair do disco. É um processo próprio (`malote armazenamento servir`), opcional: sem o `rclone` declarado (`MALOTE_RCLONE_BINARIO`) ele não sobe e o resto do produto não muda. O Inquilino precisa de Destino Remoto declarado (`inquilino destino-remoto`), e o remoto precisa entregar SHA-256 (o Google Drive entrega; sem hash, todo envio falha e nada é apagado). São comandos **locais**: com `MALOTE_SERVIDOR` configurado eles recusam.
+
+| Comando | O que faz |
+|---|---|
+| `armazenamento servir` | O processo longo: uma passada completa por Inquilino a cada intervalo (`MALOTE_ARMAZENAMENTO_INTERVALO_MS`, padrão 60 s), até SIGTERM, que termina o arquivo em andamento e não começa outro. Sobe o vídeo primeiro, apaga no remoto o Anexo que a retenção descartou, apaga a cópia local (só com a trava liberada e depois da Janela) e confere uma amostra do que só existe no remoto. Só roda um: um arquivo de trava no estado (`armazenamento/servico.pid`) recusa a segunda instância |
+| `armazenamento passada --inquilino <id> [--grupo video\|resto\|todos] [--limite <n>] [--ensaio]` | Uma passada de envio, à mão. Sem `--grupo`, o vídeo e depois o resto. `--ensaio` conta o que subiria sem falar com o remoto e sem criar a base. **Recusa com o serviço no ar**, exceto `--ensaio` |
+| `armazenamento apagar-local --inquilino <id>` | Uma passada de apagamento da cópia local: relê a trava a cada arquivo, reverifica o remoto antes de cada um e **mantém** a cópia local se o remoto não tem o arquivo inteiro ou se a Impressão de Anexo do Acervo mudou depois do envio. Com a trava fechada não examina nada. Tira **só o nome do malote**: arquivo que tem outro nome no disco (hardlink) só devolve os bytes quando o outro nome também sai. **Recusa com o serviço no ar** |
+| `armazenamento conferir --inquilino <id> [--amostra <n>]` | Confere por amostra (padrão 50) que os arquivos que só existem no remoto continuam lá, inteiros, e registra o instante da conferência. Sai `1` se achar divergência. **Recusa com o serviço no ar** |
+| `armazenamento reconstruir --inquilino <id> [--confirmo]` | Refaz a base da Localização do Anexo pela listagem do remoto, conferida contra o Acervo. Não toca no remoto nem no Acervo. **Recusa com a listagem do remoto vazia e a base cheia** (pasta-base trocada, remoto errado, credencial sem acesso): só com `--confirmo`. **Recusa com o serviço no ar**, porque apagaria a base por baixo dele |
+| `armazenamento estado --inquilino <id> [--json]` | O que foi enviado, o que falta, falhas, duplicatas, divergências, cópias locais removidas, a verificação mais antiga que ainda tem cópia local, a divergência mais antiga, o instante da última conferência e a idade do pendente mais antigo. Só lê; não sobe o `rclone`. `pendentes` é uma aproximação (presentes menos enviados) |
+
+O pedido de ir mais devagar do remoto (limite de cota da API) **não é falha de envio**: o serviço reduz o ritmo (metade das transferências, espera que dobra até 60 s) e o Anexo sobe na passada seguinte. O armazenamento esgotado do remoto, sim, é erro comum. A cópia remota que a retenção descartou vai para a **lixeira do remoto** quando ele a tem (no Google Drive, enquanto o `rclone` do Operador não desliga `drive-use-trash`).
+
+Variáveis do serviço, todas por instalação: `MALOTE_RCLONE_BINARIO` (obrigatória), `MALOTE_RCLONE_PORTA` (padrão 5599, só localhost), `MALOTE_ARMAZENAMENTO_INTERVALO_MS`, `MALOTE_ARMAZENAMENTO_CHECAGEM_A_CADA_MS` (padrão 6 h) e `MALOTE_ARMAZENAMENTO_AMOSTRA` (padrão 50). O acesso ao remoto é do ambiente do `rclone`, não do produto. Sai `0` na parada pedida; `1` quando o `rclone` não sobe ou há veredito (envio com falha, divergência) e também numa exceção não tratada; `2` na invocação ou configuração errada, no modo rede, com outro serviço no ar e em `--limite`/`--amostra` que não sejam inteiros maiores que zero.
+
 ## O servidor de consulta
 
 ```bash
