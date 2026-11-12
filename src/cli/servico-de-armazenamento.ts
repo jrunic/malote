@@ -74,7 +74,7 @@ export interface DependenciasDoServico {
   parou?: () => boolean;
 }
 
-interface ContextoDoInquilino {
+export interface ContextoDoInquilino {
   inquilinoId: string;
   destinoLocal: string;
   remoto: DestinoRemotoDeMidia;
@@ -95,13 +95,19 @@ export function inquilinosComDestinoRemoto(dep: DependenciasDoServico): string[]
   }
 }
 
-function contextoDoInquilino(dep: DependenciasDoServico, inquilinoId: string): ContextoDoInquilino | undefined {
+export function contextoDoInquilino(
+  dep: DependenciasDoServico,
+  inquilinoId: string,
+  opcoes: { avisar?: boolean } = {},
+): ContextoDoInquilino | undefined {
   const registro = abrirRegistroSomenteLeitura(dep.dados);
   try {
     const local = lerDestinoDeMidia(registro, inquilinoId);
     const remoto = lerDestinoRemotoDeMidia(registro, inquilinoId);
     if (local === undefined || remoto === undefined) {
-      dep.escrever(`${PREFIXO} Inquilino ${inquilinoId}: sem Destino de Midia e Destino Remoto declarados. Pulado.`);
+      if (opcoes.avisar !== false) {
+        dep.escrever(`${PREFIXO} Inquilino ${inquilinoId}: sem Destino de Midia e Destino Remoto declarados. Pulado.`);
+      }
       return undefined;
     }
     return { inquilinoId, destinoLocal: local.endereco, remoto };
@@ -110,7 +116,7 @@ function contextoDoInquilino(dep: DependenciasDoServico, inquilinoId: string): C
   }
 }
 
-function abrirAcervoParaLer(dep: DependenciasDoServico, inquilinoId: string): Acervo | undefined {
+export function abrirAcervoParaLer(dep: DependenciasDoServico, inquilinoId: string): Acervo | undefined {
   const pasta = join(dep.dados, 'acervos');
   const versao = versaoDoAcervoEmDisco(pasta, inquilinoId);
   if (versao !== VERSAO_SCHEMA_ACERVO) {
@@ -125,11 +131,11 @@ function abrirAcervoParaLer(dep: DependenciasDoServico, inquilinoId: string): Ac
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 
-function descreverErro(erro: unknown): string {
+export function descreverErro(erro: unknown): string {
   return erro instanceof Error ? erro.message.slice(0, 200) : String(erro).slice(0, 200);
 }
 
-function alvoRemoto(ctx: ContextoDoInquilino, relativo: string, remoto = ctx.remoto.remoto): AlvoRemoto {
+export function alvoRemoto(ctx: ContextoDoInquilino, relativo: string, remoto = ctx.remoto.remoto): AlvoRemoto {
   return { remoto, pasta: ctx.remoto.pastaBase, relativo };
 }
 

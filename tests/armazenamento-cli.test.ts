@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { cenario, type Cenario } from './ajuda/acervo.js';
 import { rodar, instalacaoTemporaria } from './ajuda/instalacao.js';
 import { RemotoEmMemoria } from './ajuda/remoto-em-memoria.js';
+import { criarBuscadorDeMidiaRemota } from '../src/cli/cliente-do-armazenamento.js';
+import { caminhoDoSoquete } from '../src/cli/servidor-do-servico.js';
 import { armazenamento, type AmbienteDeArmazenamento } from '../src/cli/armazenamento.js';
 import { configurarDestinoDeMidia } from '../src/registro/destino-midia.js';
 import { PADROES_DO_DESTINO_REMOTO, configurarDestinoRemotoDeMidia } from '../src/registro/destino-remoto.js';
@@ -427,6 +429,31 @@ test('a linha da passada conta os limites de cota, e eles nao fazem a passada sa
     m.remoto.copiasComCota = 1;
     assert.equal(await armazenamento(['armazenamento', 'passada', '--inquilino', m.id, '--grupo', 'todos'], m.ambiente), 0);
     assert.match(m.saidas.join('\n'), /1 limite\(s\) de cota/);
+  } finally {
+    c.limpar();
+  }
+});
+
+test('servir abre o canal local, entrega o Anexo enviado no laco e remove o soquete ao parar', async () => {
+  const c = cenario();
+  try {
+    const m = montar(c);
+    const anexo = listarAnexosPresentes(m.acervo, { limite: 10 }).find((a) => a.tipo === 'image') as { id: string };
+    const buscar = criarBuscadorDeMidiaRemota(c.raiz);
+    let entregue: string | undefined;
+    const ambiente: AmbienteDeArmazenamento = {
+      ...m.ambiente,
+      dormir: async () => {
+        // Depois da primeira passada (que enviou), o canal ja esta aberto e entrega.
+        const r = await buscar({ inquilinoId: m.id, anexoId: anexo.id, prazoMs: 5_000 });
+        entregue = r.tipo;
+        assert.ok(existsSync(caminhoDoSoquete(c.raiz)), 'o soquete existe com o servico no ar');
+        process.emit('SIGTERM');
+      },
+    };
+    assert.equal(await armazenamento(['armazenamento', 'servir'], ambiente), 0);
+    assert.equal(entregue, 'bytes');
+    assert.ok(!existsSync(caminhoDoSoquete(c.raiz)), 'o soquete saiu quando o servico parou');
   } finally {
     c.limpar();
   }

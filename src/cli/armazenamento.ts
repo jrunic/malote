@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { opcao, recusarBandeiras, temBandeira } from './bandeiras.js';
+import { TAMANHO_MAXIMO_PADRAO_DA_MIDIA_REMOTA } from '../nucleo/midia-remota.js';
 import type { Ambiente } from './index.js';
 import {
   MENSAGEM_RCLONE_NAO_DECLARADO,
@@ -9,6 +10,7 @@ import {
   type ConfiguracaoDoRclone,
   type Remoto,
 } from './motor-de-armazenamento.js';
+import { iniciarServidorDoServico, type ServidorDoServico } from './servidor-do-servico.js';
 import {
   conferirPorAmostra,
   estadoDoArmazenamento,
@@ -106,6 +108,7 @@ const REMOTO_INERTE: Remoto = {
   statArquivo: () => Promise.reject(new Error('estado nao fala com o remoto')),
   listarArquivos: () => Promise.reject(new Error('estado nao fala com o remoto')),
   apagarArquivo: () => Promise.reject(new Error('estado nao fala com o remoto')),
+  lerArquivo: () => Promise.reject(new Error('estado nao fala com o remoto')),
   parar: () => Promise.resolve(),
 };
 
@@ -274,6 +277,8 @@ async function servirEmLaco(ambiente: AmbienteDeArmazenamento): Promise<number> 
   const intervaloMs = inteiroPositivo(env['MALOTE_ARMAZENAMENTO_INTERVALO_MS'], INTERVALO_PADRAO_MS);
   const checagemACadaMs = inteiroPositivo(env['MALOTE_ARMAZENAMENTO_CHECAGEM_A_CADA_MS'], CHECAGEM_PADRAO_MS);
   const amostra = inteiroPositivo(env['MALOTE_ARMAZENAMENTO_AMOSTRA'], AMOSTRA_PADRAO);
+  // O maior arquivo que o canal entrega ao servidor (a rota remota de midia), em MiB.
+  const tamanhoMaximo = inteiroPositivo(env['MALOTE_ARMAZENAMENTO_MAXIMO_DA_ENTREGA_MB'], TAMANHO_MAXIMO_PADRAO_DA_MIDIA_REMOTA / (1024 * 1024)) * 1024 * 1024;
 
   let parar = false;
   let acordar: (() => void) | undefined;
@@ -293,6 +298,15 @@ async function servirEmLaco(ambiente: AmbienteDeArmazenamento): Promise<number> 
     process.once('SIGTERM', aoTermo);
     process.once('SIGINT', aoInterromper);
     const dep = dependencias(ambiente, remoto, () => parar);
+    let canal: ServidorDoServico;
+    try {
+      canal = await iniciarServidorDoServico(dep, { tamanhoMaximo });
+    } catch (erro) {
+      process.off('SIGTERM', aoTermo);
+      process.off('SIGINT', aoInterromper);
+      ambiente.escrever(`${PREFIXO} O canal local do servico nao subiu: ${(erro as Error).message}`);
+      return 1;
+    }
     ambiente.escrever(`${PREFIXO} servico no ar; passada a cada ${intervaloMs} ms.`);
     let ultimaChecagem = 0;
     try {
@@ -329,6 +343,7 @@ async function servirEmLaco(ambiente: AmbienteDeArmazenamento): Promise<number> 
     } finally {
       process.off('SIGTERM', aoTermo);
       process.off('SIGINT', aoInterromper);
+      await canal.fechar();
     }
     ambiente.escrever(`${PREFIXO} servico parado.`);
     return 0;

@@ -5,6 +5,7 @@ import {
   ErroDoRemoto,
   type AlvoRemoto,
   type ItemRemoto,
+  type OpcoesDeLeitura,
   type OrigemLocal,
   type Remoto,
 } from '../../src/cli/motor-de-armazenamento.js';
@@ -98,6 +99,40 @@ export class RemotoEmMemoria implements Remoto {
     this.chamadas.push('deletefile');
     if (!this.arquivos.delete(this.chave(alvo))) return Promise.reject(new ErroDoRemoto('object not found', 404, false));
     return Promise.resolve();
+  }
+
+  /** As proximas N leituras levantam um erro comum do remoto. */
+  leiturasComErro = 0;
+  /** Se definido, a leitura devolve estes bytes no lugar do conteudo guardado (remoto que corrompe). */
+  conteudoTrocado: Buffer | undefined;
+  /** A leitura nao termina ate o cliente ir embora (o sinal aborta): deixa o teste abandonar no meio. */
+  leituraEmEspera = false;
+  leituraAbortada = false;
+  /** O prazo que a ultima leitura recebeu, em ms: prova o teto que o canal impoe. */
+  ultimoPrazoMs: number | undefined;
+
+  lerArquivo(alvo: AlvoRemoto, opcoes: OpcoesDeLeitura): Promise<Buffer | null> {
+    this.chamadas.push('read');
+    this.ultimoPrazoMs = opcoes.prazoMs;
+    if (this.leiturasComErro > 0) {
+      this.leiturasComErro -= 1;
+      return Promise.reject(new ErroDoRemoto('erro de leitura de teste', 500, false));
+    }
+    if (this.leituraEmEspera) {
+      return new Promise((_resolver, rejeitar) => {
+        opcoes.sinal?.addEventListener('abort', () => {
+          this.leituraAbortada = true;
+          rejeitar(new ErroDoRemoto('leitura abortada', undefined, false));
+        });
+      });
+    }
+    const arquivo = this.arquivos.get(this.chave(alvo));
+    if (arquivo === undefined || this.perdidos.has(alvo.relativo)) return Promise.resolve(null);
+    const bytes = this.conteudoTrocado ?? arquivo.conteudo;
+    if (bytes.length > opcoes.tamanhoMaximo) {
+      return Promise.reject(new ErroDoRemoto('acima do maximo', undefined, false));
+    }
+    return Promise.resolve(Buffer.from(bytes));
   }
 
   parar(): Promise<void> {

@@ -75,7 +75,17 @@ export interface Remoto {
   /** Todos os arquivos sob `relativo` (recursivo), com hash e identificador. */
   listarArquivos(alvo: AlvoRemoto): Promise<ItemRemoto[]>;
   apagarArquivo(alvo: AlvoRemoto): Promise<void>;
+  /** Os bytes do arquivo, ou `null` quando o remoto nao o tem. Recusa o que passa de `tamanhoMaximo` sem le-lo inteiro. */
+  lerArquivo(alvo: AlvoRemoto, opcoes: OpcoesDeLeitura): Promise<Buffer | null>;
   parar(): Promise<void>;
+}
+
+export interface OpcoesDeLeitura {
+  tamanhoMaximo: number;
+  /** Prazo total da leitura, em ms. */
+  prazoMs: number;
+  /** O cliente que pediu foi embora: a leitura para. */
+  sinal?: AbortSignal | undefined;
 }
 
 export class ErroDoRemoto extends Error {
@@ -131,7 +141,7 @@ export async function iniciarRclone(
   opcoes: OpcoesDoRclone = {},
 ): Promise<Remoto> {
   const senha = randomBytes(16).toString('hex');
-  const filho: ChildProcess = spawn(config.binario, ['rcd', '--rc-addr', `127.0.0.1:${config.porta}`], {
+  const filho: ChildProcess = spawn(config.binario, ['rcd', '--rc-addr', `127.0.0.1:${config.porta}`, '--rc-serve'], {
     env: { ...env, RCLONE_RC_USER: USUARIO_DO_RCD, RCLONE_RC_PASS: senha },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
@@ -244,6 +254,40 @@ export async function iniciarRclone(
     },
     async apagarArquivo(alvo) {
       await chamar('operations/deletefile', { fs: FS(alvo.remoto, alvo.pasta), remote: alvo.relativo }, 60_000);
+    },
+    async lerArquivo(alvo, opcoes) {
+      // `--rc-serve` serve o arquivo em `/[<remoto>:<pasta>]/<caminho>`; o `encodeURI` cuida de espaco e acento, e o
+      // rclone decodifica o caminho da URL. Sem autenticacao e 401: a senha e a mesma do rcd, so por cabecalho.
+      const url = `${base}/${encodeURI(`[${FS(alvo.remoto, alvo.pasta)}]/${alvo.relativo}`)}`;
+      const prazo = AbortSignal.timeout(opcoes.prazoMs);
+      let resposta: Response;
+      try {
+        resposta = await fetch(url, {
+          headers: { authorization: autorizacao },
+          signal: opcoes.sinal === undefined ? prazo : AbortSignal.any([prazo, opcoes.sinal]),
+        });
+        if (resposta.status === 404) {
+          await resposta.arrayBuffer();
+          return null;
+        }
+        if (!resposta.ok) {
+          const mensagem = (await resposta.text()).slice(0, 300);
+          throw new ErroDoRemoto(mensagem === '' ? `HTTP ${resposta.status}` : mensagem, resposta.status, ehLimiteDeCota(resposta.status, mensagem));
+        }
+        const declarado = Number(resposta.headers.get('content-length') ?? '0');
+        if (declarado > opcoes.tamanhoMaximo) {
+          await resposta.body?.cancel();
+          throw new ErroDoRemoto(`o arquivo (${declarado} bytes) passa do maximo de ${opcoes.tamanhoMaximo}`, undefined, false);
+        }
+        const bytes = Buffer.from(await resposta.arrayBuffer());
+        if (bytes.length > opcoes.tamanhoMaximo) {
+          throw new ErroDoRemoto(`o arquivo (${bytes.length} bytes) passa do maximo de ${opcoes.tamanhoMaximo}`, undefined, false);
+        }
+        return bytes;
+      } catch (causa) {
+        if (causa instanceof ErroDoRemoto) throw causa;
+        throw new ErroDoRemoto(`rclone nao entregou o arquivo: ${(causa as Error).message}`, undefined, false);
+      }
     },
     async parar() {
       if (encerrouCom !== undefined) return;

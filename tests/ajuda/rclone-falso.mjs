@@ -79,6 +79,18 @@ function responder(res, status, corpo) {
 createServer((req, res) => {
   const esperado = `Basic ${Buffer.from(`${usuario}:${senha}`).toString('base64')}`;
   if (req.headers.authorization !== esperado) return responder(res, 401, { error: 'unauthorized', status: 401 });
+  // `--rc-serve`: GET /[<remoto>:<pasta>]/<caminho> devolve os bytes (404 se nao existe, 500 se o remoto e invalido).
+  if (req.method === 'GET') {
+    const alvo = /^\/\[(.*?)\]\/(.*)$/.exec(decodeURIComponent(req.url ?? ''));
+    if (alvo === null) return responder(res, 404, { error: 'rota desconhecida', status: 404 });
+    const f = falhas();
+    if (consumir('leitura_erro')) return responder(res, 500, { error: 'erro de leitura de teste', status: 500 });
+    const arquivo = join(dirDoFs(alvo[1]), alvo[2]);
+    if (!existsSync(arquivo) || (f.perder ?? []).includes(alvo[2])) return responder(res, 404, { error: 'object not found', status: 404 });
+    const conteudo = readFileSync(arquivo);
+    res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': String(conteudo.length) });
+    return res.end(conteudo);
+  }
   let texto = '';
   req.on('data', (d) => (texto += d));
   req.on('end', () => {

@@ -100,7 +100,7 @@ test('copiar, conferir (hash e identificador), listar e apagar contra o rcd', as
 test('a senha do rcd nunca vai por argumento de linha de comando', async () => {
   await comFalso(async ({ remotoDeTeste, porta }) => {
     const argv = JSON.parse(readFileSync(join(remotoDeTeste, '.argv.json'), 'utf8')) as string[];
-    assert.deepEqual(argv, ['rcd', '--rc-addr', `127.0.0.1:${porta}`]);
+    assert.deepEqual(argv, ['rcd', '--rc-addr', `127.0.0.1:${porta}`, '--rc-serve']);
   });
 });
 
@@ -225,3 +225,52 @@ test('depois de parar, o rcd nao responde mais', async () => {
 function portaAleatoria(): number {
   return 20_000 + Math.floor(Math.random() * 20_000);
 }
+
+test('ler devolve os bytes do arquivo, null para o que nao existe, e uma pasta-base com espaco e acento funciona', async () => {
+  await comFalso(async ({ remoto, raizLocal }) => {
+    const conteudo = Buffer.from('bytes de um anexo lido pelo rcd');
+    writeFileSync(join(raizLocal, 'ab', 'arquivo.jpg'), conteudo);
+    const alvo = { remoto: 'remoto_de_teste', pasta: 'minha pasta/midia', relativo: 'inq/image/ab/cdarquivo.jpg' };
+    await remoto.copiarArquivo({ raiz: raizLocal, relativo: 'ab/arquivo.jpg' }, alvo, conteudo.length);
+
+    const lido = await remoto.lerArquivo(alvo, { tamanhoMaximo: 1024, prazoMs: 5_000 });
+    assert.equal(lido?.toString(), conteudo.toString());
+    assert.equal(
+      await remoto.lerArquivo({ ...alvo, relativo: 'inq/image/ab/nao-existe.jpg' }, { tamanhoMaximo: 1024, prazoMs: 5_000 }),
+      null,
+    );
+  });
+});
+
+test('ler recusa o que passa do tamanho maximo e traduz o erro do remoto em ErroDoRemoto', async () => {
+  await comFalso(
+    async ({ remoto, raizLocal }) => {
+      writeFileSync(join(raizLocal, 'ab', 'grande.bin'), Buffer.alloc(2048, 7));
+      const alvo = { remoto: 'remoto_de_teste', pasta: 'malote', relativo: 'inq/document/ab/cdgrande.bin' };
+      await remoto.copiarArquivo({ raiz: raizLocal, relativo: 'ab/grande.bin' }, alvo, 2048);
+
+      // a primeira leitura leva a falha injetada (`leitura_erro: 1`): erro comum; as seguintes voltam ao normal
+      await assert.rejects(
+        () => remoto.lerArquivo(alvo, { tamanhoMaximo: 4096, prazoMs: 5_000 }),
+        (e: unknown) => e instanceof ErroDoRemoto && e.status === 500 && !e.limiteDeCota,
+      );
+      await assert.rejects(
+        () => remoto.lerArquivo(alvo, { tamanhoMaximo: 1024, prazoMs: 5_000 }),
+        (e: unknown) => e instanceof ErroDoRemoto && /passa do maximo/.test(e.message),
+      );
+      assert.equal((await remoto.lerArquivo(alvo, { tamanhoMaximo: 4096, prazoMs: 5_000 }))?.length, 2048);
+    },
+    { leitura_erro: 1 },
+  );
+});
+
+test('ler obedece o sinal do cliente que foi embora', async () => {
+  await comFalso(async ({ remoto }) => {
+    const alvo = { remoto: 'remoto_de_teste', pasta: 'malote', relativo: 'inq/image/ab/cdarquivo.jpg' };
+    const abortado = AbortSignal.abort();
+    await assert.rejects(
+      () => remoto.lerArquivo(alvo, { tamanhoMaximo: 1024, prazoMs: 5_000, sinal: abortado }),
+      (e: unknown) => e instanceof ErroDoRemoto,
+    );
+  });
+});
