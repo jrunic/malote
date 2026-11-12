@@ -13,6 +13,7 @@ const RAIZ = join(fileURLToPath(new URL('.', import.meta.url)), '..', 'src');
 const PERMITIDOS = new Map<string, string>([
   ['nucleo/acervo.ts', 'implementa o próprio `preparar` e abre a base'],
   ['registro/registro.ts', 'implementa o próprio `preparar` e abre a base'],
+  ['registro/localizacao.ts', 'implementa o próprio `preparar` e abre a base refazível da Localização do Anexo'],
   ['nucleo/migracao.ts', 'DDL de passo de migração: roda uma vez e troca a tabela que o statement referencia'],
   ['adaptadores/whatsapp/material.ts', 'conexão própria com o material lido, que não é Acervo nem Registro'],
   // Entrou em 08/09/2026, com o passo 13 -> 14. Os passos anteriores só faziam
