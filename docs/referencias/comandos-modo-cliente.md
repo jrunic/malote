@@ -107,7 +107,12 @@ Observações:
   a conexão cair no meio, o parcial fica indicado e não há arquivo definitivo. Sem `--saida`, escreve na
   saída padrão. `--json` equivale a `--formato json`.
 - **`midia`:** vídeo é recusado com `415`; Anexo inexistente, de outro Inquilino ou sem bytes é `404`
-  (indistinguíveis, por desenho).
+  (indistinguíveis, por desenho). Se a cópia local do Anexo saiu e o arquivo está no armazenamento remoto, o servidor o
+  busca lá: acima do tamanho máximo da rota (50 MiB) a resposta é `413`; com o arquivo guardado no remoto e não lido
+  agora (serviço fora do ar, remoto indisponível, conteúdo que não confere) é `502`, que **não** significa que ele foi
+  perdido: tente de novo daqui a pouco. Com o serviço no limite de entregas é `503` (com `retry-after`): repita.
+  Passou do prazo, `504`. O arquivo é conferido inteiro antes de a primeira resposta sair, então o tempo até o primeiro
+  byte cresce com o tamanho do arquivo.
 - **`enviar --para <endereco>`** envia ao endereço que o Acervo guarda: o celular brasileiro pedido na outra forma de um
   número gravado sai pela gravada, e a resposta diz qual (`enderecoUsado` no `--json`). O número que o Acervo não conhece
   em nenhuma das duas formas sai como foi pedido, e a resposta avisa (`enderecoDesconhecido`). O destino é decidido pelo
