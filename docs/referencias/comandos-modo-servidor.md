@@ -65,6 +65,7 @@ valer, `--com-efeito` e `--confirmo` juntos. Vale para `pessoa propostas aplicar
 | `inquilino criar --chave <valor> --titular <nome>` | Cria um Inquilino |
 | `inquilino listar --chave <valor> [--json]` | Lista os Inquilinos |
 | `inquilino destino --chave <valor> --inquilino <id> --endereco <caminho>` | Declara o **Destino de Mídia**: a pasta onde os arquivos do Inquilino ficam |
+| `inquilino destino-remoto --chave <valor> --inquilino <id> [--remoto <nome>] [--pasta <pasta-base>] [--janela-dias <n>] [--apagar-local sim\|nao [--confirmo]] [--fuso <zona>] [--transferencias <n>] [--chamadas-por-segundo <n>]` | Declara o **Destino Remoto**: o nome do remoto do rclone, a pasta-base, a **Janela de Cópia Local** (padrão 7 dias), o fuso do rótulo (padrão `America/Cuiaba`) e o ritmo do envio. `--remoto` só é exigido na primeira declaração; as outras flags omitidas mantêm o que já estava gravado. Nasce com o apagamento local **travado**; liberá-lo (`--apagar-local sim`) exige `--confirmo`. **Trocar o remoto ou a pasta-base religa a trava** (a autorização era para o alvo antigo) |
 | `acesso chave emitir --chave <valor> --inquilino <id>` | Emite uma **Chave de Acesso** para um consumidor (o valor não é recuperável) |
 | `acesso chave listar --chave <valor> --inquilino <id>` | Lista as Chaves de Acesso do Inquilino |
 | `acesso chave revogar --chave <valor> --id <id>` | Revoga uma Chave de Acesso (vale na requisição seguinte) |

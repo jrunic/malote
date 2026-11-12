@@ -92,6 +92,12 @@ import {
   destinoAcessivel,
   lerDestinoDeMidia,
 } from '../registro/destino-midia.js';
+import {
+  PADROES_DO_DESTINO_REMOTO,
+  configurarDestinoRemotoDeMidia,
+  inteiroDaOpcao,
+  lerDestinoRemotoDeMidia,
+} from '../registro/destino-remoto.js';
 import { trazerArquivos } from '../adaptadores/whatsapp/trazer.js';
 import { extrairDuracoesDoBruto } from '../adaptadores/whatsapp/duracao-do-anexo.js';
 import { reprocessarMidiaNuncaObtida } from '../adaptadores/whatsapp/reprocessar-midia.js';
@@ -349,6 +355,7 @@ Administracao (exige --chave a partir da primeira Chave criada):
   malote inquilino criar         --chave <valor> --titular <nome>
   malote inquilino listar        --chave <valor> [--json]
   malote inquilino destino       --chave <valor> --inquilino <id> --endereco <caminho>
+  malote inquilino destino-remoto --chave <valor> --inquilino <id> [--remoto <nome>] [--pasta <pasta-base>] [--janela-dias <n>] [--apagar-local sim|nao [--confirmo]] [--fuso <zona>] [--transferencias <n>] [--chamadas-por-segundo <n>]
   malote acesso chave emitir     --chave <valor> --inquilino <id>
   malote acesso chave listar     --chave <valor> --inquilino <id>
   malote acesso chave revogar    --chave <valor> --id <id>
@@ -1627,6 +1634,64 @@ function executarComAtor(
       if (endereco === undefined) throw new Error('Informe --endereco.');
       configurarDestinoDeMidia(registro, inquilino, { natureza: 'local', endereco });
       escrever(`Destino de Midia do Inquilino ${inquilino} apontado para ${endereco}.`);
+      return 0;
+    }
+
+    if (grupo === 'inquilino' && sub === 'destino-remoto') {
+      autorizarAdministracao(registro, chave, identidade);
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino.');
+      const atual = lerDestinoRemotoDeMidia(registro, inquilino);
+      // `--remoto` so e exigido na primeira declaracao: depois, o que nao vem fica como esta gravado.
+      const remotoDado = opcao(argumentos, 'remoto');
+      if (remotoDado === undefined && atual === undefined) {
+        throw new Error('Informe --remoto (a primeira declaracao precisa do nome do remoto).');
+      }
+      const remoto = remotoDado ?? atual?.remoto ?? '';
+      const pastaBase = opcao(argumentos, 'pasta') ?? atual?.pastaBase ?? PADROES_DO_DESTINO_REMOTO.pastaBase;
+      const alvoMudou = atual !== undefined && (remoto !== atual.remoto || pastaBase !== atual.pastaBase);
+      const apagarLocalDado = opcao(argumentos, 'apagar-local');
+      // Liberar o apagamento local (de travado a liberado, ou de novo depois de trocar o alvo) exige --confirmo.
+      if (apagarLocalDado === 'sim' && (atual?.apagarLocal !== true || alvoMudou) && !temBandeira(argumentos, 'confirmo')) {
+        throw new Error(
+          'Liberar o apagamento local faz o servico apagar a copia local depois de verificar o remoto: ' +
+            'confira uma amostra no remoto e repita com --confirmo.',
+        );
+      }
+      let apagarLocal =
+        apagarLocalDado === undefined ? (atual?.apagarLocal ?? PADROES_DO_DESTINO_REMOTO.apagarLocal) : apagarLocalDado === 'sim';
+      // Trocar o remoto ou a pasta-base com a trava liberada a RELIGA: a autorizacao era para o alvo antigo.
+      const religou = alvoMudou && apagarLocalDado === undefined && apagarLocal;
+      if (religou) apagarLocal = false;
+      const destino = {
+        remoto,
+        pastaBase,
+        janelaDias:
+          inteiroDaOpcao(opcao(argumentos, 'janela-dias'), '--janela-dias') ??
+          atual?.janelaDias ??
+          PADROES_DO_DESTINO_REMOTO.janelaDias,
+        apagarLocal,
+        fuso: opcao(argumentos, 'fuso') ?? atual?.fuso ?? PADROES_DO_DESTINO_REMOTO.fuso,
+        transferencias:
+          inteiroDaOpcao(opcao(argumentos, 'transferencias'), '--transferencias') ??
+          atual?.transferencias ??
+          PADROES_DO_DESTINO_REMOTO.transferencias,
+        chamadasPorSegundo:
+          inteiroDaOpcao(opcao(argumentos, 'chamadas-por-segundo'), '--chamadas-por-segundo') ??
+          atual?.chamadasPorSegundo ??
+          PADROES_DO_DESTINO_REMOTO.chamadasPorSegundo,
+      };
+      configurarDestinoRemotoDeMidia(registro, inquilino, destino);
+      escrever(
+        `Destino Remoto do Inquilino ${inquilino}: remoto ${destino.remoto}, pasta ${destino.pastaBase === '' ? '(raiz)' : destino.pastaBase}, ` +
+          `janela de copia local ${destino.janelaDias} dia(s), apagamento local: ${destino.apagarLocal ? 'LIBERADO' : 'travado'}.`,
+      );
+      if (religou) {
+        escrever(
+          'A trava foi RELIGADA porque o remoto ou a pasta-base mudou. Libere de novo com --apagar-local sim --confirmo ' +
+            'depois de conferir uma amostra no remoto novo.',
+        );
+      }
       return 0;
     }
 
