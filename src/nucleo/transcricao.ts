@@ -26,17 +26,19 @@ export interface AnexoElegivel {
  * entre chamadas. O `(t.solicitada_em IS NULL) ASC` e o que separa os dois
  * grupos antes de desempatar dentro de cada um.
  */
-export function proximoElegivel(acervo: Acervo): AnexoElegivel | undefined {
+export function proximoElegivel(acervo: Acervo, exceto: readonly string[] = []): AnexoElegivel | undefined {
+  // `exceto`: os Anexos que o worker adiou nesta rodada (o remoto fora do ar); em JSON para o SQL ser um so, que `preparar` reusa.
   const linha = acervo.preparar(
       `SELECT a.id AS anexoId, a.mensagem_id AS mensagemId, a.caminho AS caminho
          FROM anexos a
          LEFT JOIN transcricoes t ON t.anexo_id = a.id
         WHERE a.tipo = 'audio' AND a.presenca = 'presente' AND a.caminho IS NOT NULL
           AND (t.anexo_id IS NULL OR t.estado = 'pendente')
+          AND a.id NOT IN (SELECT value FROM json_each(?))
         ORDER BY (t.solicitada_em IS NULL) ASC, t.solicitada_em ASC, a.id ASC
         LIMIT 1`,
     )
-    .get() as { anexoId: string; mensagemId: string; caminho: string } | undefined;
+    .get(JSON.stringify(exceto)) as { anexoId: string; mensagemId: string; caminho: string } | undefined;
   return linha;
 }
 
