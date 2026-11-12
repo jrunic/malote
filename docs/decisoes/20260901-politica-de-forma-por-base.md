@@ -64,6 +64,10 @@ A política de abertura passa a ser:
 | **Acervo**, abertura de leitura | recusa, e manda migrar | recusa | recusa | — |
 | **Registro**, abertura de escrita | migra por passos | recusa | recusa, e manda usar outra versão | não |
 | **Registro**, abertura de leitura | recusa | recusa | recusa | — |
+| **Localização do Anexo**, abertura de escrita | recusa, e manda recriar (não há passos) | recusa, e manda recriar | recusa, e manda recriar | sim (refaz-se por listagem do remoto) |
+| **Localização do Anexo**, abertura de leitura | recusa | recusa | recusa | — (devolve ausência se a base não existe) |
+
+A **Localização do Anexo** (ciclo 49) é uma terceira base, própria do Serviço de Armazenamento, e é um cache refazível: por isso não tem passos de migração e toda forma diferente da corrente é recusada com a instrução de recriar. É a única das três em que "recriar" não perde dado.
 
 ### As três assimetrias, e a razão de cada uma
 

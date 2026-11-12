@@ -20,7 +20,7 @@ import type { Database } from 'better-sqlite3';
  * reconstroi — o Acervo tem o material exportado como fonte. Tabela completa
  * da politica na ADR local `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_REGISTRO = 8;
+export const VERSAO_SCHEMA_REGISTRO = 9;
 
 /**
  * Forma mais antiga do Registro que a maquina de migracao alcanca.
@@ -72,6 +72,21 @@ export function aplicarSchemaRegistro(db: Database): void {
       natureza       TEXT NOT NULL CHECK (natureza IN ('local')),
       endereco       TEXT NOT NULL,
       configurado_em TEXT NOT NULL,
+      FOREIGN KEY (inquilino_id) REFERENCES inquilinos(id) ON DELETE CASCADE
+    );
+
+    -- O Destino Remoto e ACRESCIMO ao Destino de Midia local (que continua o lugar
+    -- de chegada e da copia pela Janela): tabela a parte, e a natureza acima fica 'local'.
+    CREATE TABLE IF NOT EXISTS destinos_remotos_de_midia (
+      inquilino_id         TEXT PRIMARY KEY,
+      remoto               TEXT NOT NULL,
+      pasta_base           TEXT NOT NULL,
+      janela_dias          INTEGER NOT NULL CHECK (janela_dias BETWEEN 0 AND 365),
+      apagar_local         INTEGER NOT NULL CHECK (apagar_local IN (0, 1)),
+      fuso                 TEXT NOT NULL,
+      transferencias       INTEGER NOT NULL CHECK (transferencias BETWEEN 1 AND 32),
+      chamadas_por_segundo INTEGER NOT NULL CHECK (chamadas_por_segundo BETWEEN 1 AND 50),
+      configurado_em       TEXT NOT NULL,
       FOREIGN KEY (inquilino_id) REFERENCES inquilinos(id) ON DELETE CASCADE
     );
 
