@@ -23,7 +23,7 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
-## [Não lançado]
+## [0.50.0] — 2026-11-13
 
 **A forma do Registro sobe de v8 para v9** (só acrescenta uma tabela, a do Destino Remoto de Mídia); o Acervo não muda (segue v32). Não acrescenta dependência npm; o `rclone` é um binário que o Operador declara, opcional, como o `whisper.cpp`. **A migração do Registro não tem volta**: antes de atualizar, guarde uma cópia consistente do Registro (e dos Acervos). A recepção ao vivo não muda.
 
