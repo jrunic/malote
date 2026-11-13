@@ -82,8 +82,17 @@ Todos aceitam `--json`. As flags marcadas com `*` são obrigatórias.
 | `malote relatorio` | Totais por Fonte e natureza | — |
 | `malote exportar` | Uma Conversa para um arquivo, txt ou json, com o nome de quem falou | `--conversa <id>`\* `--formato txt\|json` `--saida <arquivo>` `--sobrescrever` `--remetente <valor>` `--desde` `--ate` |
 | `malote midia <anexoId>` | Os **bytes** de um Anexo (foto, documento, áudio). Só existe no modo rede | `--saida <arquivo>`\* |
+| `malote indice-de-midia` | O **Índice de Mídia**: um HTML com um link por mídia da Conversa, com o rótulo `AAAAMMDD-NN-<conversa>`. Só existe no modo rede, e o HTML é **dado pessoal** (nome da Conversa e links): nasce com permissão 0600 e não leva o texto da Mensagem | `--conversa <id>`\* `--de AAAAMMDD` `--ate AAAAMMDD` `--tipo <tipo>` `--saida <arquivo.html>` `--sobrescrever` |
 
 Observações:
+
+- **`indice-de-midia`:** o `NN` do rótulo é a ordem da mídia na Conversa **naquele dia**, no fuso do Destino Remoto do Inquilino
+  (padrão `America/Cuiaba`), por instante, Mensagem e Anexo, com no mínimo 3 dígitos; `--tipo` só esconde linhas (não muda
+  o `NN`). O nome da Conversa no rótulo é o assunto (grupo) ou o nome (direta), sem acento e em minúsculas; sem nome, os
+  dígitos do telefone; sem telefone, `sem-nome-` e os 6 primeiros caracteres do id (o endereço opaco nunca aparece). A mídia
+  só no disco aparece como "pendente de envio"; o `nunca-obtido`, como "nao obtido". Com Destino Remoto e o Serviço de
+  Armazenamento fora do ar ou ocupado, o comando **sai 5 sem gravar**. Não sobrescreve arquivo existente sem
+  `--sobrescrever`; duas execuções sobre o mesmo Acervo dão o mesmo HTML.
 
 - **`--remetente`** é o **valor do Identificador** (LID ou JID, por exemplo
   `5511999990000@s.whatsapp.net`), com ou sem Pessoa; alcança todas as formas do mesmo endereço.

@@ -182,6 +182,7 @@ import { emOperacao, lerOperacao, listarOperacoes } from '../nucleo/trilha.js';
 import { conferirSeDesfazivel, desfazerOperacao } from '../nucleo/desfazer.js';
 import { caminhosDaConta, ouvir } from './ouvir.js';
 import { enderecoRecusado, servir } from './servir.js';
+import { executarIndiceDeMidia } from './indice-de-midia.js';
 import { armazenamento, servicoVivo as servicoDeArmazenamentoVivo } from './armazenamento.js';
 import { lerUltimoEvento } from './ultimo-evento.js';
 import { lerSinalDaConexao } from './sinal-da-conexao.js';
@@ -435,6 +436,8 @@ Titular (nao exige chave enquanto nao houver rede):
                                          Conversa grande: use --saida, o modo local sem ela acumula a saida em memoria)
   malote midia <id> --saida <arquivo>   (bytes do Anexo — SO em modo rede;
                                           local, leia 'caminho' de 'mensagens --json')
+  malote indice-de-midia --conversa <id> [--de AAAAMMDD] [--ate AAAAMMDD] [--tipo <tipo>] [--saida <arquivo.html>] [--sobrescrever]
+                                        (HTML com um link por midia da Conversa — SO em modo rede; o arquivo tem dado pessoal)
   malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--conversa <id>] [--desde <data>] [--ate <data>] [--limite <n>] [--ordem recentes|cronologica] [--json]
                     (sem --ordem, as mais recentes; diz quando o limite cortou resultados — padrao 100)
   malote pessoas        --inquilino <id> --texto <nome>        (resolve texto em Pessoa; com MALOTE_SERVIDOR: por REDE, sem --inquilino)
@@ -554,6 +557,7 @@ export const COMANDOS_DE_REDE = new Set([
   'anexos',
   'etiquetas',
   'chegadas',
+  'indice-de-midia',
 ]);
 
 /**
@@ -582,6 +586,7 @@ export async function executarConsultaRede(
     if (valor !== undefined) q.set(nome, valor);
   }
   if (grupo === 'conversas') return consultarConversasPorRede(argumentos, rede, q);
+  if (grupo === 'indice-de-midia') return executarIndiceDeMidia(argumentos, rede);
   let caminho: string;
   if (grupo === 'buscar') caminho = '/buscar';
   else if (grupo === 'pessoas') caminho = '/pessoas';

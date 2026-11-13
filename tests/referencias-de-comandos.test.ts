@@ -62,8 +62,8 @@ function mencionado(documento: string, chave: string): boolean {
   return new RegExp('(?:`|malote )' + escapada + '(?=[ `<\\[])').test(documento);
 }
 
-/** Os dois comandos que so existem por rede: nao ha o que dizer deles na referencia do modo servidor. */
-const SO_POR_REDE = new Set(['relatorio', 'midia']);
+/** Os comandos que so existem por rede: nao ha o que dizer deles na referencia do modo servidor. */
+const SO_POR_REDE = new Set(['relatorio', 'midia', 'indice-de-midia']);
 
 test('todo comando da --ajuda aparece na referencia do servidor, e os de rede na do cliente (#1132)', () => {
   const chaves = chavesDaAjuda();
