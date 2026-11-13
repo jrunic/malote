@@ -52,7 +52,7 @@ valer, `--com-efeito` e `--confirmo` juntos. Vale para `pessoa propostas aplicar
 `contato-compartilhado extrair`, `citacao extrair`, `midia extrair-imagem-de-modelo`, `retencao aplicar` e `operacao desfazer`.
 `--com-efeito` sem `--confirmo` não executa, mas o código de saída varia: a maioria lança o erro e sai 1,
 `retencao aplicar` sai 2 e `operacao desfazer` cai no ensaio e sai 0.
-`acervo recriar` exige `--confirmo` e **apaga o Acervo e os arquivos do Inquilino**.
+`acervo recriar` exige `--confirmo` e **apaga o Acervo e os arquivos do Inquilino**. Com Anexos que já têm Localização no Destino Remoto ele **recusa**: a mídia que só existe no remoto ficaria órfã. Só com `--descartar-localizacao` ele segue, descarta a base da Localização junto (os arquivos no remoto **não** são apagados pelo malote) e deixa na Operação o que foi descartado. A base da Localização é descartada sempre que existe, ainda que sem envios, e o comando recusa com o Serviço de Armazenamento no ar.
 
 ## Administração
 
@@ -65,6 +65,7 @@ valer, `--com-efeito` e `--confirmo` juntos. Vale para `pessoa propostas aplicar
 | `inquilino criar --chave <valor> --titular <nome>` | Cria um Inquilino |
 | `inquilino listar --chave <valor> [--json]` | Lista os Inquilinos |
 | `inquilino destino --chave <valor> --inquilino <id> --endereco <caminho>` | Declara o **Destino de Mídia**: a pasta onde os arquivos do Inquilino ficam |
+| `inquilino destino-remoto --chave <valor> --inquilino <id> [--remoto <nome>] [--pasta <pasta-base>] [--janela-dias <n>] [--apagar-local sim\|nao [--confirmo]] [--fuso <zona>] [--transferencias <n>] [--chamadas-por-segundo <n>]` | Declara o **Destino Remoto**: o nome do remoto do rclone, a pasta-base, a **Janela de Cópia Local** (padrão 7 dias), o fuso do rótulo (padrão `America/Cuiaba`) e o ritmo do envio. `--remoto` só é exigido na primeira declaração; as outras flags omitidas mantêm o que já estava gravado. Nasce com o apagamento local **travado**; liberá-lo (`--apagar-local sim`) exige `--confirmo`. **Trocar o remoto ou a pasta-base religa a trava** (a autorização era para o alvo antigo) |
 | `acesso chave emitir --chave <valor> --inquilino <id>` | Emite uma **Chave de Acesso** para um consumidor (o valor não é recuperável) |
 | `acesso chave listar --chave <valor> --inquilino <id>` | Lista as Chaves de Acesso do Inquilino |
 | `acesso chave revogar --chave <valor> --id <id>` | Revoga uma Chave de Acesso (vale na requisição seguinte) |
@@ -135,6 +136,25 @@ ambiente: `MALOTE_WHISPER_BINARIO`, `MALOTE_WHISPER_MODELO`, `MALOTE_FFMPEG_BINA
 `MALOTE_TRANSCRICAO_IDIOMA`, `MALOTE_TRANSCRICAO_THREADS` e `MALOTE_TRANSCRICAO_INTERVALO_MS`.
 Sem elas, a fila fica parada e o `servir` diz isso ao subir.
 
+## Armazenamento remoto de mídia
+
+O **Serviço de Armazenamento** sobe a mídia de um Inquilino para o Destino Remoto, verifica pelo hash de conteúdo (SHA-256, a Impressão de Anexo) e só então deixa a cópia local sair do disco. É um processo próprio (`malote armazenamento servir`), opcional: sem o `rclone` declarado (`MALOTE_RCLONE_BINARIO`) ele não sobe e o resto do produto não muda. O Inquilino precisa de Destino Remoto declarado (`inquilino destino-remoto`), e o remoto precisa entregar SHA-256 (o Google Drive entrega; sem hash, todo envio falha e nada é apagado). São comandos **locais**: com `MALOTE_SERVIDOR` configurado eles recusam.
+
+| Comando | O que faz |
+|---|---|
+| `armazenamento servir` | O processo longo: uma passada completa por Inquilino a cada intervalo (`MALOTE_ARMAZENAMENTO_INTERVALO_MS`, padrão 60 s), até SIGTERM, que termina o arquivo em andamento e não começa outro. Sobe o vídeo primeiro, apaga no remoto o Anexo que a retenção descartou, apaga a cópia local (só com a trava liberada e depois da Janela) e confere uma amostra do que só existe no remoto. Só roda um: um arquivo de trava no estado (`armazenamento/servico.pid`) recusa a segunda instância. Abre o **canal local** do servidor e da transcrição (`armazenamento/servico.sock`, soquete Unix na pasta 0700, com permissão 0600) |
+| `armazenamento passada --inquilino <id> [--grupo video\|resto\|todos] [--limite <n>] [--ensaio]` | Uma passada de envio, à mão. Sem `--grupo`, o vídeo e depois o resto. `--ensaio` conta o que subiria sem falar com o remoto e sem criar a base. **Recusa com o serviço no ar**, exceto `--ensaio` |
+| `armazenamento apagar-local --inquilino <id>` | Uma passada de apagamento da cópia local: relê a trava a cada arquivo, reverifica o remoto antes de cada um e **mantém** a cópia local se o remoto não tem o arquivo inteiro ou se a Impressão de Anexo do Acervo mudou depois do envio. Com a trava fechada não examina nada. Tira **só o nome do malote**: arquivo que tem outro nome no disco (hardlink) só devolve os bytes quando o outro nome também sai. **Recusa com o serviço no ar** |
+| `armazenamento conferir --inquilino <id> [--amostra <n>]` | Confere por amostra (padrão 50) que os arquivos que só existem no remoto continuam lá, inteiros, e registra o instante da conferência. Sai `1` se achar divergência. **Recusa com o serviço no ar** |
+| `armazenamento reconstruir --inquilino <id> [--confirmo]` | Refaz a base da Localização do Anexo pela listagem do remoto, conferida contra o Acervo. Não toca no remoto nem no Acervo. **Recusa com a listagem do remoto vazia e a base cheia** (pasta-base trocada, remoto errado, credencial sem acesso): só com `--confirmo`. **Recusa com o serviço no ar**, porque apagaria a base por baixo dele |
+| `armazenamento estado --inquilino <id> [--json]` | O que foi enviado, o que falta, falhas, duplicatas, divergências, cópias locais removidas, a verificação mais antiga que ainda tem cópia local, a divergência mais antiga, o instante da última conferência e a idade do pendente mais antigo. Só lê; não sobe o `rclone`. `pendentes` é uma aproximação (presentes menos enviados) |
+
+O pedido de ir mais devagar do remoto (limite de cota da API) **não é falha de envio**: o serviço reduz o ritmo (metade das transferências, espera que dobra até 60 s) e o Anexo sobe na passada seguinte. O armazenamento esgotado do remoto, sim, é erro comum. A cópia remota que a retenção descartou vai para a **lixeira do remoto** quando ele a tem (no Google Drive, enquanto o `rclone` do Operador não desliga `drive-use-trash`).
+
+**Leitura do que só existe no remoto.** O servidor de consulta e a transcrição pedem ao serviço, pelo canal local, os bytes de um Anexo cuja cópia local saiu; o pedido é por Inquilino e Anexo, nunca por caminho, e o serviço só entrega o que a Localização verificou: o Anexo tem de ser o mesmo (Impressão de Anexo e tamanho do Acervo), a Localização tem de ser do Destino Remoto de agora, e os bytes que o remoto devolve têm de ter o tamanho e o SHA-256 dela. Acima de 50 MiB (`MALOTE_ARMAZENAMENTO_MAXIMO_DA_ENTREGA_MB`) o serviço recusa. Até 4 entregas em voo; a quinta é recusada e o cliente tenta de novo. Com o serviço fora do ar, o Anexo que só existe no remoto fica **inacessível** (não "inexistente") até ele voltar. As consultas do relatório (`acervo relatar`, `operador espaco`) separam o que está em disco do que só existe no remoto, e a conferência do disco não acusa como perda o Anexo que tem Localização.
+
+Variáveis do serviço, todas por instalação: `MALOTE_RCLONE_BINARIO` (obrigatória), `MALOTE_RCLONE_PORTA` (padrão 5599, só localhost), `MALOTE_ARMAZENAMENTO_INTERVALO_MS`, `MALOTE_ARMAZENAMENTO_CHECAGEM_A_CADA_MS` (padrão 6 h) e `MALOTE_ARMAZENAMENTO_AMOSTRA` (padrão 50) e `MALOTE_ARMAZENAMENTO_MAXIMO_DA_ENTREGA_MB` (padrão 50). O acesso ao remoto é do ambiente do `rclone`, não do produto. Sai `0` na parada pedida; `1` quando o `rclone` não sobe ou há veredito (envio com falha, divergência) e também numa exceção não tratada; `2` na invocação ou configuração errada, no modo rede, com outro serviço no ar e em `--limite`/`--amostra` que não sejam inteiros maiores que zero.
+
 ## O servidor de consulta
 
 ```bash
@@ -159,7 +179,7 @@ etapas estão na seção 4.3 do [guia do host](../guias/host-continuo-ouvinte-e-
 |---|---|
 | `acervo relatar --inquilino <id>` | O relatório do Acervo: por Fonte, tipo, natureza e idade, com a divergência entre banco e disco |
 | `acervo migrar --inquilino <id>` | Sobe a forma do Acervo por passos, e diz o que fez. **O único caminho com as duas bases**; faça backup antes |
-| `acervo recriar --inquilino <id> --confirmo` | **Apaga** o Acervo e os arquivos do Inquilino |
+| `acervo recriar --inquilino <id> --confirmo [--descartar-localizacao]` | **Apaga** o Acervo e os arquivos do Inquilino; com Localização no Destino Remoto exige `--descartar-localizacao` |
 | `pessoa listar --inquilino <id> [--incluir-absorvidas]` | Lista as Pessoas |
 | `pessoa ver --inquilino <id> --pessoa <id>` | Mostra uma Pessoa |
 | `pessoa propostas --inquilino <id> [--produtor telefone\|email\|nome\|multiplos-enderecos] [--limite <n>] [--json]` | Calcula Propostas de identidade a partir do catálogo |

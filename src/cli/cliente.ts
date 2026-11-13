@@ -47,6 +47,9 @@ function mensagemDeErroDoServidor(status: number): string {
     return 'Erro do servidor (504): a consulta passou do prazo do servidor. Restrinja os filtros, por exemplo por período ou remetente.';
   }
   if (status === 503) return 'Erro do servidor (503). Servidor ocupado ou indisponível: tente de novo daqui a pouco.';
+  if (status === 502) {
+    return 'Erro do servidor (502): o arquivo está guardado no armazenamento remoto e não pôde ser lido agora. Ele não foi perdido: tente de novo daqui a pouco.';
+  }
   return `Erro do servidor (${status}).`;
 }
 

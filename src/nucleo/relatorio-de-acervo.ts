@@ -134,8 +134,10 @@ export interface DivergenciaDeDisco {
    * como perda e o defeito que este campo existe para impedir.
    */
   conferiu: boolean;
-  /** Acervo diz `presente` e o disco nao tem o arquivo. */
+  /** Acervo diz `presente`, o disco nao tem o arquivo e NENHUMA Localizacao diz que ele esta no remoto: perda possivel. */
   presentesSemArquivo: string[];
+  /** Acervo diz `presente`, o disco nao tem o arquivo e a Localizacao o tem no remoto: nao e perda. */
+  soNoRemoto: string[];
   /** Arquivo sob a subarvore do Inquilino que nenhum Anexo reivindica. */
   arquivosSemAnexo: string[];
   /** Arquivo existe e o tamanho nao bate com o gravado. */
@@ -168,25 +170,34 @@ function arquivosSob(raiz: string): string[] {
  * Destino: dois Inquilinos podem apontar para a mesma raiz, e varrer a raiz
  * inteira faria os arquivos de um aparecerem como orfaos do outro.
  */
-export function conferirDisco(acervo: Acervo, destino: string): DivergenciaDeDisco {
+export interface OpcoesDeConferencia {
+  /** Os Anexos que tem Localizacao no remoto (o que `lerLocalizacaoParaConsumidor` devolve): ausentes do disco, nao sao perda. */
+  comLocalizacao?: ReadonlySet<string>;
+}
+
+export function conferirDisco(acervo: Acervo, destino: string, opcoes: OpcoesDeConferencia = {}): DivergenciaDeDisco {
   const nada: DivergenciaDeDisco = {
     conferiu: false,
     presentesSemArquivo: [],
+    soNoRemoto: [],
     arquivosSemAnexo: [],
     tamanhoDivergente: [],
   };
   if (!existsSync(destino)) return nada;
 
   const reivindicados = new Map<string, number | null>();
+  const donoDoCaminho = new Map<string, string>();
   for (const l of acervo.preparar(
-      "SELECT caminho, tamanho FROM anexos WHERE presenca = 'presente' AND caminho IS NOT NULL",
+      "SELECT id, caminho, tamanho FROM anexos WHERE presenca = 'presente' AND caminho IS NOT NULL",
     )
-    .all() as Array<{ caminho: string; tamanho: number | null }>) {
+    .all() as Array<{ id: string; caminho: string; tamanho: number | null }>) {
     reivindicados.set(l.caminho, l.tamanho);
+    donoDoCaminho.set(l.caminho, l.id);
   }
 
   const r: DivergenciaDeDisco = {
     conferiu: true,
+    soNoRemoto: [],
     presentesSemArquivo: [],
     arquivosSemAnexo: [],
     tamanhoDivergente: [],
@@ -194,7 +205,9 @@ export function conferirDisco(acervo: Acervo, destino: string): DivergenciaDeDis
   for (const [caminho, tamanho] of reivindicados) {
     const alvo = join(destino, caminho);
     if (!existsSync(alvo)) {
-      r.presentesSemArquivo.push(caminho);
+      // Ausente do disco: e perda so se nada diz que o arquivo esta no remoto.
+      if (opcoes.comLocalizacao?.has(donoDoCaminho.get(caminho) as string) === true) r.soNoRemoto.push(caminho);
+      else r.presentesSemArquivo.push(caminho);
       continue;
     }
     if (tamanho !== null && statSync(alvo).size !== tamanho) r.tamanhoDivergente.push(caminho);

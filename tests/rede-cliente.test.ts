@@ -104,3 +104,36 @@ test('timeout sai com classe INDETERMINADO (7) e mensagem declara resultado desc
     srv.close();
   }
 });
+
+test('502 (arquivo guardado no remoto e inacessivel) e 413 (acima do maximo) sao sinais distintos de "nao existe"', async () => {
+  const porta = await portaLivre();
+  const srv = createServer((req, res) => {
+    if (req.url === '/midia/inacessivel') {
+      res.writeHead(502, { 'content-type': 'application/json' });
+      res.end('{"erro":"arquivo guardado no remoto e inacessivel agora"}');
+    } else {
+      res.writeHead(413, { 'content-type': 'application/json' });
+      res.end('{"erro":"Anexo acima do tamanho maximo da rota de midia remota (52428800 bytes)"}');
+    }
+  });
+  await new Promise<void>((r) => srv.listen(porta, '127.0.0.1', r));
+  try {
+    try {
+      await pedirGet(`${SERVIDOR}:${porta}`, 'k', '/midia/inacessivel');
+      assert.fail('deveria falhar');
+    } catch (e) {
+      assert.equal((e as CodigoDeFalha).classe, 'servidor');
+      assert.equal((e as CodigoDeFalha).codigoDeSaida, 5);
+      assert.match((e as Error).message, /não foi perdido/);
+    }
+    try {
+      await pedirGet(`${SERVIDOR}:${porta}`, 'k', '/midia/grande');
+      assert.fail('deveria falhar');
+    } catch (e) {
+      assert.equal((e as CodigoDeFalha).classe, 'uso');
+      assert.match((e as Error).message, /tamanho maximo/);
+    }
+  } finally {
+    srv.close();
+  }
+});

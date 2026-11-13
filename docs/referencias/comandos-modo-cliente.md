@@ -82,8 +82,17 @@ Todos aceitam `--json`. As flags marcadas com `*` são obrigatórias.
 | `malote relatorio` | Totais por Fonte e natureza | — |
 | `malote exportar` | Uma Conversa para um arquivo, txt ou json, com o nome de quem falou | `--conversa <id>`\* `--formato txt\|json` `--saida <arquivo>` `--sobrescrever` `--remetente <valor>` `--desde` `--ate` |
 | `malote midia <anexoId>` | Os **bytes** de um Anexo (foto, documento, áudio). Só existe no modo rede | `--saida <arquivo>`\* |
+| `malote indice-de-midia` | O **Índice de Mídia**: um HTML com um link por mídia da Conversa, com o rótulo `AAAAMMDD-NN-<conversa>`. Só existe no modo rede, e o HTML é **dado pessoal** (nome da Conversa e links): nasce com permissão 0600 e não leva o texto da Mensagem | `--conversa <id>`\* `--de AAAAMMDD` `--ate AAAAMMDD` `--tipo <tipo>` `--saida <arquivo.html>` `--sobrescrever` |
 
 Observações:
+
+- **`indice-de-midia`:** o `NN` do rótulo é a ordem da mídia na Conversa **naquele dia**, no fuso do Destino Remoto do Inquilino
+  (padrão `America/Cuiaba`), por instante, Mensagem e Anexo, com no mínimo 3 dígitos; `--tipo` só esconde linhas (não muda
+  o `NN`). O nome da Conversa no rótulo é o assunto (grupo) ou o nome (direta), sem acento e em minúsculas; sem nome, os
+  dígitos do telefone; sem telefone, `sem-nome-` e os 6 primeiros caracteres do id (o endereço opaco nunca aparece). A mídia
+  só no disco aparece como "pendente de envio"; o `nunca-obtido`, como "nao obtido". Com Destino Remoto e o Serviço de
+  Armazenamento fora do ar ou ocupado, o comando **sai 5 sem gravar**. Não sobrescreve arquivo existente sem
+  `--sobrescrever`; duas execuções sobre o mesmo Acervo dão o mesmo HTML.
 
 - **`--remetente`** é o **valor do Identificador** (LID ou JID, por exemplo
   `5511999990000@s.whatsapp.net`), com ou sem Pessoa; alcança todas as formas do mesmo endereço.
@@ -107,7 +116,12 @@ Observações:
   a conexão cair no meio, o parcial fica indicado e não há arquivo definitivo. Sem `--saida`, escreve na
   saída padrão. `--json` equivale a `--formato json`.
 - **`midia`:** vídeo é recusado com `415`; Anexo inexistente, de outro Inquilino ou sem bytes é `404`
-  (indistinguíveis, por desenho).
+  (indistinguíveis, por desenho). Se a cópia local do Anexo saiu e o arquivo está no armazenamento remoto, o servidor o
+  busca lá: acima do tamanho máximo da rota (50 MiB) a resposta é `413`; com o arquivo guardado no remoto e não lido
+  agora (serviço fora do ar, remoto indisponível, conteúdo que não confere) é `502`, que **não** significa que ele foi
+  perdido: tente de novo daqui a pouco. Com o serviço no limite de entregas é `503` (com `retry-after`): repita.
+  Passou do prazo, `504`. O arquivo é conferido inteiro antes de a primeira resposta sair, então o tempo até o primeiro
+  byte cresce com o tamanho do arquivo.
 - **`enviar --para <endereco>`** envia ao endereço que o Acervo guarda: o celular brasileiro pedido na outra forma de um
   número gravado sai pela gravada, e a resposta diz qual (`enderecoUsado` no `--json`). O número que o Acervo não conhece
   em nenhuma das duas formas sai como foi pedido, e a resposta avisa (`enderecoDesconhecido`). O destino é decidido pelo

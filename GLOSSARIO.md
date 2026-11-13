@@ -85,8 +85,28 @@ nem Conteúdo Bruto, e o `desfazer` dela não devolve o que chegou depois.
 *Evitar*: Conversa duplicada, Conversa órfã, mesclagem de Conversas, merge.
 
 **Destino de Mídia**:
-Onde os arquivos de Anexo de um Inquilino ficam — um caminho de sistema de arquivos, configurado por Inquilino. Caminho montado por rede é atendido como qualquer outro; transporte remoto próprio ficou fora do v1 (28/08/2026).
+Onde os arquivos de Anexo de um Inquilino ficam — um caminho de sistema de arquivos, configurado por Inquilino. Caminho montado por rede é atendido como qualquer outro. O transporte remoto não é um Destino de Mídia: é o **Destino Remoto**, que se acrescenta a ele.
 *Evitar*: storage, bucket, pasta de mídia, backend, volume.
+
+**Destino Remoto**:
+Para onde o Serviço de Armazenamento sobe os arquivos de Anexo de um Inquilino: o nome de um remoto que o rclone do host resolve, a pasta-base, a Janela de Cópia Local, a trava de apagar a cópia local e o ritmo do envio. No máximo um por Inquilino; acréscimo ao Destino de Mídia, não substituto.
+*Evitar*: nuvem, storage, bucket, backend, espelho.
+
+**Serviço de Armazenamento**:
+O processo à parte que sobe a mídia de um Inquilino para o Destino Remoto, verifica pelo hash de conteúdo e só então deixa a cópia local sair do disco. Só ele fala com o remoto e só ele escreve na Localização do Anexo.
+*Evitar*: sincronizador, backup, uploader.
+
+**Índice de Mídia**:
+O HTML que lista as mídias de uma Conversa, com um link por mídia para o arquivo no Destino Remoto, rotulada `AAAAMMDD-NN-<conversa>`. Substitui o nome legível no arquivo, que o produto nunca usa. Tem dado pessoal (o nome da Conversa e os links) e só se monta no cliente.
+*Evitar*: galeria, catálogo de arquivos.
+
+**Janela de Cópia Local**:
+Os dias que a cópia local de um Anexo fica no Destino de Mídia depois de verificada no Destino Remoto. Conta do instante da verificação. Distinta da **Política de Retenção**, que apaga Anexo por critério.
+*Evitar*: retenção local, TTL, cache.
+
+**Localização do Anexo**:
+Onde o arquivo de um Anexo está no Destino Remoto e o que prova que está lá inteiro (caminho remoto, identificador no remoto, tamanho, Impressão de Anexo verificada, instante da verificação). Base própria do Serviço de Armazenamento, fora do Acervo, refazível por listagem.
+*Evitar*: URL, link, endereço do arquivo, índice de arquivos.
 
 **Chave de Acesso**:
 Credencial que identifica e autoriza acesso por rede a exatamente um Inquilino.
@@ -207,7 +227,7 @@ O que se sabe sobre um Anexo — tipo, tamanho, nome original, duração, impres
 *Evitar*: metadados, header.
 
 **Presença**:
-O estado de um Anexo em disco: presente, nunca obtido ou descartado.
+O estado de um Anexo no Destino de Mídia: presente (no disco ou, depois de verificado, só no Destino Remoto), nunca obtido ou descartado.
 *Evitar*: status, disponibilidade, existe.
 
 **Transcrição**:
@@ -417,7 +437,7 @@ A remoção do arquivo de um Anexo do disco, preservando o Descritor.
 ## Relações
 
 - Uma instalação hospeda N **Inquilinos**, isolados entre si.
-- Um **Inquilino** tem exatamente 1 **Acervo**, 1 **Titular**, 1 **Destino de Mídia**, N **Configurações de Adaptador** e N **Chaves de Acesso**.
+- Um **Inquilino** tem exatamente 1 **Acervo**, 1 **Titular**, 1 **Destino de Mídia**, 0..1 **Destino Remoto**, N **Configurações de Adaptador** e N **Chaves de Acesso**.
 - Uma **Chave de Acesso** autoriza exatamente 1 **Inquilino**; uma **Chave de Operador** não autoriza **Inquilino** nenhum.
 - Uma instalação tem 1..N **Chaves de Operador**, e nunca zero.
 - Um **Operador** administra N **Inquilinos** e nunca lê o conteúdo do Acervo deles.

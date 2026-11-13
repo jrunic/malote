@@ -4,7 +4,8 @@ import { abrirRegistro } from '../registro/registro.js';
 import { verificarChaveDeAcesso } from '../registro/chave-de-acesso.js';
 import { abrirAcervoSomenteLeitura } from '../nucleo/acervo.js';
 import { atorDeAcesso, comAtor } from '../nucleo/ator.js';
-import { responder, type ContextoDaRequisicao } from './rotas.js';
+import { CONTENT_TYPE_POR_TIPO, responder, type ContextoDaRequisicao } from './rotas.js';
+import type { BuscadorDeMidiaRemota, ConsultorDeLocalizacoes, LocalizacaoParaOIndice } from '../nucleo/midia-remota.js';
 import type { InquilinoId } from '../nucleo/tipos.js';
 import { DespachanteDeLeituras, type ResultadoDoDespacho } from './despachante.js';
 import type { InstrucaoDeTeste } from './contrato-da-leitura.js';
@@ -103,6 +104,14 @@ export interface OpcoesDoServidor {
   /** Prazo de uma leitura desde a chegada, em ms (padrao 25.000). */
   prazoMs?: number;
   filaMaxima?: number;
+  /**
+   * Quem sabe pedir ao Servico de Armazenamento os bytes de um Anexo que ja nao esta no disco; a compoe
+   * `src/cli/servir.ts`, porque a rede nao conhece o Servico nem o armazenamento remoto. Ausente, a rota `midia` responde 404 como
+   * antes do Destino Remoto.
+   */
+  buscarMidiaRemota?: BuscadorDeMidiaRemota;
+  /** Quem sabe pedir ao Servico as Localizacoes de uma pagina do Indice de Midia (compoe `servir.ts`). Ausente: `servico` sai `indisponivel`. */
+  consultarLocalizacoes?: ConsultorDeLocalizacoes;
   /** A previa do destino de um Envio (#1376); a compoe `src/cli/servir.ts`, porque a regra do celular e do adaptador. */
   consultarDestinoDeEnvio?: ContextoDaRequisicao['consultarDestinoDeEnvio'];
   /** SO PARA TESTE: outro arquivo de worker, para provar que o `servir` recusa subir se ele nao carrega. */
@@ -119,7 +128,152 @@ export function criarServidor(opcoes: OpcoesDoServidor): ServidorDeLeitura {
     ...(opcoes.arquivoDoTrabalhador ? { arquivoDoTrabalhador: opcoes.arquivoDoTrabalhador } : {}),
     aoLogar: (linha) => process.stderr.write(`${linha}\n`),
   });
+  const prazoTotalMs = opcoes.prazoMs ?? PRAZO_PADRAO_MS;
+  // A busca no Servico roda na thread principal (o worker e sincrono), entao a RESERVA e a mesma do despachante, aqui:
+  // um Inquilino ocupa no maximo N-1 buscas, para sempre sobrar vez aos outros.
+  const tetoDeBuscasPorInquilino = Math.max(1, (opcoes.trabalhadores ?? TRABALHADORES_PADRAO) - 1);
+  const buscasPorInquilino = new Map<string, number>();
+
+  /** A resposta da rota `midia` quando o arquivo so esta no remoto: mesmo prazo desde a chegada, mesmo abandono. */
+  async function responderDaMidiaRemota(
+    res: ServerResponse,
+    inquilinoId: string,
+    pedido: { anexoId: string; tipo: string },
+    chegouEm: number,
+    sinal: AbortSignal,
+  ): Promise<void> {
+    if (opcoes.buscarMidiaRemota === undefined) {
+      res.writeHead(404, { 'content-type': 'application/json' });
+      res.end('');
+      return;
+    }
+    const restanteMs = prazoTotalMs - (Date.now() - chegouEm);
+    if (restanteMs <= 0) {
+      res.writeHead(504, { 'content-type': 'application/json' });
+      res.end('');
+      return;
+    }
+    const ocupadas = buscasPorInquilino.get(inquilinoId) ?? 0;
+    if (ocupadas >= tetoDeBuscasPorInquilino) {
+      res.writeHead(503, { 'content-type': 'application/json', 'retry-after': '1' });
+      res.end('');
+      return;
+    }
+    buscasPorInquilino.set(inquilinoId, ocupadas + 1);
+    // O prazo e DESTE servidor, nao de quem busca: um buscador que nao responde nao segura o pedido nem a reserva.
+    const estouro = new AbortController();
+    let relogio: NodeJS.Timeout | undefined;
+    let r;
+    try {
+      const prazo = new Promise<'prazo'>((resolver) => {
+        relogio = setTimeout(() => {
+          estouro.abort();
+          resolver('prazo');
+        }, restanteMs);
+      });
+      const busca = opcoes.buscarMidiaRemota({
+        inquilinoId,
+        anexoId: pedido.anexoId,
+        prazoMs: restanteMs,
+        sinal: AbortSignal.any([sinal, estouro.signal]),
+      });
+      busca.catch(() => undefined); // a perdedora da corrida nao pode virar rejeicao sem dono
+      const venceu = await Promise.race([busca, prazo]);
+      if (venceu === 'prazo') {
+        if (!res.destroyed && !res.headersSent) {
+          res.writeHead(504, { 'content-type': 'application/json' });
+          res.end('');
+        }
+        return;
+      }
+      r = venceu;
+    } finally {
+      clearTimeout(relogio);
+      const depois = (buscasPorInquilino.get(inquilinoId) ?? 1) - 1;
+      if (depois <= 0) buscasPorInquilino.delete(inquilinoId);
+      else buscasPorInquilino.set(inquilinoId, depois);
+    }
+    if (res.destroyed || res.headersSent) return;
+    switch (r.tipo) {
+      case 'bytes':
+        res.writeHead(200, { 'content-type': CONTENT_TYPE_POR_TIPO[pedido.tipo] ?? 'application/octet-stream' });
+        res.end(r.bytes);
+        return;
+      case 'sem-localizacao':
+        res.writeHead(404, { 'content-type': 'application/json' });
+        res.end('');
+        return;
+      case 'grande-demais':
+        res.writeHead(413, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ erro: `Anexo acima do tamanho maximo da rota de midia remota (${r.maximo} bytes)` }));
+        return;
+      case 'ocupado':
+        // O Servico esta no ar e no limite de entregas: repetir resolve, e a resposta diz isso (nao e "inacessivel").
+        res.writeHead(503, { 'content-type': 'application/json', 'retry-after': '1' });
+        res.end('');
+        return;
+      case 'inacessivel':
+      case 'servico-fora':
+        // O arquivo esta guardado no remoto e nao veio agora: nunca o 404 de "nao existe". Estourou o prazo, e 504.
+        res.writeHead(Date.now() - chegouEm >= prazoTotalMs ? 504 : 502, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ erro: 'arquivo guardado no remoto e inacessivel agora' }));
+        return;
+    }
+  }
+
+  /**
+   * O Indice de Midia: o worker ja montou a pagina (200, JSON); aqui se acrescenta a Localizacao de cada item. O Servico
+   * fora do ar, ocupado ou sem resposta no prazo NAO derruba a pagina: ela sai com `localizacao: null` e o campo
+   * `servico` diz por que, para o cliente nao montar um Indice sem link como se estivesse completo.
+   */
+  async function responderComLocalizacoes(
+    res: ServerResponse,
+    inquilinoId: string,
+    resposta: { status: number; cabecalhos: Record<string, string>; corpo: string | Uint8Array },
+    chegouEm: number,
+    sinal: AbortSignal,
+  ): Promise<void> {
+    const texto = typeof resposta.corpo === 'string' ? resposta.corpo : Buffer.from(resposta.corpo).toString('utf8');
+    const pagina = JSON.parse(texto) as { itens: Array<{ anexoId: string; localizacao?: LocalizacaoParaOIndice | null }>; servico?: string };
+    const restanteMs = prazoTotalMs - (Date.now() - chegouEm);
+    let servico = 'indisponivel';
+    let porAnexo: Record<string, LocalizacaoParaOIndice> = {};
+    if (opcoes.consultarLocalizacoes !== undefined && restanteMs > 0) {
+      const estouro = new AbortController();
+      let relogio: NodeJS.Timeout | undefined;
+      try {
+        const consulta = opcoes.consultarLocalizacoes({
+          inquilinoId,
+          anexoIds: pagina.itens.map((i) => i.anexoId),
+          prazoMs: restanteMs,
+          sinal: AbortSignal.any([sinal, estouro.signal]),
+        });
+        consulta.catch(() => undefined);
+        const prazo = new Promise<'prazo'>((resolver) => {
+          relogio = setTimeout(() => {
+            estouro.abort();
+            resolver('prazo');
+          }, restanteMs);
+        });
+        const venceu = await Promise.race([consulta, prazo]);
+        if (venceu === 'prazo') servico = 'inacessivel';
+        else if (venceu.tipo === 'localizacoes') {
+          servico = 'ok';
+          porAnexo = venceu.porAnexo;
+        } else servico = venceu.tipo === 'servico-fora' ? 'fora' : venceu.tipo === 'ocupado' ? 'ocupado' : 'inacessivel';
+      } finally {
+        clearTimeout(relogio);
+      }
+    }
+    if (res.destroyed || res.headersSent) return;
+    for (const item of pagina.itens) item.localizacao = porAnexo[item.anexoId] ?? null;
+    pagina.servico = servico;
+    res.writeHead(resposta.status, resposta.cabecalhos);
+    res.end(JSON.stringify(pagina));
+  }
+
   const servidor = createServer((req, res) => {
+    const chegouEm = Date.now();
     const valor = chaveApresentada(req);
     if (valor === null) {
       recusar(res);
@@ -168,7 +322,17 @@ export function criarServidor(opcoes: OpcoesDoServidor): ServidorDeLeitura {
           },
           abandono.signal,
         )
-        .then((r) => responderDeResultado(res, r))
+        .then((r) => {
+          if (r.tipo === 'resposta' && r.resposta.enriquecerComLocalizacoes === true) {
+            return responderComLocalizacoes(res, identidade.inquilinoId, r.resposta, chegouEm, abandono.signal);
+          }
+          if (r.tipo === 'resposta' && r.resposta.buscarNoServico !== undefined) {
+            const pedido = r.resposta.buscarNoServico;
+            return responderDaMidiaRemota(res, identidade.inquilinoId, pedido, chegouEm, abandono.signal);
+          }
+          responderDeResultado(res, r);
+          return undefined;
+        })
         .catch(() => responderDeResultado(res, { tipo: 'erro', mensagem: 'despacho' }));
       return;
     }

@@ -17,6 +17,7 @@ export const BANDEIRAS: ReadonlySet<string> = new Set([
   'ajuda',
   'versao',
   'confirmo',
+  'descartar-localizacao',
   'com-efeito',
   'reprocessar',
   'exposto',
@@ -34,6 +35,8 @@ export const VALORES_FECHADOS: Readonly<Record<string, readonly string[]>> = {
   coletiva: ['true', 'false'],
   fixada: ['true', 'false'],
   ordem: ['recentes', 'cronologica'],
+  'apagar-local': ['sim', 'nao'],
+  grupo: ['video', 'resto', 'todos'],
 };
 
 /**

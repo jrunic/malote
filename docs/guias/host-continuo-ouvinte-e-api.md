@@ -391,6 +391,95 @@ $CLI transcricao estado      --inquilino <id> --json   # contagem por estado + m
 O backfill do estoque de áudio já presente antes de instalar esta versão **não acontece
 sozinho** — só o áudio que chega depois entra na fila.
 
+## 7.1 Armazenamento remoto de mídia (opcional)
+
+A mídia fica no disco do host. Quando o disco aperta, o **Serviço de Armazenamento** a sobe para um **Destino
+Remoto** (qualquer remoto do `rclone`; o Google Drive é o primeiro), confere que o arquivo chegou inteiro pelo
+SHA-256 e só então deixa a cópia local sair, depois de uma **Janela** de dias. Sem o `rclone` declarado, o serviço
+não sobe e o resto do produto não muda. **Depois da Janela, o remoto é a única cópia**: leia o que isto exige antes
+de liberar o apagamento.
+
+**O que você precisa:**
+
+- O binário do `rclone` (o malote não o instala nem o baixa), com o remoto configurado **para o usuário do serviço** (por
+  arquivo de configuração do `rclone` ou por variáveis de ambiente dele; o produto só lê o que o `rclone` lê, e a senha
+  do `rclone rcd` que ele sobe vai por ambiente, nunca por argumento de linha de comando). O remoto precisa entregar
+  **SHA-256** (o Google Drive entrega; sem hash todo envio falha e nada é apagado).
+- No Google Drive, `drive-use-trash` ligado (é o padrão do `rclone`): é o que faz a cópia remota que a retenção
+  descarta ir para a lixeira, e não sumir.
+- Espaço no remoto, e a cota da API do remoto: o serviço reduz o ritmo no primeiro limite, mas a cota é do cliente
+  OAuth do `rclone`, e se ele for o mesmo de outra ferramenta, as duas a dividem.
+
+**Declare o Destino Remoto** (uma vez por Inquilino, com a Chave de Operador). O apagamento local nasce **travado**:
+
+```bash
+malote inquilino destino-remoto --chave <chave-de-operador> --inquilino <id> --remoto <nome-do-remoto> --pasta malote --janela-dias 7
+```
+
+**A unidade de serviço**, `/etc/systemd/system/malote-armazenamento.service`, **do mesmo usuário e com o mesmo estado** do
+`malote-servidor` (o canal entre os dois é um soquete Unix `armazenamento/servico.sock` na pasta de estado, com permissão
+0600; outro usuário não o alcança):
+
+```ini
+[Unit]
+Description=Malote Servico de Armazenamento
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=malote
+WorkingDirectory=/opt/malote
+Environment=MALOTE_RCLONE_BINARIO=/usr/bin/rclone
+ExecStart=/usr/bin/node --import tsx src/cli/index.ts armazenamento servir
+Restart=always
+RestartSec=30
+RestartPreventExitStatus=0 2 78
+KillMode=mixed
+TimeoutStopSec=300
+
+[Install]
+WantedBy=multi-user.target
+```
+
+- **Saída 1 reinicia** (o `rclone` que não sobe, a porta do `rcd` ocupada, uma exceção): por isso o `1` **não** está em
+  `RestartPreventExitStatus`, ao contrário do ouvinte. Saída 2 é configuração errada e não reinicia.
+- **`KillMode=mixed`**: o systemd manda o SIGTERM só ao processo principal. O serviço, ao parar, **termina as cópias em
+  curso** (até 4, por arquivo: não começa outra) e só então encerra o `rclone rcd`. Com o `KillMode` padrão o `rcd`
+  receberia o SIGTERM junto, sairia na hora e **abortaria a cópia em voo**: cada parada deixaria até 4 falhas de envio
+  registradas (sem perda de dado, mas com ruído no `estado`). `TimeoutStopSec` precisa cobrir a maior cópia em curso (um
+  vídeo de ~170 MiB leva ~45 s a 4 MB/s; um documento de centenas de MiB, minutos); passou dele, o systemd corta tudo e a
+  cópia só vale depois de verificada.
+- O `systemctl stop` ou o reinício de uma atualização, por isso, **demora** o quanto a maior cópia em curso levar.
+- O servidor sobe sem o serviço, mas **a mídia que só existe no remoto responde `502` e a transcrição desses áudios espera
+  até o serviço voltar** (nada se perde). Fora do systemd, `kill -9` do serviço deixa o `rcd` órfão segurando a porta.
+
+**Liberar o apagamento** (só depois de conferir uma amostra do que subiu, e nunca antes):
+
+```bash
+malote armazenamento estado --inquilino <id> --json          # enviados, pendentes, falhas, divergências
+malote armazenamento conferir --inquilino <id> --amostra 100 # com o serviço parado: relê do remoto e confere o hash
+malote inquilino destino-remoto --chave <chave-de-operador> --inquilino <id> --apagar-local sim --confirmo
+```
+
+A Janela conta do instante da verificação: o estoque inteiro só libera disco depois dos dias da Janela. E **apagar a
+cópia local tira só o nome do malote**: arquivo que tem outro nome no disco (um hardlink, como o estoque que veio de um
+backup) só devolve os bytes quando o outro nome também sai.
+
+**O que vigiar** (`armazenamento estado --json`; quem vigia decide o limiar, o produto só mede): `pendentes` e a idade do
+mais antigo, `falhos`, `divergencias` e `divergenciaMaisAntigaEm`, `verificacaoMaisAntigaComCopiaLocalEm` (com a trava
+fechada, é o relógio do "verificado há mais de 3 dias e ainda travado"), `ultimaConferenciaEm` (a conferência periódica
+roda?), e o espaço livre do volume enquanto o estoque sobe.
+
+**O Índice de Mídia** (`malote indice-de-midia --conversa <id> --saida <arquivo.html>`, no cliente) lista as mídias de uma
+Conversa com um link por mídia; abre só com o login do dono do Drive. O nome padrão do arquivo (`indice-de-midia-<nome-ou-telefone>.html`, no diretório corrente) **carrega o nome ou o telefone**: ele aparece em `ls` e no histórico do shell, fora da permissão 0600; use `--saida` com um nome neutro quando isso importar. **O HTML é dado pessoal** (o nome da Conversa e os
+links): o servidor não guarda cópia, o arquivo nasce com permissão 0600, e quem o guarda o trata como tal. Sem o Serviço no
+ar, o comando **não grava** (um Índice sem link não se passa por completo).
+
+**Limites declarados:** o link do Índice só existe para remoto que dá identificador de arquivo (o Google Drive); a mídia
+entregue pelo servidor sai até 50 MiB (`MALOTE_ARMAZENAMENTO_MAXIMO_DA_ENTREGA_MB`), e o primeiro byte chega depois de o
+arquivo inteiro ser lido e conferido; vídeo continua só pelo Índice (a rota recusa com `415`). Refazer a base da Localização:
+`malote armazenamento reconstruir --inquilino <id>`, com o serviço parado.
+
 ## 8. Ingestão contínua (opcional)
 
 Material que chega recorrentemente (exports de plataforma) entra por **Pastas de Entrada**

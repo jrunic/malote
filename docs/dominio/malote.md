@@ -40,7 +40,9 @@ Duas regras atravessam o modelo inteiro:
 - **Nome do Titular na Fonte** (objeto de valor, na Configuração) — como aquela Fonte chama o Titular dentro do material. Só existe onde a Fonte exige: o Instagram precisa dele para achar quem é "eu" na conversa direta.
 - **Pasta de Entrada** (objeto de valor, na Configuração) — o diretório local onde material novo daquela Configuração aparece.
 - **Natureza do Material** (objeto de valor, na Configuração) — **completo** ou **parcial**.
-- **Destino de Mídia** (entidade) — onde os arquivos de Anexo deste Inquilino ficam. Um caminho de sistema de arquivos, configurável por Inquilino; caminho montado por rede é atendido como qualquer outro. Transporte remoto próprio (objeto tipo S3) saiu do recorte v1 em 28/08/2026. O layout **sob** a raiz é decidido pelo núcleo e começa por um segmento do Inquilino.
+- **Destino de Mídia** (entidade) — onde os arquivos de Anexo deste Inquilino ficam. Um caminho de sistema de arquivos, configurável por Inquilino; caminho montado por rede é atendido como qualquer outro. O recorte v1 deixou o transporte remoto de fora (28/08/2026); a ADR `20261112-destino-remoto-de-midia-e-servico-de-armazenamento` o reabre como **acréscimo**, no Destino Remoto abaixo, e o Destino de Mídia continua local. O layout **sob** a raiz é decidido pelo núcleo e começa por um segmento do Inquilino.
+- **Destino Remoto** (entidade, opcional, no máximo um por Inquilino) — para onde o Serviço de Armazenamento sobe os arquivos de Anexo do Inquilino: o nome de um remoto que o rclone do host resolve, a pasta-base, a **Janela de Cópia Local** (dias que a cópia local fica depois de verificada no remoto), a trava de apagar a cópia local (nasce travada), o fuso do rótulo do Índice de Mídia e os limites de ritmo. É acréscimo ao Destino de Mídia, que continua sendo onde o arquivo chega. Credencial não é do modelo: o remoto é resolvido pelo rclone do host.
+- **Localização do Anexo** (objeto de valor, em base própria do Serviço de Armazenamento, fora do Acervo) — onde o arquivo de um Anexo está no Destino Remoto e o que prova que está lá inteiro: o caminho remoto (derivado do Anexo pelo núcleo), o identificador do arquivo no remoto quando existe, o tamanho, a Impressão de Anexo verificada, o instante da verificação e o instante em que a cópia local saiu. É cache refazível: perdida, volta por listagem do remoto.
 
 **Invariantes**
 
@@ -326,7 +328,7 @@ Duas regras atravessam o modelo inteiro:
 
 - **Anexo** (raiz) — o arquivo que acompanha a Mensagem. A mídia que a Fonte embrulha (o envelope de mídia associada, o cabeçalho de uma mensagem de modelo) também é Anexo da Mensagem, e quem a abre é o Adaptador.
 - **Descritor** (objeto de valor) — tipo, tamanho, nome original, duração, impressão de conteúdo. É o que se sabe sobre o arquivo.
-- **Presença** (objeto de valor) — o estado do arquivo em disco: presente, nunca obtido ou descartado.
+- **Presença** (objeto de valor) — o estado do arquivo no Destino de Mídia (no disco ou, depois de verificado, só no Destino Remoto): presente, nunca obtido ou descartado.
 - **Transcrição** (objeto de valor, opcional) — o texto extraído de um Anexo de tipo áudio por
   reconhecimento de fala local, com estado (pendente, concluída, falhou, fora-de-escopo — este
   último para o estoque já presente antes da Transcrição existir), o motor/modelo que a

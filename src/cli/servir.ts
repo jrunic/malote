@@ -4,6 +4,7 @@ import { abrirRegistro } from '../registro/registro.js';
 import { criarServidor, PRAZO_PADRAO_MS, TRABALHADORES_PADRAO } from '../rede/servidor.js';
 import { iniciarWorkerDeTranscricao } from './transcricao.js';
 import { configuracaoDoMotor } from './motor-de-transcricao.js';
+import { criarBuscadorDeMidiaRemota, criarConsultorDeLocalizacoes } from './cliente-do-armazenamento.js';
 import type { Ambiente } from './index.js';
 import { consultarDestinoDeWhatsapp } from '../adaptadores/whatsapp/resolver-celular.js';
 
@@ -63,7 +64,11 @@ export async function servir(argumentos: string[], ambiente: AmbienteDeServico):
   // acontece aqui, e nao na disputa entre workers. Os workers o abrem somente-leitura.
   abrirRegistro(ambiente.dados).fechar();
 
+  // O unico caminho do servidor e da transcricao ate o remoto: o canal local do Servico de Armazenamento.
+  const buscarMidiaRemota = criarBuscadorDeMidiaRemota(ambiente.estado);
   const servidor = (ambiente.criar ?? criarServidor)({
+    buscarMidiaRemota,
+    consultarLocalizacoes: criarConsultorDeLocalizacoes(ambiente.estado),
     dados: ambiente.dados,
     porta,
     trabalhadores,
@@ -99,7 +104,7 @@ export async function servir(argumentos: string[], ambiente: AmbienteDeServico):
   );
   const intervaloMs = Number(process.env['MALOTE_TRANSCRICAO_INTERVALO_MS'] ?? String(INTERVALO_DEFAULT_MS));
   const pararWorker = (ambiente.iniciarWorker ?? iniciarWorkerDeTranscricao)(
-    { dados: ambiente.dados, env: process.env, escrever },
+    { dados: ambiente.dados, env: process.env, escrever, buscarMidiaRemota },
     Number.isInteger(intervaloMs) && intervaloMs > 0 ? intervaloMs : INTERVALO_DEFAULT_MS,
   );
 

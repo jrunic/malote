@@ -28,7 +28,7 @@ Acervo (ver [cliente × servidor](cliente-e-agente.md)).
 | variável | o que guarda | se perder |
 |---|---|---|
 | `XDG_DATA_HOME` (default `~/.local/share`) | `malote/` com Registro, Acervos, mídia, material — **dado** | não se reconstrói |
-| `XDG_STATE_HOME` (default `~/.local/state`) | `malote/` com vínculo do ouvinte, fila de derrame, guarda de descartes, último evento — **estado** | em parte se refaz; o vínculo é credencial e o derrame e a guarda não se recriam |
+| `XDG_STATE_HOME` (default `~/.local/state`) | `malote/` com vínculo do ouvinte, fila de derrame, guarda de descartes, último evento e, com Destino Remoto, `armazenamento/` — **estado** | em parte se refaz; o vínculo é credencial e o derrame e a guarda não se recriam |
 | `MALOTE_HOME` | **tudo** numa pasta só | — |
 
 Regras que o produto segue (e testa):
@@ -64,6 +64,11 @@ A pergunta que separa as duas categorias: *se eu apagar isto, o que se perde?*
   gerar; e `descartados.jsonl` (a guarda do evento cru, deliberadamente fora do backup). Os três
   últimos têm conversa em claro. Copie o vínculo (por **cópia**, nunca movendo) quando for mexer
   na instalação.
+- **`XDG_STATE_HOME/malote/armazenamento/` (com Destino Remoto) se refaz, e não vai para backup.** Ali vivem a base da
+  **Localização do Anexo** de cada Inquilino (`<inquilino>.db`), o arquivo de trava do serviço (`servico.pid`) e o soquete do
+  canal local (`servico.sock`). A base é cache: se ela se perde, `malote armazenamento reconstruir` a refaz pela listagem do
+  remoto, conferida contra o Acervo (com o serviço parado). **O que não se refaz é o remoto:** depois da Janela, os arquivos
+  que já saíram do disco só existem lá, e o backup do Acervo não os inclui. O backup deles é o do próprio remoto.
 
 ### Cópia consistente do Acervo
 

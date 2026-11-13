@@ -19,8 +19,8 @@ test('o Registro de forma anterior sobe para a v8 e ganha a tabela de enderecos 
     criarRegistroNoPiso(raiz);
     const r = abrirRegistro(raiz);
     try {
-      assert.equal(VERSAO_SCHEMA_REGISTRO, 8);
-      assert.equal(r.versaoDoSchema(), 8);
+      assert.ok(VERSAO_SCHEMA_REGISTRO >= 8, 'a tabela entrou na v8 e as formas seguintes a mantem');
+      assert.equal(r.versaoDoSchema(), VERSAO_SCHEMA_REGISTRO);
       const colunas = r.db.prepare('PRAGMA table_info(enderecos_da_conta)').all() as Array<{ name: string }>;
       assert.deepEqual(
         colunas.map((c) => c.name),

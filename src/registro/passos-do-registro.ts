@@ -176,6 +176,40 @@ const ENDERECOS_DA_CONTA_PASSO_V8: PassoDeMigracao = {
   aplicar: (db) => db.exec(ENDERECOS_DA_CONTA_V8),
 };
 
+/**
+ * DDL CONGELADO da forma 9. Duplica o texto do schema fresco DE PROPOSITO.
+ */
+const DESTINOS_REMOTOS_V9 = `
+  CREATE TABLE destinos_remotos_de_midia (
+    inquilino_id         TEXT PRIMARY KEY,
+    remoto               TEXT NOT NULL,
+    pasta_base           TEXT NOT NULL,
+    janela_dias          INTEGER NOT NULL CHECK (janela_dias BETWEEN 0 AND 365),
+    apagar_local         INTEGER NOT NULL CHECK (apagar_local IN (0, 1)),
+    fuso                 TEXT NOT NULL,
+    transferencias       INTEGER NOT NULL CHECK (transferencias BETWEEN 1 AND 32),
+    chamadas_por_segundo INTEGER NOT NULL CHECK (chamadas_por_segundo BETWEEN 1 AND 50),
+    configurado_em       TEXT NOT NULL,
+    FOREIGN KEY (inquilino_id) REFERENCES inquilinos(id) ON DELETE CASCADE
+  );
+`;
+
+/**
+ * O Destino Remoto de Midia entra em instalacao que ja existe (ciclo 49).
+ *
+ * Tabela nova, e nao a natureza do Destino de Midia ampliada: o Destino local
+ * continua sendo onde o arquivo chega, entao a natureza segue `local` e nao ha
+ * CHECK para recriar. Nasce vazia — sem Destino Remoto o Servico de
+ * Armazenamento nao faz nada.
+ */
+const DESTINO_REMOTO_V9: PassoDeMigracao = {
+  de: 8,
+  para: 9,
+  descricao: 'acrescenta o Destino Remoto de Midia por Inquilino',
+  tabelasNovas: ['destinos_remotos_de_midia'],
+  aplicar: (db) => db.exec(DESTINOS_REMOTOS_V9),
+};
+
 export const PASSOS_DO_REGISTRO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CHAVES_DE_ACESSO,
@@ -183,6 +217,7 @@ export const PASSOS_DO_REGISTRO: readonly PassoDeMigracao[] = [
   PASTA_DE_ENTRADA_V6,
   CATALOGO_PREFERIDO_V7,
   ENDERECOS_DA_CONTA_PASSO_V8,
+  DESTINO_REMOTO_V9,
 ];
 
 export const PLANO_DO_REGISTRO: PlanoDeMigracao = {

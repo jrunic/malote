@@ -193,18 +193,25 @@ for (const pasta of SEM_ADAPTADOR) {
  * mora no adaptador, e injeta-lo pelo `servir` obrigaria todo servidor de teste a passa-lo. O modulo nao importa nada,
  * entao a rede nao herda dependencia nenhuma. Qualquer outro import de adaptador em `src/rede/` reprova.
  */
-const ADAPTADOR_PURO_PERMITIDO_NA_REDE = join('src', 'adaptadores', 'whatsapp', 'destinatario-de-envio.ts');
+const ADAPTADORES_PUROS_PERMITIDOS_NA_REDE = [
+  join('src', 'adaptadores', 'whatsapp', 'destinatario-de-envio.ts'),
+  // O telefone de um endereco (rotulo do Indice de Midia): a regra e da Fonte, e o nucleo nao a nomeia.
+  join('src', 'adaptadores', 'whatsapp', 'telefone-do-endereco.ts'),
+];
 
-test('src/rede so importa de adaptador o predicado puro de destinatario de Envio, e ele nao importa nada', () => {
+test('src/rede so importa de adaptador os modulos puros permitidos (destinatario de Envio e telefone do endereco), e eles nao importam nada', () => {
   const violacoes: string[] = [];
+  const permitidos = ADAPTADORES_PUROS_PERMITIDOS_NA_REDE.map((p) => p.replace(/\.ts$/, '.js').split('\\').join('/'));
   for (const arquivo of arquivosDe(join('src', 'rede'))) {
     for (const alvo of importados(arquivo)) {
       if (!alcancaAdaptadores(alvo)) continue;
-      if (!alvo.endsWith('adaptadores/whatsapp/destinatario-de-envio.js')) violacoes.push(`${arquivo} importa ${alvo}`);
+      if (!permitidos.some((p) => alvo.endsWith(p.replace(/^src\//, '')))) violacoes.push(`${arquivo} importa ${alvo}`);
     }
   }
   assert.deepEqual(violacoes, [], violacoes.join('; '));
-  assert.deepEqual(importados(ADAPTADOR_PURO_PERMITIDO_NA_REDE), [], 'o modulo permitido na rede nao pode importar nada');
+  for (const puro of ADAPTADORES_PUROS_PERMITIDOS_NA_REDE) {
+    assert.deepEqual(importados(puro), [], `o modulo permitido na rede nao pode importar nada: ${puro}`);
+  }
   // Anti-vacuidade: a rota de Envio de fato usa o modulo (senao a excecao nao teria o que guardar).
   const usos = arquivosDe(join('src', 'rede')).flatMap((a) => importados(a)).filter((alvo) => alcancaAdaptadores(alvo));
   assert.ok(usos.length >= 1, 'o detector nao viu nenhum import de adaptador em src/rede');
@@ -262,6 +269,73 @@ test('so motor-de-transcricao.ts referencia as variaveis do motor de transcricao
     const fonte = readFileSync(arquivo, 'utf8');
     for (const variavel of VARIAVEIS_DO_MOTOR) {
       if (fonte.includes(variavel)) violacoes.push(`${arquivo} referencia ${variavel}`);
+    }
+  }
+  assert.deepEqual(violacoes, [], violacoes.join('; '));
+});
+
+const VARIAVEIS_DO_RCLONE = ['MALOTE_RCLONE_BINARIO', 'MALOTE_RCLONE_PORTA'];
+const PORTAO_DO_RCLONE = join('src', 'cli', 'motor-de-armazenamento.ts');
+
+test('so motor-de-armazenamento.ts referencia as variaveis do rclone', () => {
+  const violacoes: string[] = [];
+  for (const arquivo of [
+    ...arquivosDe('src/nucleo'),
+    ...arquivosDe('src/registro'),
+    ...arquivosDe('src/adaptadores'),
+    ...arquivosDe('src/rede'),
+    ...arquivosDe('src/cli'),
+  ]) {
+    if (arquivo === PORTAO_DO_RCLONE) continue;
+    const fonte = readFileSync(arquivo, 'utf8');
+    for (const variavel of VARIAVEIS_DO_RCLONE) {
+      if (fonte.includes(variavel)) violacoes.push(`${arquivo} referencia ${variavel}`);
+    }
+  }
+  assert.deepEqual(violacoes, [], violacoes.join('; '));
+});
+
+test('so o portao do rclone cria processo para o rclone', () => {
+  const violacoes: string[] = [];
+  for (const arquivo of arquivosDe('src')) {
+    if (arquivo === PORTAO_DO_RCLONE) continue;
+    const fonte = readFileSync(arquivo, 'utf8');
+    if (/rclone/i.test(fonte) && /node:child_process/.test(fonte)) violacoes.push(arquivo);
+  }
+  assert.deepEqual(violacoes, [], `fora do portao: ${violacoes.join('; ')}`);
+});
+
+test('o nucleo, o registro, os adaptadores e a rede nao importam o Servico de Armazenamento nem o portao do rclone', () => {
+  const violacoes: string[] = [];
+  for (const arquivo of [
+    ...arquivosDe('src/nucleo'),
+    ...arquivosDe('src/registro'),
+    ...arquivosDe('src/adaptadores'),
+    ...arquivosDe('src/rede'),
+  ]) {
+    for (const alvo of importados(arquivo)) {
+      if (/(^|\/)(servico-de-armazenamento|motor-de-armazenamento|armazenamento|entrega-de-anexo|servidor-do-servico|cliente-do-armazenamento)\.js$/.test(alvo)) {
+        violacoes.push(`${arquivo} importa ${alvo}`);
+      }
+    }
+  }
+  assert.deepEqual(violacoes, [], violacoes.join('; '));
+});
+
+test('o canal local do Servico: o cliente so e importado por servir.ts, e o servidor do soquete so por armazenamento.ts', () => {
+  const quemImporta = (alvo: RegExp): string[] =>
+    arquivosDe('src').filter((arquivo) => importados(arquivo).some((i) => alvo.test(i)));
+  assert.deepEqual(quemImporta(/(^|\/)cliente-do-armazenamento\.js$/), [join('src', 'cli', 'servir.ts')]);
+  assert.deepEqual(quemImporta(/(^|\/)servidor-do-servico\.js$/), [join('src', 'cli', 'armazenamento.ts')]);
+});
+
+test('o servidor de leitura e a transcricao nao sabem do rclone: so o tipo da porta (nucleo/midia-remota) os liga ao Servico', () => {
+  const violacoes: string[] = [];
+  for (const arquivo of [join('src', 'rede', 'servidor.ts'), join('src', 'rede', 'rotas.ts'), join('src', 'cli', 'transcricao.ts')]) {
+    const fonte = readFileSync(arquivo, 'utf8');
+    if (/rclone/i.test(fonte)) violacoes.push(`${arquivo} cita o rclone`);
+    for (const alvo of importados(arquivo)) {
+      if (/motor-de-armazenamento|servico-de-armazenamento|entrega-de-anexo/.test(alvo)) violacoes.push(`${arquivo} importa ${alvo}`);
     }
   }
   assert.deepEqual(violacoes, [], violacoes.join('; '));

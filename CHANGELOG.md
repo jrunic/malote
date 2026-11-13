@@ -23,6 +23,21 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [0.50.0] — 2026-11-13
+
+**A forma do Registro sobe de v8 para v9** (só acrescenta uma tabela, a do Destino Remoto de Mídia); o Acervo não muda (segue v32). Não acrescenta dependência npm; o `rclone` é um binário que o Operador declara, opcional, como o `whisper.cpp`. **A migração do Registro não tem volta**: antes de atualizar, guarde uma cópia consistente do Registro (e dos Acervos). A recepção ao vivo não muda.
+
+### Adicionado
+
+- **Destino Remoto de Mídia e Serviço de Armazenamento** (`malote armazenamento servir`, `passada`, `apagar-local`, `conferir`, `reconstruir`, `estado`; `inquilino destino-remoto`). O Inquilino pode ter um remoto do `rclone` (o Google Drive é o primeiro); o serviço sobe cada arquivo, confere o SHA-256 contra a Impressão de Anexo e só então deixa a cópia local sair, depois de uma Janela de dias contada da verificação e com uma trava que nasce fechada. O arquivo que o remoto perde ou muda vira divergência visível, e o serviço nunca apaga duplicata nem divergência. O estado em JSON traz a medição crua para quem vigia. Nenhum arquivo é renomeado.
+- **O servidor entrega a mídia que só existe no remoto.** `GET /midia/<id>` e `malote midia` buscam no Serviço de Armazenamento, por um canal local (soquete Unix 0600), o Anexo cuja cópia local saiu; o serviço confere o tamanho e o SHA-256 antes de entregar. Sinais novos: `413` acima de 50 MiB, `502` quando o arquivo está guardado no remoto e não veio agora, `503` com o serviço no limite. A transcrição de áudio lê pelo serviço quando o Anexo tem Localização.
+- **`malote indice-de-midia` (Índice de Mídia).** Um HTML por Conversa com um link por mídia (o endereço do arquivo no Google Drive), rotulado `AAAAMMDD-NN-<conversa>` (data no fuso do Inquilino, ordem da mídia no dia). O HTML é montado no cliente, tem dado pessoal e nasce com permissão 0600; com o serviço fora do ar o comando não grava. Rota `GET /conversas/<id>/indice-de-midia`.
+
+### Alterado
+
+- **A conferência de disco, `operador espaco`, `acervo relatar` e a retenção olham a Localização:** a mídia que só existe no remoto não é acusada como perda, o relatório separa o que está em disco do que só existe no remoto, e a retenção só conta como liberado o que saiu do disco.
+- **`acervo recriar` recusa um Inquilino com Localização no Destino Remoto**, e só segue com `--descartar-localizacao` (que descarta a base da Localização e deixa a Operação dizer o que foi descartado; os arquivos no remoto não são apagados).
+
 ## [0.49.0] — 2026-11-10
 
 Não muda a forma do Acervo (segue v32) nem a do Registro, e não acrescenta dependência. A recepção ao vivo não muda: há um comando novo que une a Conversa partida.

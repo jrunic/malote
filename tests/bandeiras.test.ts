@@ -28,7 +28,7 @@ test('as bandeiras nao pedem valor, e nao consomem o argumento seguinte', () => 
     assert.equal(validarBandeiras(['conversas', `--${b}`, '--inquilino', 'x']), undefined, b);
   }
   assert.deepEqual([...BANDEIRAS].sort(), [
-    'ajuda', 'com-conteudo', 'com-efeito', 'confirmo', 'ensaio', 'exposto', 'historico', 'incluir-absorvidas', 'json',
+    'ajuda', 'com-conteudo', 'com-efeito', 'confirmo', 'descartar-localizacao', 'ensaio', 'exposto', 'historico', 'incluir-absorvidas', 'json',
     'ponto-de-partida', 'reprocessar', 'sobrescrever', 'tudo', 'versao',
   ]);
 });

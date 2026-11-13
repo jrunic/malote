@@ -49,6 +49,8 @@ export function executarLeitura(pedido: PedidoDeLeitura): RespostaDeLeitura {
     return { status: 503, cabecalhos: { 'content-type': 'application/json' }, corpo: '' };
   }
 
+  let buscarNoServico: { anexoId: string; tipo: string } | undefined;
+  let enriquecer = false;
   try {
     comAtor(atorDeAcesso(pedido.chaveId), () => {
       aplicarInstrucao(pedido.instrucao, res);
@@ -56,13 +58,23 @@ export function executarLeitura(pedido: PedidoDeLeitura): RespostaDeLeitura {
         acervo,
         identidade: { chaveId: pedido.chaveId, inquilinoId: pedido.inquilinoId },
         dados: pedido.dados,
+        pedirMidiaRemota: (anexo) => {
+          buscarNoServico = anexo;
+        },
+        pedirLocalizacoes: () => {
+          enriquecer = true;
+        },
       });
     });
   } finally {
     acervo.fechar();
   }
 
+  // A rota nao respondeu e pediu o remoto: a resposta e da thread principal (o worker e sincrono).
+  if (buscarNoServico !== undefined) {
+    return { status: 0, cabecalhos: {}, corpo: '', buscarNoServico };
+  }
   const resposta = capturar();
   if (resposta === undefined) throw new Error('a rota nao respondeu');
-  return resposta;
+  return enriquecer ? { ...resposta, enriquecerComLocalizacoes: true } : resposta;
 }

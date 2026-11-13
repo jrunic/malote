@@ -69,6 +69,8 @@ import {
 } from '../registro/registro.js';
 import { abrirAcervo } from '../nucleo/acervo.js';
 import { recriarAcervo } from '../nucleo/recriar.js';
+import { lerLocalizacaoParaConsumidor } from './localizacao-para-consumidores.js';
+import { descartarLocalizacao } from '../registro/localizacao.js';
 import { versaoDoAcervoEmDisco } from '../nucleo/acervo.js';
 import { passosAplicados } from '../nucleo/migracao.js';
 import {
@@ -92,6 +94,12 @@ import {
   destinoAcessivel,
   lerDestinoDeMidia,
 } from '../registro/destino-midia.js';
+import {
+  PADROES_DO_DESTINO_REMOTO,
+  configurarDestinoRemotoDeMidia,
+  inteiroDaOpcao,
+  lerDestinoRemotoDeMidia,
+} from '../registro/destino-remoto.js';
 import { trazerArquivos } from '../adaptadores/whatsapp/trazer.js';
 import { extrairDuracoesDoBruto } from '../adaptadores/whatsapp/duracao-do-anexo.js';
 import { reprocessarMidiaNuncaObtida } from '../adaptadores/whatsapp/reprocessar-midia.js';
@@ -174,6 +182,8 @@ import { emOperacao, lerOperacao, listarOperacoes } from '../nucleo/trilha.js';
 import { conferirSeDesfazivel, desfazerOperacao } from '../nucleo/desfazer.js';
 import { caminhosDaConta, ouvir } from './ouvir.js';
 import { enderecoRecusado, servir } from './servir.js';
+import { executarIndiceDeMidia } from './indice-de-midia.js';
+import { armazenamento, servicoVivo as servicoDeArmazenamentoVivo } from './armazenamento.js';
 import { lerUltimoEvento } from './ultimo-evento.js';
 import { lerSinalDaConexao } from './sinal-da-conexao.js';
 import { lerEstadoDosPendentes } from './estado-dos-pendentes.js';
@@ -349,6 +359,7 @@ Administracao (exige --chave a partir da primeira Chave criada):
   malote inquilino criar         --chave <valor> --titular <nome>
   malote inquilino listar        --chave <valor> [--json]
   malote inquilino destino       --chave <valor> --inquilino <id> --endereco <caminho>
+  malote inquilino destino-remoto --chave <valor> --inquilino <id> [--remoto <nome>] [--pasta <pasta-base>] [--janela-dias <n>] [--apagar-local sim|nao [--confirmo]] [--fuso <zona>] [--transferencias <n>] [--chamadas-por-segundo <n>]
   malote acesso chave emitir     --chave <valor> --inquilino <id>
   malote acesso chave listar     --chave <valor> --inquilino <id>
   malote acesso chave revogar    --chave <valor> --id <id>
@@ -402,6 +413,12 @@ Titular (nao exige chave enquanto nao houver rede):
   malote servir     --porta <n> [--endereco <ip>] [--exposto] [--trabalhadores <n>] [--prazo <segundos>]
                                         (leituras em workers, 4 por padrao, com prazo de 25 s; passou do prazo: 504;
                                          um Inquilino ocupa no maximo N-1 workers e metade da fila; as escritas ficam na thread principal)
+  malote armazenamento servir
+  malote armazenamento passada --inquilino <id> [--grupo video|resto|todos] [--limite <n>] [--ensaio]
+  malote armazenamento apagar-local --inquilino <id>
+  malote armazenamento conferir --inquilino <id> [--amostra <n>]
+  malote armazenamento reconstruir --inquilino <id> [--confirmo]
+  malote armazenamento estado --inquilino <id> [--json]
   malote conversas  --inquilino <id> [--pessoa <id>] [--configuracao <apelido>] [--fixada true] [--limite <n>] [--antes <cursor>] [--tudo] [--json]
                                         (a primeira pagina de 500; ha mais: o aviso traz o cursor para --antes, e --tudo percorre as paginas)
   malote mensagens  --inquilino <id> [--conversa <id>] [--desde D] [--ate D] [--fonte <nome>] [--direcao enviada|recebida] [--remetente <valor>] [--limite <n>] [--json]
@@ -419,6 +436,8 @@ Titular (nao exige chave enquanto nao houver rede):
                                          Conversa grande: use --saida, o modo local sem ela acumula a saida em memoria)
   malote midia <id> --saida <arquivo>   (bytes do Anexo — SO em modo rede;
                                           local, leia 'caminho' de 'mensagens --json')
+  malote indice-de-midia --conversa <id> [--de AAAAMMDD] [--ate AAAAMMDD] [--tipo <tipo>] [--saida <arquivo.html>] [--sobrescrever]
+                                        (HTML com um link por midia da Conversa — SO em modo rede; o arquivo tem dado pessoal)
   malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--conversa <id>] [--desde <data>] [--ate <data>] [--limite <n>] [--ordem recentes|cronologica] [--json]
                     (sem --ordem, as mais recentes; diz quando o limite cortou resultados — padrao 100)
   malote pessoas        --inquilino <id> --texto <nome>        (resolve texto em Pessoa; com MALOTE_SERVIDOR: por REDE, sem --inquilino)
@@ -430,7 +449,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote conversas sem-endereco --inquilino <id> [--limite <n>]
   malote conversa presenca      --inquilino <id> --conversa <id> --em <AAAA-MM-DD> [--json]
   malote acervo migrar  --inquilino <id>              (sobe a forma do Acervo, e diz o que fez)
-  malote acervo recriar --inquilino <id> --confirmo   (apaga o Acervo E os arquivos deste Inquilino)
+  malote acervo recriar --inquilino <id> --confirmo [--descartar-localizacao]   (apaga o Acervo E os arquivos deste Inquilino; com Destino Remoto recusa sem --descartar-localizacao)
   malote pessoa listar      --inquilino <id> [--incluir-absorvidas]
   malote pessoa propostas   --inquilino <id> [--produtor telefone|email|nome|multiplos-enderecos] [--limite <n>] [--json]
   malote pessoa propostas aplicar --inquilino <id> [--produtor <nome>] [--com-efeito --confirmo] [--json]
@@ -538,6 +557,7 @@ export const COMANDOS_DE_REDE = new Set([
   'anexos',
   'etiquetas',
   'chegadas',
+  'indice-de-midia',
 ]);
 
 /**
@@ -566,6 +586,7 @@ export async function executarConsultaRede(
     if (valor !== undefined) q.set(nome, valor);
   }
   if (grupo === 'conversas') return consultarConversasPorRede(argumentos, rede, q);
+  if (grupo === 'indice-de-midia') return executarIndiceDeMidia(argumentos, rede);
   let caminho: string;
   if (grupo === 'buscar') caminho = '/buscar';
   else if (grupo === 'pessoas') caminho = '/pessoas';
@@ -1050,6 +1071,11 @@ function executarComAtor(
         return 2;
       }
       escrever('O servidor nao roda por esta porta. Invoque `malote servir` no terminal.');
+      return 2;
+    }
+
+    if (grupo === 'armazenamento') {
+      escrever('O armazenamento remoto nao roda por esta porta. Invoque `malote armazenamento` no terminal.');
       return 2;
     }
 
@@ -1630,6 +1656,64 @@ function executarComAtor(
       return 0;
     }
 
+    if (grupo === 'inquilino' && sub === 'destino-remoto') {
+      autorizarAdministracao(registro, chave, identidade);
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino.');
+      const atual = lerDestinoRemotoDeMidia(registro, inquilino);
+      // `--remoto` so e exigido na primeira declaracao: depois, o que nao vem fica como esta gravado.
+      const remotoDado = opcao(argumentos, 'remoto');
+      if (remotoDado === undefined && atual === undefined) {
+        throw new Error('Informe --remoto (a primeira declaracao precisa do nome do remoto).');
+      }
+      const remoto = remotoDado ?? atual?.remoto ?? '';
+      const pastaBase = opcao(argumentos, 'pasta') ?? atual?.pastaBase ?? PADROES_DO_DESTINO_REMOTO.pastaBase;
+      const alvoMudou = atual !== undefined && (remoto !== atual.remoto || pastaBase !== atual.pastaBase);
+      const apagarLocalDado = opcao(argumentos, 'apagar-local');
+      // Liberar o apagamento local (de travado a liberado, ou de novo depois de trocar o alvo) exige --confirmo.
+      if (apagarLocalDado === 'sim' && (atual?.apagarLocal !== true || alvoMudou) && !temBandeira(argumentos, 'confirmo')) {
+        throw new Error(
+          'Liberar o apagamento local faz o servico apagar a copia local depois de verificar o remoto: ' +
+            'confira uma amostra no remoto e repita com --confirmo.',
+        );
+      }
+      let apagarLocal =
+        apagarLocalDado === undefined ? (atual?.apagarLocal ?? PADROES_DO_DESTINO_REMOTO.apagarLocal) : apagarLocalDado === 'sim';
+      // Trocar o remoto ou a pasta-base com a trava liberada a RELIGA: a autorizacao era para o alvo antigo.
+      const religou = alvoMudou && apagarLocalDado === undefined && apagarLocal;
+      if (religou) apagarLocal = false;
+      const destino = {
+        remoto,
+        pastaBase,
+        janelaDias:
+          inteiroDaOpcao(opcao(argumentos, 'janela-dias'), '--janela-dias') ??
+          atual?.janelaDias ??
+          PADROES_DO_DESTINO_REMOTO.janelaDias,
+        apagarLocal,
+        fuso: opcao(argumentos, 'fuso') ?? atual?.fuso ?? PADROES_DO_DESTINO_REMOTO.fuso,
+        transferencias:
+          inteiroDaOpcao(opcao(argumentos, 'transferencias'), '--transferencias') ??
+          atual?.transferencias ??
+          PADROES_DO_DESTINO_REMOTO.transferencias,
+        chamadasPorSegundo:
+          inteiroDaOpcao(opcao(argumentos, 'chamadas-por-segundo'), '--chamadas-por-segundo') ??
+          atual?.chamadasPorSegundo ??
+          PADROES_DO_DESTINO_REMOTO.chamadasPorSegundo,
+      };
+      configurarDestinoRemotoDeMidia(registro, inquilino, destino);
+      escrever(
+        `Destino Remoto do Inquilino ${inquilino}: remoto ${destino.remoto}, pasta ${destino.pastaBase === '' ? '(raiz)' : destino.pastaBase}, ` +
+          `janela de copia local ${destino.janelaDias} dia(s), apagamento local: ${destino.apagarLocal ? 'LIBERADO' : 'travado'}.`,
+      );
+      if (religou) {
+        escrever(
+          'A trava foi RELIGADA porque o remoto ou a pasta-base mudou. Libere de novo com --apagar-local sim --confirmo ' +
+            'depois de conferir uma amostra no remoto novo.',
+        );
+      }
+      return 0;
+    }
+
     if (grupo === 'material' && sub === 'listar') {
       const inquilino = opcao(argumentos, 'inquilino');
       if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
@@ -1766,9 +1850,18 @@ function executarComAtor(
           `Anexos: ${r.total.anexos}  (${r.total.anexosPresentes} presentes, ` +
             `${r.total.anexosNuncaObtidos} nunca obtidos, ${r.total.anexosDescartados} descartados)`,
         );
+        const localizacao = lerLocalizacaoParaConsumidor(ambiente.estado, inquilino, acervo);
         escrever(
           `Bytes: ${r.total.bytesPresentes} presentes de ${r.total.bytesDeclarados} declarados`,
         );
+        if (localizacao !== undefined && !localizacao.ilegivel && localizacao.bytesSoNoRemoto > 0) {
+          escrever(
+            `  ${localizacao.bytesSoNoRemoto} desses bytes ja so existem no Destino Remoto (a copia local saiu)`,
+          );
+        }
+        if (localizacao?.ilegivel === true) {
+          escrever('  A base da Localizacao esta em outra forma: rode "malote armazenamento reconstruir" antes de confiar na conferencia do disco.');
+        }
         if (r.total.anexosSemTamanhoDeclarado > 0) {
           escrever(
             `  ${r.total.anexosSemTamanhoDeclarado} Anexos sem tamanho declarado pelo material`,
@@ -1794,7 +1887,9 @@ function executarComAtor(
         if (destino === undefined) {
           escrever('Destino de Midia nao configurado: nao ha disco a conferir.');
         } else {
-          const d = conferirDisco(acervo, destino.endereco);
+          const d = conferirDisco(acervo, destino.endereco, {
+            ...(localizacao !== undefined && !localizacao.ilegivel ? { comLocalizacao: localizacao.anexoIds } : {}),
+          });
           if (!d.conferiu) {
             escrever('Destino inacessivel: NAO foi possivel conferir o disco.');
           } else {
@@ -1803,6 +1898,9 @@ function executarComAtor(
                 `${d.arquivosSemAnexo.length} arquivos sem Anexo, ` +
                 `${d.tamanhoDivergente.length} com tamanho diferente`,
             );
+            if (d.soNoRemoto.length > 0) {
+              escrever(`  ${d.soNoRemoto.length} presentes sem arquivo local, mas com Localizacao no Destino Remoto (nao e perda)`);
+            }
           }
         }
       } finally {
@@ -1838,10 +1936,16 @@ function executarComAtor(
         }
         try {
           const r = relatarAcervo(acervo, { agora: Date.now() });
-          // Contagens e bytes. Nunca titulo de Conversa, nunca texto.
+          // Com Destino Remoto, parte dos Anexos presentes ja so existe la: "em disco" e o presente MENOS o que so esta no remoto.
+          const localizacao = lerLocalizacaoParaConsumidor(ambiente.estado, i.id, acervo);
+          const soNoRemoto = localizacao !== undefined && !localizacao.ilegivel ? localizacao.bytesSoNoRemoto : 0;
+          const emDisco = r.total.bytesPresentes - soNoRemoto;
+          // Contagens e bytes. Nunca titulo de Conversa, nunca texto. Sem `Math.max`: um resultado negativo e dado
+          // inconsistente (a Localizacao diz mais bytes so no remoto que os presentes) e aparece como esta.
           escrever(
-            `${i.id}  ${r.total.anexos} anexos  ${r.total.bytesPresentes} bytes em disco  ` +
-              `${r.total.bytesDeclarados} declarados`,
+            `${i.id}  ${r.total.anexos} anexos  ${emDisco} bytes em disco  ` +
+              `${r.total.bytesDeclarados} declarados` +
+              (soNoRemoto > 0 ? `  ${soNoRemoto} bytes so no remoto` : ''),
           );
         } finally {
           acervo.fechar();
@@ -3834,6 +3938,9 @@ function executarComAtor(
           comEfeito: true,
         });
         escrever(`Descartados: ${r.descartados} Anexos (${r.bytesLiberados} bytes liberados)`);
+        if (r.semArquivoLocal > 0) {
+          escrever(`  ${r.semArquivoLocal} ja nao tinham arquivo local (com Destino Remoto, o Servico de Armazenamento apaga a copia remota)`);
+        }
         if (r.falhas > 0) escrever(`  ${r.falhas} falharam e seguem presentes`);
       } finally {
         acervoDaPolitica.fechar();
@@ -3906,6 +4013,28 @@ function executarComAtor(
         );
       }
 
+      // Com Destino Remoto, os arquivos que ja saíram do disco so existem la, e recriar deixaria o remoto orfao em silencio.
+      // So se recria com a escolha explicita de descartar a Localizacao junto.
+      const localizacaoDoRecriar = lerLocalizacaoParaConsumidor(ambiente.estado, inquilino);
+      // A base existe, ainda que sem envios (so falhas ou divergencias): ela aponta para Anexos que o recriar apaga, e e
+      // descartada junto. Recusar so vale quando ha Localizacao (ou ela esta ilegivel): ai o remoto ficaria orfao.
+      const existeBaseDaLocalizacao = localizacaoDoRecriar !== undefined;
+      const temLocalizacao = localizacaoDoRecriar?.ilegivel === true || (localizacaoDoRecriar?.enviados ?? 0) > 0;
+      if (temLocalizacao && !temBandeira(argumentos, 'descartar-localizacao')) {
+        throw new Error(
+          `Este Inquilino tem Anexos com Localizacao no Destino Remoto. Recriar apagaria o Acervo e os arquivos locais, ` +
+            'e a midia que so existe no remoto ficaria orfa, sem nada que a reivindique. ' +
+            'Se e isso mesmo, repita com --descartar-localizacao: a base da Localizacao e descartada junto ' +
+            '(os arquivos no remoto NAO sao apagados pelo malote). Com o Servico de Armazenamento parado.',
+        );
+      }
+      if (existeBaseDaLocalizacao) {
+        const vivo = servicoDeArmazenamentoVivo(ambiente.estado);
+        if (vivo !== undefined) {
+          throw new Error(`O Servico de Armazenamento esta no ar (pid ${vivo}): pare-o antes de recriar (a base da Localizacao dele e descartada junto).`);
+        }
+      }
+
       if (!temBandeira(argumentos, 'confirmo')) {
         escrever(
           'Recriar apaga o Acervo deste Inquilino por inteiro, e tambem os arquivos ' +
@@ -3933,12 +4062,26 @@ function executarComAtor(
             antes: null,
             depois: new Date().toISOString(),
           });
+          // O mapa dos arquivos no remoto vai embora: a Operacao diz que existiu e quanto, para o remoto nao ficar orfao em silencio.
+          if (existeBaseDaLocalizacao) {
+            op.valor({
+              tabela: 'localizacoes',
+              chave: inquilino,
+              campo: 'descartada',
+              antes: localizacaoDoRecriar.ilegivel ? 'ilegivel' : `${localizacaoDoRecriar.enviados} Anexos com Localizacao`,
+              depois: null,
+            });
+          }
         },
       );
 
       recriarAcervo(join(ambiente.dados, 'acervos'), inquilino, {
         ...(destinoDoRecriar !== undefined ? { destino: destinoDoRecriar.endereco } : {}),
       });
+      if (existeBaseDaLocalizacao) {
+        descartarLocalizacao(ambiente.estado, inquilino);
+        escrever('A base da Localizacao deste Inquilino foi descartada; os arquivos no Destino Remoto continuam la.');
+      }
       escrever(`Acervo do Inquilino ${inquilino} recriado. Reimporte o material.`);
       if (destinoDoRecriar !== undefined) {
         escrever('Os arquivos de Anexo deste Inquilino tambem foram apagados.');
@@ -4097,6 +4240,9 @@ if (ehPontoDeEntrada(import.meta, process.argv[1])) {
     void ouvir(argumentos, ambiente).then(encerrar);
   } else if (argumentos[0] === 'servir') {
     void servir(argumentos, ambiente).then(encerrar);
+  } else if (argumentos[0] === 'armazenamento') {
+    // Processo proprio, como `servir` e `ouvir`: o Servico de Armazenamento nao termina sozinho.
+    void armazenamento(argumentos, ambiente).then(encerrar);
   } else if (ehReprocessarQueGravaEdicao(argumentos)) {
     // #1246: os dois reprocessos gravam edicao, e o decodificador do portao e assincrono. Carregado antes de despachar,
     // para `executar()` continuar sincrona.

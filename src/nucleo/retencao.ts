@@ -1,4 +1,4 @@
-import { rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import type { Acervo } from './acervo.js';
 import { DestinoInacessivelError } from './arquivo-de-anexo.js';
@@ -135,7 +135,10 @@ export interface OpcoesDeAplicar extends OpcoesDeProjecao {
 export interface RelatorioDeAplicacao {
   comEfeito: boolean;
   descartados: number;
+  /** Bytes que de fato SAIRAM do disco: o arquivo que ja nao estava la (so no remoto) nao conta. */
   bytesLiberados: number;
+  /** Descartados cujo arquivo local ja nao existia (a copia so estava no remoto): o Servico apaga a copia remota. */
+  semArquivoLocal: number;
   falhas: number;
   projecao: ProjecaoDeRetencao;
 }
@@ -160,7 +163,7 @@ export function aplicarRetencao(acervo: Acervo, opcoes: OpcoesDeAplicar): Relato
   const comEfeito = opcoes.comEfeito === true;
 
   if (!comEfeito) {
-    return { comEfeito: false, descartados: 0, bytesLiberados: 0, falhas: 0, projecao };
+    return { comEfeito: false, descartados: 0, bytesLiberados: 0, semArquivoLocal: 0, falhas: 0, projecao };
   }
 
   // O gate vem ANTES de qualquer escrita, e vale so para o caminho com efeito.
@@ -174,6 +177,7 @@ export function aplicarRetencao(acervo: Acervo, opcoes: OpcoesDeAplicar): Relato
 
   let descartados = 0;
   let bytesLiberados = 0;
+  let semArquivoLocal = 0;
   let falhas = 0;
 
   for (const alvo of selecionarAlvos(acervo, opcoes)) {
@@ -190,6 +194,9 @@ export function aplicarRetencao(acervo: Acervo, opcoes: OpcoesDeAplicar): Relato
     // `force: true` nao estoura em arquivo ausente, e isso so e seguro porque
     // o gate acima ja garantiu que o Destino esta acessivel. Sem ele, um
     // Destino desmontado faria TODO alvo parecer ja apagado.
+    // O arquivo estava no disco? Com Destino Remoto a copia local pode ja ter saido: isso nao e falha, e o que o Servico
+    // ainda faz com a copia remota; mas os bytes so contam como liberados se o arquivo existia.
+    const existia = existsSync(absoluto);
     try {
       rmSync(absoluto, { force: true });
     } catch {
@@ -208,8 +215,9 @@ export function aplicarRetencao(acervo: Acervo, opcoes: OpcoesDeAplicar): Relato
     // para sempre sobre o que "descartado" significa.
     descartarAnexo(acervo, alvo.id, { politica: marca, quando: opcoes.agora });
     descartados += 1;
-    bytesLiberados += alvo.tamanho ?? 0;
+    if (existia) bytesLiberados += alvo.tamanho ?? 0;
+    else semArquivoLocal += 1;
   }
 
-  return { comEfeito: true, descartados, bytesLiberados, falhas, projecao };
+  return { comEfeito: true, descartados, bytesLiberados, semArquivoLocal, falhas, projecao };
 }

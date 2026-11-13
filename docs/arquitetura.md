@@ -57,6 +57,7 @@ Roadmap, spec, plano e diário: documentos internos do autor, fora deste reposit
 | `src/adaptadores/instagram/` | A Fonte Instagram: material exportado |
 | `src/adaptadores/contatos/` | O catálogo de contatos (vCard): propõe identidade por telefone, e-mail e nome |
 | `src/rede/` | A superfície de rede. `servidor.ts` autentica e despacha; `rotas.ts` tem as rotas; `despachante.ts`, `leitura.ts`, `contrato-da-leitura.ts` e `trabalhador-de-leitura.ts` rodam cada `GET` num worker, com prazo (ver abaixo). **Exceção declarada (#1323):** `rotas.ts` importa do adaptador do WhatsApp só o `destinatario-de-envio.ts`, um módulo puro sem import, para recusar o que não é destinatário de Envio; um teste de fronteira só permite esse |
+| `src/cli/` (Serviço de Armazenamento) | `armazenamento.ts` (o comando e o laço), `servico-de-armazenamento.ts` (as passadas), `motor-de-armazenamento.ts` (o **único** que alcança o `rclone`), `entrega-de-anexo.ts` + `servidor-do-servico.ts` (o canal local que entrega o Anexo conferido), `cliente-do-armazenamento.ts` (quem pede, usado só por `servir.ts`) e `caminho-do-soquete.ts`. O núcleo e a rede só conhecem o tipo de `nucleo/midia-remota.ts` |
 | `src/cli/` | Os comandos: `index.ts` (despacho e `--ajuda`), `cliente.ts` (o cliente HTTP, **só aqui**, nunca em `src/rede/`), `servir.ts`, `ouvir.ts`, `exportar.ts`, `anexos-texto.ts`, `identificar-texto.ts`, `detalhar-texto.ts`, `edicoes-texto.ts`, `transcricao.ts`, `varredura.ts`, `chegadas.ts` (o pedido e o texto de `chegadas`) e outros. O estado do ouvinte: `derrame.ts`, `descartes.ts` (o contador), `guarda-de-descartes.ts` (o evento cru), `ultimo-evento.ts`, `sinal-da-conexao.ts` e `aparagem-do-diario.ts` (o aparador do Diário de Chegadas, que o ouvinte arma depois da subida). As flags: `bandeiras.ts` (as que não levam valor) e `recorte-de-midia.ts` (o recorte do `midia reprocessar`). `encerrar.ts` é quem encerra o processo. **Só `src/cli/` compõe mais de uma Fonte** |
 | `tests/` | `node --test`; `tests/ajuda/` guarda as fixtures e os servidores de teste |
 
@@ -78,6 +79,15 @@ As fronteiras que têm teste (`tests/fronteira-de-dependencia.test.ts`, `tests/s
    `responder` de `rotas.ts` → a resposta volta à thread principal. Prazo de 25 s (`504`), fila de 64
    (`503`), exceção ou queda do worker é `500`. Detalhe e motivo: a
    [ADR das leituras em workers](decisoes/20261004-leituras-do-servidor-em-workers-com-prazo.md).
+   **Mídia que só existe no remoto.** A rota `midia` não responde nesse caso: o worker devolve `buscarNoServico` e a
+   thread principal pede o Anexo ao Serviço de Armazenamento por um canal local (soquete Unix 0600, em
+   `armazenamento/servico.sock`), com o mesmo prazo, a reserva e o abandono; o Serviço confere a Localização, o
+   Anexo e o SHA-256 dos bytes antes de entregar. `413`, `502` e `503` distinguem "grande demais", "guardado no remoto
+   e não veio agora" e "Serviço ocupado" de "não existe". A transcrição usa o mesmo canal. O **Índice de Mídia**
+   (`GET /conversas/<id>/indice-de-midia`) usa o mesmo mecanismo: o worker monta a página (instante, tipo, tamanho,
+   Presença, e o nome e o fuso do rótulo), e a thread principal acrescenta a Localização de cada Anexo pedindo-a ao
+   Serviço (`POST /localizacoes` no canal); o HTML é montado no cliente (`malote indice-de-midia`). Detalhe e motivo: a
+   [ADR da rota de mídia remota](decisoes/20261112-rota-de-midia-remota-responde-da-thread-principal.md).
 3. **Escrita por rede.** `POST /transcricoes/solicitar` e `POST /envios/solicitar` rodam na thread principal,
    fora do worker, com conexão própria.
 4. **Exportar.** `malote exportar` pagina Mensagens em ordem cronológica, nomeia os autores por
