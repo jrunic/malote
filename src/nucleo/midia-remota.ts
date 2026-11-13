@@ -33,3 +33,29 @@ export interface PedidoDeBusca {
 
 /** A porta que `servir` injeta no servidor e na transcricao: o que sabe falar com o Servico. */
 export type BuscadorDeMidiaRemota = (pedido: PedidoDeBusca) => Promise<ResultadoDaBusca>;
+
+/** O que o Indice de Midia precisa saber da Localizacao de um Anexo: o id do arquivo no remoto (link) e se a copia local saiu. */
+export interface LocalizacaoParaOIndice {
+  idNoRemoto: string | null;
+  copiaLocalRemovida: boolean;
+}
+
+export type ResultadoDasLocalizacoes =
+  | { tipo: 'localizacoes'; porAnexo: Record<string, LocalizacaoParaOIndice> }
+  | { tipo: 'servico-fora' }
+  | { tipo: 'ocupado' }
+  | { tipo: 'inacessivel'; motivo: string };
+
+export interface PedidoDeLocalizacoes {
+  /** O Inquilino que o servidor VERIFICOU pela Chave. */
+  inquilinoId: string;
+  anexoIds: string[];
+  prazoMs: number;
+  sinal?: AbortSignal | undefined;
+}
+
+/** A porta que `servir` injeta no servidor para o Indice de Midia: so o Servico abre a base da Localizacao. */
+export type ConsultorDeLocalizacoes = (pedido: PedidoDeLocalizacoes) => Promise<ResultadoDasLocalizacoes>;
+
+/** Quantos Anexos uma consulta de Localizacoes aceita (uma pagina do Indice). */
+export const MAXIMO_DE_ANEXOS_POR_CONSULTA_DE_LOCALIZACOES = 500;

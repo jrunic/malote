@@ -1,5 +1,13 @@
 import { request } from 'node:http';
-import type { BuscadorDeMidiaRemota, PedidoDeBusca, ResultadoDaBusca } from '../nucleo/midia-remota.js';
+import type {
+  BuscadorDeMidiaRemota,
+  ConsultorDeLocalizacoes,
+  LocalizacaoParaOIndice,
+  PedidoDeBusca,
+  PedidoDeLocalizacoes,
+  ResultadoDaBusca,
+  ResultadoDasLocalizacoes,
+} from '../nucleo/midia-remota.js';
 import { caminhoDoSoquete } from './caminho-do-soquete.js';
 
 /**
@@ -68,5 +76,61 @@ function buscar(soquete: string, pedido: PedidoDeBusca): Promise<ResultadoDaBusc
       return concluir({ tipo: 'inacessivel', motivo: `canal com o servico: ${erro.message}` });
     });
     req.end();
+  });
+}
+
+/** Pede ao Servico as Localizacoes de uma pagina do Indice de Midia. O Servico fora do ar e um resultado, nao uma excecao. */
+export function criarConsultorDeLocalizacoes(estado: string): ConsultorDeLocalizacoes {
+  const soquete = caminhoDoSoquete(estado);
+  return (pedido: PedidoDeLocalizacoes) => consultar(soquete, pedido);
+}
+
+function consultar(soquete: string, pedido: PedidoDeLocalizacoes): Promise<ResultadoDasLocalizacoes> {
+  return new Promise((resolver) => {
+    let concluido = false;
+    const concluir = (r: ResultadoDasLocalizacoes): void => {
+      if (concluido) return;
+      concluido = true;
+      clearTimeout(relogio);
+      resolver(r);
+    };
+    const corpo = JSON.stringify({ inquilino: pedido.inquilinoId, anexos: pedido.anexoIds });
+    const req = request(
+      {
+        socketPath: soquete,
+        path: '/localizacoes',
+        method: 'POST',
+        agent: false,
+        headers: { 'content-type': 'application/json', 'content-length': String(Buffer.byteLength(corpo)) },
+        ...(pedido.sinal === undefined ? {} : { signal: pedido.sinal }),
+      },
+      (res) => {
+        const pedacos: Buffer[] = [];
+        res.on('data', (p: Buffer) => pedacos.push(p));
+        res.on('error', () => concluir({ tipo: 'inacessivel', motivo: 'a conexao com o servico caiu na leitura' }));
+        res.on('end', () => {
+          const status = res.statusCode ?? 0;
+          let json: { localizacoes?: Record<string, LocalizacaoParaOIndice>; motivo?: string; erro?: string } = {};
+          try {
+            json = JSON.parse(Buffer.concat(pedacos).toString('utf8')) as typeof json;
+          } catch {
+            // corpo que nao e JSON: so o status vale
+          }
+          if (status === 200 && json.localizacoes !== undefined) return concluir({ tipo: 'localizacoes', porAnexo: json.localizacoes });
+          if (status === 503) return concluir({ tipo: json.erro === 'ocupado' ? 'ocupado' : 'servico-fora' });
+          return concluir({ tipo: 'inacessivel', motivo: json.motivo ?? json.erro ?? `o servico respondeu ${status}` });
+        });
+      },
+    );
+    const relogio = setTimeout(() => {
+      req.destroy();
+      concluir({ tipo: 'inacessivel', motivo: 'o servico nao respondeu no prazo' });
+    }, Math.max(1, pedido.prazoMs));
+    req.on('error', (erro: NodeJS.ErrnoException) => {
+      if (pedido.sinal?.aborted === true) return concluir({ tipo: 'inacessivel', motivo: 'pedido abandonado' });
+      if (erro.code === 'ENOENT' || erro.code === 'ECONNREFUSED') return concluir({ tipo: 'servico-fora' });
+      return concluir({ tipo: 'inacessivel', motivo: `canal com o servico: ${erro.message}` });
+    });
+    req.end(corpo);
   });
 }
