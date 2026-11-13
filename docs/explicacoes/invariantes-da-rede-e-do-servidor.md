@@ -120,6 +120,11 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   da porta (`nucleo/midia-remota`) os liga a ele, e `servir.ts` é quem o compõe (`tests/fronteira-de-dependencia.test.ts`).
   O Serviço no limite de entregas é `503` com `retry-after` (repetir resolve), não `502`. O serviço fora do ar e o remoto que não entrega são `502`, nunca `404`: "não existe" e "existe e não veio agora" são
   sinais diferentes. Motivo: o `404` mandaria o agente concluir que a mídia se perdeu.
+- **O Índice de Mídia não monta HTML no servidor nem guarda cópia dele (#1489).** A rota entrega a página compacta (sem texto da
+  Mensagem, sem nome de arquivo, sem miniatura) e, com Destino Remoto, a Localização de cada Anexo, que só o Serviço lê. O
+  Serviço fora do ar, ocupado ou sem resposta no prazo **não derruba a página**: ela sai com `localizacao: null` e o campo
+  `servico` diz por quê, e o cliente **não grava** um Índice sem link como se estivesse completo. O rótulo é função pura do
+  Acervo e do fuso do Inquilino (o `NN` não depende de filtro nem de quem pede), e o HTML é dado pessoal.
 - **O que o serviço entrega, ele confere (#1489).** Os bytes saem só se a Localização é do Destino Remoto de agora, o Anexo
   é o que ela verificou e os bytes têm o tamanho e o SHA-256 dela; qualquer divergência é `inacessível`. Um arquivo
   corrompido no remoto nunca chega ao agente como se fosse a mídia.

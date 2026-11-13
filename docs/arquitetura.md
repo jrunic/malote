@@ -83,7 +83,10 @@ As fronteiras que têm teste (`tests/fronteira-de-dependencia.test.ts`, `tests/s
    thread principal pede o Anexo ao Serviço de Armazenamento por um canal local (soquete Unix 0600, em
    `armazenamento/servico.sock`), com o mesmo prazo, a reserva e o abandono; o Serviço confere a Localização, o
    Anexo e o SHA-256 dos bytes antes de entregar. `413`, `502` e `503` distinguem "grande demais", "guardado no remoto
-   e não veio agora" e "Serviço ocupado" de "não existe". A transcrição usa o mesmo canal. Detalhe e motivo: a
+   e não veio agora" e "Serviço ocupado" de "não existe". A transcrição usa o mesmo canal. O **Índice de Mídia**
+   (`GET /conversas/<id>/indice-de-midia`) usa o mesmo mecanismo: o worker monta a página (instante, tipo, tamanho,
+   Presença, e o nome e o fuso do rótulo), e a thread principal acrescenta a Localização de cada Anexo pedindo-a ao
+   Serviço (`POST /localizacoes` no canal); o HTML é montado no cliente (`malote indice-de-midia`). Detalhe e motivo: a
    [ADR da rota de mídia remota](decisoes/20261112-rota-de-midia-remota-responde-da-thread-principal.md).
 3. **Escrita por rede.** `POST /transcricoes/solicitar` e `POST /envios/solicitar` rodam na thread principal,
    fora do worker, com conexão própria.

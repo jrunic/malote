@@ -97,7 +97,7 @@ O processo à parte que sobe a mídia de um Inquilino para o Destino Remoto, ver
 *Evitar*: sincronizador, backup, uploader.
 
 **Índice de Mídia**:
-O HTML que lista as mídias de uma Conversa, com um link por mídia para o arquivo no Destino Remoto. Substitui o nome legível no arquivo, que o produto nunca usa.
+O HTML que lista as mídias de uma Conversa, com um link por mídia para o arquivo no Destino Remoto, rotulada `AAAAMMDD-NN-<conversa>`. Substitui o nome legível no arquivo, que o produto nunca usa. Tem dado pessoal (o nome da Conversa e os links) e só se monta no cliente.
 *Evitar*: galeria, catálogo de arquivos.
 
 **Janela de Cópia Local**:
