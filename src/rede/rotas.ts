@@ -25,6 +25,15 @@ import {
   type PaginaDeConversas,
 } from '../nucleo/pagina-de-conversas.js';
 import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
+import {
+  cursorDaProximaPaginaDoIndice,
+  decodificarCursorDoIndice,
+  fontesDoNomeDaConversa,
+  paginaDoIndiceDeMidia,
+} from '../nucleo/indice-de-midia.js';
+import { diaValido, fimDoDiaNoFuso, inicioDoDiaNoFuso } from '../nucleo/rotulo-de-midia.js';
+import { telefoneDoEndereco } from '../adaptadores/whatsapp/telefone-do-endereco.js';
+import { PADROES_DO_DESTINO_REMOTO } from '../registro/destino-remoto.js';
 import { abrirAcervo, abrirAcervoSomenteLeitura, versaoDoAcervoEmDisco, VERSAO_SCHEMA_ACERVO } from '../nucleo/acervo.js';
 import { resolverDestinoPorConversa, type DestinoPorConversa } from '../nucleo/destino-de-envio.js';
 import { enderecoEhDestinatarioDeEnvio } from '../adaptadores/whatsapp/destinatario-de-envio.js';
@@ -74,6 +83,8 @@ export interface ContextoDaRequisicao {
    * Servico de Armazenamento (o worker e sincrono). Quem o define e `executarLeitura`; ausente, a rota responde 404.
    */
   pedirMidiaRemota?: (anexo: { anexoId: string; tipo: string }) => void;
+  /** A resposta do Indice de Midia precisa das Localizacoes, que so o Servico le: a thread principal as acrescenta. */
+  pedirLocalizacoes?: () => void;
   /**
    * Para onde um Envio ao endereco iria (a previa do aviso, #1376). Quem compoe e `src/cli/servir.ts`: a rede nao
    * conhece a regra do celular. Ausente, a resposta do Envio nao leva aviso de endereco.
@@ -1313,6 +1324,81 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       registro.fechar();
     }
     json(res, 200, { autores: autoresDaConversa(ctx.acervo, conversaId, precedencia) });
+    return;
+  }
+
+  if (partes.length === 3 && partes[0] === 'conversas' && partes[2] === 'indice-de-midia') {
+    // #1489: uma pagina do Indice de Midia de UMA Conversa. A rota diz o que o rotulo precisa (fuso, nome, telefone) e, com
+    // Destino Remoto, pede a thread principal que acrescente a Localizacao de cada Anexo (so o Servico a le).
+    const conversaId = partes[1] as ConversaId;
+    const q = url.searchParams;
+    let limite = 500;
+    const limiteTexto = q.get('limite');
+    if (limiteTexto !== null) {
+      limite = Number(limiteTexto);
+      if (!Number.isInteger(limite) || limite < 1 || limite > 500) {
+        json(res, 400, { erro: 'limite precisa ser um inteiro de 1 a 500' });
+        return;
+      }
+    }
+    let cursor;
+    const proximoToken = q.get('proximo');
+    if (proximoToken !== null) {
+      cursor = decodificarCursorDoIndice(proximoToken);
+      if (cursor === undefined) {
+        json(res, 400, { erro: 'cursor invalido — devolva o token `proximo` tal como recebeu' });
+        return;
+      }
+    }
+    for (const nome of ['de', 'ate']) {
+      const v = q.get(nome);
+      if (v !== null && !diaValido(v)) {
+        json(res, 400, { erro: `${nome} precisa ser um dia que existe, no formato AAAAMMDD` });
+        return;
+      }
+    }
+    const registro = abrirRegistroSomenteLeitura(ctx.dados);
+    let precedencia: PrecedenciaDeNome;
+    let fuso: string = PADROES_DO_DESTINO_REMOTO.fuso;
+    let destinoRemoto = false;
+    try {
+      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+      const remoto = lerDestinoRemotoDeMidia(registro, ctx.identidade.inquilinoId);
+      if (remoto !== undefined) {
+        fuso = remoto.fuso;
+        destinoRemoto = true;
+      }
+    } finally {
+      registro.fechar();
+    }
+    const fontes = fontesDoNomeDaConversa(ctx.acervo, conversaId, precedencia);
+    if (fontes === undefined) {
+      naoEncontrado(res);
+      return;
+    }
+    const de = q.get('de');
+    const ate = q.get('ate');
+    const itens = paginaDoIndiceDeMidia(ctx.acervo, {
+      conversaId,
+      limite,
+      ...(cursor === undefined ? {} : { cursor }),
+      ...(de === null ? {} : { de: inicioDoDiaNoFuso(de, fuso) }),
+      ...(ate === null ? {} : { ate: fimDoDiaNoFuso(ate, fuso) }),
+    });
+    const proximo = cursorDaProximaPaginaDoIndice(itens, limite);
+    json(res, 200, {
+      conversa: {
+        id: conversaId,
+        nome: fontes.nome,
+        assunto: fontes.assunto,
+        telefone: fontes.enderecoDaDireta === null ? null : telefoneDoEndereco(fontes.enderecoDaDireta),
+      },
+      fuso,
+      destinoRemoto,
+      itens,
+      ...(proximo === undefined ? {} : { proximo }),
+    });
+    if (destinoRemoto && itens.length > 0) ctx.pedirLocalizacoes?.();
     return;
   }
 

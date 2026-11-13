@@ -193,18 +193,25 @@ for (const pasta of SEM_ADAPTADOR) {
  * mora no adaptador, e injeta-lo pelo `servir` obrigaria todo servidor de teste a passa-lo. O modulo nao importa nada,
  * entao a rede nao herda dependencia nenhuma. Qualquer outro import de adaptador em `src/rede/` reprova.
  */
-const ADAPTADOR_PURO_PERMITIDO_NA_REDE = join('src', 'adaptadores', 'whatsapp', 'destinatario-de-envio.ts');
+const ADAPTADORES_PUROS_PERMITIDOS_NA_REDE = [
+  join('src', 'adaptadores', 'whatsapp', 'destinatario-de-envio.ts'),
+  // O telefone de um endereco (rotulo do Indice de Midia): a regra e da Fonte, e o nucleo nao a nomeia.
+  join('src', 'adaptadores', 'whatsapp', 'telefone-do-endereco.ts'),
+];
 
-test('src/rede so importa de adaptador o predicado puro de destinatario de Envio, e ele nao importa nada', () => {
+test('src/rede so importa de adaptador os modulos puros permitidos (destinatario de Envio e telefone do endereco), e eles nao importam nada', () => {
   const violacoes: string[] = [];
+  const permitidos = ADAPTADORES_PUROS_PERMITIDOS_NA_REDE.map((p) => p.replace(/\.ts$/, '.js').split('\\').join('/'));
   for (const arquivo of arquivosDe(join('src', 'rede'))) {
     for (const alvo of importados(arquivo)) {
       if (!alcancaAdaptadores(alvo)) continue;
-      if (!alvo.endsWith('adaptadores/whatsapp/destinatario-de-envio.js')) violacoes.push(`${arquivo} importa ${alvo}`);
+      if (!permitidos.some((p) => alvo.endsWith(p.replace(/^src\//, '')))) violacoes.push(`${arquivo} importa ${alvo}`);
     }
   }
   assert.deepEqual(violacoes, [], violacoes.join('; '));
-  assert.deepEqual(importados(ADAPTADOR_PURO_PERMITIDO_NA_REDE), [], 'o modulo permitido na rede nao pode importar nada');
+  for (const puro of ADAPTADORES_PUROS_PERMITIDOS_NA_REDE) {
+    assert.deepEqual(importados(puro), [], `o modulo permitido na rede nao pode importar nada: ${puro}`);
+  }
   // Anti-vacuidade: a rota de Envio de fato usa o modulo (senao a excecao nao teria o que guardar).
   const usos = arquivosDe(join('src', 'rede')).flatMap((a) => importados(a)).filter((alvo) => alcancaAdaptadores(alvo));
   assert.ok(usos.length >= 1, 'o detector nao viu nenhum import de adaptador em src/rede');

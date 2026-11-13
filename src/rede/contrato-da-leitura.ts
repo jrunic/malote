@@ -40,6 +40,11 @@ export interface RespostaDeLeitura {
    * (`status` 0 e corpo vazio nao valem). So a rota `midia` o usa.
    */
   buscarNoServico?: { anexoId: string; tipo: string };
+  /**
+   * A resposta (200, JSON) esta pronta, mas cada item tem de ser enriquecido com a Localizacao do Anexo, que so o Servico
+   * de Armazenamento le: a thread principal a pede ao Servico e a acrescenta. So a rota do Indice de Midia o usa.
+   */
+  enriquecerComLocalizacoes?: true;
 }
 
 export type MensagemDoTrabalhador =

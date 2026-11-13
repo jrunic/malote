@@ -5,7 +5,7 @@ import { verificarChaveDeAcesso } from '../registro/chave-de-acesso.js';
 import { abrirAcervoSomenteLeitura } from '../nucleo/acervo.js';
 import { atorDeAcesso, comAtor } from '../nucleo/ator.js';
 import { CONTENT_TYPE_POR_TIPO, responder, type ContextoDaRequisicao } from './rotas.js';
-import type { BuscadorDeMidiaRemota } from '../nucleo/midia-remota.js';
+import type { BuscadorDeMidiaRemota, ConsultorDeLocalizacoes, LocalizacaoParaOIndice } from '../nucleo/midia-remota.js';
 import type { InquilinoId } from '../nucleo/tipos.js';
 import { DespachanteDeLeituras, type ResultadoDoDespacho } from './despachante.js';
 import type { InstrucaoDeTeste } from './contrato-da-leitura.js';
@@ -110,6 +110,8 @@ export interface OpcoesDoServidor {
    * antes do Destino Remoto.
    */
   buscarMidiaRemota?: BuscadorDeMidiaRemota;
+  /** Quem sabe pedir ao Servico as Localizacoes de uma pagina do Indice de Midia (compoe `servir.ts`). Ausente: `servico` sai `indisponivel`. */
+  consultarLocalizacoes?: ConsultorDeLocalizacoes;
   /** A previa do destino de um Envio (#1376); a compoe `src/cli/servir.ts`, porque a regra do celular e do adaptador. */
   consultarDestinoDeEnvio?: ContextoDaRequisicao['consultarDestinoDeEnvio'];
   /** SO PARA TESTE: outro arquivo de worker, para provar que o `servir` recusa subir se ele nao carrega. */
@@ -219,6 +221,57 @@ export function criarServidor(opcoes: OpcoesDoServidor): ServidorDeLeitura {
     }
   }
 
+  /**
+   * O Indice de Midia: o worker ja montou a pagina (200, JSON); aqui se acrescenta a Localizacao de cada item. O Servico
+   * fora do ar, ocupado ou sem resposta no prazo NAO derruba a pagina: ela sai com `localizacao: null` e o campo
+   * `servico` diz por que, para o cliente nao montar um Indice sem link como se estivesse completo.
+   */
+  async function responderComLocalizacoes(
+    res: ServerResponse,
+    inquilinoId: string,
+    resposta: { status: number; cabecalhos: Record<string, string>; corpo: string | Uint8Array },
+    chegouEm: number,
+    sinal: AbortSignal,
+  ): Promise<void> {
+    const texto = typeof resposta.corpo === 'string' ? resposta.corpo : Buffer.from(resposta.corpo).toString('utf8');
+    const pagina = JSON.parse(texto) as { itens: Array<{ anexoId: string; localizacao?: LocalizacaoParaOIndice | null }>; servico?: string };
+    const restanteMs = prazoTotalMs - (Date.now() - chegouEm);
+    let servico = 'indisponivel';
+    let porAnexo: Record<string, LocalizacaoParaOIndice> = {};
+    if (opcoes.consultarLocalizacoes !== undefined && restanteMs > 0) {
+      const estouro = new AbortController();
+      let relogio: NodeJS.Timeout | undefined;
+      try {
+        const consulta = opcoes.consultarLocalizacoes({
+          inquilinoId,
+          anexoIds: pagina.itens.map((i) => i.anexoId),
+          prazoMs: restanteMs,
+          sinal: AbortSignal.any([sinal, estouro.signal]),
+        });
+        consulta.catch(() => undefined);
+        const prazo = new Promise<'prazo'>((resolver) => {
+          relogio = setTimeout(() => {
+            estouro.abort();
+            resolver('prazo');
+          }, restanteMs);
+        });
+        const venceu = await Promise.race([consulta, prazo]);
+        if (venceu === 'prazo') servico = 'inacessivel';
+        else if (venceu.tipo === 'localizacoes') {
+          servico = 'ok';
+          porAnexo = venceu.porAnexo;
+        } else servico = venceu.tipo === 'servico-fora' ? 'fora' : venceu.tipo === 'ocupado' ? 'ocupado' : 'inacessivel';
+      } finally {
+        clearTimeout(relogio);
+      }
+    }
+    if (res.destroyed || res.headersSent) return;
+    for (const item of pagina.itens) item.localizacao = porAnexo[item.anexoId] ?? null;
+    pagina.servico = servico;
+    res.writeHead(resposta.status, resposta.cabecalhos);
+    res.end(JSON.stringify(pagina));
+  }
+
   const servidor = createServer((req, res) => {
     const chegouEm = Date.now();
     const valor = chaveApresentada(req);
@@ -270,6 +323,9 @@ export function criarServidor(opcoes: OpcoesDoServidor): ServidorDeLeitura {
           abandono.signal,
         )
         .then((r) => {
+          if (r.tipo === 'resposta' && r.resposta.enriquecerComLocalizacoes === true) {
+            return responderComLocalizacoes(res, identidade.inquilinoId, r.resposta, chegouEm, abandono.signal);
+          }
           if (r.tipo === 'resposta' && r.resposta.buscarNoServico !== undefined) {
             const pedido = r.resposta.buscarNoServico;
             return responderDaMidiaRemota(res, identidade.inquilinoId, pedido, chegouEm, abandono.signal);

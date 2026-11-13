@@ -50,6 +50,7 @@ export function executarLeitura(pedido: PedidoDeLeitura): RespostaDeLeitura {
   }
 
   let buscarNoServico: { anexoId: string; tipo: string } | undefined;
+  let enriquecer = false;
   try {
     comAtor(atorDeAcesso(pedido.chaveId), () => {
       aplicarInstrucao(pedido.instrucao, res);
@@ -59,6 +60,9 @@ export function executarLeitura(pedido: PedidoDeLeitura): RespostaDeLeitura {
         dados: pedido.dados,
         pedirMidiaRemota: (anexo) => {
           buscarNoServico = anexo;
+        },
+        pedirLocalizacoes: () => {
+          enriquecer = true;
         },
       });
     });
@@ -72,5 +76,5 @@ export function executarLeitura(pedido: PedidoDeLeitura): RespostaDeLeitura {
   }
   const resposta = capturar();
   if (resposta === undefined) throw new Error('a rota nao respondeu');
-  return resposta;
+  return enriquecer ? { ...resposta, enriquecerComLocalizacoes: true } : resposta;
 }

@@ -4,7 +4,7 @@ import { abrirRegistro } from '../registro/registro.js';
 import { criarServidor, PRAZO_PADRAO_MS, TRABALHADORES_PADRAO } from '../rede/servidor.js';
 import { iniciarWorkerDeTranscricao } from './transcricao.js';
 import { configuracaoDoMotor } from './motor-de-transcricao.js';
-import { criarBuscadorDeMidiaRemota } from './cliente-do-armazenamento.js';
+import { criarBuscadorDeMidiaRemota, criarConsultorDeLocalizacoes } from './cliente-do-armazenamento.js';
 import type { Ambiente } from './index.js';
 import { consultarDestinoDeWhatsapp } from '../adaptadores/whatsapp/resolver-celular.js';
 
@@ -68,6 +68,7 @@ export async function servir(argumentos: string[], ambiente: AmbienteDeServico):
   const buscarMidiaRemota = criarBuscadorDeMidiaRemota(ambiente.estado);
   const servidor = (ambiente.criar ?? criarServidor)({
     buscarMidiaRemota,
+    consultarLocalizacoes: criarConsultorDeLocalizacoes(ambiente.estado),
     dados: ambiente.dados,
     porta,
     trabalhadores,
