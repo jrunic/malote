@@ -6,6 +6,10 @@ import type { Operacao } from './trilha.js';
 export const SQL_ENDERECO_EH_CANONICO =
   'SELECT 1 FROM correspondencias_de_endereco WHERE fonte = ? AND canonico = ? LIMIT 1';
 
+/** A consulta de `alternativosDe`, exportada para o teste de plano de consulta fixar que ela usa o indice por canonico (v31). */
+export const SQL_ALTERNATIVOS_DO_CANONICO =
+  'SELECT alternativo FROM correspondencias_de_endereco WHERE fonte = ? AND canonico = ?';
+
 /**
  * Correspondencia entre duas formas do mesmo endereco numa Fonte.
  *
@@ -104,6 +108,15 @@ export function removerCorrespondencia(acervo: Acervo, entrada: EntradaDeCorresp
 /** O valor e canonico de algum par? (a forma que o resto do Acervo ja usa). Usa o indice por canonico (v31). */
 export function enderecoEhCanonico(acervo: Acervo, fonte: Fonte, valor: string): boolean {
   return acervo.preparar(SQL_ENDERECO_EH_CANONICO).get(fonte, valor) !== undefined;
+}
+
+/**
+ * As formas alternativas que apontam para este canonico: o inverso de `resolverEndereco`. Vazio quando o valor nao e
+ * canonico de nenhum par. A ordem nao e contrato: quem precisa de UMA forma confere que ha uma so.
+ */
+export function alternativosDe(acervo: Acervo, fonte: Fonte, canonico: string): string[] {
+  const linhas = acervo.preparar(SQL_ALTERNATIVOS_DO_CANONICO).all(fonte, canonico) as Array<{ alternativo: string }>;
+  return linhas.map((linha) => linha.alternativo);
 }
 
 /** O valor esta gravado como Identificador da Fonte? */

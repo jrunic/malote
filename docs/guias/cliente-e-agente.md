@@ -453,10 +453,13 @@ malote enviar --configuracao agente --para <endereço> --documento relatorio.pdf
 - **A conta (`--configuracao`) é sempre explícita**, no pedido por `--para` e no por `--conversa`: nunca é inferida da Conversa, e a resposta diz qual conta falou. Num grupo de que duas contas participam, quem escolhe a conta é quem pede.
 - **O endereço que vai à plataforma é o que o Acervo guarda, e o produto decide isso ao processar o Envio.** Pedir pela forma
   alternativa do celular brasileiro (com ou sem o 9) de um número que o Acervo conhece envia à forma gravada, e a resposta
-  diz qual (`enderecoUsado` no `--json`). Número que o Acervo não conhece em nenhuma das duas formas sai **como foi
-  pedido**, e a resposta avisa (`enderecoDesconhecido`): `enviado` não prova entrega nem que o endereço existe (o número
-  de MT com 13 dígitos saiu `enviado` e não chegou, #1364). Antes de enviar a um número novo, consulte
-  `malote identificar`. O grupo e o endereço opaco (`@lid`) saem como foram pedidos.
+  diz qual (`enderecoUsado` no `--json`). **Telefone cujo endereço opaco (`@lid`) o Acervo conhece sai pelo opaco**
+  (uma só forma conhecida; com duas ou mais o Envio fica no telefone): o aparelho que migrou para o endereço opaco não
+  decifra a mensagem cifrada para o telefone e mostra "Aguardando mensagem", enquanto o mesmo texto enviado ao opaco
+  chega legível. A Conversa e o eco continuam os do telefone. Número que o Acervo não conhece em nenhuma das duas formas
+  sai **como foi pedido**, e a resposta avisa (`enderecoDesconhecido`): `enviado` não prova entrega nem que o endereço
+  existe (o número de MT com 13 dígitos saiu `enviado` e não chegou, #1364). Antes de enviar a um número novo, consulte
+  `malote identificar`. O grupo e o endereço opaco (`@lid`) pedido saem como foram pedidos.
 - **`--conversa` é por Inquilino.** O id vem do Acervo da Chave que envia; o mesmo grupo tem ids diferentes em Inquilinos diferentes, e o id de outro Inquilino responde `404`. **Entre contas** (ler com uma chave e falar com a de outro Inquilino) use o endereço: `malote detalhar --conversa <id>` com a chave de leitura devolve `endereco` na coletiva, e `malote enviar --configuracao <a que fala> --para <endereco> --chave-em <VARIÁVEL>` envia com a outra chave.
 - No modo rede, o Inquilino vem da Chave de Acesso: `--inquilino` é recusado (código 2).
   Para enviar pela instalação local numa máquina que carrega o servidor, rode com
@@ -499,7 +502,7 @@ quando o pedido entrou na fila. Por `conversa`, a resposta traz também `convers
 ficou) e, se a Conversa dada era a forma alternativa de um endereço que tem Conversa canônica (a `@lid` de uma
 pessoa com Conversa de telefone), `redirecionadaDe` (o id que foi dado); se a canônica ainda não existe, vem só
 `redirecionadaDe`, e a Conversa nasce quando a mensagem sai. Por `para`, a resposta traz `enderecoUsado` (o endereço
-inteiro para onde o Envio iria, quando o Acervo guarda o número em outra forma) ou `enderecoDesconhecido: true` (quando
+inteiro para onde o Envio iria, quando o Acervo guarda o número em outra forma ou conhece o endereço opaco dele) ou `enderecoDesconhecido: true` (quando
 não o conhece); o ouvinte decide o destino de fato ao processar, e a resposta é a prévia. O `202` não confirma que a mensagem saiu: o Envio fica
 `pendente` até o `malote ouvir` daquela Configuração processá-lo. Repetição do mesmo
 pedido com o mesmo `identificadorDeEnvio`: `200` com os mesmos campos e `"repetido": true`.
