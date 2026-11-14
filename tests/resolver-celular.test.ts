@@ -344,10 +344,12 @@ test('consultar o destino: a outra forma ja e alternativa de outro endereco, ent
   });
 });
 
-test('consultar o destino: telefone que e o canonico de um par LID, sem Identificador, e conhecido', () => {
+test('consultar o destino: telefone que e o canonico de um par LID, sem Identificador, nao e desconhecido: vai ao opaco', () => {
   comAcervo((acervo) => {
     const FIXO = '556532221234@s.whatsapp.net';
     aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: LID, canonico: FIXO });
-    assert.deepEqual(consultarDestinoDeWhatsapp(acervo, FIXO), { usado: FIXO, situacao: 'conhecido' });
+    // Antes do envio ao opaco (14/11/2026) a situacao era `conhecido` e o destino o proprio telefone; o telefone cifrava
+    // para a sessao que o aparelho migrado nao decifra. O que este teste guarda continua: nao e `desconhecido`.
+    assert.deepEqual(consultarDestinoDeWhatsapp(acervo, FIXO), { usado: LID, situacao: 'redirecionado' });
   });
 });

@@ -123,7 +123,9 @@ Observações:
   Passou do prazo, `504`. O arquivo é conferido inteiro antes de a primeira resposta sair, então o tempo até o primeiro
   byte cresce com o tamanho do arquivo.
 - **`enviar --para <endereco>`** envia ao endereço que o Acervo guarda: o celular brasileiro pedido na outra forma de um
-  número gravado sai pela gravada, e a resposta diz qual (`enderecoUsado` no `--json`). O número que o Acervo não conhece
+  número gravado sai pela gravada, e a resposta diz qual (`enderecoUsado` no `--json`). O telefone cujo endereço opaco
+  (`@lid`) o Acervo conhece, uma só forma, sai pelo opaco: o aparelho que migrou para o endereço opaco não decifra a
+  mensagem cifrada para o telefone. O número que o Acervo não conhece
   em nenhuma das duas formas sai como foi pedido, e a resposta avisa (`enderecoDesconhecido`). O destino é decidido pelo
   ouvinte ao processar o Envio; a resposta do pedido é a previa. O mesmo vale para `--conversa`: se a Conversa dada é a
   forma alternativa do celular e o Acervo guarda a outra, o ouvinte envia à gravada e liga o Envio à Conversa dela

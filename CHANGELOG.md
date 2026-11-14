@@ -23,6 +23,14 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [0.50.1] — 2026-11-14
+
+Sem mudança na forma do Registro (v9) nem do Acervo (v32), e sem dependência nova.
+
+### Corrigido
+
+- **O Envio a um telefone vai ao endereço opaco (`@lid`) quando o Acervo conhece um só.** O aparelho que já migrou para o endereço opaco não decifra a mensagem cifrada para a sessão do telefone e mostra "Aguardando mensagem"; o reenvio que ele pede, mesmo forçando a sessão opaca, reenvia a mensagem montada para o telefone. O mesmo texto enviado ao `@lid` chega legível (medido em campo). Com mais de um `@lid` conhecido para o mesmo telefone o Envio fica no telefone. A Conversa e o eco continuam os do telefone, e o aviso do pedido (`enderecoUsado`) mostra o endereço que será usado. Telefone sem `@lid` conhecido, grupo e destino já opaco saem como antes.
+
 ## [0.50.0] — 2026-11-13
 
 **A forma do Registro sobe de v8 para v9** (só acrescenta uma tabela, a do Destino Remoto de Mídia); o Acervo não muda (segue v32). Não acrescenta dependência npm; o `rclone` é um binário que o Operador declara, opcional, como o `whisper.cpp`. **A migração do Registro não tem volta**: antes de atualizar, guarde uma cópia consistente do Registro (e dos Acervos). A recepção ao vivo não muda.

@@ -174,7 +174,13 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   montado a partir do telefone (#1364, #1376).** `processarEnvios` resolve o destino com `soComEvidencia`: o celular
   brasileiro pedido na outra forma de um número gravado vai pela gravada; o número que o Acervo não conhece sai como
   foi pedido, e nenhum par é inventado, porque aprender a forma digitada tornaria permanente o `enviado` sem entrega
-  (MT, 13 dígitos). Só telefone se resolve: grupo e `@lid` saem como pedidos. O aviso do pedido (CLI e rota) é só uma
+  (MT, 13 dígitos). Só telefone se resolve: grupo e `@lid` saem como pedidos. **Resolvido o telefone canônico, o Envio
+  vai ao `@lid` quando o Acervo conhece UM só (`alternativosDe`; com dois ou mais a dúvida não escolhe e fica o
+  telefone).** Medido em 14/11/2026 num aparelho que migrou para o endereço opaco: o Envio cifrado para a sessão do
+  telefone ficou em "Aguardando mensagem" (o aparelho pede reenvio, e a biblioteca, mesmo forçando a sessão opaca,
+  reenvia a mensagem montada para o telefone), e o mesmo texto enviado ao `@lid` chegou legível; o aparelho da própria
+  conta e o Desktop decifravam nos dois. A Conversa e o eco continuam os do canônico (o eco `fromMe` do opaco se resolve
+  ao telefone pelo par). O aviso do pedido (CLI e rota) é só uma
   previa dessa decisão, e a rota a recebe de `servir.ts`, porque a regra do celular é do adaptador.
 - **A fila de Envio prioriza por `tentativas` antes de `solicitada_em`.** Um
   Envio que já tentou e voltou indeterminado cede a vez aos que nunca

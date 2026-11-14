@@ -1,5 +1,6 @@
 import type { Acervo } from '../../nucleo/acervo.js';
 import {
+  alternativosDe,
   aprenderCorrespondencia,
   enderecoEhCanonico,
   enderecoTemIdentificador,
@@ -150,15 +151,30 @@ export function situacaoNoEstoque(acervo: Acervo, endereco: string): SituacaoNoE
 }
 
 const ehTelefone = (endereco: string): boolean => endereco.endsWith('@s.whatsapp.net');
+const ehOpaco = (endereco: string): boolean => endereco.endsWith('@lid');
+
+/**
+ * A forma opaca de um telefone canonico, quando o Acervo conhece UMA so. O aparelho que migrou para o endereco opaco
+ * nao decifra a mensagem cifrada para a sessao do telefone ("Aguardando mensagem"), e o reenvio que ele pede reenvia a
+ * mensagem montada para o telefone: o mesmo texto enviado ao opaco chegou legivel (medido em campo, 14/11/2026). Com
+ * mais de um opaco para o mesmo telefone a duvida nao escolhe: o Envio fica no telefone, como antes.
+ */
+function formaOpacaDoTelefone(acervo: Acervo, telefone: string): string | null {
+  if (!ehTelefone(telefone)) return null;
+  const opacos = alternativosDe(acervo, FONTE, telefone).filter(ehOpaco);
+  return opacos.length === 1 ? (opacos[0] as string) : null;
+}
 
 /**
  * O endereco para onde o ouvinte ENVIA um pedido de Envio ao `endereco`: so telefone se resolve (o grupo e o opaco saem
  * como foram pedidos, que e o que funciona em campo), e com `soComEvidencia`, porque o que o operador digitou nao e
- * evidencia da plataforma (#1364). Aprende o par quando o Acervo tem a evidencia.
+ * evidencia da plataforma (#1364). Aprende o par quando o Acervo tem a evidencia. Resolvido o telefone canonico, vai a
+ * forma opaca quando o Acervo conhece uma so (`formaOpacaDoTelefone`): a Conversa e o eco continuam os do canonico.
  */
 export function destinoDeEnvioDeWhatsapp(acervo: Acervo, endereco: string): string {
   if (!ehTelefone(endereco)) return endereco;
-  return resolverEnderecoDeWhatsapp(acervo, endereco, undefined, { soComEvidencia: true });
+  const telefone = resolverEnderecoDeWhatsapp(acervo, endereco, undefined, { soComEvidencia: true });
+  return formaOpacaDoTelefone(acervo, telefone) ?? telefone;
 }
 
 export type SituacaoDoDestino = 'redirecionado' | 'conhecido' | 'desconhecido' | 'nao-se-aplica';
@@ -168,7 +184,7 @@ export type SituacaoDoDestino = 'redirecionado' | 'conhecido' | 'desconhecido' |
  * decisao de `destinoDeEnvioDeWhatsapp`, que o ouvinte aplica de fato ao processar o Envio; o Acervo pode ganhar o par
  * entre o pedido e o processamento, e a decisao do ouvinte vale.
  *
- * - `redirecionado`: o Acervo guarda a outra forma do celular (ou o par), e o Envio vai a ela;
+ * - `redirecionado`: o Acervo guarda a outra forma do celular (ou o par), ou o opaco do telefone, e o Envio vai a ela;
  * - `conhecido`: o Acervo conhece o endereco como esta (Identificador, canonico ou alternativo de um par), em qualquer
  *   das duas formas;
  * - `desconhecido`: telefone que o Acervo nao conhece em nenhuma forma; sai como foi pedido (#1364);
@@ -179,7 +195,8 @@ export function consultarDestinoDeWhatsapp(
   endereco: string,
 ): { usado: string; situacao: SituacaoDoDestino } {
   if (!ehTelefone(endereco)) return { usado: endereco, situacao: 'nao-se-aplica' };
-  const { usado } = decidir(acervo, endereco, true);
+  const { usado: telefone } = decidir(acervo, endereco, true);
+  const usado = formaOpacaDoTelefone(acervo, telefone) ?? telefone;
   if (usado !== endereco) return { usado, situacao: 'redirecionado' };
   const conhece = (e: string): boolean =>
     enderecoTemIdentificador(acervo, FONTE, e) ||

@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { cenario } from './ajuda/acervo.js';
 import { abrirAcervo, VERSAO_SCHEMA_ACERVO } from '../src/nucleo/acervo.js';
-import { aprenderCorrespondencia, SQL_ENDERECO_EH_CANONICO } from '../src/nucleo/correspondencia.js';
+import {
+  alternativosDe,
+  aprenderCorrespondencia,
+  SQL_ALTERNATIVOS_DO_CANONICO,
+  SQL_ENDERECO_EH_CANONICO,
+} from '../src/nucleo/correspondencia.js';
 import { CFG_WHATSAPP } from './ajuda/configuracao.js';
 
 // O plano de consulta da MESMA constante que a porta `enderecoEhCanonico` usa: se a porta mudar a consulta, o teste muda junto.
@@ -52,6 +57,40 @@ test('a pergunta "este valor e canonico?" usa o indice, e nao varre a tabela', (
       plano.some((l) => l.detail.includes('correspondencias_por_canonico')),
       `o plano nao usa o indice: ${JSON.stringify(plano)}`,
     );
+  } finally {
+    c.limpar();
+  }
+});
+
+test('a pergunta "quais formas apontam para este canonico?" usa o indice, e nao varre a tabela', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Teste');
+    const plano = acervo.db.prepare(`EXPLAIN QUERY PLAN ${SQL_ALTERNATIVOS_DO_CANONICO}`).all('whatsapp', 'x') as Array<{
+      detail: string;
+    }>;
+    assert.ok(
+      plano.some((l) => l.detail.includes('correspondencias_por_canonico')),
+      `o plano nao usa o indice: ${JSON.stringify(plano)}`,
+    );
+  } finally {
+    c.limpar();
+  }
+});
+
+test('alternativosDe devolve as formas do canonico, so as dele e so da Fonte pedida', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Teste');
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: 'a1', canonico: 'c1' });
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: 'a2', canonico: 'c1' });
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: 'b1', canonico: 'c2' });
+    aprenderCorrespondencia(acervo, { fonte: 'instagram', alternativo: 'i1', canonico: 'c1' });
+
+    assert.deepEqual(alternativosDe(acervo, 'whatsapp', 'c1').sort(), ['a1', 'a2']);
+    assert.deepEqual(alternativosDe(acervo, 'whatsapp', 'c2'), ['b1']);
+    assert.deepEqual(alternativosDe(acervo, 'whatsapp', 'a1'), [], 'alternativo nao e canonico');
+    assert.deepEqual(alternativosDe(acervo, 'whatsapp', 'nao-existe'), []);
   } finally {
     c.limpar();
   }
