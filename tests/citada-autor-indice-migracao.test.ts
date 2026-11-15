@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { cenario } from './ajuda/acervo.js';
 import { abrirAcervo, VERSAO_SCHEMA_ACERVO } from '../src/nucleo/acervo.js';
-import { PLANO_DO_ACERVO } from '../src/nucleo/passos-do-acervo.js';
+import { PASSOS_DO_ACERVO } from '../src/nucleo/passos-do-acervo.js';
 import { registrarConversa, registrarIdentificador, registrarMensagem } from '../src/nucleo/escrita.js';
 import { CFG_WHATSAPP } from './ajuda/configuracao.js';
 
@@ -77,11 +77,13 @@ test('o passo v33 e idempotente: aplicado de novo sobre a forma v33 nao falha ne
   try {
     const { acervo } = c.novoInquilino('Teste');
     semear(acervo);
-    const passo = PLANO_DO_ACERVO.passos.find((p) => p.para === 33);
+    const passo = PASSOS_DO_ACERVO.find((p) => p.para === 33);
     assert.ok(passo, 'nao ha passo v32 -> v33');
+    assert.equal(passo.de, 32);
+    assert.equal(passo.exigeContexto, undefined, 'passo leve: nao exige contexto');
     const antes = (acervo.db.prepare('SELECT COUNT(*) AS n FROM sqlite_master').get() as { n: number }).n;
-    passo.aplicar(acervo.db);
-    passo.aplicar(acervo.db);
+    passo.aplicar(acervo.db, {} as never);
+    passo.aplicar(acervo.db, {} as never);
     assert.equal((acervo.db.prepare('SELECT COUNT(*) AS n FROM sqlite_master').get() as { n: number }).n, antes);
     assert.equal((acervo.db.prepare('SELECT COUNT(*) AS n FROM mensagens').get() as { n: number }).n, 2);
   } finally {

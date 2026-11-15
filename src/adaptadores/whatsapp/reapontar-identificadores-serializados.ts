@@ -19,9 +19,25 @@ import { decidirEnderecoDeWhatsapp } from './resolver-celular.js';
 const FONTE = 'whatsapp' as const;
 const PAGINA = 500;
 
+/**
+ * A pausa padrao entre dois itens do lote, em ms (#1519). Medida em bancada com o codigo real (200 mil Mensagens, escritor
+ * concorrente com o busy_timeout de 5 s do produto, lote de 300): sem pausa o escritor perdeu 3 a 4 de ~180 escritas; com 20 ms
+ * nenhuma falhou, mas a maior espera chegou a 3,9 s (o SQLite espera em intervalos de ate 100 ms e perde a janela estreita); com
+ * 100 ms, 0 falhas em 2.464 escritas e a maior espera foi de 288 ms.
+ */
+export const PAUSA_PADRAO_ENTRE_ITENS_MS = 100;
+
 export interface OpcoesDoReaponto {
   comEfeito: boolean;
   limite?: number;
+  /**
+   * Pausa, em ms, entre um item e o seguinte (inteiro nao negativo; padrao 100). O laco e sincrono: sem a pausa o proximo item
+   * toma o lock logo que o anterior o solta, e o escritor do ouvinte, que espera ate 5 s, perde a corrida (medido: 10 de 182
+   * escritas falharam por banco ocupado).
+   */
+  pausaEntreItensMs?: number;
+  /** SO PARA TESTE: roda entre dois itens, com o lock livre (simula o ouvinte gravando). */
+  ganchoDeTeste?: { entreItens?: () => void };
 }
 
 export interface RelatorioDoReaponto {
@@ -139,6 +155,10 @@ export function reapontarIdentificadoresSerializados(
   if (opcoes.limite !== undefined && (!Number.isInteger(opcoes.limite) || opcoes.limite <= 0)) {
     throw new RangeError('o limite precisa ser um inteiro maior que zero');
   }
+  const pausa = opcoes.pausaEntreItensMs ?? PAUSA_PADRAO_ENTRE_ITENS_MS;
+  if (!Number.isInteger(pausa) || pausa < 0) {
+    throw new RangeError('a pausa precisa ser um inteiro maior ou igual a zero');
+  }
   const r: RelatorioDoReaponto = {
     serializados: 0,
     ilegiveis: 0,
@@ -228,8 +248,14 @@ export function reapontarIdentificadoresSerializados(
     },
     (op) => {
       try {
-        for (const item of plano)
+        for (const [i, item] of plano.entries()) {
           acervo.db.transaction(() => reapontarUm(acervo, item, op, r)).immediate();
+          if (i < plano.length - 1) {
+            // Lock livre: o escritor do ouvinte tem vez. Pausa sincrona de proposito (o laco inteiro e sincrono).
+            opcoes.ganchoDeTeste?.entreItens?.();
+            if (pausa > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, pausa);
+          }
+        }
       } catch (causa) {
         r.operacaoId = op.id;
         r.gravou = r.serializadosRemovidos + r.transicoesReapontadas + r.transicoesFundidas > 0;

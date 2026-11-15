@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { join } from 'node:path';
 import { cenario } from './ajuda/acervo.js';
+import { abrirAcervo } from '../src/nucleo/acervo.js';
 import {
   registrarConversa,
   registrarIdentificador,
@@ -423,6 +425,84 @@ test('o lote parcial leva primeiro o valor com telefone, mesmo quando o sem tele
       0,
       'nenhum Identificador do opaco nasceu',
     );
+  } finally {
+    c.limpar();
+  }
+});
+
+// #1519 (decisao do Titular, 15/11/2026): o lote nao pode prender o ouvinte. Cada Identificador e UMA transacao, e entre dois
+// itens o lock esta livre e ha uma pausa para o escritor concorrente ter vez (medido: sem a pausa, 10 de 182 escritas do ouvinte
+// falharam por banco ocupado; com o indice e a pausa de 100 ms, 0 de 2.464 e a maior espera de 288 ms; com 20 ms a maior espera ainda
+// chegou a 3,9 s, perto dos 5 s do produto).
+function trio(acervo: Acervo) {
+  const s = semear(acervo);
+  for (let i = 0; i < 3; i += 1) {
+    const ser = s.id(objeto({ id: `${100 + i}0000000000000@lid`, admin: null }));
+    s.t(`P${i}`, ser, 'entrou', 1000 + i);
+  }
+}
+
+test('entre dois itens o lock esta livre: uma escrita de OUTRA conexao nao falha por banco ocupado', () => {
+  const c = cenario();
+  try {
+    const { id, acervo } = c.novoInquilino('Padme');
+    trio(acervo);
+    const outra = abrirAcervo(join(c.raiz, 'acervos'), id as never);
+    outra.db.pragma('busy_timeout = 0'); // se o lote segurasse o lock entre os itens, a escrita falharia na hora
+    let escritas = 0;
+    try {
+      const r = reapontarIdentificadoresSerializados(acervo, {
+        comEfeito: true,
+        pausaEntreItensMs: 0,
+        ganchoDeTeste: {
+          entreItens: () => {
+            outra.db.prepare("UPDATE identificadores SET visto_em = '2026-11-15T00:00:00.000Z' WHERE substr(valor, 1, 1) <> '{'").run();
+            escritas += 1;
+          },
+        },
+      });
+      assert.equal(r.serializadosRemovidos, 3);
+      assert.equal(escritas, 2, 'o gancho roda entre os itens: 2 vezes para 3 itens, nunca depois do ultimo');
+    } finally {
+      outra.fechar();
+    }
+  } finally {
+    c.limpar();
+  }
+});
+
+test('ha uma pausa entre os itens (100 ms por padrao) e a opcao a troca', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Padme');
+    trio(acervo);
+    const t0 = Date.now();
+    reapontarIdentificadoresSerializados(acervo, { comEfeito: true });
+    const gasto = Date.now() - t0;
+    assert.ok(gasto >= 190, `2 pausas de 100 ms (padrao) davam pelo menos ~200 ms; levou ${gasto} ms`);
+  } finally {
+    c.limpar();
+  }
+  const c2 = cenario();
+  try {
+    const { acervo } = c2.novoInquilino('Padme');
+    trio(acervo);
+    const t0 = Date.now();
+    reapontarIdentificadoresSerializados(acervo, { comEfeito: true, pausaEntreItensMs: 60 });
+    const gasto = Date.now() - t0;
+    assert.ok(gasto >= 118, `2 pausas de 60 ms davam pelo menos ~120 ms; levou ${gasto} ms`);
+  } finally {
+    c2.limpar();
+  }
+});
+
+test('a pausa invalida (negativa, fracionaria ou NaN) e recusada', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Padme');
+    for (const pausaEntreItensMs of [-1, 1.5, Number.NaN]) {
+      assert.throws(() => reapontarIdentificadoresSerializados(acervo, { comEfeito: false, pausaEntreItensMs }), RangeError);
+    }
   } finally {
     c.limpar();
   }
