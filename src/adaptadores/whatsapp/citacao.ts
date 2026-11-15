@@ -12,7 +12,7 @@ import { colunasDaCitacao, type CitacaoDeEntrada } from '../../nucleo/citacao.js
 import { resolverEndereco } from '../../nucleo/correspondencia.js';
 import type { Operacao } from '../../nucleo/trilha.js';
 import { resolverEnderecoDeWhatsapp } from './resolver-celular.js';
-import { registrarIdentificador } from '../../nucleo/escrita.js';
+import { registrarIdentificadorDeWhatsapp } from './endereco-de-whatsapp.js';
 import { desembrulhar, VIRAM_MENSAGEM } from './conteudo-de-mensagem.js';
 
 const FONTE = 'whatsapp' as const;
@@ -98,10 +98,10 @@ export function citacaoParaGravar(
   if (r.propria) return { idExterno: r.idExterno, direcao: 'enviada' };
   if (r.enderecoDoAutor === undefined) return { idExterno: r.idExterno };
   // `resolverCitacao` SO LE (o ensaio a usa). Quem grava e quem aprende o par; dentro de Operacao `por-efeito`, passa `op`.
-  const { id } = registrarIdentificador(acervo, {
-    fonte: FONTE,
-    valor: resolverEnderecoDeWhatsapp(acervo, r.enderecoDoAutor, op),
-  });
+  // O autor da citada que nao e endereco nao vira Identificador (#1519): a citacao fica so com o id externo.
+  const autor = registrarIdentificadorDeWhatsapp(acervo, resolverEnderecoDeWhatsapp(acervo, r.enderecoDoAutor, op));
+  if (autor === null) return { idExterno: r.idExterno };
+  const { id } = autor;
   return {
     idExterno: r.idExterno,
     autorId: id,

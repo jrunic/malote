@@ -70,7 +70,7 @@ test('perguntar pelo ULTIMO dia do alcance cai dentro dele, e não fora', () => 
     const inquilino = instalacaoComInquilino(raiz);
     const backup = backupFalso({
       conversas: [{ pk: 1, endereco: 'grupo-1@g.us', nome: 'Grupo', tipoDeSessao: 1 }],
-      membros: [{ pk: 10, endereco: '5565911111', conversaPk: 1, ativo: true }],
+      membros: [{ pk: 10, endereco: '5565911111@s.whatsapp.net', conversaPk: 1, ativo: true }],
       mensagens: [
         // Um evento de entrada às 10h de um dia. Perguntar por ESSE dia tem de
         // cair dentro do alcance — o fim do dia é depois do último evento, e

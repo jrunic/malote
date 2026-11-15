@@ -7,11 +7,8 @@ import {
 } from '../../nucleo/correspondencia.js';
 import { outraFormaDoCelular } from './celular-br.js';
 import { resolverEnderecoDeWhatsapp } from './resolver-celular.js';
-import {
-  idDeConversaPorEndereco,
-  idDeMensagemPorExterno,
-  registrarIdentificador,
-} from '../../nucleo/escrita.js';
+import { idDeConversaPorEndereco, idDeMensagemPorExterno } from '../../nucleo/escrita.js';
+import { registrarIdentificadorDeWhatsapp } from './endereco-de-whatsapp.js';
 import { registrarNome } from '../../nucleo/identidade.js';
 import { nomeRepeteONumeroBrasileiro } from './nome-repete-numero-br.js';
 import { pareceValorSentinela } from './nome-sentinela-de-contato.js';
@@ -223,10 +220,10 @@ function processarContatos(
     const { name, bruto } = contato;
     const canonico = resolverEndereco(acervo, 'whatsapp', bruto);
     if (nomeRepeteONumeroBrasileiro(name, canonico)) continue;
-    const { id: identificadorId } = registrarIdentificador(acervo, {
-      fonte: 'whatsapp',
-      valor: canonico,
-    });
+    // Valor que nao e endereco nao vira Identificador (#1519); o nome do contato fica de fora.
+    const contatoRegistrado = registrarIdentificadorDeWhatsapp(acervo, canonico);
+    if (contatoRegistrado === null) continue;
+    const identificadorId = contatoRegistrado.id;
     registrarNome(acervo, {
       identificadorId,
       origem: 'whatsapp',

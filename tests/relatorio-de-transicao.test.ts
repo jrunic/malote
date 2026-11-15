@@ -34,15 +34,15 @@ test('o relatório separa participante ativo de inativo, e não conta a Conversa
             coletiva: true,
             bruto: '{}',
             participantesConhecidos: [
-              { endereco: '5565911111', ativaNaFonte: true },
-              { endereco: '5565922222', ativaNaFonte: false },
-              { endereco: '5565933333', ativaNaFonte: false },
+              { endereco: '5565911111@s.whatsapp.net', ativaNaFonte: true },
+              { endereco: '5565922222@s.whatsapp.net', ativaNaFonte: false },
+              { endereco: '5565933333@s.whatsapp.net', ativaNaFonte: false },
             ],
           },
           // Conversa direta: a Fonte não declara atividade nenhuma nela, e por
           // isso ela não entra em nenhum dos dois contadores.
           {
-            idExterno: '5565944444',
+            idExterno: '5565944444@s.whatsapp.net',
             nome: 'Alguem',
             coletiva: false,
             bruto: '{}',
@@ -67,8 +67,8 @@ test('a importação imprime as Transições e os códigos que não classificou'
     const backup = backupFalso({
       conversas: [{ pk: 1, endereco: 'grupo-1@g.us', nome: 'Grupo', tipoDeSessao: 1 }],
       membros: [
-        { pk: 10, endereco: '5565911111', conversaPk: 1, ativo: true },
-        { pk: 11, endereco: '5565922222', conversaPk: 1, ativo: false },
+        { pk: 10, endereco: '5565911111@s.whatsapp.net', conversaPk: 1, ativo: true },
+        { pk: 11, endereco: '5565922222@s.whatsapp.net', conversaPk: 1, ativo: false },
       ],
       mensagens: [
         // Evento MAPEADO (codigo 7) e evento DESCONHECIDO (codigo 30 — o dos

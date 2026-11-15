@@ -91,6 +91,11 @@ export interface RelatorioDeImportacao {
   conversasPorCaixa: Record<string, number>;
   /** Diretórios de Conversa observados sem arquivo de mensagem algum. */
   conversasSemArquivo: number;
+  /**
+   * Valores que a porta de gravação recusou por não serem endereço da Fonte (#1519): membro de roster ou de evento,
+   * ou autor (a Mensagem é gravada sem autor, nunca perdida). Só o WhatsApp confere a forma; nas demais Fontes fica 0.
+   */
+  enderecosInvalidos: number;
 }
 
 export function relatorioVazio(): RelatorioDeImportacao {
@@ -121,6 +126,7 @@ export function relatorioVazio(): RelatorioDeImportacao {
     colisoesDesempatadas: 0,
     conversasPorCaixa: {},
     conversasSemArquivo: 0,
+    enderecosInvalidos: 0,
   };
 }
 

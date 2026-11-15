@@ -1,3 +1,6 @@
+import type { Acervo } from '../../nucleo/acervo.js';
+import { registrarIdentificador } from '../../nucleo/escrita.js';
+
 /**
  * O que e endereco de WhatsApp, para quem GRAVA Identificador (#1519). Medido no Acervo do Titular em 15/11/2026: todo
  * Identificador legitimo e `<texto sem espaco, chave nem aspas>@<sufixo>` (sufixos s.whatsapp.net, lid, g.us, broadcast e o
@@ -27,4 +30,19 @@ export function enderecoDoParametro(parametro: string): string | null {
   if (objeto === null || typeof objeto !== 'object') return null;
   const id = (objeto as Record<string, unknown>)['id'];
   return typeof id === 'string' && ehEnderecoDeWhatsapp(id) ? id : null;
+}
+
+/**
+ * A UNICA porta de gravacao de Identificador de WhatsApp do Adaptador. Valor que nao e endereco nao grava e devolve `null`:
+ * nunca lanca (a excecao que escapa da biblioteca de recepcao derruba o ouvinte por 70), e quem chama conta e segue. A guarda
+ * `tests/porta-de-identificador-whatsapp.test.ts` reprova a chamada direta ao nucleo neste diretorio. Tres caminhos do nucleo
+ * criam Identificador de WhatsApp sem passar aqui (a declaracao da conta, a resolucao retroativa e a uniao das Conversas):
+ * os valores deles vem de Configuracao e de par ja gravado.
+ */
+export function registrarIdentificadorDeWhatsapp(
+  acervo: Acervo,
+  valor: string,
+): { id: string; criado: boolean } | null {
+  if (!ehEnderecoDeWhatsapp(valor)) return null;
+  return registrarIdentificador(acervo, { fonte: 'whatsapp', valor });
 }

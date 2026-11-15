@@ -2420,6 +2420,9 @@ function executarComAtor(
         if (r.transicoesCriadas > 0) {
           escrever(`  ${r.transicoesCriadas} transicoes de participacao novas`);
         }
+        if (r.enderecosInvalidos > 0) {
+          escrever(`  ${r.enderecosInvalidos} enderecos recusados (nao sao enderecos de WhatsApp)`);
+        }
         if (r.participantesAtivos > 0 || r.participantesInativos > 0) {
           escrever(
             `  ${r.participantesAtivos} ativos, ${r.participantesInativos} inativos ` +

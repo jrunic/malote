@@ -7,13 +7,13 @@ import {
   CorrespondenciaEmConflitoError,
 } from '../../nucleo/correspondencia.js';
 import { resolverEnderecoDeWhatsapp } from './resolver-celular.js';
+import { enderecoDoParametro, registrarIdentificadorDeWhatsapp } from './endereco-de-whatsapp.js';
 import { outraFormaDoCelular } from './celular-br.js';
 import {
   anexoJaExiste,
   idDeMensagemPorExterno,
   registrarAnexo,
   registrarConversa,
-  registrarIdentificador,
   registrarMensagem,
   registrarParticipacao,
   registrarTransicao,
@@ -839,8 +839,15 @@ function gravarUma(
     : resolverEnderecoDeWhatsapp(acervo, m.key.participant ?? m.key.remoteJid);
 
   let autorId: string | undefined;
-  if (enderecoDoAutor !== undefined && !enderecoDoAutor.endsWith('@broadcast')) {
-    const { id } = registrarIdentificador(acervo, { fonte: FONTE, valor: enderecoDoAutor });
+  // O autor que nao e endereco (vazio, ou outra forma que a plataforma entregue) nao vira Identificador (#1519): a Mensagem
+  // grava sem autor, nunca se perde, e o recusado e contado.
+  const autor =
+    enderecoDoAutor !== undefined && !enderecoDoAutor.endsWith('@broadcast')
+      ? registrarIdentificadorDeWhatsapp(acervo, enderecoDoAutor)
+      : undefined;
+  if (autor === null) relato.ignorados['endereco-invalido'] = (relato.ignorados['endereco-invalido'] ?? 0) + 1;
+  if (autor !== undefined && autor !== null && enderecoDoAutor !== undefined) {
+    const { id } = autor;
     autorId = id;
     registrarParticipacao(acervo, {
       conversaId,
@@ -987,14 +994,22 @@ function gravarUma(
 
   for (const alvo of m.messageStubParameters ?? []) {
     // Parametro nem sempre e endereco. Contar o que nao e mostra a mudanca de
-    // forma no dia em que ela acontecer; descartar em silencio, nao.
-    if (!alvo.includes('@')) {
+    // forma no dia em que ela acontecer; descartar em silencio, nao. As vezes
+    // e o objeto do participante serializado (#1519): vale o `id` dele.
+    const endereco = enderecoDoParametro(alvo);
+    const membro =
+      endereco === null ? null : registrarIdentificadorDeWhatsapp(acervo, resolverEnderecoDeWhatsapp(acervo, endereco));
+    if (membro === null) {
       relato.ignorados['parametro-sem-endereco'] =
         (relato.ignorados['parametro-sem-endereco'] ?? 0) + 1;
+      // O objeto serializado que nao se le conta tambem a parte: separa a mudanca de forma do `'0'` comum dos stubs.
+      if (alvo.startsWith('{')) {
+        relato.ignorados['parametro-serializado-ilegivel'] =
+          (relato.ignorados['parametro-serializado-ilegivel'] ?? 0) + 1;
+      }
       continue;
     }
-    const enderecoDoMembro = resolverEnderecoDeWhatsapp(acervo, alvo);
-    const { id } = registrarIdentificador(acervo, { fonte: FONTE, valor: enderecoDoMembro });
+    const { id } = membro;
     const nasceu = registrarTransicao(acervo, {
       origemDaChegada: opcoes.origemDaChegada,
       conversaId,
@@ -1068,10 +1083,12 @@ function gravarEtiqueta(
     bruto: JSON.stringify(m.key),
   });
   // `decidirEtiqueta` decide SO LENDO (nao abre Operacao vazia por evento descartado); quem grava e quem aprende o par.
-  const { id } = registrarIdentificador(acervo, {
-    fonte: FONTE,
-    valor: resolverEnderecoDeWhatsapp(acervo, alvo.enderecoDoMembro),
-  });
+  const membro = registrarIdentificadorDeWhatsapp(acervo, resolverEnderecoDeWhatsapp(acervo, alvo.enderecoDoMembro));
+  if (membro === null) {
+    relato.ignorados['endereco-invalido'] = (relato.ignorados['endereco-invalido'] ?? 0) + 1;
+    return;
+  }
+  const { id } = membro;
   const nasceu = registrarEtiqueta(acervo, {
     origemDaChegada,
     conversaId,
