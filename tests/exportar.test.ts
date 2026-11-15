@@ -21,6 +21,7 @@ function msg(sobre: Partial<MensagemLida>): MensagemLida {
     conversaId: 'c1',
     fonte: 'whatsapp',
     autorId: 'i-ana',
+    autor: null,
     conteudo: 'oi',
     ocorridaEm: T,
     direcao: 'recebida',

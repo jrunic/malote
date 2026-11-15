@@ -105,6 +105,7 @@ test('a saida em texto: uma linha por Chegada, o conteudo resumido, a ausente ma
       conversaId: 'c1',
       fonte: 'whatsapp',
       autorId: 'i1',
+      autor: null,
       conteudo: texto,
       ocorridaEm: base.ocorridaEm,
       direcao: 'recebida',

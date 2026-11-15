@@ -8,6 +8,7 @@ import {
   type PaginaDeChegadas,
 } from './chegada.js';
 import { lerMensagensPorIds, type MensagemLida } from './consulta.js';
+import type { PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
 
 /**
  * A leitura de Chegadas COM CONTEUDO: cada Chegada de Mensagem, de Edicao e de Anexo traz a Mensagem correspondente, lida
@@ -40,6 +41,7 @@ export function lerChegadasComConteudo(
   acervo: Acervo,
   filtro: FiltroDeChegadas,
   tetoDeBytes: number = TETO_DE_BYTES_COM_CONTEUDO,
+  precedencia?: PrecedenciaDeNome,
 ): PaginaDeChegadasComConteudo {
   const pagina: PaginaDeChegadas = lerChegadas(acervo, filtro);
   const ids = [
@@ -49,7 +51,7 @@ export function lerChegadasComConteudo(
         .map((c) => c.mensagemId as string),
     ),
   ];
-  const porId = new Map(lerMensagensPorIds(acervo, ids).map((m) => [m.id, m]));
+  const porId = new Map(lerMensagensPorIds(acervo, ids, precedencia).map((m) => [m.id, m]));
   const completas: ChegadaComConteudo[] = pagina.chegadas.map((c) =>
     TIPOS_COM_CONTEUDO.has(c.tipo) ? { ...c, conteudo: porId.get(c.mensagemId ?? '') ?? null } : c,
   );
