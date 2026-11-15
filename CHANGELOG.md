@@ -23,6 +23,17 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [Não publicado]
+
+Sem mudança na forma do Registro (v9) nem do Acervo (v32), e sem dependência nova. Só leitura: nenhum campo existente muda.
+
+### Adicionado
+
+- **Identidade nos grupos (parte 1): quem escreve é um só, seja qual for a forma do endereço.**
+  - **A Mensagem traz `autor`** (`mensagens`, `buscar`, `exportar` e `chegadas` com conteúdo, local e por rede): o endereço gravado de quem escreveu, a forma canônica que a Correspondência de endereço liga a ele (nula quando o par não é conhecido; nunca se monta um número) e o nome corrente escolhido entre as formas ligadas. Nulo na Mensagem da conta e na sem autor. O `autorId` continua como estava. Os autores da página saem em lote.
+  - **`participantes` liga as formas do mesmo endereço**: cada linha ganha `contato` (a chave de agrupamento: a forma canônica, ou o próprio endereço sem par) e `formas`, a situação de cada linha é decidida pelo evento declarado sob qualquer das formas, o autor de Mensagem recebida que só existe sob outra forma entra quando há Participação ou Transição sob alguma delas (a Presença nunca se infere de ter escrito), e `--endereco <valor>` filtra pelas formas desse endereço. O mesmo em `conversa presenca`.
+  - **`identificar` soma as formas do endereço** (bloco `contato`): pelo número e pelo endereço opaco, os mesmos totais de Conversas e de Mensagens que esse lado escreveu, com a Conversa contada uma vez. Os totais por Identificador seguem como eram.
+
 ## [0.50.1] — 2026-11-14
 
 Sem mudança na forma do Registro (v9) nem do Acervo (v32), e sem dependência nova.

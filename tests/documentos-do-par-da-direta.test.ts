@@ -43,11 +43,14 @@ test('as invariantes da recepcao dizem que a Edicao compara o endereco resolvido
 
 // "contato" esta no *Evitar* de Pessoa; o texto novo diz "quem fala" ou "o outro lado". "Contato Compartilhado" e outro termo,
 // e o nome do comando da uniao (#1440, fixado no contrato dos planos) e identificador, nao prosa: os dois saem antes da busca.
+// O campo JSON `contato` (#1517, chave de agrupamento das formas, nome do contrato dos planos do ciclo 50) e identificador
+// tambem, e sai so entre crases: a palavra solta na prosa continua reprovando.
 const semContato = (trecho: string, onde: string): void => {
   const achados =
     trecho
       .replace(/Contatos? Compartilhados?/g, '')
       .replace(/unir-conversas-do-contato/g, '')
+      .replace(/`contato`/g, '')
       .match(/\bcontatos?\b/gi) ?? [];
   assert.equal(achados.length, 0, `${onde} usa "contato", que o glossario manda evitar`);
 };

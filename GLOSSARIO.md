@@ -72,6 +72,14 @@ de receber é a **Conversa partida**, que só uma Operação própria une. Não 
 **Pessoa**: liga formas de endereço, não Identificadores a Pessoas.
 *Evitar*: mapeamento, alias, de-para, sinônimo, lid-jid, "o telefone do LID".
 
+**Família de formas** (de um Identificador):
+As formas do mesmo endereço que a **Correspondência de endereço** liga a um Identificador gravado:
+ele mesmo, a forma canônica e as alternativas dela, gravadas como Identificador ou só como
+correspondência. É o que a leitura usa para reconhecer quem fala sob qualquer forma (o autor da
+Mensagem, `participantes`, os totais de `identificar`). Sem par, a família é só o próprio endereço.
+Não é a família de **Pessoas** da mesclagem, que reúne Pessoas mescladas; a família de formas não
+liga Identificador a Pessoa nem os funde.
+
 **Conversa partida**:
 A Conversa direta da forma alternativa que deixou de receber quando o par da
 **Correspondência de endereço** foi aprendido: o histórico de quem fala fica em duas Conversas da

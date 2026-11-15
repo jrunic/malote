@@ -135,6 +135,23 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   Identificador que ganhou uso. Ele não é volta total: o que chegou depois fica, e desfazer uma promoção devolve o endereço
   opaco a uma Conversa que pode ter Mensagens das duas formas (com um par errado, a Mensagem seguinte do número cria uma
   terceira Conversa).
+- **A leitura resolve as formas do endereço pela Correspondência e nunca infere Presença de ter escrito (#1517, #1518, #1465).**
+  O autor da Mensagem, `participantes` e `identificar` usam a mesma família de formas (`familia-de-endereco.ts`: o
+  endereço gravado, a forma canônica e as alternativas dela, as que existem como Identificador e as que só existem como
+  Correspondência), resolvida **em lote** (uma consulta por tabela para a página inteira, nunca uma por Mensagem), e o
+  filtro `--endereco` de `participantes` resolve pelo mesmo caminho de `--remetente` (`identificadoresDoRemetente`). A
+  forma canônica do autor é **nula** quando nenhum par liga o endereço: nunca se monta um número. Em `participantes`, o
+  autor que só existe sob a forma opaca entra na lista quando há Participação ou Transição sob **alguma** forma da família,
+  e a situação de cada linha é decidida pelos eventos de todas as formas; quem escreveu sem nenhuma das duas, em forma
+  nenhuma, fica de fora (Transição só nasce do que a Fonte declara). Em `identificar`, os totais da família (o bloco
+  `contato`, nome de campo) contam as Mensagens de que alguma forma é autora e as
+  Conversas por `UNION` (a Participação sob uma forma e a Mensagem sob outra na mesma Conversa contam uma). Medido em
+  15/11/2026 num Acervo grande (somente leitura): de 31.691 pares autor-Conversa coletiva com Mensagem recebida, 6.462
+  não têm Participação nem Transição sob o próprio id; com a família, 5.611 passam a aparecer na lista e 851 (nenhum de
+  endereço opaco) ficam sem Participação em forma nenhuma. Dos 6.754 autores de endereço opaco, 5.464 têm par (o
+  `canonico` vem preenchido) e 1.290 não. 130 Mensagens com autor em coletiva têm direção nula e não entram no universo
+  de `participantes`. A palavra **família** aqui
+  é de endereço; a família da mesclagem (`familia.ts`) é de Pessoas, e as duas não se misturam.
 - **"Comparar dígitos serve a qualquer Fonte" tem limite, e o nono dígito brasileiro
   mora do lado de fora dele.** `nome-do-endereco.ts` (núcleo) já dizia, desde que
   nasceu: "traduzir a forma escrita do número na forma do endereço é vocabulário de
