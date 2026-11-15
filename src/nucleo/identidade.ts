@@ -533,6 +533,13 @@ export function nomeEscolhido(
   historico: NomeAtribuido[],
   precedencia: PrecedenciaDeNome,
 ): NomeAtribuido | null {
+  // O descarte (#1137) so vale QUANDO HA OUTRO nome: com o bloco como unica Atribuicao, ele segue sendo o escolhido, e
+  // nenhuma saida muda sem um nome real para ocupar o lugar. O historico recebido nao e tocado (filtro em copia).
+  const descartar = precedencia.descartarNome;
+  if (descartar !== undefined) {
+    const reais = historico.filter((n) => !descartar(n.nome));
+    if (reais.length > 0 && reais.length < historico.length) historico = reais;
+  }
   let melhor: NomeAtribuido | undefined;
   let melhorPeso = -1;
   let melhorEhPreferido = false;
