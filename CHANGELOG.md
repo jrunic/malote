@@ -25,7 +25,7 @@ do que foi publicado antes da abertura, e as tags delas pertencem ao repositóri
 
 ## [Não publicado]
 
-Sem mudança na forma do Registro (v9) nem do Acervo (v32), e sem dependência nova. Só leitura: nenhum campo existente muda.
+Sem mudança na forma do Registro (v9) nem do Acervo (v32), e sem dependência nova. Só leitura: nenhum campo existente muda de forma; o valor do nome mostrado muda onde o bloco codificado vencia (ver Corrigido).
 
 ### Adicionado
 
@@ -33,6 +33,10 @@ Sem mudança na forma do Registro (v9) nem do Acervo (v32), e sem dependência n
   - **A Mensagem traz `autor`** (`mensagens`, `buscar`, `exportar` e `chegadas` com conteúdo, local e por rede): o endereço gravado de quem escreveu, a forma canônica que a Correspondência de endereço liga a ele (nula quando o par não é conhecido; nunca se monta um número) e o nome corrente escolhido entre as formas ligadas. Nulo na Mensagem da conta e na sem autor. O `autorId` continua como estava. Os autores da página saem em lote.
   - **`participantes` liga as formas do mesmo endereço**: cada linha ganha `contato` (a chave de agrupamento: a forma canônica, ou o próprio endereço sem par) e `formas`, a situação de cada linha é decidida pelo evento declarado sob qualquer das formas, o autor de Mensagem recebida que só existe sob outra forma entra quando há Participação ou Transição sob alguma delas (a Presença nunca se infere de ter escrito), e `--endereco <valor>` filtra pelas formas desse endereço. O mesmo em `conversa presenca`.
   - **`identificar` soma as formas do endereço** (bloco `contato`): pelo número e pelo endereço opaco, os mesmos totais de Conversas e de Mensagens que esse lado escreveu, com a Conversa contada uma vez. Os totais por Identificador seguem como eram.
+
+### Corrigido
+
+- **O nome real vence o bloco codificado (#1137).** A plataforma às vezes grava, no campo de nome do contato, um bloco codificado e ilegível (metadado serializado: `+` seguido de base64 com preenchimento), com Autoridade `titular`, que vencia o nome que a pessoa escolheu. A escolha do nome corrente passa a descartá-lo quando existe outro nome, em `participantes`, `identificar`, `exportar`, no `autor` da Mensagem e em toda leitura que mostra nome, local e por rede. O bloco não é apagado (segue em `nomes` de `identificar`) e, quando é a única Atribuição, segue sendo o nome mostrado. Medido nos Acervos de produção: o nome mostrado muda em 279 Pessoas, 1.624 endereços sem Pessoa e 1.106 endereços com Pessoa na leitura por endereço.
 
 ## [0.50.1] — 2026-11-14
 

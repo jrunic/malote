@@ -124,6 +124,11 @@ Observações:
   Mensagem recebida** do grupo que só existe sob outra forma, quando há Participação ou Transição sob alguma delas; quem escreveu e
   não tem nenhuma das duas, em forma nenhuma, **não** entra (a Presença nunca se infere de ter escrito: leia-o pelo
   `autor` da Mensagem). `--endereco <valor>` devolve só as linhas das formas desse endereço, por qualquer delas.
+- **O nome real vence o bloco codificado.** Quando um endereço tem, além de um nome real, uma Atribuição em forma de bloco
+  codificado (o metadado serializado e ilegível que a plataforma às vezes grava no campo de nome: `+` seguido de base64 com
+  preenchimento), o nome corrente é o real, em `participantes`, `identificar`, `exportar`, no `autor` da Mensagem e em
+  toda leitura que mostra nome. O bloco continua na lista `nomes` de `identificar`. Sem outro nome, o bloco segue sendo o
+  nome mostrado.
 - **`anexos`:** o id da última coluna é o que se passa a `malote midia`. Anexo `nunca-obtido` ou
   `descartado` aparece na lista, mas só `presente` tem bytes.
 - **`exportar`:** horários em UTC. O arquivo nasce como `<saida>.parcial` e só vira definitivo ao fim; se

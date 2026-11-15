@@ -174,6 +174,22 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   recusa pela FORMA (`pareceValorSentinela`) antes de gravar — 14 Pessoas já exibiam
   esse lixo como nome corrente antes da correção, e a limpeza do que já está gravado
   ainda não existe (ver Pendências).
+- **A leitura do nome corrente descarta o bloco codificado quando existe outro nome; o
+  dado fica (#1137).** O predicado é o mesmo da gravação (`pareceValorSentinela`), é do
+  Adaptador e entra pela precedência (`comDescarteDeNome` põe `descartarNome` nela), na
+  camada que compõe: a rede (o módulo é puro, sem import, e está na lista de exceções
+  da fronteira) e a CLI. O núcleo (`nomeEscolhido`) só filtra quando sobra nome real; o
+  bloco como única Atribuição segue sendo o escolhido. `pessoa precedencia` imprime a
+  precedência sem o predicado, porque não resolve nome. `descartarNome` é função: não
+  atravessa `postMessage`, e a precedência nasce dentro do worker de leitura. Medido em
+  15/11/2026 nos quatro Acervos de produção, com a precedência padrão (a que rodava): o
+  nome escolhido muda em **279 Pessoas, 1.624 Identificadores sem Pessoa e 1.106
+  Identificadores com Pessoa** na leitura por Identificador (`identificar`); seguem no
+  bloco, por não terem outro nome, 13.720 Identificadores sem Pessoa e nenhuma Pessoa.
+  Dos ~4.100 valores distintos com a forma, 266 não são só metadado (varint e cadeia
+  vazia): todos são protobuf válido e 250 levam DENTRO uma cadeia de texto (a maioria
+  com espaço, cara do nome do contato serializado na mesma mutação). O valor gravado
+  segue ilegível; o que o descarte esconde é o bloco, não um nome legível.
 - **A remoção de Atribuição inválida classifica endereço-repetido PRIMEIRO.** Só
   depois marca-duplicata, e essa só remove se sobrar uma irmã que não vá ser
   removida também. Invertido, as linhas que são **as duas coisas** seguram uma à

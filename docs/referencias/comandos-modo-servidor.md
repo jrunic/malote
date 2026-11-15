@@ -206,7 +206,7 @@ As mesmas consultas do modo cliente, lendo o Acervo direto, com `--inquilino <id
 `conversas`, `mensagens`, `anexos`, `exportar`, `buscar`, `pessoas`, `participantes`, `etiquetas`, `chegadas`, `identificar <valor>` e `detalhar`. Flags, formatos e o
 significado de `--remetente` e `--autor` estão na [referência do modo cliente](comandos-modo-cliente.md); a
 diferença é o `--inquilino` e o fato de **`malote midia <id>`** (os bytes do Anexo) só existir por rede:
-local, o arquivo já está em disco, e o caminho vem no campo `caminho` de `mensagens --json`. A resposta de `buscar` traz `truncado`, e `ordem` aceita `recentes` (padrão) ou `cronologica`. O `autor` da Mensagem, o `contato` e as `formas` de `participantes` (com `--endereco`) e o bloco `contato` de `identificar` saem iguais no modo local; `participantes` local não traz nome nem Pessoa (só o modo rede os acrescenta).
+local, o arquivo já está em disco, e o caminho vem no campo `caminho` de `mensagens --json`. A resposta de `buscar` traz `truncado`, e `ordem` aceita `recentes` (padrão) ou `cronologica`. O `autor` da Mensagem, o `contato` e as `formas` de `participantes` (com `--endereco`) e o bloco `contato` de `identificar` saem iguais no modo local; `participantes` local não traz nome nem Pessoa (só o modo rede os acrescenta). Nas leituras locais que mostram nome, o nome real vence o bloco codificado, como no modo rede (ver a referência do modo cliente).
 
 Além delas, só existem locais:
 
