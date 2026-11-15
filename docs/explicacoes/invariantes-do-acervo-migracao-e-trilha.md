@@ -40,7 +40,27 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
 - **O Piso é o maior número removido e o Marcador é válido sse é da época atual, maior ou igual ao Piso e menor ou igual à última Chegada.** O "acima da última" cobre o Acervo restaurado de uma cópia anterior, em que a época se mantém e a sequência volta ao ponto da cópia; "época diferente" sozinha não pegaria esse caso. O zero nunca é válido porque o Piso nasce no número da `inicio-do-diario`. A fronteira `>` contra `>=` do Piso e da última é a que os mutantes de `tests/chegada-marcador.test.ts` guardam.
 - **O Acervo novo nasce semeado numa transação só (schema, versão e a Chegada `inicio-do-diario`), e o passo v30 faz a mesma semente, idempotente.** O teste de equivalência de forma compara estrutura, não linhas; um teste à parte (`tests/chegada-migracao.test.ts`) confere que o Acervo novo e o migrado do piso nascem com a mesma semente. Sem a semente não há Marcador atual: a leitura recusa com a causa em vez de inventar um.
 - **A aparagem remove um PREFIXO da ordem de gravação, nunca a Chegada de maior número, e só grava Operação quando removeu.** Para na primeira Chegada ainda dentro da retenção, mesmo que depois haja outra mais velha pelo relógio (relógio que andou para trás), porque o Piso diz "tudo até aqui saiu". A fronteira é `seq >= Piso`: a `inicio-do-diario` nasce com o número igual ao Piso e é a primeira a sair. O tique que não remove nada não deixa Operação, porque a frota lê a ausência de Operação como sinal e uma por hora por Inquilino seria ruído. O `UPDATE` do Piso usa `MAX(piso, ?)` para que uma passada concorrente não o desça; esse mutante sobrevive por equivalência num teste sequencial.
+- **O reaponto dos serializados relata três linhas de efeito, e o `desfazer` confere o valor atual antes de cada uma
+  (#1519).** `transicoes_de_participacao.identificador_id` (a Transição reapontada; volta ao Identificador de origem só se
+  ainda pende do destino e se o evento está livre na origem), `transicoes_de_participacao.removida-por-fusao` (a linha inteira,
+  em JSON: a Transição que repetia o evento já gravado sob o destino sai, porque a regra de unicidade `(fonte, id_externo,
+  identificador_id)` recusaria o reapontar; volta só se o id e o evento estão livres) e `identificadores.removido` (volta com
+  o **mesmo id**, só se o id e o valor estão livres). Os três casos ficam em `desfazer.ts` **antes** do ramo genérico da
+  resolução retroativa e, por casarem a tabela e o campo, passam a devolver também, com a mesma guarda, as linhas
+  `transicoes_de_participacao.identificador_id` que a resolução retroativa relata (antes, um UPDATE sem conferir o valor
+  atual). A **Chegada não é referência que recusa**: o Diário só acrescenta, a Operação não a toca, e a Chegada fica com o id
+  do Identificador removido até o `desfazer` recriá-lo (0 Chegadas citavam serializados em 15/11/2026: são anteriores ao
+  Diário). O inventário caro (`mensagens.citada_autor_id` e `chegadas.autor_id`, sem índice) roda **uma vez, em lote, fora
+  de transação**; cada Identificador é uma transação `immediate` curta, e a remoção usa a guarda `SQL_REMOVER_SERIALIZADO`,
+  que não lê nem a citação nem as Chegadas.
 
 ## Limitação conhecida
 
+- **A remoção do serializado ainda varre `mensagens` sob o lock, pela chave estrangeira (#1519).** O `DELETE FROM
+  identificadores` dispara o `ON DELETE SET NULL` de `mensagens.citada_autor_id`, que não tem índice, e o SQLite varre a tabela
+  por Identificador removido; `participacoes`, `transicoes_de_participacao`, `etiquetas_de_participacao` e `desvinculos`
+  também não têm índice que comece por `identificador_id`. Medido em bancada (200 mil Mensagens, com um escritor
+  concorrente): 181 ms de lock por item, dos quais 124 ms são a chave estrangeira, e o escritor perdeu 10 de 182 escritas por
+  banco ocupado, porque um item começa assim que o anterior termina. No Acervo grande (1,79 milhão de Mensagens) o lock passa de
+  1 s por item. **Não rodar o estoque com o ouvinte no ar** antes da correção (índice e pausa entre itens, decisão pendente).
 - **Entre migrar e registrar a migração na trilha há uma janela, e ela é aceita.** A migração roda primeiro e a Operação `migrar-base` é gravada depois, na forma **nova** das tabelas (`migrarComTrilha`), que é o que permite a um passo alterar as tabelas da trilha. Se o processo morrer entre as duas coisas, a base fica migrada sem a linha na trilha. A contabilidade de verdade é `migracoes_aplicadas`, escrita **dentro** da transação da migração; a trilha é o segundo registro, para quem audita. A Operação também não existe durante a conferência, então um passo não declara `+1` para `operacoes`.

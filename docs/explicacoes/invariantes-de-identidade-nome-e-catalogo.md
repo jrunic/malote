@@ -152,6 +152,36 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   `canonico` vem preenchido) e 1.290 não. 130 Mensagens com autor em coletiva têm direção nula e não entram no universo
   de `participantes`. A palavra **família** aqui
   é de endereço; a família da mesclagem (`familia.ts`) é de Pessoas, e as duas não se misturam.
+- **O Identificador de WhatsApp só nasce pela porta do Adaptador, que confere a forma do endereço (#1519).**
+  `registrarIdentificadorDeWhatsapp` (`endereco-de-whatsapp.ts`) é a única chamada de `registrarIdentificador` em
+  `src/adaptadores/whatsapp`, e grava só `<texto sem espaço, chave nem aspas>@<sufixo>`; o resto devolve nulo e **nunca
+  lança** (a exceção que escapa da recepção derruba o ouvinte por 70). A guarda `tests/porta-de-identificador-whatsapp.test.ts`
+  reprova a chamada direta nesse diretório. A checagem mora na porta de **gravação** do Adaptador, que o resolvedor alimenta,
+  e não no resolvedor, que nunca recusa; o núcleo continua sem conhecer as formas de endereço de uma Fonte. **Três caminhos do
+  núcleo criam Identificador de WhatsApp sem ela**: a declaração da conta (`endereco-da-conta.ts`), a resolução retroativa
+  (`resolucao-retroativa.ts`) e a união das Conversas (`registrarIdentificadorComEfeito`); os valores deles vêm de
+  Configuração e de par já gravado, nunca de evento. Instagram e o catálogo de agenda não têm a checagem (nome de exibição e e-mail são
+  Identificadores legítimos neles). O parâmetro do evento de entrada e saída às vezes é o **objeto do participante
+  serializado** (`{"id": ..., "phoneNumber": ..., "admin": ...}`): a Transição grava sob o `id` do objeto, resolvido pela
+  Correspondência, sem aprender o par do telefone na recepção; o que não se lê conta `parametro-sem-endereco` e, quando é
+  objeto, também `parametro-serializado-ilegivel`; o autor ou a Etiqueta recusados contam `endereco-invalido` (as três
+  chaves vão à série de descartes do `ouvinte estado --json`), e a importação conta `enderecosInvalidos`. O autor recusado
+  grava a Mensagem **sem autor**, nunca a perde. O estado ao vivo (a agenda sincronizada) recusa em silêncio, sem
+  contador: o nome daquele endereço fica de fora. Medido em 15/11/2026 no Acervo do Titular: 3.706 valores serializados com
+  5.595 Transições, todos de 07 a 10/09/2026, vindos do conversor do acervo antigo pela porta da recepção ao vivo. O
+  **Identificador de valor vazio** (537 Mensagens e 211 Participações no mesmo Acervo) é o único legítimo que a regra recusa:
+  a reentrega ou a reimportação dessas Mensagens grava sem autor e conta, em vez de ligá-las ao vazio (a origem do vazio,
+  provavelmente `participant` vazio que o `??` não pega, não foi medida). A checagem custa de 0,0002 a 0,0013 ms por
+  chamada (medido), e roda também na Mensagem comum de grupo, porque o autor passa pela porta a cada Mensagem.
+- **`identidade reapontar-identificadores-serializados` limpa o estoque (#1519).** Para cada Identificador de WhatsApp de
+  valor serializado, o destino é o canônico do par que o `id` do objeto já tem (o par existente vence e nunca é
+  sobrescrito); sem par e com telefone, o telefone resolvido pela decisão do resolvedor (`decidirEnderecoDeWhatsapp`, que só
+  lê), com o par do `id` para ele e o do nono dígito, se houver; sem telefone, o próprio `id`. O `id` que é canônico de outro
+  par é conflito (cadeia de dois passos), e o Identificador que algo além de Transição referencia é achado: nada é tocado. Os
+  valores **com telefone vão primeiro**: o mesmo participante aparece serializado em mais de um valor (o `admin` muda, o
+  telefone falta em alguns; 4 casos no Acervo do Titular), e o valor sem telefone só chega ao número se o par do `id` já foi
+  aprendido; na ordem de id ele iria ao endereço opaco e quem fala ficaria partido entre dois Identificadores. O ensaio carrega em memória os pares que
+  já previu, para contar cada par uma vez e mandar ao número o que o efeito manda; o `--limite` corta depois dessa ordem.
 - **"Comparar dígitos serve a qualquer Fonte" tem limite, e o nono dígito brasileiro
   mora do lado de fora dele.** `nome-do-endereco.ts` (núcleo) já dizia, desde que
   nasceu: "traduzir a forma escrita do número na forma do endereço é vocabulário de

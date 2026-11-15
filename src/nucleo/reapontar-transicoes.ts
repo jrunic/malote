@@ -215,6 +215,9 @@ export function reapontarTransicoes(
  * `mensagens.citada_autor_id` (sem indice: 1 a 7 s) nem `chegadas` (a Chegada nao e reescrita; decisao do ciclo 50): o
  * inventario em lote, fora do lock, ja recusou o item que tinha citacao, e a porta fechada impede referencia nova a valor
  * serializado. Conferido por EXISTS e nunca deixado a chave estrangeira: as de `identificadores` sao em cascata ou anulam.
+ * LIMITE MEDIDO (15/11/2026, bancada de 200 mil Mensagens): o DELETE em si dispara o `ON DELETE SET NULL` de
+ * `mensagens.citada_autor_id`, e o SQLite VARRE `mensagens` por Identificador removido (124 de 181 ms de lock por item); no Acervo
+ * grande passa de 1 s. Ver a limitacao em `docs/explicacoes/invariantes-do-acervo-migracao-e-trilha.md`.
  */
 export const SQL_REMOVER_SERIALIZADO = `DELETE FROM identificadores
   WHERE id = ?
