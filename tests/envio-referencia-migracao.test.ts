@@ -22,7 +22,7 @@ function colunaDaReferencia(db: import('better-sqlite3').Database): Coluna | und
 }
 
 test('o Acervo na v31 sobe para a v32 com a Referencia Externa no Envio, sem perder Envio', () => {
-  assert.equal(VERSAO_SCHEMA_ACERVO, 32);
+  assert.equal(VERSAO_SCHEMA_ACERVO, 33);
   const c = cenario();
   try {
     const { id, acervo } = c.novoInquilino('Teste');
@@ -46,7 +46,7 @@ test('o Acervo na v31 sobe para a v32 com a Referencia Externa no Envio, sem per
 
     const migrado = abrirAcervo(join(c.raiz, 'acervos'), id, { configuracoes: [CFG_WHATSAPP] });
     try {
-      assert.equal((migrado.db.prepare('SELECT versao FROM versao_schema').get() as { versao: number }).versao, 32);
+      assert.equal((migrado.db.prepare('SELECT versao FROM versao_schema').get() as { versao: number }).versao, 33);
       const coluna = colunaDaReferencia(migrado.db);
       assert.ok(coluna, 'o passo nao criou a coluna');
       assert.equal(coluna.type, 'TEXT');

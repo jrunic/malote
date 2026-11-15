@@ -1090,6 +1090,23 @@ const REFERENCIA_DO_ENVIO_V32: PassoDeMigracao = {
   },
 };
 
+/**
+ * v32 -> v33: o indice por autor da Mensagem citada (#1519). Remover um Identificador dispara o `ON DELETE SET NULL` de
+ * `mensagens.citada_autor_id`, e sem indice o banco varre a tabela inteira dentro do lock. Indice parcial (a coluna e nula na
+ * grande maioria das Mensagens). Nao muda linha nenhuma. DDL congelado, idempotente (o schema fresco ja o tem). Leve: sem contexto.
+ */
+const INDICE_DE_CITADA_AUTOR_V33: PassoDeMigracao = {
+  de: 32,
+  para: 33,
+  descricao: 'cria o indice por autor da Mensagem citada',
+  aplicar: (db) => {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_mensagens_citada_autor
+        ON mensagens(citada_autor_id) WHERE citada_autor_id IS NOT NULL;
+    `);
+  },
+};
+
 export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CRIA_CONTABILIDADE,
   CRIA_CORRESPONDENCIAS,
@@ -1113,6 +1130,7 @@ export const PASSOS_DO_ACERVO: readonly PassoDeMigracao[] = [
   CHEGADAS_V30,
   INDICE_DE_CANONICO_V31,
   REFERENCIA_DO_ENVIO_V32,
+  INDICE_DE_CITADA_AUTOR_V33,
 ];
 
 export const PLANO_DO_ACERVO: PlanoDeMigracao = {

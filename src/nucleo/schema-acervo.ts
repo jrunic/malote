@@ -9,7 +9,7 @@ import type { Database } from 'better-sqlite3';
  * Politica completa das duas bases na ADR local
  * `20260901-politica-de-forma-por-base.md`.
  */
-export const VERSAO_SCHEMA_ACERVO = 32;
+export const VERSAO_SCHEMA_ACERVO = 33;
 
 /**
  * Forma mais antiga que a maquina de migracao alcanca.
@@ -417,6 +417,10 @@ export function aplicarSchemaAcervo(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_mensagens_conversa ON mensagens(conversa_id, ocorrida_em);
     CREATE INDEX IF NOT EXISTS idx_mensagens_autor    ON mensagens(autor_id);
     CREATE INDEX IF NOT EXISTS idx_mensagens_momento  ON mensagens(ocorrida_em);
+    -- Remover um Identificador dispara o ON DELETE SET NULL de citada_autor_id; sem este indice o banco varre a tabela mensagens
+    -- inteira dentro do lock de quem remove (medido: ~124 ms por remocao com 200 mil Mensagens, ~1,1 s estimado com 1,79 milhao).
+    -- O Titular decidiu o indice (v33) no lugar de aceitar o lock longo (#1519).
+    CREATE INDEX IF NOT EXISTS idx_mensagens_citada_autor ON mensagens(citada_autor_id) WHERE citada_autor_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS mensagens_por_citada_externa
       ON mensagens (fonte, citada_id_externo) WHERE citada_id_externo IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_identificadores_pessoa ON identificadores(pessoa_id);
