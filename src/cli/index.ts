@@ -2,7 +2,7 @@
 import { lerPedidoDeEtiquetas, formatarEtiquetas } from './etiquetas.js';
 import { lerPedidoDeChegadas, formatarChegadas } from './chegadas.js';
 import { apararDiario, lerChegadas, LOTE_DA_APARAGEM, MarcadorExpiradoError, MarcadorInvalidoError, pontoDePartida, RETENCAO_PADRAO_DO_DIARIO_EM_DIAS, type FiltroDeChegadas } from '../nucleo/chegada.js';
-import { lerChegadasComConteudo } from '../nucleo/chegadas-com-conteudo.js';
+import { lerChegadasComConteudo, TETO_DE_BYTES_COM_CONTEUDO } from '../nucleo/chegadas-com-conteudo.js';
 import { acrescentarEtiquetas, listarEtiquetas } from '../nucleo/etiqueta-de-participacao.js';
 import { execFileSync } from 'node:child_process';
 import {
@@ -2653,6 +2653,7 @@ function executarComAtor(
           ...(direcaoOpcao === undefined ? {} : { direcao: direcaoOpcao }),
           ...(limite === undefined ? {} : { limite: Number(limite) }),
           ordem,
+          precedencia: lerPrecedenciasDeNome(registro, inquilino),
           ...(antes === undefined
             ? {}
             : {
@@ -2827,6 +2828,7 @@ function executarComAtor(
           ...(ate === undefined ? {} : { ate: expandirData(ate, 'fim') }),
           limite: limiteEfetivo,
           ordem,
+          precedencia: lerPrecedenciasDeNome(registro, inquilino),
         });
         if (temBandeira(argumentos, 'json')) {
           escrever(JSON.stringify(achadas, null, 2));
@@ -3103,7 +3105,14 @@ function executarComAtor(
           ...(pedido.tipos.length > 0 ? { tipos: pedido.tipos } : {}),
           ...(pedido.origens.length > 0 ? { origens: pedido.origens } : {}),
         };
-        const pagina = pedido.comConteudo ? lerChegadasComConteudo(acervo, filtro) : lerChegadas(acervo, filtro);
+        const pagina = pedido.comConteudo
+          ? lerChegadasComConteudo(
+              acervo,
+              filtro,
+              TETO_DE_BYTES_COM_CONTEUDO,
+              lerPrecedenciasDeNome(registro, inquilino),
+            )
+          : lerChegadas(acervo, filtro);
         if (temBandeira(argumentos, 'json')) escrever(JSON.stringify(pagina, null, 2));
         else for (const l of formatarChegadas(pagina)) escrever(l);
       } catch (erro) {

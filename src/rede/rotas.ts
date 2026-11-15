@@ -63,7 +63,7 @@ import {
   type OrigemDaChegada,
   type TipoDeChegada,
 } from '../nucleo/chegada.js';
-import { lerChegadasComConteudo } from '../nucleo/chegadas-com-conteudo.js';
+import { lerChegadasComConteudo, TETO_DE_BYTES_COM_CONTEUDO } from '../nucleo/chegadas-com-conteudo.js';
 import { lerPrecedenciasDeNome, type PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
 
 /**
@@ -556,6 +556,16 @@ async function responderSolicitacaoDeEnvio(
   }
 }
 
+/** A precedencia de nomes do Inquilino da chave, lida do Registro em leitura somente (o nome do autor depende dela, #1517). */
+function precedenciaDoInquilino(ctx: ContextoDaRequisicao): PrecedenciaDeNome {
+  const registro = abrirRegistroSomenteLeitura(ctx.dados);
+  try {
+    return lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+  } finally {
+    registro.fechar();
+  }
+}
+
 export function responder(req: IncomingMessage, res: ServerResponse, ctx: ContextoDaRequisicao): void {
   const url = new URL(req.url ?? '/', 'http://interno');
   const partes = url.pathname.split('/').filter((p) => p !== '');
@@ -825,6 +835,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       ...(limite !== null ? { limite: Number(limite) } : {}),
       ordem,
       ...(cursor !== undefined ? { cursor } : {}),
+      precedencia: precedenciaDoInquilino(ctx),
     });
 
     // Sem a ambiguidade da rota por Conversa: aqui vazio e resultado
@@ -942,7 +953,9 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       ...(origens !== undefined ? { origens: origens as OrigemDaChegada[] } : {}),
     };
     try {
-      json(res, 200, conteudo === '1' ? lerChegadasComConteudo(ctx.acervo, filtro) : lerChegadas(ctx.acervo, filtro));
+      json(res, 200, conteudo === '1'
+          ? lerChegadasComConteudo(ctx.acervo, filtro, TETO_DE_BYTES_COM_CONTEUDO, precedenciaDoInquilino(ctx))
+          : lerChegadas(ctx.acervo, filtro));
     } catch (erro) {
       if (erro instanceof MarcadorInvalidoError) {
         json(res, 400, { erro: erro.message });
@@ -1216,6 +1229,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       ...(favorito === 'true' ? { favorito: true, configuracaoId: configuracaoId! } : {}),
       ...(cursor !== undefined ? { cursor } : {}),
       ordem,
+      precedencia: precedenciaDoInquilino(ctx),
     });
 
     // A Conversa ja provou que existe, acima — lista vazia aqui e sempre
@@ -1278,6 +1292,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       ...(filtroAte !== undefined ? { ate: filtroAte } : {}),
       ...(limite !== null ? { limite: Number(limite) } : {}),
       ...(ordemParam !== null ? { ordem: ordemParam } : {}),
+      precedencia: precedenciaDoInquilino(ctx),
     }));
     return;
   }
