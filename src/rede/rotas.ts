@@ -65,6 +65,7 @@ import {
 } from '../nucleo/chegada.js';
 import { lerChegadasComConteudo, TETO_DE_BYTES_COM_CONTEUDO } from '../nucleo/chegadas-com-conteudo.js';
 import { lerPrecedenciasDeNome, type PrecedenciaDeNome } from '../registro/precedencia-de-nome.js';
+import { comDescarteDeNome } from '../adaptadores/whatsapp/nome-sentinela-de-contato.js';
 
 /**
  * As rotas. Cada uma recebe o Acervo que a Chave abriu e devolve dado.
@@ -560,7 +561,7 @@ async function responderSolicitacaoDeEnvio(
 function precedenciaDoInquilino(ctx: ContextoDaRequisicao): PrecedenciaDeNome {
   const registro = abrirRegistroSomenteLeitura(ctx.dados);
   try {
-    return lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+    return comDescarteDeNome(lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId));
   } finally {
     registro.fechar();
   }
@@ -645,7 +646,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const registro = abrirRegistroSomenteLeitura(ctx.dados);
     let precedencia: PrecedenciaDeNome;
     try {
-      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+      precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId));
     } finally {
       registro.fechar();
     }
@@ -711,7 +712,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
       apelidoPorId = new Map(
         listarConfiguracoes(registro, ctx.identidade.inquilinoId).map((c) => [c.id, c.apelido]),
       );
-      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+      precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId));
     } finally {
       registro.fechar();
     }
@@ -1017,7 +1018,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const registro = abrirRegistroSomenteLeitura(ctx.dados);
     let precedencia: PrecedenciaDeNome;
     try {
-      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+      precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId));
     } finally {
       registro.fechar();
     }
@@ -1334,7 +1335,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const registro = abrirRegistroSomenteLeitura(ctx.dados);
     let precedencia: PrecedenciaDeNome;
     try {
-      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+      precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId));
     } finally {
       registro.fechar();
     }
@@ -1377,7 +1378,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     let fuso: string = PADROES_DO_DESTINO_REMOTO.fuso;
     let destinoRemoto = false;
     try {
-      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+      precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId));
       const remoto = lerDestinoRemotoDeMidia(registro, ctx.identidade.inquilinoId);
       if (remoto !== undefined) {
         fuso = remoto.fuso;
@@ -1424,7 +1425,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     let precedencia: PrecedenciaDeNome;
     let apelidoPorId: Map<string, string>;
     try {
-      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+      precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId));
       apelidoPorId = new Map(listarConfiguracoes(registro, ctx.identidade.inquilinoId).map((c) => [c.id, c.apelido]));
     } finally {
       registro.fechar();
@@ -1457,7 +1458,7 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     const registro = abrirRegistroSomenteLeitura(ctx.dados);
     let precedencia: PrecedenciaDeNome;
     try {
-      precedencia = lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId);
+      precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, ctx.identidade.inquilinoId));
     } finally {
       registro.fechar();
     }

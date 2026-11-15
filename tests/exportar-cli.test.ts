@@ -12,7 +12,8 @@ import { instalacaoTemporaria } from './ajuda/instalacao.js';
 import { abrirRegistro, criarInquilino } from '../src/registro/registro.js';
 import { abrirAcervo } from '../src/nucleo/acervo.js';
 import { registrarMensagem } from '../src/nucleo/escrita.js';
-import { semearIdentidade, subirCenaDeIdentidade, BRUNO_LID, PRECEDENCIA } from './ajuda/identidade.js';
+import { semearIdentidade, subirCenaDeIdentidade, BRUNO_LID, PRECEDENCIA, minuto } from './ajuda/identidade.js';
+import { registrarNome } from '../src/nucleo/identidade.js';
 import { semearMidia } from './ajuda/midia.js';
 
 const INDEX = join(import.meta.dirname, '..', 'src', 'cli', 'index.ts');
@@ -359,6 +360,41 @@ test('exportar LOCAL atravessa paginas: com pagina de 2, as nove Mensagens saem 
     } finally {
       acervo.fechar();
     }
+  } finally {
+    limpar();
+  }
+});
+
+test('exportar LOCAL: o autor com o bloco codificado e um nome real sai pelo nome real (#1137)', () => {
+  const { raiz, limpar } = instalacaoTemporaria();
+  try {
+    const registro = abrirRegistro(raiz);
+    const inquilino = criarInquilino(registro, { titularNome: 'Titular' });
+    registro.fechar();
+    const acervo = abrirAcervo(join(raiz, 'acervos'), inquilino);
+    const s = semearIdentidade(acervo);
+    const bloco = '+EAAYrP740wYgAQ==';
+    registrarNome(acervo, { identificadorId: s.edu, origem: 'whatsapp', nome: bloco, autoridade: 'titular' });
+    registrarNome(acervo, { identificadorId: s.edu, origem: 'whatsapp', nome: 'Edu Real', autoridade: 'terceiro' });
+    registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
+      conversaId: s.grupo,
+      fonte: 'whatsapp',
+      idExterno: 'nb-exp-1',
+      autorId: s.edu,
+      conteudo: 'oi do bloco',
+      ocorridaEm: minuto(70),
+      agora: Date.now(),
+      direcao: 'recebida',
+    });
+    acervo.fechar();
+    const txt: string[] = [];
+    assert.equal(
+      executar(['exportar', '--inquilino', inquilino, '--conversa', s.grupo], { dados: raiz, estado: raiz, escrever: (t: string) => txt.push(t) }),
+      0,
+    );
+    assert.match(txt.join('\n'), /Edu Real: oi do bloco/);
+    assert.doesNotMatch(txt.join('\n'), /EAAYrP740wYgAQ/);
   } finally {
     limpar();
   }

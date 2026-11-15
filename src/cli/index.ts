@@ -133,7 +133,7 @@ import {
   resolverFiltroDeConfiguracao,
 } from '../registro/configuracao-adaptador.js';
 import { CONTA_PADRAO } from '../adaptadores/whatsapp/material.js';
-import { pareceValorSentinela } from '../adaptadores/whatsapp/nome-sentinela-de-contato.js';
+import { comDescarteDeNome, pareceValorSentinela } from '../adaptadores/whatsapp/nome-sentinela-de-contato.js';
 import { nomeRepeteONumeroBrasileiro } from '../adaptadores/whatsapp/nome-repete-numero-br.js';
 import { importarCatalogo } from '../adaptadores/contatos/importar.js';
 import { FONTES_VARRIVEIS, varrer } from './varredura.js';
@@ -2560,7 +2560,7 @@ function executarComAtor(
       const limite = opcao(argumentos, 'limite');
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
-        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino));
         const filtro = limite === undefined ? {} : { limite: Number(limite) };
         for (const l of listarSemEndereco(acervo, precedencia, filtro)) {
           escrever(
@@ -2662,7 +2662,7 @@ function executarComAtor(
           ...(direcaoOpcao === undefined ? {} : { direcao: direcaoOpcao }),
           ...(limite === undefined ? {} : { limite: Number(limite) }),
           ordem,
-          precedencia: lerPrecedenciasDeNome(registro, inquilino),
+          precedencia: comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino)),
           ...(antes === undefined
             ? {}
             : {
@@ -2732,7 +2732,7 @@ function executarComAtor(
           listarConfiguracoes(registro, inquilino).map((c) => [c.id, c.apelido]),
         );
 
-        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino));
         const antes = opcao(argumentos, 'antes');
         const tudo = temBandeira(argumentos, 'tudo');
         if (tudo && antes !== undefined) {
@@ -2837,7 +2837,7 @@ function executarComAtor(
           ...(ate === undefined ? {} : { ate: expandirData(ate, 'fim') }),
           limite: limiteEfetivo,
           ordem,
-          precedencia: lerPrecedenciasDeNome(registro, inquilino),
+          precedencia: comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino)),
         });
         if (temBandeira(argumentos, 'json')) {
           escrever(JSON.stringify(achadas, null, 2));
@@ -2953,7 +2953,7 @@ function executarComAtor(
       if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
-        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino));
         const filtro = temBandeira(argumentos, 'incluir-absorvidas')
           ? { incluirAbsorvidas: true }
           : {};
@@ -2980,7 +2980,7 @@ function executarComAtor(
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
         const apelidoPorId = new Map(listarConfiguracoes(registro, inquilino).map((c) => [c.id, c.apelido]));
-        const detalhe = detalharConversa(acervo, conversa, lerPrecedenciasDeNome(registro, inquilino), apelidoPorId);
+        const detalhe = detalharConversa(acervo, conversa, comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino)), apelidoPorId);
         if (detalhe === undefined) {
           escrever(`Conversa desconhecida: ${conversa}`);
           return 2;
@@ -3008,7 +3008,7 @@ function executarComAtor(
       }
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
-        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino));
         const r = identificarPorValor(
           acervo,
           { valor, ...(fonteOpcao !== undefined ? { fonte: fonteOpcao } : {}) },
@@ -3119,7 +3119,7 @@ function executarComAtor(
               acervo,
               filtro,
               TETO_DE_BYTES_COM_CONTEUDO,
-              lerPrecedenciasDeNome(registro, inquilino),
+              comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino)),
             )
           : lerChegadas(acervo, filtro);
         if (temBandeira(argumentos, 'json')) escrever(JSON.stringify(pagina, null, 2));
@@ -3166,7 +3166,7 @@ function executarComAtor(
                 valor: pedido.remetente,
                 ...(fonteDoRemetente !== undefined ? { fonte: fonteDoRemetente } : {}),
               });
-        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino));
         const lista = listarEtiquetas(
           acervo,
           {
@@ -3269,7 +3269,7 @@ function executarComAtor(
       if (inquilino === undefined) throw new Error('Informe --inquilino.');
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
-        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino));
         return executarExportarLocal(acervo, precedencia, lido.pedido, { escrever, erro: escrever });
       } finally {
         acervo.fechar();
@@ -3283,7 +3283,7 @@ function executarComAtor(
       if (pessoaId === undefined) throw new Error('Informe --pessoa <id>.');
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
-        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino));
         const p = lerPessoa(acervo, pessoaId, precedencia);
         if (p === null) throw new Error(`Pessoa desconhecida: ${pessoaId}`);
 
