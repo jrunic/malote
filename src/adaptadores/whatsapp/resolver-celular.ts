@@ -88,6 +88,17 @@ export function resolverEnderecoDeWhatsapp(
   return usado;
 }
 
+/**
+ * O que `resolverEnderecoDeWhatsapp` faria, SEM escrever: o endereco usado e o par a aprender (nulo quando nao ha). Para o ensaio
+ * de quem precisa prever o par sem grava-lo (#1519): o ensaio que chamasse o resolvedor aprenderia o par do nono digito.
+ */
+export function decidirEnderecoDeWhatsapp(
+  acervo: Acervo,
+  endereco: string,
+): { usado: string; par: { fonte: typeof FONTE; alternativo: string; canonico: string } | null } {
+  return decidir(acervo, endereco, false);
+}
+
 /** O que o endereco resolve e o par a aprender (nulo quando nao ha). So le: quem escreve e `resolverEnderecoDeWhatsapp`. */
 function decidir(
   acervo: Acervo,

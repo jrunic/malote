@@ -40,6 +40,8 @@ const CHAMADAS: Record<string, Record<string, number>> = {
   'src/adaptadores/whatsapp/estado-ao-vivo.ts': { registrarIdentificadorDeWhatsapp: 1, aprenderCorrespondencia: 1 },
   'src/adaptadores/whatsapp/importar.ts': { registrarIdentificadorDeWhatsapp: 3, registrarConversa: 1, aprenderCorrespondencia: 1 },
   'src/adaptadores/whatsapp/metadados-de-coletiva-ao-vivo.ts': { registrarConversa: 2, registrarMetadadosDeColetiva: 2 },
+  // O estoque dos Identificadores serializados (#1519): o par e o destino vem de `decidirEnderecoDeWhatsapp`, a decisao do resolvedor.
+  'src/adaptadores/whatsapp/reapontar-identificadores-serializados.ts': { aprenderCorrespondencia: 1, registrarIdentificadorComEfeito: 1 },
   // A uniao das Conversas do contato (#1440): promove a Conversa opaca para o numero ja resolvido do par gravado.
   'src/adaptadores/whatsapp/unir-conversas-do-contato.ts': { registrarIdentificadorComEfeito: 1, trocarEnderecoDeConversaDireta: 1 },
   'src/adaptadores/whatsapp/resolver-celular.ts': { aprenderCorrespondencia: 2 },
@@ -56,6 +58,8 @@ const SEM_RESOLVEDOR: Record<string, string> = {
   'src/adaptadores/whatsapp/unir-conversas-do-contato.ts':
     'so promove para o canonico de um par ja gravado (`resolverEndereco` do nucleo), que nasceu resolvido pelo resolvedor do celular no estoque do par; a porta de promocao recusa forma que nao e canonica',
   'src/adaptadores/whatsapp/resolver-celular.ts': 'e o proprio resolvedor',
+  'src/adaptadores/whatsapp/reapontar-identificadores-serializados.ts':
+    'decide pela mesma funcao do resolvedor, `decidirEnderecoDeWhatsapp`, que so le (o ensaio nao pode aprender o par do nono digito), e grava o par com `op` para o `desfazer` o remover',
   'src/adaptadores/whatsapp/endereco-de-whatsapp.ts':
     'e a porta da forma do endereco (#1519): recebe o endereco que o chamador ja resolveu, e cada chamador passa pela resolucao do celular',
   'src/nucleo/endereco-da-conta.ts': 'recebe o JID ja resolvido por `declararContaDeWhatsapp`, que o ouvinte usa',

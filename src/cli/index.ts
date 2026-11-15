@@ -54,6 +54,10 @@ import {
   EstoqueDoParInterrompidoError,
 } from '../adaptadores/whatsapp/aprender-pares-da-conversa-direta.js';
 import { unirConversasDoContato, UniaoInterrompidaError } from '../adaptadores/whatsapp/unir-conversas-do-contato.js';
+import {
+  reapontarIdentificadoresSerializados,
+  ReapontoInterrompidoError,
+} from '../adaptadores/whatsapp/reapontar-identificadores-serializados.js';
 import { extrairCitacoes } from '../adaptadores/whatsapp/extrair-citacoes.js';
 import { extrairImagensDeModelo } from '../adaptadores/whatsapp/extrair-imagem-de-modelo.js';
 import { formatarAnexos, tipoGuardado } from './anexos-texto.js';
@@ -471,6 +475,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote identidade aprender-pares-da-conversa-direta --inquilino <id> [--limite <n>] [--tamanho-do-lote <n>] [--com-efeito --confirmo] [--json]
                                     (aprende o telefone das Conversas diretas por forma opaca, do cru das Mensagens recebidas; ensaio por padrão)
   malote identidade unir-conversas-do-contato --inquilino <id> [--limite <n>] [--com-efeito --confirmo] [--json]
+  malote identidade reapontar-identificadores-serializados --inquilino <id> [--limite <n>] [--com-efeito --confirmo] [--json]
                                     (une a Conversa direta por forma opaca com par e a Conversa do número na mesma Configuração; ensaio por padrão)
   malote operacao listar   --inquilino <id> --chave <valor>
   malote operacao ver      <id> --inquilino <id> --chave <valor>
@@ -3610,6 +3615,67 @@ function executarComAtor(
             'O par vale para o Inquilino inteiro: a Conversa opaca de todas as Configuracoes deixa de receber, e as Mensagens novas do contato vao para a Conversa por telefone (uma nova, se ainda nao existe).',
           );
         }
+        if (r.operacaoId !== null) {
+          escrever(`Para desfazer: malote operacao desfazer ${r.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
+        }
+        escrever(cobre);
+        if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
+    if (grupo === 'identidade' && sub === 'reapontar-identificadores-serializados') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
+      const comEfeito = temBandeira(argumentos, 'com-efeito');
+      if (comEfeito && !temBandeira(argumentos, 'confirmo')) {
+        throw new Error('Repita o comando com --confirmo para executar.');
+      }
+      const textoDoLimite = opcao(argumentos, 'limite');
+      const limite = textoDoLimite === undefined ? undefined : Number(textoDoLimite);
+      if (limite !== undefined && !(Number.isInteger(limite) && limite >= 1)) {
+        escrever('--limite precisa ser um inteiro maior que zero.');
+        return 2;
+      }
+      // O que o `desfazer` cobre e o que NAO cobre (#1519): sai sempre, no ensaio e no efeito.
+      const cobre =
+        'O `operacao desfazer` devolve cada Transicao reapontada ao Identificador de origem, recria cada Transicao fundida e cada ' +
+        'Identificador removido (com o mesmo id) e remove os pares e os Identificadores que esta Operacao criou, cada um so ' +
+        'enquanto o valor ainda e o que ela gravou (o resto e recusado, com a causa). Ele NAO devolve o que o ouvinte gravou ' +
+        'depois: a Transicao nova sob o endereco de destino fica onde esta. A Operacao nao toca nas Chegadas.';
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        let r;
+        try {
+          r = reapontarIdentificadoresSerializados(acervo, { comEfeito, ...(limite === undefined ? {} : { limite }) });
+        } catch (erro) {
+          if (!(erro instanceof ReapontoInterrompidoError)) throw erro;
+          escrever(
+            `Interrompido na Operacao ${erro.operacaoId}: ${erro.relatorio.transicoesReapontadas} Transicao(oes) reapontada(s), ${erro.relatorio.transicoesFundidas} fundida(s) e ${erro.relatorio.serializadosRemovidos} Identificador(es) removido(s); repita o comando para completar.`,
+          );
+          escrever(`Para desfazer o que entrou: malote operacao desfazer ${erro.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
+          escrever(cobre);
+          escrever(`Causa: ${String(erro.causa)}`);
+          return 1;
+        }
+        if (temBandeira(argumentos, 'json')) {
+          // So ids de Identificador e contagens: nem endereco, nem nome, nem texto.
+          escrever(JSON.stringify({ ...r, oQueODesfazerCobre: cobre }, null, 2));
+          return 0;
+        }
+        escrever(
+          comEfeito
+            ? `Reapontado: ${r.transicoesReapontadas} Transicao(oes) reapontada(s), ${r.transicoesFundidas} fundida(s), ${r.serializadosRemovidos} Identificador(es) removido(s), ${r.paresAprendidos} par(es) aprendido(s), ${r.identificadoresCriados} Identificador(es) criado(s).`
+            : `Ensaio: ${r.serializados} Identificador(es) serializado(s); ${r.transicoesAReapontar} Transicao(oes) a reapontar, ${r.paresAAprender} par(es) a aprender, ${r.identificadoresACriar} Identificador(es) a criar.`,
+        );
+        if (r.ilegiveis > 0) escrever(`  ${r.ilegiveis} valor(es) ilegivel(is): nada e tocado.`);
+        if (r.referenciados.length > 0) {
+          escrever(`  ${r.referenciados.length} Identificador(es) referenciado(s) por algo que a Operacao nao move: nada e tocado (--json traz as tabelas).`);
+        }
+        if (r.conflitos.length > 0) escrever(`  ${r.conflitos.length} conflito(s) de endereco: nada e tocado (--json traz os motivos).`);
+        if (r.chegadasQueCitam > 0) escrever(`  ${r.chegadasQueCitam} Chegada(s) citam os Identificadores do plano; a Operacao nao as toca.`);
         if (r.operacaoId !== null) {
           escrever(`Para desfazer: malote operacao desfazer ${r.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
         }
