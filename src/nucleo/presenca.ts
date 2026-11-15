@@ -172,16 +172,23 @@ export function quemEstavaEm(acervo: Acervo, pergunta: PerguntaDePresenca): Resp
     ressalva: RESSALVA,
   };
 
-  const ultimaAte = acervo.preparar(
-    `SELECT natureza, ocorrida_em FROM transicoes_de_participacao
-      WHERE conversa_id = ? AND identificador_id IN (SELECT value FROM json_each(?)) AND ocorrida_em <= ?
-      ORDER BY ocorrida_em DESC LIMIT 1`,
-  );
-  const primeiraDepois = acervo.preparar(
-    `SELECT natureza FROM transicoes_de_participacao
-      WHERE conversa_id = ? AND identificador_id IN (SELECT value FROM json_each(?)) AND ocorrida_em > ?
-      ORDER BY ocorrida_em ASC LIMIT 1`,
-  );
+  // Os eventos da Conversa, lidos UMA vez e agrupados por Identificador: a leitura por membro (duas consultas cada) custava ~4 s
+  // na maior Conversa (3.666 membros). So se le dentro do Alcance; fora dele ninguem e afirmavel.
+  type Evento = { natureza: string; ocorrida_em: number };
+  const eventosPorIdentificador = new Map<string, Evento[]>();
+  if (dentroDoAlcance) {
+    const eventos = acervo
+      .preparar(
+        `SELECT identificador_id, natureza, ocorrida_em FROM transicoes_de_participacao
+          WHERE conversa_id = ? ORDER BY ocorrida_em, id`,
+      )
+      .all(pergunta.conversaId) as Array<Evento & { identificador_id: string }>;
+    for (const e of eventos) {
+      const lista = eventosPorIdentificador.get(e.identificador_id);
+      if (lista === undefined) eventosPorIdentificador.set(e.identificador_id, [e]);
+      else lista.push(e);
+    }
+  }
 
   for (const id of universo) {
     const contato = doContato(id);
@@ -191,10 +198,19 @@ export function quemEstavaEm(acervo: Acervo, pergunta: PerguntaDePresenca): Resp
     }
 
     // A situacao da linha e a do CONTATO: o ultimo evento declarado entre os Identificadores gravados das formas dele.
-    const daFamilia = JSON.stringify(familias.get(id)?.identificadorIds ?? [id]);
-    const ultima = ultimaAte.get(pergunta.conversaId, daFamilia, pergunta.em) as
-      | { natureza: string; ocorrida_em: number }
-      | undefined;
+    const doContatoEventos = (familias.get(id)?.identificadorIds ?? [id]).flatMap(
+      (i) => eventosPorIdentificador.get(i) ?? [],
+    );
+    if (doContatoEventos.length > 1) doContatoEventos.sort((x, y) => x.ocorrida_em - y.ocorrida_em);
+    let ultima: Evento | undefined;
+    let proxima: Evento | undefined;
+    for (const e of doContatoEventos) {
+      if (e.ocorrida_em <= pergunta.em) ultima = e;
+      else {
+        proxima = e;
+        break;
+      }
+    }
 
     if (ultima !== undefined) {
       if (ultima.natureza === 'entrou') {
@@ -218,10 +234,6 @@ export function quemEstavaEm(acervo: Acervo, pergunta: PerguntaDePresenca): Resp
     // Sem evento ate a data: o PRIMEIRO evento depois dela decide. Ninguem sai
     // de onde nao esta, entao uma saida posterior prova presenca; uma entrada
     // posterior prova que a pessoa ainda nao tinha entrado.
-    const proxima = primeiraDepois.get(pergunta.conversaId, daFamilia, pergunta.em) as
-      | { natureza: string }
-      | undefined;
-
     if (proxima?.natureza === 'saiu') {
       resposta.presentes.push({ identificadorId: id, situacao: 'presente', ...contato });
     } else if (proxima?.natureza === 'entrou') {
