@@ -441,13 +441,13 @@ Titular (nao exige chave enquanto nao houver rede):
   malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--conversa <id>] [--desde <data>] [--ate <data>] [--limite <n>] [--ordem recentes|cronologica] [--json]
                     (sem --ordem, as mais recentes; diz quando o limite cortou resultados — padrao 100)
   malote pessoas        --inquilino <id> --texto <nome>        (resolve texto em Pessoa; com MALOTE_SERVIDOR: por REDE, sem --inquilino)
-  malote participantes  --inquilino <id> --conversa <id> [--em <AAAA-MM-DD>]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino)
+  malote participantes  --inquilino <id> --conversa <id> [--em <AAAA-MM-DD>] [--endereco <valor>]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino; --endereco acha o contato por qualquer forma do endereco)
   malote etiquetas      --inquilino <id> [--conversa <id>] [--remetente <valor>] [--busca <texto>] [--historico] [--limite <n>] [--json]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino; --historico exige --conversa e --remetente; sem filtro, so as correntes nao vazias, ate 100 por padrao e 1000 no maximo)
   malote chegadas aparar --inquilino <id> [--dias <n>] [--limite <n>] [--com-efeito --confirmo] [--json]  (apara o Diario de Chegadas: remove as mais antigas que a retencao, 30 dias por padrao, ate o limite por passada; ensaio por padrao; SO local, e o ouvinte ja apara sozinho)
   malote chegadas       --inquilino <id> (--depois <marcador> | --ponto-de-partida) [--conversa <id>] [--configuracao <apelido>] [--direcao enviada|recebida] [--remetente <valor>] [--sem-remetente <valor>] [--tipo <tipos>] [--origem <origens>] [--limite <n>] [--com-conteudo] [--json]  (o Diario de Chegadas: o que entrou no Acervo, na ordem em que entrou; com MALOTE_SERVIDOR: por REDE, sem --inquilino; --ponto-de-partida devolve o Marcador de agora e nao aceita filtros; Marcador expirado sai por 8)
   malote relatorio                                              (SO em modo rede: totais por Fonte e natureza; local, use 'malote acervo relatar')
   malote conversas sem-endereco --inquilino <id> [--limite <n>]
-  malote conversa presenca      --inquilino <id> --conversa <id> --em <AAAA-MM-DD> [--json]
+  malote conversa presenca      --inquilino <id> --conversa <id> --em <AAAA-MM-DD> [--endereco <valor>] [--json]
   malote acervo migrar  --inquilino <id>              (sobe a forma do Acervo, e diz o que fez)
   malote acervo recriar --inquilino <id> --confirmo [--descartar-localizacao]   (apaga o Acervo E os arquivos deste Inquilino; com Destino Remoto recusa sem --descartar-localizacao)
   malote pessoa listar      --inquilino <id> [--incluir-absorvidas]
@@ -581,7 +581,7 @@ export async function executarConsultaRede(
   const q = new URLSearchParams();
   for (const nome of ['busca', 'fonte', 'coletiva', 'pessoa', 'limite', 'conversa',
     'autor', 'desde', 'ate', 'antes', 'em', 'texto', 'configuracao', 'favorito', 'fixada',
-    'ordem', 'direcao', 'remetente']) {
+    'ordem', 'direcao', 'remetente', 'endereco']) {
     const valor = opcao(argumentos, nome);
     if (valor !== undefined) q.set(nome, valor);
   }
@@ -2518,7 +2518,12 @@ function executarComAtor(
           quando = janela.ate;
         }
 
-        const r = quemEstavaEm(acervo, { conversaId: conversa, em: quando });
+        const endereco = opcao(argumentos, 'endereco');
+        const r = quemEstavaEm(acervo, {
+          conversaId: conversa,
+          em: quando,
+          ...(endereco === undefined ? {} : { endereco }),
+        });
         if (temBandeira(argumentos, 'json')) {
           escrever(JSON.stringify(r, null, 2));
           return 0;
@@ -2590,6 +2595,7 @@ function executarComAtor(
       const inquilino = opcao(argumentos, 'inquilino');
       if (inquilino === undefined) throw new Error('Informe --inquilino.');
       const emParam = opcao(argumentos, 'em');
+      const endereco = opcao(argumentos, 'endereco');
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
         // Sem --em: agora. Com --em: fim do dia capado ao Alcance, a regra
@@ -2597,7 +2603,10 @@ function executarComAtor(
         const em = emParam === undefined ? Date.now() : expandirData(emParam, 'fim');
         escrever(
           JSON.stringify(
-            acrescentarEtiquetas(acervo, quemEstavaEm(acervo, { conversaId: conversa, em })),
+            acrescentarEtiquetas(
+              acervo,
+              quemEstavaEm(acervo, { conversaId: conversa, em, ...(endereco === undefined ? {} : { endereco }) }),
+            ),
             null,
             2,
           ),

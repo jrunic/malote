@@ -1441,6 +1441,8 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
   if (partes.length === 3 && partes[0] === 'conversas' && partes[2] === 'participantes') {
     const conversaId = partes[1] as ConversaId;
     const emParam = url.searchParams.get('em');
+    // So o contato deste endereco, em qualquer das formas (#1518).
+    const endereco = url.searchParams.get('endereco');
     let em = Date.now();
     if (emParam !== null) {
       try {
@@ -1462,7 +1464,11 @@ export function responder(req: IncomingMessage, res: ServerResponse, ctx: Contex
     json(res, 200, {
       presenca: acrescentarEtiquetas(
         ctx.acervo,
-        enriquecerPresenca(ctx.acervo, quemEstavaEm(ctx.acervo, { conversaId, em }), precedencia),
+        enriquecerPresenca(
+          ctx.acervo,
+          quemEstavaEm(ctx.acervo, { conversaId, em, ...(endereco !== null && endereco !== '' ? { endereco } : {}) }),
+          precedencia,
+        ),
       ),
     });
     return;

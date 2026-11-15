@@ -1,5 +1,8 @@
 import type { Acervo } from './acervo.js';
 import type { ConversaId } from './tipos.js';
+import { familiasDeIdentificadores } from './familia-de-endereco.js';
+import { identificadoresDoRemetente } from './remetente.js';
+import { fonteDaConversa } from './consulta.js';
 
 /**
  * A janela dentro da qual esta Conversa TEM evento declarado.
@@ -38,6 +41,14 @@ export type SituacaoNaData = 'presente' | 'saiu-antes' | 'ainda-nao-entrou' | 's
 export interface PresencaDeIdentificador {
   identificadorId: string;
   situacao: SituacaoNaData;
+  /**
+   * A chave do contato (#1518): a forma canonica do endereco, ou o proprio endereco quando a Correspondencia nao o liga a
+   * outra forma. Duas linhas com o mesmo `contato` sao o mesmo contato sob formas diferentes. Nulo so quando o
+   * Identificador nao existe.
+   */
+  contato: string | null;
+  /** As OUTRAS formas do endereco que a Correspondencia conhece, gravadas ou nao, ordenadas por valor. */
+  formas: string[];
   /** Presente so em `saiu-antes`. O instante que a Fonte declarou. */
   saiuEm?: number;
   /** Presente so em `presente`, quando ha entrada declarada ate a data. */
@@ -80,6 +91,11 @@ export interface PerguntaDePresenca {
   conversaId: ConversaId;
   /** O instante sobre o qual se pergunta. */
   em: number;
+  /**
+   * So o contato deste endereco, em qualquer das formas que a Correspondencia liga (#1518). Resolve pelo mesmo caminho do
+   * filtro por remetente (`identificadoresDoRemetente`), na Fonte da Conversa.
+   */
+  endereco?: string;
 }
 
 /**
@@ -107,13 +123,42 @@ export function quemEstavaEm(acervo: Acervo, pergunta: PerguntaDePresenca): Resp
   const dentroDoAlcance =
     alcance !== null && pergunta.em >= alcance.de && pergunta.em <= alcance.ate;
 
-  const universo = acervo.preparar(
+  const base = acervo
+    .preparar(
       `SELECT identificador_id FROM participacoes WHERE conversa_id = ?
        UNION
-       SELECT identificador_id FROM transicoes_de_participacao WHERE conversa_id = ?
-       ORDER BY identificador_id`,
+       SELECT identificador_id FROM transicoes_de_participacao WHERE conversa_id = ?`,
     )
     .all(pergunta.conversaId, pergunta.conversaId) as Array<{ identificador_id: string }>;
+  const idsDeBase = new Set(base.map((l) => l.identificador_id));
+
+  // O autor de Mensagem recebida desta Conversa cujo CONTATO tem Participacao ou Transicao sob OUTRA forma entra
+  // tambem (#1518); quem nao tem nenhuma das duas, em forma nenhuma, NAO entra: a Presenca nunca se infere de ter
+  // escrito.
+  const autores = (
+    acervo
+      .preparar('SELECT DISTINCT autor_id FROM mensagens WHERE conversa_id = ? AND autor_id IS NOT NULL AND direcao = ?')
+      .all(pergunta.conversaId, 'recebida') as Array<{ autor_id: string }>
+  ).map((l) => l.autor_id);
+  const familias = familiasDeIdentificadores(acervo, [...idsDeBase, ...autores]);
+  const universoIds = new Set(idsDeBase);
+  for (const autor of autores) {
+    if (idsDeBase.has(autor)) continue;
+    const f = familias.get(autor);
+    if (f !== undefined && f.identificadorIds.some((i) => idsDeBase.has(i))) universoIds.add(autor);
+  }
+  let universo = [...universoIds].sort();
+  if (pergunta.endereco !== undefined) {
+    const fonte = fonteDaConversa(acervo, pergunta.conversaId);
+    const alvo = new Set(
+      identificadoresDoRemetente(acervo, { valor: pergunta.endereco, ...(fonte !== undefined ? { fonte } : {}) }),
+    );
+    universo = universo.filter((id) => alvo.has(id));
+  }
+  const doContato = (id: string): { contato: string | null; formas: string[] } => {
+    const f = familias.get(id);
+    return { contato: f === undefined ? null : (f.canonico ?? f.valor), formas: f?.outrasFormas ?? [] };
+  };
 
   const resposta: RespostaDePresenca = {
     conversaId: pergunta.conversaId,
@@ -129,22 +174,25 @@ export function quemEstavaEm(acervo: Acervo, pergunta: PerguntaDePresenca): Resp
 
   const ultimaAte = acervo.preparar(
     `SELECT natureza, ocorrida_em FROM transicoes_de_participacao
-      WHERE conversa_id = ? AND identificador_id = ? AND ocorrida_em <= ?
+      WHERE conversa_id = ? AND identificador_id IN (SELECT value FROM json_each(?)) AND ocorrida_em <= ?
       ORDER BY ocorrida_em DESC LIMIT 1`,
   );
   const primeiraDepois = acervo.preparar(
     `SELECT natureza FROM transicoes_de_participacao
-      WHERE conversa_id = ? AND identificador_id = ? AND ocorrida_em > ?
+      WHERE conversa_id = ? AND identificador_id IN (SELECT value FROM json_each(?)) AND ocorrida_em > ?
       ORDER BY ocorrida_em ASC LIMIT 1`,
   );
 
-  for (const { identificador_id: id } of universo) {
+  for (const id of universo) {
+    const contato = doContato(id);
     if (!dentroDoAlcance) {
-      resposta.semInformacao.push({ identificadorId: id, situacao: 'sem-informacao' });
+      resposta.semInformacao.push({ identificadorId: id, situacao: 'sem-informacao', ...contato });
       continue;
     }
 
-    const ultima = ultimaAte.get(pergunta.conversaId, id, pergunta.em) as
+    // A situacao da linha e a do CONTATO: o ultimo evento declarado entre os Identificadores gravados das formas dele.
+    const daFamilia = JSON.stringify(familias.get(id)?.identificadorIds ?? [id]);
+    const ultima = ultimaAte.get(pergunta.conversaId, daFamilia, pergunta.em) as
       | { natureza: string; ocorrida_em: number }
       | undefined;
 
@@ -154,12 +202,14 @@ export function quemEstavaEm(acervo: Acervo, pergunta: PerguntaDePresenca): Resp
           identificadorId: id,
           situacao: 'presente',
           entrouEm: ultima.ocorrida_em,
+          ...contato,
         });
       } else {
         resposta.sairamAntes.push({
           identificadorId: id,
           situacao: 'saiu-antes',
           saiuEm: ultima.ocorrida_em,
+          ...contato,
         });
       }
       continue;
@@ -168,19 +218,19 @@ export function quemEstavaEm(acervo: Acervo, pergunta: PerguntaDePresenca): Resp
     // Sem evento ate a data: o PRIMEIRO evento depois dela decide. Ninguem sai
     // de onde nao esta, entao uma saida posterior prova presenca; uma entrada
     // posterior prova que a pessoa ainda nao tinha entrado.
-    const proxima = primeiraDepois.get(pergunta.conversaId, id, pergunta.em) as
+    const proxima = primeiraDepois.get(pergunta.conversaId, daFamilia, pergunta.em) as
       | { natureza: string }
       | undefined;
 
     if (proxima?.natureza === 'saiu') {
-      resposta.presentes.push({ identificadorId: id, situacao: 'presente' });
+      resposta.presentes.push({ identificadorId: id, situacao: 'presente', ...contato });
     } else if (proxima?.natureza === 'entrou') {
-      resposta.aindaNaoEntraram.push({ identificadorId: id, situacao: 'ainda-nao-entrou' });
+      resposta.aindaNaoEntraram.push({ identificadorId: id, situacao: 'ainda-nao-entrou', ...contato });
     } else {
       // Nenhum evento, em direcao nenhuma. O retrato diz onde a pessoa esta
       // HOJE, e nao onde estava — e usa-lo aqui seria apresentar o quadro
       // atual como historico, que e o defeito central que este ciclo impede.
-      resposta.semInformacao.push({ identificadorId: id, situacao: 'sem-informacao' });
+      resposta.semInformacao.push({ identificadorId: id, situacao: 'sem-informacao', ...contato });
     }
   }
 
