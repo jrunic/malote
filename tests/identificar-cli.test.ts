@@ -10,7 +10,7 @@ import { instalacaoTemporaria } from './ajuda/instalacao.js';
 import { abrirRegistro, criarInquilino } from '../src/registro/registro.js';
 import { abrirAcervo } from '../src/nucleo/acervo.js';
 import { aprenderCorrespondencia } from '../src/nucleo/correspondencia.js';
-import { registrarIdentificador } from '../src/nucleo/escrita.js';
+import { registrarIdentificador, registrarMensagem } from '../src/nucleo/escrita.js';
 import {
   semearIdentidade,
   subirCenaDeIdentidade,
@@ -19,6 +19,8 @@ import {
   BRUNO,
   BRUNO_LID,
   ANA,
+  CARLA,
+  minuto,
 } from './ajuda/identidade.js';
 import { subirServidorContador } from './ajuda/servidor-de-envio.js';
 
@@ -184,7 +186,12 @@ test('o executavel identifica por rede, com o valor antes ou depois das opcoes (
 });
 
 test('o texto diz a forma pedida e a forma gravada quando diferem, e nada quando sao a mesma (#1376)', () => {
-  const base = { fonte: null, identificadores: [], formas: [] };
+  const base = {
+    fonte: null,
+    identificadores: [],
+    formas: [],
+    contato: { conversas: 0, mensagens: 0, primeiraMensagemEm: null, ultimaMensagemEm: null },
+  };
   const diferem = formatarIdentificacao({
     ...base,
     consultado: { valor: '5565999991234@s.whatsapp.net', fonte: null, gravadas: ['556599991234@s.whatsapp.net'] },
@@ -227,6 +234,29 @@ test('identificar LOCAL com o celular pedido na outra forma: o --json traz as gr
     const texto: string[] = [];
     assert.equal(executar(['identificar', '5565999991234@s.whatsapp.net', '--inquilino', inquilino], ambiente(texto)), 0);
     assert.match(texto.join('\n'), /Pedido: 5565999991234@s\.whatsapp\.net\. O Acervo guarda: 556599991234@s\.whatsapp\.net\./);
+  } finally {
+    limpar();
+  }
+});
+
+test('o texto soma as formas do contato numa linha so quando ha mais de um Identificador gravado (#1465)', () => {
+  const { acervo, s, limpar } = acervoDeIdentidade();
+  try {
+    registrarMensagem(acervo, {
+      origemDaChegada: 'importacao',
+      conversaId: s.grupo,
+      fonte: 'whatsapp',
+      idExterno: 'it-1',
+      autorId: s.carlaLid,
+      conteudo: 'oi',
+      ocorridaEm: minuto(70),
+      agora: Date.now(),
+      direcao: 'recebida',
+    });
+    const duas = formatarIdentificacao(identificarPorValor(acervo, { valor: CARLA }, PRECEDENCIA)).join('\n');
+    assert.match(duas, /contato \(formas somadas\): conversas: 1 {2}mensagens: 1/);
+    const uma = formatarIdentificacao(identificarPorValor(acervo, { valor: BRUNO }, PRECEDENCIA)).join('\n');
+    assert.doesNotMatch(uma, /formas somadas/);
   } finally {
     limpar();
   }

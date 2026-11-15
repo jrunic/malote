@@ -43,6 +43,18 @@ export interface IdentificadorIdentificado {
   etiquetas: EtiquetaDeIdentificador[];
 }
 
+/**
+ * Os totais do CONTATO (#1465): as formas do endereco que a Correspondencia liga, somadas. Conta o que o contato
+ * escreveu (Mensagens de que ele e autor), nunca as da conta na mesma Conversa; a Conversa em que ele consta como
+ * participante sob uma forma e escreveu sob outra conta uma vez so.
+ */
+export interface ContatoIdentificado {
+  conversas: number;
+  mensagens: number;
+  primeiraMensagemEm: number | null;
+  ultimaMensagemEm: number | null;
+}
+
 export interface Identificacao {
   /**
    * O valor pedido, a Fonte do filtro e as formas do endereco que estao GRAVADAS como Identificador (as que a
@@ -52,6 +64,8 @@ export interface Identificacao {
   consultado: { valor: string; fonte: Fonte | null; gravadas: string[] };
   identificadores: IdentificadorIdentificado[];
   formas: FormaDeEndereco[];
+  /** Os totais do contato, somando os Identificadores gravados de todas as formas (os por Identificador seguem acima). */
+  contato: ContatoIdentificado;
 }
 
 const ORDEM_DO_PAPEL: Record<PapelDaForma, number> = { consultado: 0, canonico: 1, alternativo: 2 };
@@ -163,5 +177,31 @@ export function identificarPorValor(
   formas.sort((a, b) => ORDEM_DO_PAPEL[a.papel] - ORDEM_DO_PAPEL[b.papel] || a.valor.localeCompare(b.valor));
 
   const gravadas = [...new Set(formas.filter((f) => f.identificador !== null).map((f) => f.valor))];
-  return { consultado: { valor, fonte: fonteFiltro, gravadas }, identificadores, formas };
+
+  const idsDoContato = JSON.stringify([...gravados.keys()]);
+  const doContato = acervo
+    .preparar(
+      `SELECT COUNT(*) AS n, MIN(ocorrida_em) AS primeira, MAX(ocorrida_em) AS ultima
+         FROM mensagens WHERE autor_id IN (SELECT value FROM json_each(?))`,
+    )
+    .get(idsDoContato) as { n: number; primeira: number | null; ultima: number | null };
+  // UNION, e nao UNION ALL: a Conversa com Participacao sob uma forma e Mensagem sob outra conta uma vez.
+  const conversasDoContato = (
+    acervo
+      .preparar(
+        `SELECT COUNT(*) AS n FROM (
+           SELECT conversa_id FROM participacoes WHERE identificador_id IN (SELECT value FROM json_each(?))
+           UNION
+           SELECT conversa_id FROM mensagens WHERE autor_id IN (SELECT value FROM json_each(?))
+         )`,
+      )
+      .get(idsDoContato, idsDoContato) as { n: number }
+  ).n;
+  const contato: ContatoIdentificado = {
+    conversas: conversasDoContato,
+    mensagens: doContato.n,
+    primeiraMensagemEm: doContato.primeira,
+    ultimaMensagemEm: doContato.ultima,
+  };
+  return { consultado: { valor, fonte: fonteFiltro, gravadas }, identificadores, formas, contato };
 }

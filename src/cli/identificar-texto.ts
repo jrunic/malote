@@ -37,6 +37,14 @@ export function formatarIdentificacao(r: Identificacao): string[] {
       linhas.push(`  etiqueta em ${e.conversaId}: ${e.texto === null ? '(removida)' : e.texto}  (${quando(e.em)})`);
     }
   }
+  // Os totais do contato so quando ha mais de uma forma gravada; com uma so, repetiriam a linha acima. O servidor de uma
+  // versao anterior (v0.50.1) nao manda `contato`: sem ele, a linha nao aparece.
+  const contato = (r as { contato?: Identificacao['contato'] }).contato;
+  if (contato !== undefined && r.identificadores.length > 1) {
+    linhas.push('');
+    linhas.push(`contato (formas somadas): conversas: ${contato.conversas}  mensagens: ${contato.mensagens}`);
+    linhas.push(`  primeira: ${quando(contato.primeiraMensagemEm)}  ultima: ${quando(contato.ultimaMensagemEm)}`);
+  }
   linhas.push('');
   linhas.push('Formas conhecidas:');
   for (const f of r.formas) {
