@@ -44,11 +44,11 @@ export interface IdentificadorIdentificado {
 }
 
 /**
- * Os totais do CONTATO (#1465): as formas do endereco que a Correspondencia liga, somadas. Conta o que o contato
+ * Os totais do ENDERECO (#1465): as formas do endereco que a Correspondencia liga, somadas. Conta o que o contato
  * escreveu (Mensagens de que ele e autor), nunca as da conta na mesma Conversa; a Conversa em que ele consta como
  * participante sob uma forma e escreveu sob outra conta uma vez so.
  */
-export interface ContatoIdentificado {
+export interface TotaisDoEndereco {
   conversas: number;
   mensagens: number;
   primeiraMensagemEm: number | null;
@@ -64,8 +64,8 @@ export interface Identificacao {
   consultado: { valor: string; fonte: Fonte | null; gravadas: string[] };
   identificadores: IdentificadorIdentificado[];
   formas: FormaDeEndereco[];
-  /** Os totais do contato, somando os Identificadores gravados de todas as formas (os por Identificador seguem acima). */
-  contato: ContatoIdentificado;
+  /** Os totais do endereco, somando os Identificadores gravados de todas as formas (os por Identificador seguem acima). */
+  totais: TotaisDoEndereco;
 }
 
 const ORDEM_DO_PAPEL: Record<PapelDaForma, number> = { consultado: 0, canonico: 1, alternativo: 2 };
@@ -197,11 +197,11 @@ export function identificarPorValor(
       )
       .get(idsDoContato, idsDoContato) as { n: number }
   ).n;
-  const contato: ContatoIdentificado = {
+  const totais: TotaisDoEndereco = {
     conversas: conversasDoContato,
     mensagens: doContato.n,
     primeiraMensagemEm: doContato.primeira,
     ultimaMensagemEm: doContato.ultima,
   };
-  return { consultado: { valor, fonte: fonteFiltro, gravadas }, identificadores, formas, contato };
+  return { consultado: { valor, fonte: fonteFiltro, gravadas }, identificadores, formas, totais };
 }

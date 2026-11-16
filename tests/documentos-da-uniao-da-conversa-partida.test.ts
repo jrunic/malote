@@ -18,11 +18,9 @@ const entre = (texto: string, de: string, ate: string): string => {
 };
 // O nome do comando (fixado no contrato) e "Contato Compartilhado" saem antes; o resto do texto diz "quem fala" ou "o outro lado".
 const semContato = (trecho: string, onde: string): void => {
-  // O campo JSON `contato` (#1517) e identificador e sai so entre crases, como o nome do comando da uniao.
   const limpo = trecho
     .replace(/Contatos? Compartilhados?/g, '')
-    .replace(/unir-conversas-do-contato/g, '')
-    .replace(/`contato`/g, '');
+    .replace(/unir-conversas-do-contato/g, '');
   assert.equal((limpo.match(/\bcontatos?\b/gi) ?? []).length, 0, `${onde} usa "contato", que o glossario manda evitar`);
 };
 const ADR_NOVA = ['docs', 'decisoes', '20261109-uniao-da-conversa-partida.md'] as const;

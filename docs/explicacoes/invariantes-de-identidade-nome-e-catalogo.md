@@ -144,7 +144,7 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   autor que só existe sob a forma opaca entra na lista quando há Participação ou Transição sob **alguma** forma da família,
   e a situação de cada linha é decidida pelos eventos de todas as formas; quem escreveu sem nenhuma das duas, em forma
   nenhuma, fica de fora (Transição só nasce do que a Fonte declara). Em `identificar`, os totais da família (o bloco
-  `contato`, nome de campo) contam as Mensagens de que alguma forma é autora e as
+  `totais`) contam as Mensagens de que alguma forma é autora e as
   Conversas por `UNION` (a Participação sob uma forma e a Mensagem sob outra na mesma Conversa contam uma). Medido em
   15/11/2026 num Acervo grande (somente leitura): de 31.691 pares autor-Conversa coletiva com Mensagem recebida, 6.462
   não têm Participação nem Transição sob o próprio id; com a família, 5.611 passam a aparecer na lista e 851 (nenhum de

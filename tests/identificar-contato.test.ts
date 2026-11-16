@@ -51,14 +51,14 @@ test('pelo numero e pelo opaco, o contato mostra as mesmas Conversas e Mensagens
     const pelaOpaca = identificarPorValor(acervo, { valor: CARLA_LID }, PRECEDENCIA);
     const peloNumero = identificarPorValor(acervo, { valor: CARLA }, PRECEDENCIA);
     for (const r of [pelaOpaca, peloNumero]) {
-      assert.equal(r.contato.conversas, 1, 'a Conversa contada uma vez');
-      assert.equal(r.contato.mensagens, 4, 'so as que o contato escreveu');
-      assert.equal(r.contato.primeiraMensagemEm, minuto(50));
-      assert.equal(r.contato.ultimaMensagemEm, minuto(53));
+      assert.equal(r.totais.conversas, 1, 'a Conversa contada uma vez');
+      assert.equal(r.totais.mensagens, 4, 'so as que o contato escreveu');
+      assert.equal(r.totais.primeiraMensagemEm, minuto(50));
+      assert.equal(r.totais.ultimaMensagemEm, minuto(53));
     }
     assert.deepEqual(
-      peloNumero.contato,
-      pelaOpaca.contato,
+      peloNumero.totais,
+      pelaOpaca.totais,
       'os totais sao os mesmos pelas duas formas',
     );
     // os numeros por Identificador seguem como eram (acrescimo, sem quebra)
@@ -76,7 +76,7 @@ test('contato sem par: os totais do contato sao os do proprio Identificador', ()
     const r = identificarPorValor(acervo, { valor: '5565444444444@s.whatsapp.net' }, PRECEDENCIA);
     const dani = r.identificadores.find((i) => i.id === s.dani)!;
     assert.equal(dani.mensagens, 2);
-    assert.deepEqual(r.contato, {
+    assert.deepEqual(r.totais, {
       conversas: dani.conversas,
       mensagens: dani.mensagens,
       primeiraMensagemEm: dani.primeiraMensagemEm,
@@ -91,7 +91,7 @@ test('valor sem Identificador nenhum: totais do contato zerados', () => {
   const { acervo, limpar } = acervoDeIdentidade();
   try {
     const r = identificarPorValor(acervo, { valor: 'x@nao-existe' }, PRECEDENCIA);
-    assert.deepEqual(r.contato, {
+    assert.deepEqual(r.totais, {
       conversas: 0,
       mensagens: 0,
       primeiraMensagemEm: null,

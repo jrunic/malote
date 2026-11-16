@@ -42,11 +42,11 @@ export interface PresencaDeIdentificador {
   identificadorId: string;
   situacao: SituacaoNaData;
   /**
-   * A chave do contato (#1518): a forma canonica do endereco, ou o proprio endereco quando a Correspondencia nao o liga a
-   * outra forma. Duas linhas com o mesmo `contato` sao o mesmo contato sob formas diferentes. Nulo so quando o
+   * A chave do endereco (#1518): a forma canonica do endereco, ou o proprio endereco quando a Correspondencia nao o liga a
+   * outra forma. Duas linhas com o mesmo `endereco` sao o mesmo contato sob formas diferentes. Nulo so quando o
    * Identificador nao existe.
    */
-  contato: string | null;
+  endereco: string | null;
   /** As OUTRAS formas do endereco que a Correspondencia conhece, gravadas ou nao, ordenadas por valor. */
   formas: string[];
   /** Presente so em `saiu-antes`. O instante que a Fonte declarou. */
@@ -155,9 +155,9 @@ export function quemEstavaEm(acervo: Acervo, pergunta: PerguntaDePresenca): Resp
     );
     universo = universo.filter((id) => alvo.has(id));
   }
-  const doContato = (id: string): { contato: string | null; formas: string[] } => {
+  const doContato = (id: string): { endereco: string | null; formas: string[] } => {
     const f = familias.get(id);
-    return { contato: f === undefined ? null : (f.canonico ?? f.valor), formas: f?.outrasFormas ?? [] };
+    return { endereco: f === undefined ? null : (f.canonico ?? f.valor), formas: f?.outrasFormas ?? [] };
   };
 
   const resposta: RespostaDePresenca = {

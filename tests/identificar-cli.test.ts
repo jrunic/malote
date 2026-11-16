@@ -190,7 +190,7 @@ test('o texto diz a forma pedida e a forma gravada quando diferem, e nada quando
     fonte: null,
     identificadores: [],
     formas: [],
-    contato: { conversas: 0, mensagens: 0, primeiraMensagemEm: null, ultimaMensagemEm: null },
+    totais: { conversas: 0, mensagens: 0, primeiraMensagemEm: null, ultimaMensagemEm: null },
   };
   const diferem = formatarIdentificacao({
     ...base,
@@ -254,7 +254,7 @@ test('o texto soma as formas do contato numa linha so quando ha mais de um Ident
       direcao: 'recebida',
     });
     const duas = formatarIdentificacao(identificarPorValor(acervo, { valor: CARLA }, PRECEDENCIA)).join('\n');
-    assert.match(duas, /contato \(formas somadas\): conversas: 1 {2}mensagens: 1/);
+    assert.match(duas, /totais \(formas somadas\): conversas: 1 {2}mensagens: 1/);
     const uma = formatarIdentificacao(identificarPorValor(acervo, { valor: BRUNO }, PRECEDENCIA)).join('\n');
     assert.doesNotMatch(uma, /formas somadas/);
   } finally {

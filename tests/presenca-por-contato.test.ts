@@ -73,8 +73,8 @@ test('o autor so existe sob a forma opaca e a Participacao sob o numero: aparece
     const carla = todos(r).find((p) => p.identificadorId === s.carla)!;
     const opaca = todos(r).find((p) => p.identificadorId === s.carlaLid);
     assert.ok(opaca, 'o autor sob a forma opaca aparece na lista');
-    assert.equal(carla.contato, CARLA);
-    assert.equal(opaca.contato, CARLA, 'a chave de agrupamento e a mesma');
+    assert.equal(carla.endereco, CARLA);
+    assert.equal(opaca.endereco, CARLA, 'a chave de agrupamento e a mesma');
     assert.deepEqual(opaca.formas, [CARLA]);
     assert.deepEqual(carla.formas, [CARLA_LID]);
     assert.equal(opaca.valor, CARLA_LID, 'cada linha mantem o proprio endereco');
@@ -90,9 +90,9 @@ test('sem par, o contato e o proprio endereco e nao ha outras formas; com par so
   try {
     const r = quemEstavaEm(acervo, { conversaId: s.grupo, em: depois });
     const edu = todos(r).find((p) => p.identificadorId === s.edu)!;
-    assert.deepEqual([edu.contato, edu.formas], ['5565555555555@s.whatsapp.net', []]);
+    assert.deepEqual([edu.endereco, edu.formas], ['5565555555555@s.whatsapp.net', []]);
     const bruno = todos(r).find((p) => p.identificadorId === s.bruno)!;
-    assert.deepEqual([bruno.contato, bruno.formas], [BRUNO, [BRUNO_LID]]);
+    assert.deepEqual([bruno.endereco, bruno.formas], [BRUNO, [BRUNO_LID]]);
   } finally {
     limpar();
   }
@@ -190,7 +190,7 @@ test('o filtro por endereco acha o contato por qualquer das formas', () => {
 
 interface LinhaDaResposta {
   identificadorId: string;
-  contato: string | null;
+  endereco: string | null;
   formas: string[];
 }
 
@@ -220,7 +220,7 @@ test('por rede e na CLI local: participantes traz contato e formas, e --endereco
     };
     const tudo = await ler(`/conversas/${cena.s.grupo}/participantes`);
     const opaca = tudo.find((p) => p.identificadorId === cena.s.carlaLid);
-    assert.deepEqual([opaca?.contato, opaca?.formas], [CARLA, [CARLA]]);
+    assert.deepEqual([opaca?.endereco, opaca?.formas], [CARLA, [CARLA]]);
     const filtrado = await ler(
       `/conversas/${cena.s.grupo}/participantes?endereco=${encodeURIComponent(CARLA_LID)}`,
     );
@@ -252,7 +252,7 @@ test('por rede e na CLI local: participantes traz contato e formas, e --endereco
       linhasLocais.map((p) => p.identificadorId).sort(),
       [cena.s.carla, cena.s.carlaLid].sort(),
     );
-    assert.ok(linhasLocais.every((p) => p.contato === CARLA));
+    assert.ok(linhasLocais.every((p) => p.endereco === CARLA));
   } finally {
     cena.encerrar();
   }

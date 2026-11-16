@@ -112,14 +112,14 @@ Observações:
   v0.49.0); `--remetente` com o número alcança as duas.
   O número com as duas formas do celular gravadas como Identificador não ganha par, e cada forma responde só por si.
 - **`identificar` soma as formas do endereço.** Além dos totais por Identificador (que seguem como eram), a resposta traz
-  `contato`: `{ conversas, mensagens, primeiraMensagemEm, ultimaMensagemEm }`, somando os Identificadores gravados de
+  `totais`: `{ conversas, mensagens, primeiraMensagemEm, ultimaMensagemEm }`, somando os Identificadores gravados de
   todas as formas que a Correspondência liga. Conta só o que esse lado **escreveu** (as Mensagens da conta na mesma
   Conversa ficam de fora) e a Conversa com Participação sob uma forma e Mensagem sob outra conta **uma** vez. Pelo
-  número e pelo endereço opaco os totais somados são os mesmos. Em texto, a linha `contato (formas somadas): …`
+  número e pelo endereço opaco os totais somados são os mesmos. Em texto, a linha `totais (formas somadas): …`
   aparece quando há mais de um Identificador gravado.
 - **`participantes` liga as formas do mesmo endereço.** Continua uma linha por Identificador (os campos de sempre não
-  mudam) e cada linha ganha `contato` (a forma canônica do endereço, ou o próprio endereço quando não há par: as linhas
-  com o mesmo `contato` são o mesmo endereço sob formas diferentes) e `formas` (as outras formas conhecidas, ordenadas).
+  mudam) e cada linha ganha `endereco` (a forma canônica do endereço, ou o próprio endereço quando não há par: as linhas
+  com o mesmo `endereco` são o mesmo endereço sob formas diferentes) e `formas` (as outras formas conhecidas, ordenadas).
   A situação de cada linha é decidida pelo último evento declarado sob qualquer das formas. Entra também o **autor de
   Mensagem recebida** do grupo que só existe sob outra forma, quando há Participação ou Transição sob alguma delas; quem escreveu e
   não tem nenhuma das duas, em forma nenhuma, **não** entra (a Presença nunca se infere de ter escrito: leia-o pelo
