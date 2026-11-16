@@ -15,7 +15,7 @@ import { CFG_WHATSAPP } from './ajuda/configuracao.js';
 const PLANO_DA_PERGUNTA = `EXPLAIN QUERY PLAN ${SQL_ENDERECO_EH_CANONICO}`;
 
 test('o Acervo na v30 sobe ate a versao corrente com o indice por canonico, sem perder par', () => {
-  assert.equal(VERSAO_SCHEMA_ACERVO, 32);
+  assert.equal(VERSAO_SCHEMA_ACERVO, 33);
   const c = cenario();
   try {
     const { id, acervo } = c.novoInquilino('Teste');
@@ -28,7 +28,7 @@ test('o Acervo na v30 sobe ate a versao corrente com o indice por canonico, sem 
 
     const migrado = abrirAcervo(join(c.raiz, 'acervos'), id, { configuracoes: [CFG_WHATSAPP] });
     try {
-      assert.equal((migrado.db.prepare('SELECT versao FROM versao_schema').get() as { versao: number }).versao, 32);
+      assert.equal((migrado.db.prepare('SELECT versao FROM versao_schema').get() as { versao: number }).versao, 33);
       assert.equal(
         (migrado.db.prepare('SELECT COUNT(*) AS n FROM correspondencias_de_endereco').get() as { n: number }).n,
         2,

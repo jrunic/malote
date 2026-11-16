@@ -9,7 +9,6 @@ import {
   participacaoJaExiste,
   registrarAnexo,
   registrarConversa,
-  registrarIdentificador,
   registrarMensagem,
   registrarParticipacao,
   registrarTransicao,
@@ -22,6 +21,7 @@ import {
   CorrespondenciaEmConflitoError,
 } from '../../nucleo/correspondencia.js';
 import { resolverEnderecoDeWhatsapp } from './resolver-celular.js';
+import { enderecoDoParametro, registrarIdentificadorDeWhatsapp } from './endereco-de-whatsapp.js';
 import { materialJaEntrou, registrarMaterialConcluido } from '../../nucleo/sincronizacao.js';
 import { relatorioVazio, type RelatorioDeImportacao } from '../relatorio.js';
 import {
@@ -226,10 +226,13 @@ export function gravarMaterialLido(
       // forma alternativa criaria uma segunda identidade para quem ja esta no
       // acervo pelo telefone.
       const endereco = resolverEnderecoDeWhatsapp(acervo, enderecoCru);
-      const { id: identificadorId } = registrarIdentificador(acervo, {
-        fonte: 'whatsapp',
-        valor: endereco,
-      });
+      // Valor que nao e endereco nao vira Identificador (#1519): contado, e o membro fica de fora.
+      const membro = registrarIdentificadorDeWhatsapp(acervo, endereco);
+      if (membro === null) {
+        relatorio.enderecosInvalidos += 1;
+        continue;
+      }
+      const identificadorId = membro.id;
       const participacaoJaEstava = participacaoJaExiste(acervo, id, identificadorId);
       registrarParticipacao(acervo, {
         conversaId: id,
@@ -313,10 +316,17 @@ export function gravarMaterialLido(
       continue;
     }
 
-    const { id: identificadorId } = registrarIdentificador(acervo, {
-      fonte: 'whatsapp',
-      valor: resolverEnderecoDeWhatsapp(acervo, ev.membroExterno),
-    });
+    // O membro pode chegar como o objeto do participante serializado (#1519): vale o `id` dele. O que nao se le e contado.
+    const enderecoDoMembro = enderecoDoParametro(ev.membroExterno);
+    const membro =
+      enderecoDoMembro === null
+        ? null
+        : registrarIdentificadorDeWhatsapp(acervo, resolverEnderecoDeWhatsapp(acervo, enderecoDoMembro));
+    if (membro === null) {
+      relatorio.enderecosInvalidos += 1;
+      continue;
+    }
+    const identificadorId = membro.id;
     const nasceu = registrarTransicao(acervo, {
       origemDaChegada: 'importacao',
       conversaId,
@@ -353,10 +363,10 @@ export function gravarMaterialLido(
     let autorId: string | undefined;
     if (m.autorExterno !== undefined) {
       // O autor tambem passa pela resolucao: gravado cru, o mesmo celular na outra forma nascia como segunda identidade.
-      autorId = registrarIdentificador(acervo, {
-        fonte: 'whatsapp',
-        valor: resolverEnderecoDeWhatsapp(acervo, m.autorExterno),
-      }).id;
+      // O autor que nao e endereco nao vira Identificador (#1519): a Mensagem grava sem autor, nunca se perde.
+      const autor = registrarIdentificadorDeWhatsapp(acervo, resolverEnderecoDeWhatsapp(acervo, m.autorExterno));
+      if (autor === null) relatorio.enderecosInvalidos += 1;
+      else autorId = autor.id;
     }
 
     const jaExistia = mensagemJaExiste(acervo, 'whatsapp', m.idExterno);

@@ -135,6 +135,53 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   Identificador que ganhou uso. Ele não é volta total: o que chegou depois fica, e desfazer uma promoção devolve o endereço
   opaco a uma Conversa que pode ter Mensagens das duas formas (com um par errado, a Mensagem seguinte do número cria uma
   terceira Conversa).
+- **A leitura resolve as formas do endereço pela Correspondência e nunca infere Presença de ter escrito (#1517, #1518, #1465).**
+  O autor da Mensagem, `participantes` e `identificar` usam a mesma família de formas (`familia-de-endereco.ts`: o
+  endereço gravado, a forma canônica e as alternativas dela, as que existem como Identificador e as que só existem como
+  Correspondência), resolvida **em lote** (uma consulta por tabela para a página inteira, nunca uma por Mensagem), e o
+  filtro `--endereco` de `participantes` resolve pelo mesmo caminho de `--remetente` (`identificadoresDoRemetente`). A
+  forma canônica do autor é **nula** quando nenhum par liga o endereço: nunca se monta um número. Em `participantes`, o
+  autor que só existe sob a forma opaca entra na lista quando há Participação ou Transição sob **alguma** forma da família,
+  e a situação de cada linha é decidida pelos eventos de todas as formas; quem escreveu sem nenhuma das duas, em forma
+  nenhuma, fica de fora (Transição só nasce do que a Fonte declara). Em `identificar`, os totais da família (o bloco
+  `totais`) contam as Mensagens de que alguma forma é autora e as
+  Conversas por `UNION` (a Participação sob uma forma e a Mensagem sob outra na mesma Conversa contam uma). Medido em
+  15/11/2026 num Acervo grande (somente leitura): de 31.691 pares autor-Conversa coletiva com Mensagem recebida, 6.462
+  não têm Participação nem Transição sob o próprio id; com a família, 5.611 passam a aparecer na lista e 851 (nenhum de
+  endereço opaco) ficam sem Participação em forma nenhuma. Dos 6.754 autores de endereço opaco, 5.464 têm par (o
+  `canonico` vem preenchido) e 1.290 não. 130 Mensagens com autor em coletiva têm direção nula e não entram no universo
+  de `participantes`. A palavra **família** aqui
+  é de endereço; a família da mesclagem (`familia.ts`) é de Pessoas, e as duas não se misturam.
+- **O Identificador de WhatsApp só nasce pela porta do Adaptador, que confere a forma do endereço (#1519).**
+  `registrarIdentificadorDeWhatsapp` (`endereco-de-whatsapp.ts`) é a única chamada de `registrarIdentificador` em
+  `src/adaptadores/whatsapp`, e grava só `<texto sem espaço, chave nem aspas>@<sufixo>`; o resto devolve nulo e **nunca
+  lança** (a exceção que escapa da recepção derruba o ouvinte por 70). A guarda `tests/porta-de-identificador-whatsapp.test.ts`
+  reprova a chamada direta nesse diretório. A checagem mora na porta de **gravação** do Adaptador, que o resolvedor alimenta,
+  e não no resolvedor, que nunca recusa; o núcleo continua sem conhecer as formas de endereço de uma Fonte. **Três caminhos do
+  núcleo criam Identificador de WhatsApp sem ela**: a declaração da conta (`endereco-da-conta.ts`), a resolução retroativa
+  (`resolucao-retroativa.ts`) e a união das Conversas (`registrarIdentificadorComEfeito`); os valores deles vêm de
+  Configuração e de par já gravado, nunca de evento. Instagram e o catálogo de agenda não têm a checagem (nome de exibição e e-mail são
+  Identificadores legítimos neles). O parâmetro do evento de entrada e saída às vezes é o **objeto do participante
+  serializado** (`{"id": ..., "phoneNumber": ..., "admin": ...}`): a Transição grava sob o `id` do objeto, resolvido pela
+  Correspondência, sem aprender o par do telefone na recepção; o que não se lê conta `parametro-sem-endereco` e, quando é
+  objeto, também `parametro-serializado-ilegivel`; o autor ou a Etiqueta recusados contam `endereco-invalido` (as três
+  chaves vão à série de descartes do `ouvinte estado --json`), e a importação conta `enderecosInvalidos`. O autor recusado
+  grava a Mensagem **sem autor**, nunca a perde. O estado ao vivo (a agenda sincronizada) recusa em silêncio, sem
+  contador: o nome daquele endereço fica de fora. Medido em 15/11/2026 no Acervo do Titular: 3.706 valores serializados com
+  5.595 Transições, todos de 07 a 10/09/2026, vindos do conversor do acervo antigo pela porta da recepção ao vivo. O
+  **Identificador de valor vazio** (537 Mensagens e 211 Participações no mesmo Acervo) é o único legítimo que a regra recusa:
+  a reentrega ou a reimportação dessas Mensagens grava sem autor e conta, em vez de ligá-las ao vazio (a origem do vazio,
+  provavelmente `participant` vazio que o `??` não pega, não foi medida). A checagem custa de 0,0002 a 0,0013 ms por
+  chamada (medido), e roda também na Mensagem comum de grupo, porque o autor passa pela porta a cada Mensagem.
+- **`identidade reapontar-identificadores-serializados` limpa o estoque (#1519).** Para cada Identificador de WhatsApp de
+  valor serializado, o destino é o canônico do par que o `id` do objeto já tem (o par existente vence e nunca é
+  sobrescrito); sem par e com telefone, o telefone resolvido pela decisão do resolvedor (`decidirEnderecoDeWhatsapp`, que só
+  lê), com o par do `id` para ele e o do nono dígito, se houver; sem telefone, o próprio `id`. O `id` que é canônico de outro
+  par é conflito (cadeia de dois passos), e o Identificador que algo além de Transição referencia é achado: nada é tocado. Os
+  valores **com telefone vão primeiro**: o mesmo participante aparece serializado em mais de um valor (o `admin` muda, o
+  telefone falta em alguns; 4 casos no Acervo do Titular), e o valor sem telefone só chega ao número se o par do `id` já foi
+  aprendido; na ordem de id ele iria ao endereço opaco e quem fala ficaria partido entre dois Identificadores. O ensaio carrega em memória os pares que
+  já previu, para contar cada par uma vez e mandar ao número o que o efeito manda; o `--limite` corta depois dessa ordem.
 - **"Comparar dígitos serve a qualquer Fonte" tem limite, e o nono dígito brasileiro
   mora do lado de fora dele.** `nome-do-endereco.ts` (núcleo) já dizia, desde que
   nasceu: "traduzir a forma escrita do número na forma do endereço é vocabulário de
@@ -157,6 +204,22 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   recusa pela FORMA (`pareceValorSentinela`) antes de gravar — 14 Pessoas já exibiam
   esse lixo como nome corrente antes da correção, e a limpeza do que já está gravado
   ainda não existe (ver Pendências).
+- **A leitura do nome corrente descarta o bloco codificado quando existe outro nome; o
+  dado fica (#1137).** O predicado é o mesmo da gravação (`pareceValorSentinela`), é do
+  Adaptador e entra pela precedência (`comDescarteDeNome` põe `descartarNome` nela), na
+  camada que compõe: a rede (o módulo é puro, sem import, e está na lista de exceções
+  da fronteira) e a CLI. O núcleo (`nomeEscolhido`) só filtra quando sobra nome real; o
+  bloco como única Atribuição segue sendo o escolhido. `pessoa precedencia` imprime a
+  precedência sem o predicado, porque não resolve nome. `descartarNome` é função: não
+  atravessa `postMessage`, e a precedência nasce dentro do worker de leitura. Medido em
+  15/11/2026 nos quatro Acervos de produção, com a precedência padrão (a que rodava): o
+  nome escolhido muda em **279 Pessoas, 1.624 Identificadores sem Pessoa e 1.106
+  Identificadores com Pessoa** na leitura por Identificador (`identificar`); seguem no
+  bloco, por não terem outro nome, 13.720 Identificadores sem Pessoa e nenhuma Pessoa.
+  Dos ~4.100 valores distintos com a forma, 266 não são só metadado (varint e cadeia
+  vazia): todos são protobuf válido e 250 levam DENTRO uma cadeia de texto (a maioria
+  com espaço, cara do nome do contato serializado na mesma mutação). O valor gravado
+  segue ilegível; o que o descarte esconde é o bloco, não um nome legível.
 - **A remoção de Atribuição inválida classifica endereço-repetido PRIMEIRO.** Só
   depois marca-duplicata, e essa só remove se sobrar uma irmã que não vá ser
   removida também. Invertido, as linhas que são **as duas coisas** seguram uma à

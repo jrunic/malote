@@ -6,6 +6,7 @@ import { nomeDoIdentificador } from './identidade.js';
 import { nomesEmLote } from './nomes-em-lote.js';
 import { lerContatosCompartilhados, type ContatoCompartilhadoLido } from './contato-compartilhado.js';
 import { lerEdicoes, textoAtualDe, type EdicaoDaMensagem } from './edicao.js';
+import { autoresDeIdentificadores, type AutorDaMensagem } from './autor-da-mensagem.js';
 import type { CursorDeConversas } from './cursor-de-conversas.js';
 
 /**
@@ -337,6 +338,11 @@ export interface MensagemLida {
   conversaId: ConversaId;
   fonte: Fonte;
   autorId: string | null;
+  /**
+   * Quem escreveu, por endereco (#1517): a forma gravada, a canonica (nula sem par) e o nome do contato pelas formas
+   * ligadas. Nulo na Mensagem sem autor e na enviada pela conta. O `autorId` continua como estava: o campo e um acrescimo.
+   */
+  autor: AutorDaMensagem | null;
   conteudo: string | null;
   ocorridaEm: number;
   /** Enviada pelo Titular ou recebida de outra Pessoa. NULL em Mensagem migrada sem discriminante. */
@@ -388,6 +394,8 @@ export interface FiltroDeMensagem {
   ordem?: 'cronologica' | 'recentes';
   /** Paginacao: token composto (ocorrida_em, id) EXCLUSIVO — sem pular nem repetir. */
   cursor?: { ocorridaEm: number; id: string };
+  /** Sem ela o nome do autor nao se resolve e sai nulo; as rotas e a CLI sempre a passam (#1517). */
+  precedencia?: PrecedenciaDeNome;
 }
 
 function citacaoDeLinha(l: Record<string, unknown>): CitacaoLida | null {
@@ -401,7 +409,17 @@ function citacaoDeLinha(l: Record<string, unknown>): CitacaoLida | null {
   };
 }
 
-function montarMensagens(acervo: Acervo, linhas: Array<Record<string, unknown>>): MensagemLida[] {
+function montarMensagens(
+  acervo: Acervo,
+  linhas: Array<Record<string, unknown>>,
+  precedencia: PrecedenciaDeNome | undefined,
+): MensagemLida[] {
+  // Os autores da PAGINA INTEIRA em lote (familia de formas e nomes), nunca uma consulta por Mensagem (#1517).
+  const autores = autoresDeIdentificadores(
+    acervo,
+    linhas.map((l) => (l['autor_id'] as string | null) ?? null).filter((i): i is string => i !== null),
+    precedencia,
+  );
   // Os cartoes da PAGINA INTEIRA em duas consultas (cartoes e valores), nunca uma por Mensagem.
   const cartoes = lerContatosCompartilhados(
     acervo,
@@ -425,6 +443,10 @@ function montarMensagens(acervo: Acervo, linhas: Array<Record<string, unknown>>)
       conversaId: l['conversa_id'] as string,
       fonte: l['fonte'] as Fonte,
       autorId: (l['autor_id'] as string | null) ?? null,
+      autor:
+        (l['direcao'] as Direcao | null) === 'enviada' || (l['autor_id'] ?? null) === null
+          ? null
+          : (autores.get(l['autor_id'] as string) ?? null),
       conteudo,
       direcao: (l['direcao'] as Direcao | null) ?? null,
       ocorridaEm: l['ocorrida_em'] as number,
@@ -535,7 +557,7 @@ export function lerMensagens(acervo: Acervo, filtro: FiltroDeMensagem): Mensagem
     )
     .all(...valores) as Array<Record<string, unknown>>;
 
-  return montarMensagens(acervo, linhas);
+  return montarMensagens(acervo, linhas, filtro.precedencia);
 }
 
 /**
@@ -543,7 +565,11 @@ export function lerMensagens(acervo: Acervo, filtro: FiltroDeMensagem): Mensagem
  * as usa). Id que nao existe no Acervo nao entra; a ordem e a do Acervo, nao a da lista. Interna: o modo rede nao tem
  * rota de Mensagem por id.
  */
-export function lerMensagensPorIds(acervo: Acervo, ids: readonly string[]): MensagemLida[] {
+export function lerMensagensPorIds(
+  acervo: Acervo,
+  ids: readonly string[],
+  precedencia?: PrecedenciaDeNome,
+): MensagemLida[] {
   if (ids.length === 0) return [];
   const linhas = acervo
     .preparar(
@@ -554,7 +580,7 @@ export function lerMensagensPorIds(acervo: Acervo, ids: readonly string[]): Mens
         ORDER BY m.ocorrida_em, m.id`,
     )
     .all(JSON.stringify(ids)) as Array<Record<string, unknown>>;
-  return montarMensagens(acervo, linhas);
+  return montarMensagens(acervo, linhas, precedencia);
 }
 
 /** A ordem da busca; o MESMO vocabulario de `mensagens`. */
@@ -585,6 +611,8 @@ export interface FiltroDeBusca {
   ate?: number;
   /** `recentes` (padrao) ou `cronologica`. Vale nas duas consultas internas e no corte final. */
   ordem?: OrdemDaBusca;
+  /** Sem ela o nome do autor nao se resolve e sai nulo; as rotas e a CLI sempre a passam (#1517). */
+  precedencia?: PrecedenciaDeNome;
 }
 
 /**
@@ -794,7 +822,7 @@ export function buscarMensagensComCorte(acervo: Acervo, filtro: FiltroDeBusca): 
     )
     .all(...idsOrdenados) as Array<Record<string, unknown>>;
 
-  const mensagens = montarMensagens(acervo, linhas);
+  const mensagens = montarMensagens(acervo, linhas, filtro.precedencia);
   const porId = new Map(mensagens.map((m) => [m.id, m]));
   return {
     mensagens: idsOrdenados

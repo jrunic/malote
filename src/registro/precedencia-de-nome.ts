@@ -29,6 +29,13 @@ export interface PrecedenciaDeNome {
   porOrigem: Record<string, number>;
   /** Configuracao de catalogo preferida. Nulo = desempate por recencia. */
   catalogoPreferido: string | null;
+  /**
+   * Nome que a leitura nao escolhe QUANDO HA OUTRO (o bloco codificado que a plataforma grava no lugar do nome, #1137). O
+   * dado nao e tocado: so a escolha do nome corrente o ignora. Ausente, nada e descartado. E uma FUNCAO: nao atravessa
+   * `postMessage` nem serializacao (a precedencia nasce dentro do worker de leitura; se um dia entrar no pedido, passa a
+   * lancar `DataCloneError`).
+   */
+  descartarNome?: (nome: string) => boolean;
 }
 
 export function definirCatalogoPreferido(

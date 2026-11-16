@@ -197,9 +197,11 @@ const ADAPTADORES_PUROS_PERMITIDOS_NA_REDE = [
   join('src', 'adaptadores', 'whatsapp', 'destinatario-de-envio.ts'),
   // O telefone de um endereco (rotulo do Indice de Midia): a regra e da Fonte, e o nucleo nao a nomeia.
   join('src', 'adaptadores', 'whatsapp', 'telefone-do-endereco.ts'),
+  // O predicado do bloco codificado (#1137): a forma e da Fonte; a rede so o injeta na precedencia. O modulo nao importa nada.
+  join('src', 'adaptadores', 'whatsapp', 'nome-sentinela-de-contato.ts'),
 ];
 
-test('src/rede so importa de adaptador os modulos puros permitidos (destinatario de Envio e telefone do endereco), e eles nao importam nada', () => {
+test('src/rede so importa de adaptador os modulos puros permitidos (destinatario de Envio, telefone do endereco e o predicado do bloco codificado), e eles nao importam nada', () => {
   const violacoes: string[] = [];
   const permitidos = ADAPTADORES_PUROS_PERMITIDOS_NA_REDE.map((p) => p.replace(/\.ts$/, '.js').split('\\').join('/'));
   for (const arquivo of arquivosDe(join('src', 'rede'))) {

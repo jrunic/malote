@@ -337,6 +337,7 @@ export function executarExportarLocal(
         ...(pedido.ate !== undefined ? { ate: expandirData(pedido.ate, 'fim') } : {}),
         ...(autorIds !== undefined ? { autorIds } : {}),
         ...(cursor !== undefined ? { cursor } : {}),
+        precedencia,
       });
       exportador.acrescentar(mensagens);
       if (mensagens.length < limiteDaPagina) break;

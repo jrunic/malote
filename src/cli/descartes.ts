@@ -83,15 +83,20 @@ export function anotarDescartes(
 }
 
 /**
- * O que a serie soma de UM relato: cada descarte por motivo, mais o parametro de
- * stub sem endereco, que nao descarta evento (o evento e Mensagem) e por isso so
- * e CONTADO, nunca guardado.
+ * O que a serie soma de UM relato: cada descarte por motivo, mais o que nao
+ * descarta evento (o evento e Mensagem) e por isso so e CONTADO, nunca guardado:
+ * o parametro de stub sem endereco, o subconjunto dele que e objeto serializado
+ * ilegivel, e o endereco que a porta de gravacao de Identificador recusou (#1519).
  */
+const SO_CONTADOS = ['parametro-sem-endereco', 'parametro-serializado-ilegivel', 'endereco-invalido'] as const;
+
 export function contagemDosDescartes(r: RelatoDeRecepcao): Record<string, number> {
   const contagem: Record<string, number> = {};
   for (const d of r.descartados) contagem[d.motivo] = (contagem[d.motivo] ?? 0) + 1;
-  const parametros = r.ignorados['parametro-sem-endereco'];
-  if (parametros !== undefined && parametros > 0) contagem['parametro-sem-endereco'] = parametros;
+  for (const chave of SO_CONTADOS) {
+    const n = r.ignorados[chave];
+    if (n !== undefined && n > 0) contagem[chave] = n;
+  }
   return contagem;
 }
 

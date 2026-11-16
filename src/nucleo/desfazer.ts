@@ -17,6 +17,11 @@ import {
   devolverMensagemDeConversa,
   removerIdentificadorSemUso,
 } from './uniao-de-conversas.js';
+import {
+  devolverIdentificadorRemovido,
+  devolverTransicaoFundida,
+  devolverTransicaoReapontada,
+} from './reapontar-transicoes.js';
 
 /** A Operacao ja foi desfeita. O indice unico do schema e a guarda dura. */
 export class OperacaoJaDesfeitaError extends Error {
@@ -240,6 +245,21 @@ function desfazerLinha(acervo: Acervo, l: LinhaDeEfeito, todas: LinhaDeEfeito[])
     })
       ? null
       : 'o par ja nao existe — foi removido, ou passou a apontar para outro canonico';
+  }
+
+  // Reapontar os Identificadores serializados (#1519): cada linha volta pela guarda, so enquanto o valor ainda e o que a
+  // Operacao gravou. ANTES do ramo da resolucao retroativa, que devolveria sem conferir (`transicoes_de_participacao` esta em
+  // TABELAS_QUE_APONTAM_PARA_IDENTIFICADOR). O filtro `ehIrmaDeLinhaApagada`, que roda antes de `desfazerLinha`, tambem olha
+  // essa tabela: a linha `removida-por-fusao` passa nele so porque cada Transicao fundida tem chave propria (grupo de um). Uma
+  // fusao que relatasse a linha coluna por coluna passaria a ser filtrada.
+  if (l.tabela === 'transicoes_de_participacao' && l.campo === 'identificador_id' && l.antes !== null && l.depois !== null) {
+    return devolverTransicaoReapontada(acervo, { transicaoId: l.chave, de: l.antes, para: l.depois });
+  }
+  if (l.tabela === 'transicoes_de_participacao' && l.campo === 'removida-por-fusao' && l.antes !== null && l.depois === null) {
+    return devolverTransicaoFundida(acervo, { transicaoId: l.chave, linha: l.antes });
+  }
+  if (l.tabela === 'identificadores' && l.campo === 'removido' && l.antes !== null && l.depois === null) {
+    return devolverIdentificadorRemovido(acervo, { identificadorId: l.chave, dados: l.antes });
   }
 
   // Uniao das Conversas do contato (#1440): cada linha volta pela guarda da porta, SO enquanto o valor ainda e o que a Operacao

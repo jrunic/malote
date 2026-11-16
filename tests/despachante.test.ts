@@ -200,7 +200,9 @@ test('RESERVA: um Inquilino ocupa no maximo N-1, e o outro e atendido no worker 
     const t0 = Date.now();
     const b = await d.executar(pedido('B'), nunca);
     assert.equal(b.tipo, 'resposta');
-    assert.ok(Date.now() - t0 < 800, `B nao esperou A (${Date.now() - t0} ms)`);
+    // A espera de B pela subida de um worker novo sob carga chegou a 895 ms (ciclo 50). Se B esperasse A, levaria pelo menos
+    // ~1.200 ms (A dorme 1.500 e comecou 300 ms antes): 1.000 ainda distingue os dois casos.
+    assert.ok(Date.now() - t0 < 1000, `B nao esperou A (${Date.now() - t0} ms)`);
     await Promise.all(lentas);
   } finally {
     await d.parar(0);

@@ -39,8 +39,8 @@ test('membro que SOME do roster entre dois materiais não produz Transição', (
           coletiva: true,
           bruto: '{}',
           participantesConhecidos: [
-            { endereco: '5565911111', ativaNaFonte: true },
-            { endereco: '5565922222', ativaNaFonte: true },
+            { endereco: '5565911111@s.whatsapp.net', ativaNaFonte: true },
+            { endereco: '5565922222@s.whatsapp.net', ativaNaFonte: true },
           ],
         },
       ],
@@ -55,7 +55,7 @@ test('membro que SOME do roster entre dois materiais não produz Transição', (
           nome: 'Grupo',
           coletiva: true,
           bruto: '{}',
-          participantesConhecidos: [{ endereco: '5565911111', ativaNaFonte: true }],
+          participantesConhecidos: [{ endereco: '5565911111@s.whatsapp.net', ativaNaFonte: true }],
         },
       ],
     });
@@ -94,21 +94,21 @@ test('só o evento DECLARADO produz Transição, e o código desconhecido é con
           nome: 'Outro',
           coletiva: true,
           bruto: '{}',
-          participantesConhecidos: [{ endereco: '5565933333', ativaNaFonte: false }],
+          participantesConhecidos: [{ endereco: '5565933333@s.whatsapp.net', ativaNaFonte: false }],
         },
       ],
       eventos: [
         {
           idExterno: 'stanza-1',
           conversaIdExterno: 'grupo-2@g.us',
-          membroExterno: '5565933333',
+          membroExterno: '5565933333@s.whatsapp.net',
           codigo: 7,
           ocorridoEm: 1_600_000_000_000,
         },
         {
           idExterno: 'stanza-2',
           conversaIdExterno: 'grupo-2@g.us',
-          membroExterno: '5565933333',
+          membroExterno: '5565933333@s.whatsapp.net',
           codigo: 30,
           ocorridoEm: 1_600_000_100_000,
         },
@@ -145,14 +145,14 @@ test('reimportar o MESMO material não duplica Transição, e o relatório diz i
           nome: 'Terceiro',
           coletiva: true,
           bruto: '{}',
-          participantesConhecidos: [{ endereco: '5565944444', ativaNaFonte: false }],
+          participantesConhecidos: [{ endereco: '5565944444@s.whatsapp.net', ativaNaFonte: false }],
         },
       ],
       eventos: [
         {
           idExterno: 'stanza-3',
           conversaIdExterno: 'grupo-3@g.us',
-          membroExterno: '5565944444',
+          membroExterno: '5565944444@s.whatsapp.net',
           codigo: 3,
           ocorridoEm: 1_600_000_000_000,
         },
@@ -189,8 +189,8 @@ test('a atividade declarada pela Fonte entra no retrato SEM virar data', () => {
           coletiva: true,
           bruto: '{}',
           participantesConhecidos: [
-            { endereco: '5565955555', ativaNaFonte: true },
-            { endereco: '5565966666', ativaNaFonte: false },
+            { endereco: '5565955555@s.whatsapp.net', ativaNaFonte: true },
+            { endereco: '5565966666@s.whatsapp.net', ativaNaFonte: false },
           ],
         },
       ],
@@ -221,7 +221,7 @@ test('Conversa direta não declara atividade, e o campo fica NULO', () => {
     const m = material({
       conversas: [
         {
-          idExterno: '5565977777',
+          idExterno: '5565977777@s.whatsapp.net',
           nome: 'Alguém',
           coletiva: false,
           bruto: '{}',
@@ -239,6 +239,91 @@ test('Conversa direta não declara atividade, e o campo fica NULO', () => {
       linhas.every((l) => l.ativa_na_fonte === null),
       'sem roster, ninguém declara — preencher com `true` afirmaria o que a Fonte não disse',
     );
+  } finally {
+    c.limpar();
+  }
+});
+
+test('o evento da importacao com o membro serializado grava sob o endereco do objeto (#1519)', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Padme');
+    const r = gravarMaterialLido(
+      acervo,
+      material({
+        conversas: [
+          {
+            idExterno: '120363000000000002@g.us',
+            nome: 'G',
+            coletiva: true,
+            bruto: '{}',
+            participantesConhecidos: [],
+          },
+        ],
+        eventos: [
+          {
+            idExterno: 'stanza-ser-1',
+            conversaIdExterno: '120363000000000002@g.us',
+            membroExterno:
+              '{"id":"109876543210987@lid","phoneNumber":"5565911110001@s.whatsapp.net","admin":null}',
+            codigo: 7,
+            ocorridoEm: 1_600_000_000_000,
+          },
+        ],
+      }),
+      { agora: 1_700_000_000_000, configuracao: CFG_WHATSAPP },
+    );
+    assert.equal(r.transicoesCriadas, 1);
+    assert.equal(r.enderecosInvalidos, 0);
+    const serializados = acervo.db
+      .prepare("SELECT COUNT(*) AS n FROM identificadores WHERE substr(valor, 1, 1) = '{'")
+      .get() as { n: number };
+    assert.equal(serializados.n, 0);
+    const dono = acervo.db
+      .prepare(
+        'SELECT i.valor FROM transicoes_de_participacao t JOIN identificadores i ON i.id = t.identificador_id',
+      )
+      .get() as { valor: string };
+    assert.equal(dono.valor, '109876543210987@lid');
+  } finally {
+    c.limpar();
+  }
+});
+
+test('o evento da importacao com membro ilegivel nao grava e e contado (#1519)', () => {
+  const c = cenario();
+  try {
+    const { acervo } = c.novoInquilino('Padme');
+    const r = gravarMaterialLido(
+      acervo,
+      material({
+        conversas: [
+          {
+            idExterno: '120363000000000002@g.us',
+            nome: 'G',
+            coletiva: true,
+            bruto: '{}',
+            participantesConhecidos: [],
+          },
+        ],
+        eventos: [
+          {
+            idExterno: 'stanza-ser-2',
+            conversaIdExterno: '120363000000000002@g.us',
+            membroExterno: '{"id":"nao e endereco"}',
+            codigo: 7,
+            ocorridoEm: 1_600_000_000_000,
+          },
+        ],
+      }),
+      { agora: 1_700_000_000_000, configuracao: CFG_WHATSAPP },
+    );
+    assert.equal(r.transicoesCriadas, 0);
+    assert.equal(r.enderecosInvalidos, 1);
+    const n = acervo.db
+      .prepare('SELECT COUNT(*) AS n FROM identificadores WHERE valor LIKE ?')
+      .get('{%') as { n: number };
+    assert.equal(n.n, 0);
   } finally {
     c.limpar();
   }

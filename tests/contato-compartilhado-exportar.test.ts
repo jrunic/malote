@@ -19,6 +19,7 @@ test('exportar mostra o cartao em txt e traz o campo no json', () => {
     conversaId: 'c1',
     fonte: 'whatsapp' as const,
     autorId: null,
+    autor: null,
     conteudo: null,
     ocorridaEm: Date.parse('2026-06-01T12:30:05Z'),
     direcao: 'recebida' as const,

@@ -26,3 +26,12 @@ export function pareceValorSentinela(valor: string): boolean {
   // e por isso o comprimento TOTAL medido e sempre 1 mod 4, nunca 0.
   return (valor.length - 1) % 4 === 0;
 }
+
+/**
+ * Acrescenta a uma precedencia de nomes o predicado que o nucleo usa para NAO escolher o bloco quando ha nome real (#1137).
+ * O nucleo nao conhece a forma do bloco (vocabulario de Fonte); quem le a precedencia na camada que compoe (a rede e a CLI)
+ * a passa por aqui. Este modulo continua sem import nenhum: e essa a condicao para a rede poder alcanca-lo.
+ */
+export function comDescarteDeNome<T extends object>(precedencia: T): T & { descartarNome: (nome: string) => boolean } {
+  return { ...precedencia, descartarNome: pareceValorSentinela };
+}

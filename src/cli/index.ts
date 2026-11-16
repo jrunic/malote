@@ -2,7 +2,7 @@
 import { lerPedidoDeEtiquetas, formatarEtiquetas } from './etiquetas.js';
 import { lerPedidoDeChegadas, formatarChegadas } from './chegadas.js';
 import { apararDiario, lerChegadas, LOTE_DA_APARAGEM, MarcadorExpiradoError, MarcadorInvalidoError, pontoDePartida, RETENCAO_PADRAO_DO_DIARIO_EM_DIAS, type FiltroDeChegadas } from '../nucleo/chegada.js';
-import { lerChegadasComConteudo } from '../nucleo/chegadas-com-conteudo.js';
+import { lerChegadasComConteudo, TETO_DE_BYTES_COM_CONTEUDO } from '../nucleo/chegadas-com-conteudo.js';
 import { acrescentarEtiquetas, listarEtiquetas } from '../nucleo/etiqueta-de-participacao.js';
 import { execFileSync } from 'node:child_process';
 import {
@@ -54,6 +54,10 @@ import {
   EstoqueDoParInterrompidoError,
 } from '../adaptadores/whatsapp/aprender-pares-da-conversa-direta.js';
 import { unirConversasDoContato, UniaoInterrompidaError } from '../adaptadores/whatsapp/unir-conversas-do-contato.js';
+import {
+  reapontarIdentificadoresSerializados,
+  ReapontoInterrompidoError,
+} from '../adaptadores/whatsapp/reapontar-identificadores-serializados.js';
 import { extrairCitacoes } from '../adaptadores/whatsapp/extrair-citacoes.js';
 import { extrairImagensDeModelo } from '../adaptadores/whatsapp/extrair-imagem-de-modelo.js';
 import { formatarAnexos, tipoGuardado } from './anexos-texto.js';
@@ -133,7 +137,7 @@ import {
   resolverFiltroDeConfiguracao,
 } from '../registro/configuracao-adaptador.js';
 import { CONTA_PADRAO } from '../adaptadores/whatsapp/material.js';
-import { pareceValorSentinela } from '../adaptadores/whatsapp/nome-sentinela-de-contato.js';
+import { comDescarteDeNome, pareceValorSentinela } from '../adaptadores/whatsapp/nome-sentinela-de-contato.js';
 import { nomeRepeteONumeroBrasileiro } from '../adaptadores/whatsapp/nome-repete-numero-br.js';
 import { importarCatalogo } from '../adaptadores/contatos/importar.js';
 import { FONTES_VARRIVEIS, varrer } from './varredura.js';
@@ -441,13 +445,13 @@ Titular (nao exige chave enquanto nao houver rede):
   malote buscar     --inquilino <id> --texto <termo> [--pessoa <id>] [--conversa <id>] [--desde <data>] [--ate <data>] [--limite <n>] [--ordem recentes|cronologica] [--json]
                     (sem --ordem, as mais recentes; diz quando o limite cortou resultados — padrao 100)
   malote pessoas        --inquilino <id> --texto <nome>        (resolve texto em Pessoa; com MALOTE_SERVIDOR: por REDE, sem --inquilino)
-  malote participantes  --inquilino <id> --conversa <id> [--em <AAAA-MM-DD>]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino)
+  malote participantes  --inquilino <id> --conversa <id> [--em <AAAA-MM-DD>] [--endereco <valor>]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino; --endereco acha o contato por qualquer forma do endereco)
   malote etiquetas      --inquilino <id> [--conversa <id>] [--remetente <valor>] [--busca <texto>] [--historico] [--limite <n>] [--json]  (com MALOTE_SERVIDOR: por REDE, sem --inquilino; --historico exige --conversa e --remetente; sem filtro, so as correntes nao vazias, ate 100 por padrao e 1000 no maximo)
   malote chegadas aparar --inquilino <id> [--dias <n>] [--limite <n>] [--com-efeito --confirmo] [--json]  (apara o Diario de Chegadas: remove as mais antigas que a retencao, 30 dias por padrao, ate o limite por passada; ensaio por padrao; SO local, e o ouvinte ja apara sozinho)
   malote chegadas       --inquilino <id> (--depois <marcador> | --ponto-de-partida) [--conversa <id>] [--configuracao <apelido>] [--direcao enviada|recebida] [--remetente <valor>] [--sem-remetente <valor>] [--tipo <tipos>] [--origem <origens>] [--limite <n>] [--com-conteudo] [--json]  (o Diario de Chegadas: o que entrou no Acervo, na ordem em que entrou; com MALOTE_SERVIDOR: por REDE, sem --inquilino; --ponto-de-partida devolve o Marcador de agora e nao aceita filtros; Marcador expirado sai por 8)
   malote relatorio                                              (SO em modo rede: totais por Fonte e natureza; local, use 'malote acervo relatar')
   malote conversas sem-endereco --inquilino <id> [--limite <n>]
-  malote conversa presenca      --inquilino <id> --conversa <id> --em <AAAA-MM-DD> [--json]
+  malote conversa presenca      --inquilino <id> --conversa <id> --em <AAAA-MM-DD> [--endereco <valor>] [--json]
   malote acervo migrar  --inquilino <id>              (sobe a forma do Acervo, e diz o que fez)
   malote acervo recriar --inquilino <id> --confirmo [--descartar-localizacao]   (apaga o Acervo E os arquivos deste Inquilino; com Destino Remoto recusa sem --descartar-localizacao)
   malote pessoa listar      --inquilino <id> [--incluir-absorvidas]
@@ -471,6 +475,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote identidade aprender-pares-da-conversa-direta --inquilino <id> [--limite <n>] [--tamanho-do-lote <n>] [--com-efeito --confirmo] [--json]
                                     (aprende o telefone das Conversas diretas por forma opaca, do cru das Mensagens recebidas; ensaio por padrão)
   malote identidade unir-conversas-do-contato --inquilino <id> [--limite <n>] [--com-efeito --confirmo] [--json]
+  malote identidade reapontar-identificadores-serializados --inquilino <id> [--limite <n>] [--com-efeito --confirmo] [--json]
                                     (une a Conversa direta por forma opaca com par e a Conversa do número na mesma Configuração; ensaio por padrão)
   malote operacao listar   --inquilino <id> --chave <valor>
   malote operacao ver      <id> --inquilino <id> --chave <valor>
@@ -581,7 +586,7 @@ export async function executarConsultaRede(
   const q = new URLSearchParams();
   for (const nome of ['busca', 'fonte', 'coletiva', 'pessoa', 'limite', 'conversa',
     'autor', 'desde', 'ate', 'antes', 'em', 'texto', 'configuracao', 'favorito', 'fixada',
-    'ordem', 'direcao', 'remetente']) {
+    'ordem', 'direcao', 'remetente', 'endereco']) {
     const valor = opcao(argumentos, nome);
     if (valor !== undefined) q.set(nome, valor);
   }
@@ -2420,6 +2425,9 @@ function executarComAtor(
         if (r.transicoesCriadas > 0) {
           escrever(`  ${r.transicoesCriadas} transicoes de participacao novas`);
         }
+        if (r.enderecosInvalidos > 0) {
+          escrever(`  ${r.enderecosInvalidos} enderecos recusados (nao sao enderecos de WhatsApp)`);
+        }
         if (r.participantesAtivos > 0 || r.participantesInativos > 0) {
           escrever(
             `  ${r.participantesAtivos} ativos, ${r.participantesInativos} inativos ` +
@@ -2518,7 +2526,12 @@ function executarComAtor(
           quando = janela.ate;
         }
 
-        const r = quemEstavaEm(acervo, { conversaId: conversa, em: quando });
+        const endereco = opcao(argumentos, 'endereco');
+        const r = quemEstavaEm(acervo, {
+          conversaId: conversa,
+          em: quando,
+          ...(endereco === undefined ? {} : { endereco }),
+        });
         if (temBandeira(argumentos, 'json')) {
           escrever(JSON.stringify(r, null, 2));
           return 0;
@@ -2555,7 +2568,7 @@ function executarComAtor(
       const limite = opcao(argumentos, 'limite');
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
-        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino));
         const filtro = limite === undefined ? {} : { limite: Number(limite) };
         for (const l of listarSemEndereco(acervo, precedencia, filtro)) {
           escrever(
@@ -2590,6 +2603,7 @@ function executarComAtor(
       const inquilino = opcao(argumentos, 'inquilino');
       if (inquilino === undefined) throw new Error('Informe --inquilino.');
       const emParam = opcao(argumentos, 'em');
+      const endereco = opcao(argumentos, 'endereco');
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
         // Sem --em: agora. Com --em: fim do dia capado ao Alcance, a regra
@@ -2597,7 +2611,10 @@ function executarComAtor(
         const em = emParam === undefined ? Date.now() : expandirData(emParam, 'fim');
         escrever(
           JSON.stringify(
-            acrescentarEtiquetas(acervo, quemEstavaEm(acervo, { conversaId: conversa, em })),
+            acrescentarEtiquetas(
+              acervo,
+              quemEstavaEm(acervo, { conversaId: conversa, em, ...(endereco === undefined ? {} : { endereco }) }),
+            ),
             null,
             2,
           ),
@@ -2653,6 +2670,7 @@ function executarComAtor(
           ...(direcaoOpcao === undefined ? {} : { direcao: direcaoOpcao }),
           ...(limite === undefined ? {} : { limite: Number(limite) }),
           ordem,
+          precedencia: comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino)),
           ...(antes === undefined
             ? {}
             : {
@@ -2722,7 +2740,7 @@ function executarComAtor(
           listarConfiguracoes(registro, inquilino).map((c) => [c.id, c.apelido]),
         );
 
-        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino));
         const antes = opcao(argumentos, 'antes');
         const tudo = temBandeira(argumentos, 'tudo');
         if (tudo && antes !== undefined) {
@@ -2827,6 +2845,7 @@ function executarComAtor(
           ...(ate === undefined ? {} : { ate: expandirData(ate, 'fim') }),
           limite: limiteEfetivo,
           ordem,
+          precedencia: comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino)),
         });
         if (temBandeira(argumentos, 'json')) {
           escrever(JSON.stringify(achadas, null, 2));
@@ -2942,7 +2961,7 @@ function executarComAtor(
       if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
-        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino));
         const filtro = temBandeira(argumentos, 'incluir-absorvidas')
           ? { incluirAbsorvidas: true }
           : {};
@@ -2969,7 +2988,7 @@ function executarComAtor(
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
         const apelidoPorId = new Map(listarConfiguracoes(registro, inquilino).map((c) => [c.id, c.apelido]));
-        const detalhe = detalharConversa(acervo, conversa, lerPrecedenciasDeNome(registro, inquilino), apelidoPorId);
+        const detalhe = detalharConversa(acervo, conversa, comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino)), apelidoPorId);
         if (detalhe === undefined) {
           escrever(`Conversa desconhecida: ${conversa}`);
           return 2;
@@ -2997,7 +3016,7 @@ function executarComAtor(
       }
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
-        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino));
         const r = identificarPorValor(
           acervo,
           { valor, ...(fonteOpcao !== undefined ? { fonte: fonteOpcao } : {}) },
@@ -3103,7 +3122,14 @@ function executarComAtor(
           ...(pedido.tipos.length > 0 ? { tipos: pedido.tipos } : {}),
           ...(pedido.origens.length > 0 ? { origens: pedido.origens } : {}),
         };
-        const pagina = pedido.comConteudo ? lerChegadasComConteudo(acervo, filtro) : lerChegadas(acervo, filtro);
+        const pagina = pedido.comConteudo
+          ? lerChegadasComConteudo(
+              acervo,
+              filtro,
+              TETO_DE_BYTES_COM_CONTEUDO,
+              comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino)),
+            )
+          : lerChegadas(acervo, filtro);
         if (temBandeira(argumentos, 'json')) escrever(JSON.stringify(pagina, null, 2));
         else for (const l of formatarChegadas(pagina)) escrever(l);
       } catch (erro) {
@@ -3148,7 +3174,7 @@ function executarComAtor(
                 valor: pedido.remetente,
                 ...(fonteDoRemetente !== undefined ? { fonte: fonteDoRemetente } : {}),
               });
-        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino));
         const lista = listarEtiquetas(
           acervo,
           {
@@ -3251,7 +3277,7 @@ function executarComAtor(
       if (inquilino === undefined) throw new Error('Informe --inquilino.');
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
-        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino));
         return executarExportarLocal(acervo, precedencia, lido.pedido, { escrever, erro: escrever });
       } finally {
         acervo.fechar();
@@ -3265,7 +3291,7 @@ function executarComAtor(
       if (pessoaId === undefined) throw new Error('Informe --pessoa <id>.');
       const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
       try {
-        const precedencia = lerPrecedenciasDeNome(registro, inquilino);
+        const precedencia = comDescarteDeNome(lerPrecedenciasDeNome(registro, inquilino));
         const p = lerPessoa(acervo, pessoaId, precedencia);
         if (p === null) throw new Error(`Pessoa desconhecida: ${pessoaId}`);
 
@@ -3589,6 +3615,67 @@ function executarComAtor(
             'O par vale para o Inquilino inteiro: a Conversa opaca de todas as Configuracoes deixa de receber, e as Mensagens novas do contato vao para a Conversa por telefone (uma nova, se ainda nao existe).',
           );
         }
+        if (r.operacaoId !== null) {
+          escrever(`Para desfazer: malote operacao desfazer ${r.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
+        }
+        escrever(cobre);
+        if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
+        return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
+    if (grupo === 'identidade' && sub === 'reapontar-identificadores-serializados') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
+      const comEfeito = temBandeira(argumentos, 'com-efeito');
+      if (comEfeito && !temBandeira(argumentos, 'confirmo')) {
+        throw new Error('Repita o comando com --confirmo para executar.');
+      }
+      const textoDoLimite = opcao(argumentos, 'limite');
+      const limite = textoDoLimite === undefined ? undefined : Number(textoDoLimite);
+      if (limite !== undefined && !(Number.isInteger(limite) && limite >= 1)) {
+        escrever('--limite precisa ser um inteiro maior que zero.');
+        return 2;
+      }
+      // O que o `desfazer` cobre e o que NAO cobre (#1519): sai sempre, no ensaio e no efeito.
+      const cobre =
+        'O `operacao desfazer` devolve cada Transicao reapontada ao Identificador de origem, recria cada Transicao fundida e cada ' +
+        'Identificador removido (com o mesmo id) e remove os pares e os Identificadores que esta Operacao criou, cada um so ' +
+        'enquanto o valor ainda e o que ela gravou (o resto e recusado, com a causa). Ele NAO devolve o que o ouvinte gravou ' +
+        'depois: a Transicao nova sob o endereco de destino fica onde esta. A Operacao nao toca nas Chegadas.';
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        let r;
+        try {
+          r = reapontarIdentificadoresSerializados(acervo, { comEfeito, ...(limite === undefined ? {} : { limite }) });
+        } catch (erro) {
+          if (!(erro instanceof ReapontoInterrompidoError)) throw erro;
+          escrever(
+            `Interrompido na Operacao ${erro.operacaoId}: ${erro.relatorio.transicoesReapontadas} Transicao(oes) reapontada(s), ${erro.relatorio.transicoesFundidas} fundida(s) e ${erro.relatorio.serializadosRemovidos} Identificador(es) removido(s); repita o comando para completar.`,
+          );
+          escrever(`Para desfazer o que entrou: malote operacao desfazer ${erro.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
+          escrever(cobre);
+          escrever(`Causa: ${String(erro.causa)}`);
+          return 1;
+        }
+        if (temBandeira(argumentos, 'json')) {
+          // So ids de Identificador e contagens: nem endereco, nem nome, nem texto.
+          escrever(JSON.stringify({ ...r, oQueODesfazerCobre: cobre }, null, 2));
+          return 0;
+        }
+        escrever(
+          comEfeito
+            ? `Reapontado: ${r.transicoesReapontadas} Transicao(oes) reapontada(s), ${r.transicoesFundidas} fundida(s), ${r.serializadosRemovidos} Identificador(es) removido(s), ${r.paresAprendidos} par(es) aprendido(s), ${r.identificadoresCriados} Identificador(es) criado(s).`
+            : `Ensaio: ${r.serializados} Identificador(es) serializado(s); ${r.transicoesAReapontar} Transicao(oes) a reapontar, ${r.paresAAprender} par(es) a aprender, ${r.identificadoresACriar} Identificador(es) a criar.`,
+        );
+        if (r.ilegiveis > 0) escrever(`  ${r.ilegiveis} valor(es) ilegivel(is): nada e tocado.`);
+        if (r.referenciados.length > 0) {
+          escrever(`  ${r.referenciados.length} Identificador(es) referenciado(s) por algo que a Operacao nao move: nada e tocado (--json traz as tabelas).`);
+        }
+        if (r.conflitos.length > 0) escrever(`  ${r.conflitos.length} conflito(s) de endereco: nada e tocado (--json traz os motivos).`);
+        if (r.chegadasQueCitam > 0) escrever(`  ${r.chegadasQueCitam} Chegada(s) citam os Identificadores do plano; a Operacao nao as toca.`);
         if (r.operacaoId !== null) {
           escrever(`Para desfazer: malote operacao desfazer ${r.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
         }
