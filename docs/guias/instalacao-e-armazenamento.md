@@ -61,8 +61,8 @@ A pergunta que separa as duas categorias: *se eu apagar isto, o que se perde?*
   as exceções são `ouvinte/<conta>/vinculo` — credencial de sessão cuja perda custa um
   pareamento novo na frente do aparelho; `nao-gravados.jsonl` (o derrame: eventos que o Acervo
   ocupado não aceitou e que a plataforma não reentrega) e o `.envenenado.jsonl` que ele pode
-  gerar; e `descartados.jsonl` (a guarda do evento cru, deliberadamente fora do backup). Os três
-  últimos têm conversa em claro. Copie o vínculo (por **cópia**, nunca movendo) quando for mexer
+  gerar; e `descartados.jsonl` (a guarda do evento cru, deliberadamente fora do backup); e `decifra.jsonl` e `decifra.json` (o registro das falhas de decifra e os contadores dele, por conta, modo `0600`, teto de 5 MiB com rotação para `decifra.anterior.jsonl`, fora do backup). Os quatro
+  últimos têm endereços de conversa em claro. Copie o vínculo (por **cópia**, nunca movendo) quando for mexer
   na instalação.
 - **`XDG_STATE_HOME/malote/armazenamento/` (com Destino Remoto) se refaz, e não vai para backup.** Ali vivem a base da
   **Localização do Anexo** de cada Inquilino (`<inquilino>.db`), o arquivo de trava do serviço (`servico.pid`) e o soquete do
