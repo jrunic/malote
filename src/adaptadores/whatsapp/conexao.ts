@@ -72,6 +72,8 @@ interface Socket {
 interface Biblioteca {
   default: (config: {
     auth: unknown;
+    /** Anunciar a conta como disponivel a cada Conexao; o ouvinte passa sempre `false` (#1422). */
+    markOnlineOnConnect: boolean;
     logger?: unknown;
     /** A pergunta da biblioteca pela mensagem original de um pedido de reenvio (#1420). So com o gancho. */
     getMessage?: (chave: ChaveDoPedidoDeReenvio | undefined) => Promise<unknown>;
@@ -417,6 +419,10 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
           });
     const sock = lib.default({
       auth: state,
+      // O ouvinte NUNCA se anuncia online (#1422). A biblioteca anuncia "disponivel" a cada Conexao quando isto esta ligado (o
+      // padrao dela), e o ouvinte conecta dezenas de vezes por dia: o contato via a conta sempre online. Desligado, ela anuncia
+      // "indisponivel" e envia os recibos de entrega como os de dispositivo inativo.
+      markOnlineOnConnect: false,
       ...(logger !== undefined ? { logger } : {}),
       ...(getMessage !== undefined ? { getMessage } : {}),
     });
