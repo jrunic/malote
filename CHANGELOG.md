@@ -23,6 +23,14 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [0.52.0] — 2026-11-16
+
+Sem mudança na forma do Registro (v9) nem do Acervo (v33), e sem dependência nova.
+
+### Alterado
+
+- **O ouvinte deixa de se anunciar online.** A biblioteca de recepção anuncia a conta como "disponível" a cada conexão, e o ouvinte conecta dezenas de vezes por dia, então o contato via a conta sempre online. O socket agora nasce com o anúncio de presença ao conectar desligado: a biblioteca anuncia "indisponível" e envia os recibos de entrega como os de dispositivo inativo. Nada mais na conexão muda (o nome do aparelho, o histórico completo e a recolha dos Pendentes seguem iguais), e a mensagem continua chegando ao ouvinte. Para voltar ao comportamento anterior, reverta esta versão.
+
 ## [0.51.1] — 2026-11-16
 
 Sem mudança na forma do Registro (v9) nem do Acervo (v33), e sem dependência nova.
