@@ -79,6 +79,13 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   o JID já resolvido). Fixo nunca ganha 9. O endereço que o OPERADOR digitou (o destino de um Envio) e toda Mensagem
   `fromMe` (o produto não separa o eco de um Envio da Mensagem escrita no aparelho) só aprendem com evidência da
   plataforma: o resolvedor não inventa a forma canônica quando nenhuma das duas está gravada.
+- **O endereço opaco que já resolve para um celular também aprende o par do nono dígito do canônico (#1531).** O resolvedor
+  não sai cedo quando o endereço já é alternativa de um par: decide pelo canônico, que resolve para si mesmo (um passo, sem
+  cadeia). Sem isso, o par do opaco aprendido antes da #1376 deixava o celular sem par quando o Identificador dele nascia depois
+  (medido em 16/11/2026: 51 celulares sem par num Acervo de produção e 2 em outro). O reaponto dos Identificadores serializados
+  segue a mesma regra no ramo em que o endereço do objeto já resolve. A união das Conversas NÃO aprende par (a guarda dela
+  proíbe o resolvedor e `aprenderCorrespondencia`): o número que ela promove aprende o par na próxima Mensagem do contato, e o
+  estoque o cobre antes disso.
 - **O estoque aprende o par pelo MESMO resolvedor da recepção (#1376).** `identidade aprender-formas-do-celular` chama
   `resolverEnderecoDeWhatsapp` com `op`, e o ensaio usa `situacaoNoEstoque`, a mesma decisão vista sem escrever: nenhum
   critério próprio. Os números com as duas formas gravadas ficam sem par e o ensaio os lista com as Mensagens de cada forma; a

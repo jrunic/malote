@@ -23,6 +23,14 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [0.51.1] — 2026-11-16
+
+Sem mudança na forma do Registro (v9) nem do Acervo (v33), e sem dependência nova.
+
+### Corrigido
+
+- **O celular que o endereço opaco aponta ganha o par do nono dígito junto do Identificador.** O resolvedor de endereço de WhatsApp saía cedo quando o endereço já era alternativa de um par (o endereço opaco que aponta para um telefone) e não aprendia o par das duas formas do celular canônico. Quando o Identificador desse telefone nascia depois, pela recepção ao vivo, ficava com uma forma só e sem par, e a consulta pela outra forma devolvia vazio. Agora o resolvedor decide pelo canônico, que resolve para si mesmo (um passo, sem cadeia), e o aprendizado entra na Operação do evento, sem abrir uma por mensagem. `identidade reapontar-identificadores-serializados` segue a mesma regra no ramo em que o endereço do objeto já resolve. As instalações com o defeito se corrigem rodando `identidade aprender-formas-do-celular` (ensaio por padrão, Operação com `desfazer`). A união das Conversas do contato não muda: o número que ela promove aprende o par na próxima Mensagem do contato.
+
 ## [0.51.0] — 2026-11-16
 
 **A forma do Acervo sobe de v32 para v33** (só acrescenta um índice, o de `mensagens.citada_autor_id`; nenhuma linha muda; a migração roda sozinha na primeira abertura e é idempotente) e a do Registro segue v9, sem dependência nova. **A rotina automática do host de terceiros recusa a release (ela muda a forma do Acervo): a atualização é manual, com cópia consistente do Acervo antes.** Nenhum campo existente muda de forma; o valor do nome mostrado muda onde o bloco codificado vencia, e a recepção passa a recusar Identificador de WhatsApp que não é endereço (ver Corrigido). **A parte da recepção (#1519) só sai depois do campo de 7 dias do ciclo 47 e do veredito do ciclo 43**, na mesma release do comando novo.
