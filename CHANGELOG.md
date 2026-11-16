@@ -29,6 +29,7 @@ do que foi publicado antes da abertura, e as tags delas pertencem ao repositóri
 
 ### Adicionado
 
+- **A subida que migra o Acervo espera o outro abridor.** Quando várias unidades abrem o mesmo Acervo ao mesmo tempo numa release que muda a forma dele, a que perdia a corrida pelo lock morria com banco ocupado depois de 5 s, contra os 13 a 16 s da migração do Acervo grande. Quem precisa migrar passa a esperar até 120 s; ao pegar o lock, vê a versão nova e segue. O uso corrente continua com 5 s.
 - **Identidade nos grupos (parte 1): quem escreve é um só, seja qual for a forma do endereço.**
   - **A Mensagem traz `autor`** (`mensagens`, `buscar`, `exportar` e `chegadas` com conteúdo, local e por rede): o endereço gravado de quem escreveu, a forma canônica que a Correspondência de endereço liga a ele (nula quando o par não é conhecido; nunca se monta um número) e o nome corrente escolhido entre as formas ligadas. Nulo na Mensagem da conta e na sem autor. O `autorId` continua como estava. Os autores da página saem em lote.
   - **`participantes` liga as formas do mesmo endereço**: cada linha ganha `endereco` (a chave de agrupamento: a forma canônica, ou o próprio endereço sem par) e `formas`, a situação de cada linha é decidida pelo evento declarado sob qualquer das formas, o autor de Mensagem recebida que só existe sob outra forma entra quando há Participação ou Transição sob alguma delas (a Presença nunca se infere de ter escrito), e `--endereco <valor>` filtra pelas formas desse endereço. O mesmo em `conversa presenca`.

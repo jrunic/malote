@@ -119,6 +119,9 @@ function conferirIdentidade(db: Database.Database, esperado: InquilinoId, caminh
   }
 }
 
+/** Quanto o abridor que precisa migrar espera pelo lock do outro abridor (a migracao do Acervo do Titular leva 13 a 16 s, #1523). */
+export const BUSY_TIMEOUT_DA_MIGRACAO_MS = 120_000;
+
 /**
  * Abre — criando se preciso — o Acervo de um Inquilino.
  *
@@ -144,9 +147,10 @@ export function abrirAcervo(
   // da morte do ouvinte, `grep busy_timeout src/` nao achou NADA. Os 5.000 ms
   // eram o default do `better-sqlite3` (medido), nunca uma decisao do produto.
   //
-  // Nao adianta aumentar: `better-sqlite3` e SINCRONO e este timeout bloqueia a
+  // Nao adianta aumentar para o uso corrente: `better-sqlite3` e SINCRONO e este timeout bloqueia a
   // THREAD, entao esperar mais congelaria o ouvinte. Quem protege de disputa
-  // longa e o derrame (`cli/derrame.ts`), nao este numero.
+  // longa e o derrame (`cli/derrame.ts`), nao este numero. A unica excecao e o
+  // abridor que precisa MIGRAR (abaixo): ele ainda esta subindo e nao serve nada.
   db.pragma('busy_timeout = 5000');
 
   const acervo = montarAcervo(db, inquilinoId, caminho);
@@ -170,6 +174,10 @@ export function abrirAcervo(
     // acrescentada ao schema fresco SEM passo apareceria no banco existente
     // por CREATE TABLE IF NOT EXISTS, e o teste de equivalencia passaria —
     // cegando exatamente o defeito que ele existe para pegar.
+    // Na subida de uma release as unidades abrem o mesmo Acervo juntas: a que perde a corrida pelo lock espera o
+    // outro terminar de migrar (13 a 16 s no Acervo do Titular, #1523) e, ao pegar o lock, ve a versao nova e segue.
+    // Com os 5 s do uso corrente ela morria com banco ocupado.
+    db.pragma(`busy_timeout = ${BUSY_TIMEOUT_DA_MIGRACAO_MS}`);
     try {
       // `inquilinoId` fica UNDEFINED de proposito: a trilha do Acervo nao tem
       // coluna `inquilino_id` — quem a tem e a do Registro. Passa-lo aqui, so
@@ -180,6 +188,7 @@ export function abrirAcervo(
       db.close();
       throw erro;
     }
+    db.pragma('busy_timeout = 5000');
   }
   // Forma corrente: nao aplica schema e nao conta tabela. Este e o caminho
   // quente, percorrido por todo comando, e ele nao ganhou trabalho novo.

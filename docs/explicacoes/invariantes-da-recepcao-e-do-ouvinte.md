@@ -65,7 +65,9 @@ Regras e decisões do repo **com o motivo e a medição que as sustentam**, movi
   timeout bloqueia a **thread**: esperar minutos congelaria o WebSocket do ouvinte e o
   derrubaria por outro caminho. O valor está explícito em `nucleo/acervo.ts` com o mesmo
   número que já valia (5.000 ms, que era o default da biblioteca, não uma decisão do
-  produto). Quem protege é o derrame.
+  produto). Quem protege é o derrame. A única exceção é o abridor que precisa migrar o Acervo: ele ainda
+  está subindo e não serve nada, e espera até 120 s pelo outro abridor (a migração do Acervo
+  grande leva 13 a 16 s; com 5 s a unidade que perdia a corrida morria com banco ocupado, #1523).
 - **A classificação de conteúdo do adaptador de recepção é MEDIDA, nunca deduzida.** O evento
   traz um objeto de conteúdo cujas chaves não têm hierarquia declarada: umas são o assunto da
   Mensagem, outras **acompanham**. Acrescentar chave a `ACOMPANHAM` ou a `VIRAM_MENSAGEM`
