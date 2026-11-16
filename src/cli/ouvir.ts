@@ -31,6 +31,8 @@ import { registrarDescartes } from './descartes.js';
 import { criarMarcadorDoSinal } from './sinal-da-conexao.js';
 import { criarGravadorDosPendentes, linhaDeResumo, linhaDoAnuncio } from './estado-dos-pendentes.js';
 import { criarGravadorDosReenvios, montarGanchoDoReenvio } from './reenvios.js';
+import { criarRegistroDaDecifra, INTERVALO_DA_RECONFERENCIA_MS } from './decifra.js';
+import { mensagemJaExiste } from '../nucleo/escrita.js';
 import { lerBrutoDaMensagemEnviada } from '../nucleo/envio.js';
 import { anotarPulos } from './pulos.js';
 import { atorDeServico, comAtor } from '../nucleo/ator.js';
@@ -75,6 +77,10 @@ export interface CaminhosDaConta {
   pendentes: string;
   /** O contador dos pedidos de reenvio, acumulado por dia (#1420). Ver `reenvios.ts`. */
   reenvios: string;
+  /** O registro das falhas de decifra e a situacao de cada mensagem (#1537). Ver `decifra.ts`. */
+  decifra: string;
+  /** `desde` e as falhas de gravar o registro (#1537). Ver `decifra.ts`. */
+  decifraContador: string;
 }
 
 /**
@@ -100,6 +106,8 @@ export function caminhosDaConta(raiz: string, conta: string): CaminhosDaConta {
       adiantadas: join(pasta, 'instantes-adiantados.json'),
       pendentes: join(pasta, 'pendentes.json'),
       reenvios: join(pasta, 'reenvios.json'),
+      decifra: join(pasta, 'decifra.jsonl'),
+      decifraContador: join(pasta, 'decifra.json'),
   };
 }
 
@@ -445,6 +453,16 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
   // Declarado ANTES dos tratadores de saida, que o PARAM: o que o estrangulamento segura so chega ao arquivo na parada.
   // Falha dele nunca derruba a recepcao.
   const gravadorDosReenvios = criarGravadorDosReenvios({ caminho: caminhos.reenvios, agora, avisar: escrever });
+  // O registro das falhas de decifra (#1537): consulta o Acervo que o ouvinte ja tem aberto, por identificador externo.
+  const registroDaDecifra = criarRegistroDaDecifra({
+    caminho: caminhos.decifra,
+    caminhoDosContadores: caminhos.decifraContador,
+    agora,
+    existe: (id) => mensagemJaExiste(acervo, 'whatsapp', id),
+    avisar: escrever,
+  });
+  registroDaDecifra.abrir();
+  registroDaDecifra.carregar();
 
   // EXCECAO QUE ESCAPA DA BIBLIOTECA (#1173). Sem tratador o Node sai com 1, que o unit le como
   // "vinculo invalidado" e NAO reinicia. Aqui a saida e por um codigo que o supervisor reinicia, e a
@@ -541,6 +559,7 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
         });
       },
       aoFrame: marcarSinal,
+      aoFalhaDeDecifra: (falha) => registroDaDecifra.registrar(falha),
       agora,
       aoPendentes: ({ tipo, estado }) => {
         gravarPendentes(estado, tipo === 'final');
@@ -847,8 +866,16 @@ export async function ouvir(argumentos: string[], ambiente: AmbienteDeEscuta): P
       ...(primeiroPassoDaAparagem !== undefined ? { primeiroPassoMs: primeiroPassoDaAparagem } : {}),
       ...(intervaloDaAparagem !== undefined ? { intervaloMs: intervaloDaAparagem } : {}),
     });
+    // A reconferencia das falhas de decifra (#1537): so le o Acervo (por identificador externo) e anexa ao arquivo.
+    const intervaloDaDecifra = Number(process.env['MALOTE_DECIFRA_INTERVALO_MS'] ?? INTERVALO_DA_RECONFERENCIA_MS);
+    const reconferenciaDaDecifra = setInterval(
+      () => registroDaDecifra.reconferir(),
+      Number.isInteger(intervaloDaDecifra) && intervaloDaDecifra > 0 ? intervaloDaDecifra : INTERVALO_DA_RECONFERENCIA_MS,
+    );
     pararPollerDeEnvio = (): void => {
       clearInterval(pollerDeEnvio);
+      clearInterval(reconferenciaDaDecifra);
+      registroDaDecifra.encerrar();
       pararAparagem();
       gravadorDosReenvios.parar();
     };

@@ -192,6 +192,7 @@ import { lerUltimoEvento } from './ultimo-evento.js';
 import { lerSinalDaConexao } from './sinal-da-conexao.js';
 import { lerEstadoDosPendentes } from './estado-dos-pendentes.js';
 import { lerReenvios } from './reenvios.js';
+import { lerBlocoDaDecifra } from './decifra.js';
 import {
   reenfileirarFalhas,
   incluirEstoqueEmTranscricao,
@@ -1165,6 +1166,16 @@ function executarComAtor(
             // `desde` presente com `dias` sem o dia e que diz "nenhum pedido". So o --json: a saida default e contrato
             // com o watchdog.
             reenvios: lerReenvios(caminhosDoEstado.reenvios),
+            // As falhas de decifra (#1537): por dia, direcao, tipo e causa, com a situacao de cada mensagem. Lido SO dos
+            // arquivos (o ouvinte reconfere com o Acervo que ja tem aberto): este comando nunca abre o Acervo. `null` e
+            // INDISPONIVEL, com o motivo ao lado, NUNCA zero. So o --json: a saida default e contrato com o watchdog.
+            ...((): Record<string, unknown> => {
+              const leitura = lerBlocoDaDecifra(
+                { registro: caminhosDoEstado.decifra, contadores: caminhosDoEstado.decifraContador },
+                Date.now(),
+              );
+              return { decifra: leitura.bloco, ...(leitura.bloco === null ? { decifraIndisponivel: leitura.motivo } : {}) };
+            })(),
           }),
         );
         return 0;
