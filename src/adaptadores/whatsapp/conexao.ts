@@ -1,6 +1,7 @@
 import { existsSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import type { MensagemRecebida } from './ao-vivo.js';
+import type { FalhaCapturada } from './falha-de-decifra.js';
 import type { Decodificador } from './edicao.js';
 import type { IdentidadeBrutaDoVinculo } from './identidade-da-conta.js';
 import { leituraDoModelo } from './imagem-de-modelo.js';
@@ -131,6 +132,8 @@ export interface OpcoesDeConexao {
    * dizer a quem o chamou que acabou.
    */
   aoTerminar: (motivo: string) => void;
+  /** O registro estreito de cada falha de decifra que a biblioteca loga (#1537). Nunca lanca para quem a emite. */
+  aoFalhaDeDecifra?: (falha: FalhaCapturada) => void;
   /** Injetavel para teste. Por padrao, o import dinamico da biblioteca. */
   carregarBiblioteca?: () => Promise<unknown>;
   /**
@@ -406,10 +409,11 @@ export async function conectar(opcoes: OpcoesDeConexao): Promise<Conexao> {
     // socket antigo ainda pode logar uma falha depois da religacao.
     let pendentesDoSocket: PendentesLigados | undefined;
     const logger =
-      aoPendentes === undefined && reenvio === undefined
+      aoPendentes === undefined && reenvio === undefined && opcoes.aoFalhaDeDecifra === undefined
         ? undefined
         : observarLogger(lib.DEFAULT_CONNECTION_CONFIG?.logger, {
             ...(aoPendentes !== undefined ? { aoFalhaDeDecifra: () => pendentesDoSocket?.falhaDeDecifra() } : {}),
+            ...(opcoes.aoFalhaDeDecifra !== undefined ? { aoFalhaDeDecifraDetalhada: opcoes.aoFalhaDeDecifra } : {}),
             ...(reenvio !== undefined
               ? {
                   aoReciboFalhou: () => emitirReenvio({ tipo: 'recibo-falhou' }),
