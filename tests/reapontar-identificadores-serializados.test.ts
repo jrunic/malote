@@ -239,7 +239,7 @@ test('o Identificador que algo mais referencia nao e tocado: vira achado, com a 
   }
 });
 
-test('o par existente do id vence (nada aprendido, destino o canonico dele)', () => {
+test('o par existente do id vence (so o par do nono digito do canonico se aprende, #1531)', () => {
   const c = cenario();
   try {
     const { acervo } = c.novoInquilino('Padme');
@@ -248,16 +248,21 @@ test('o par existente do id vence (nada aprendido, destino o canonico dele)', ()
     aprenderCorrespondencia(acervo, {
       fonte: 'whatsapp',
       alternativo: OPACO,
-      canonico: '5565922220002@s.whatsapp.net',
+      canonico: '5565992220002@s.whatsapp.net',
     });
     s.t('E1', ser, 'entrou', 1000);
     const r = reapontarIdentificadoresSerializados(acervo, { comEfeito: true });
-    assert.equal(r.paresAprendidos, 0);
-    assert.equal(resolverEndereco(acervo, 'whatsapp', OPACO), '5565922220002@s.whatsapp.net');
+    // O Identificador do canonico nasce aqui: sem o par do nono digito ele ficaria com uma forma so, sem par (#1531).
+    assert.equal(r.paresAprendidos, 1);
+    assert.equal(
+      resolverEndereco(acervo, 'whatsapp', '556592220002@s.whatsapp.net'),
+      '5565992220002@s.whatsapp.net',
+    );
+    assert.equal(resolverEndereco(acervo, 'whatsapp', OPACO), '5565992220002@s.whatsapp.net');
     assert.equal(
       n(
         acervo,
-        "SELECT COUNT(*) AS n FROM identificadores WHERE valor = '5565922220002@s.whatsapp.net'",
+        "SELECT COUNT(*) AS n FROM identificadores WHERE valor = '5565992220002@s.whatsapp.net'",
       ),
       1,
     );

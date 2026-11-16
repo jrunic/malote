@@ -88,7 +88,15 @@ test('o par ja aprendido por outro caminho, sem o par do celular: nenhuma Operac
 
     assert.equal(aprendizados(acervo), 0);
     assert.equal(r1.conflitosDaDireta + r2.conflitosDaDireta, 0, 'com e sem o nono digito sao o mesmo numero');
-    assert.deepEqual(pares(acervo), [{ alternativo: OPACO, canonico: COM_NOVE }], 'a comparacao so le');
+    // O par do nono digito do canonico vem junto, uma vez, na Operacao do evento (#1531): sem ela o numero ficava com uma forma so.
+    assert.deepEqual(
+      pares(acervo),
+      [
+        { alternativo: OPACO, canonico: COM_NOVE },
+        { alternativo: SEM_NOVE, canonico: COM_NOVE },
+      ],
+      'o par do opaco nao muda; so o do nono digito nasce',
+    );
   });
 });
 
@@ -107,7 +115,11 @@ test('conflito entre lotes: o primeiro par fica, nao abre Operacao, conta UM, e 
 
     assert.equal(r.conflitosDaDireta, 1);
     assert.equal(aprendizados(acervo), 0);
-    assert.deepEqual(pares(acervo), [{ alternativo: OPACO, canonico: COM_NOVE }]);
+    // O par do opaco fica (o conflito nao o troca); o do nono digito do canonico nasce na Operacao do evento (#1531).
+    assert.deepEqual(pares(acervo), [
+      { alternativo: OPACO, canonico: COM_NOVE },
+      { alternativo: SEM_NOVE, canonico: COM_NOVE },
+    ]);
     assert.equal(r.gravados, 1);
     assert.equal(mensagensNaConversa(acervo, COM_NOVE), 1);
     assert.deepEqual(r.conflitos, [], 'o conflito da direta e so contagem, sem endereco');

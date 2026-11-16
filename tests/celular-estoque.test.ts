@@ -295,7 +295,9 @@ test('Conversas diretas de Configuracoes diferentes nao sao duplicata', () => {
 });
 
 test('a situacao de um endereco prediz exatamente se o resolvedor cria o par (o ensaio e o efeito sao a mesma decisao)', () => {
-  const enderecos = [SO_SEM, SO_SEM_ALT, SO_COM, SO_COM_ALT, DUAS_A, DUAS_B, RESPEITA, RESPEITA_ALT, LEGADO_GRAVADO, LEGADO_CANONICO, JA, JA_ALT, FIXO, NOVE_E_UM, ESTRANGEIRO, LID_R];
+  const enderecos = [SO_SEM, SO_SEM_ALT, SO_COM, SO_COM_ALT, DUAS_A, DUAS_B, RESPEITA, RESPEITA_ALT, LEGADO_GRAVADO, LEGADO_CANONICO, JA, JA_ALT, FIXO, NOVE_E_UM, ESTRANGEIRO];
+  // O opaco fica de fora de proposito: o estoque so recebe celular, e o resolvedor aprende o par do canonico do opaco (#1531,
+  // tests/resolver-celular.test.ts), o que a situacao do estoque nao descreve.
   for (const endereco of enderecos) {
     comEstoque((acervo) => {
       const situacao = situacaoNoEstoque(acervo, endereco);

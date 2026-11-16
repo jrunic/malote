@@ -353,3 +353,26 @@ test('consultar o destino: telefone que e o canonico de um par LID, sem Identifi
     assert.deepEqual(consultarDestinoDeWhatsapp(acervo, FIXO), { usado: LID, situacao: 'redirecionado' });
   });
 });
+
+test('endereco opaco que resolve para um celular canonico sem a outra forma aprende o par do celular (#1531)', () => {
+  comAcervo((acervo) => {
+    // O par do opaco foi aprendido antes da #1376 e o celular nunca ganhou Identificador nem par do nono digito.
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: LID, canonico: SEM_NOVE });
+    assert.equal(resolverEnderecoDeWhatsapp(acervo, LID), SEM_NOVE);
+    assert.deepEqual(pares(acervo), [
+      { alternativo: LID, canonico: SEM_NOVE },
+      { alternativo: COM_NOVE, canonico: SEM_NOVE },
+    ]);
+    assert.equal(resolverEndereco(acervo, 'whatsapp', COM_NOVE), SEM_NOVE);
+  });
+});
+
+test('endereco opaco cujo celular tem as duas formas gravadas nao ganha par (#1531, criterio 5)', () => {
+  comAcervo((acervo) => {
+    aprenderCorrespondencia(acervo, { fonte: 'whatsapp', alternativo: LID, canonico: SEM_NOVE });
+    id(acervo, SEM_NOVE);
+    id(acervo, COM_NOVE);
+    assert.equal(resolverEnderecoDeWhatsapp(acervo, LID), SEM_NOVE);
+    assert.deepEqual(pares(acervo), [{ alternativo: LID, canonico: SEM_NOVE }]);
+  });
+});

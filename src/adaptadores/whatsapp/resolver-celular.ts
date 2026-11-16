@@ -106,7 +106,10 @@ function decidir(
   soComEvidencia: boolean,
 ): { usado: string; par: { fonte: typeof FONTE; alternativo: string; canonico: string } | null } {
   const resolvido = resolverEndereco(acervo, FONTE, endereco);
-  if (resolvido !== endereco) return { usado: resolvido, par: null };
+  // O endereco ja e alternativa de um par (o opaco que aponta para um telefone): o que se usa e o canonico, e o par do nono
+  // digito DELE ainda pode faltar (o par do opaco veio de antes da #1376 e o celular nunca foi gravado). Decide-se pelo
+  // canonico, que resolve para si mesmo (nao ha cadeia): a recursao e de um passo (#1531).
+  if (resolvido !== endereco) return decidir(acervo, resolvido, soComEvidencia);
 
   const outra = outraFormaDoCelular(endereco);
   if (outra === null) return { usado: endereco, par: null };

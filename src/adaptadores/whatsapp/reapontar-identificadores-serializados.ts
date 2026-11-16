@@ -117,7 +117,16 @@ function decidirDestino(acervo: Acervo, item: Item, previsao?: Previsao): Decisa
   const resolver = (endereco: string): string =>
     previsao?.pares.get(endereco) ?? resolverEndereco(acervo, FONTE, endereco);
   const jaResolve = resolver(item.endereco);
-  if (jaResolve !== item.endereco) return { destino: jaResolve, pares: [], conflito: null };
+  if (jaResolve !== item.endereco) {
+    // O Identificador do destino nasce aqui, entao o par do nono digito dele se aprende junto (#1531): sem isso ele ficaria
+    // com uma forma so e sem par, que o par do opaco aprendido antes da #1376 nunca cobriu.
+    const celular = decidirEnderecoDeWhatsapp(acervo, jaResolve);
+    const pares: Decisao['pares'] =
+      celular.par !== null && previsao?.pares.has(celular.par.alternativo) !== true
+        ? [{ alternativo: celular.par.alternativo, canonico: celular.par.canonico }]
+        : [];
+    return { destino: jaResolve, pares, conflito: null };
+  }
   if (item.numero === null) return { destino: item.endereco, pares: [], conflito: null };
   if (
     enderecoEhCanonico(acervo, FONTE, item.endereco) ||
