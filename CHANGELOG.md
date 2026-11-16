@@ -23,7 +23,7 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
-## [Não publicado]
+## [0.51.0] — 2026-11-16
 
 **A forma do Acervo sobe de v32 para v33** (só acrescenta um índice, o de `mensagens.citada_autor_id`; nenhuma linha muda; a migração roda sozinha na primeira abertura e é idempotente) e a do Registro segue v9, sem dependência nova. **A rotina automática do host de terceiros recusa a release (ela muda a forma do Acervo): a atualização é manual, com cópia consistente do Acervo antes.** Nenhum campo existente muda de forma; o valor do nome mostrado muda onde o bloco codificado vencia, e a recepção passa a recusar Identificador de WhatsApp que não é endereço (ver Corrigido). **A parte da recepção (#1519) só sai depois do campo de 7 dias do ciclo 47 e do veredito do ciclo 43**, na mesma release do comando novo.
 
