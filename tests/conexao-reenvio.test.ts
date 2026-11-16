@@ -197,12 +197,12 @@ test('a mensagem que a biblioteca nao devolveu nao e guardada: o pedido cai para
     conexao.parar();
   }));
 
-test('SEM o gancho: enviar devolve o keyId de sempre, e o socket nao ganha resposta nem logger', () =>
+test('SEM o gancho: enviar devolve o keyId de sempre, e o socket so ganha a presenca desligada (sem resposta nem logger)', () =>
   comPasta(async (pasta) => {
     const { sockets, lib } = biblioteca();
     const conexao = await conectar(opcoesBase(pasta, lib));
     assert.deepEqual(await conexao.enviar(CONTATO, { text: 'x' }), { keyId: '3EB0SINTETICO1' });
-    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth']);
+    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth', 'markOnlineOnConnect']);
     conexao.parar();
   }));
 

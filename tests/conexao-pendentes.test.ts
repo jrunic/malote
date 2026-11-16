@@ -95,7 +95,7 @@ const PREVIEW = {
   content: [{ tag: 'offline_preview', attrs: { count: '300', notification: '300' } }],
 };
 
-test('SEM o gancho o socket nasce como sempre: so `auth`, e nenhum no do transporte e assinado', () =>
+test('SEM o gancho o socket nasce como sempre: so `auth` e a presenca desligada, e nenhum no do transporte e assinado', () =>
   comPasta(async (pasta) => {
     const { sockets, lib } = biblioteca();
     const conexao = await conectar({
@@ -105,7 +105,7 @@ test('SEM o gancho o socket nasce como sempre: so `auth`, e nenhum no do transpo
       carregarBiblioteca: () => Promise.resolve(lib),
       aoReceber: () => undefined,
     });
-    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth'], 'a configuracao nao ganhou nada');
+    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth', 'markOnlineOnConnect'], 'a configuracao so ganhou a presenca desligada (#1422)');
     assert.equal(sockets[0]!.ws.eventNames().length, 0);
     conexao.parar();
   }));
@@ -132,7 +132,7 @@ test('COM o gancho o logger da biblioteca e embrulhado, e as falhas de decifra e
     assert.equal(eventos.at(-1)?.estado.falhasDeDecifra, 2);
   }));
 
-test('sem logger para embrulhar o socket nasce so com `auth` e as falhas ficam indisponiveis (null)', () =>
+test('sem logger para embrulhar o socket nasce so com `auth` e a presenca desligada e as falhas ficam indisponiveis (null)', () =>
   comPasta(async (pasta) => {
     const { sockets, lib } = biblioteca('sem-config');
     const eventos: EventoDePendentes[] = [];
@@ -144,7 +144,7 @@ test('sem logger para embrulhar o socket nasce so com `auth` e as falhas ficam i
       aoReceber: () => undefined,
       aoPendentes: (e) => eventos.push(e),
     });
-    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth']);
+    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth', 'markOnlineOnConnect']);
     conexao.parar();
     assert.equal(eventos.at(-1)?.estado.falhasDeDecifra, null);
   }));
@@ -367,7 +367,7 @@ test('so os Pendentes: o socket ganha o logger e NAO ganha a resposta ao pedido 
       aoReceber: () => undefined,
       aoPendentes: () => undefined,
     });
-    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth', 'logger']);
+    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth', 'markOnlineOnConnect', 'logger']);
     conexao.parar();
   }));
 
@@ -382,7 +382,7 @@ test('COM o gancho do pedido de reenvio o socket ganha o logger embrulhado e a r
       aoReceber: () => undefined,
       aoPedidoDeReenvio: GANCHO_INERTE,
     });
-    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth', 'logger', 'getMessage']);
+    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth', 'markOnlineOnConnect', 'logger', 'getMessage']);
     assert.equal(typeof sockets[0]!.config.getMessage, 'function');
     assert.equal(sockets[0]!.ws.eventNames().length, 0, 'sem o gancho dos Pendentes, o transporte nao e assinado');
     conexao.parar();
@@ -399,7 +399,7 @@ test('so o gancho do pedido de reenvio e nenhum logger para embrulhar: `auth` e 
       aoReceber: () => undefined,
       aoPedidoDeReenvio: GANCHO_INERTE,
     });
-    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth', 'getMessage']);
+    assert.deepEqual(Object.keys(sockets[0]!.config), ['auth', 'markOnlineOnConnect', 'getMessage']);
     conexao.parar();
   }));
 
