@@ -108,6 +108,49 @@ export function declararTelefoneDaConta(
   );
 }
 
+/**
+ * Troca o telefone declarado de uma Configuracao que JA o tinha, quando a conta e a MESMA com outro numero
+ * (spec #1564): e a excecao declarada a "conta nova e Configuracao nova", e so por este caminho. Mexe SO no
+ * telefone: o `jid`, o `lid` e o instante da conferencia ficam como o vinculo os mostrou, ate o vinculo novo os
+ * regravar. Devolve `false`, sem escrever nem abrir Operacao, quando o telefone ja e o declarado.
+ *
+ * A equivalencia do nono digito entre este telefone e o atual, e a recusa por telefone de OUTRA Configuracao, sao
+ * da CLI (o Registro e opaco para o valor). Nao ha `desfazer` de Operacao do Registro: volta-se rodando de novo.
+ */
+export function trocarTelefoneDaConta(
+  registro: Registro,
+  configuracaoId: string,
+  telefone: string,
+): boolean {
+  if (!telefoneValido(telefone)) {
+    throw new Error('telefone invalido: use so digitos, com codigo do pais (de 10 a 15)');
+  }
+  const inquilinoId = inquilinoDaConfiguracao(registro, configuracaoId);
+  const antes = lerEnderecosDaConta(registro, configuracaoId);
+  if (antes?.telefone == null) {
+    throw new Error('a Configuracao nao tem telefone declarado: use configuracao definir-telefone');
+  }
+  if (antes.telefone === telefone) return false;
+
+  emOperacao(
+    registro,
+    { natureza: 'trocar-telefone-da-conta', reversibilidade: 'por-efeito', inquilinoId },
+    (op) => {
+      registro
+        .preparar('UPDATE enderecos_da_conta SET telefone = ?, declarado_em = ? WHERE configuracao_id = ?')
+        .run(telefone, new Date().toISOString(), configuracaoId);
+      op.valor({
+        tabela: 'enderecos_da_conta',
+        chave: configuracaoId,
+        campo: 'telefone',
+        antes: antes.telefone,
+        depois: telefone,
+      });
+    },
+  );
+  return true;
+}
+
 export interface EnderecosDoVinculo {
   telefone: string;
   jid: string;
