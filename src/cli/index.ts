@@ -218,8 +218,10 @@ import { lerPulos } from './pulos.js';
 import { configuracaoPorApelido } from '../registro/configuracao-adaptador.js';
 import { lerEnderecosDaConta } from '../registro/endereco-da-conta.js';
 import { configuracaoComTelefoneEquivalente } from './telefone-da-conta.js';
+import { mesmoTelefone } from '../adaptadores/whatsapp/identidade-da-conta.js';
 import {
   declararTelefoneDaConta,
+  trocarTelefoneDaConta,
   TelefoneJaConferidoError,
   telefoneValido,
 } from '../registro/endereco-da-conta.js';
@@ -376,6 +378,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote configuracao listar    --inquilino <id>
   malote configuracao criar     --inquilino <id> --fonte <nome> --configuracao <apelido> [--conta <nome>] [--telefone <so digitos>]
   malote configuracao definir-telefone --inquilino <id> --configuracao <apelido> --telefone <so digitos>
+  malote configuracao trocar-telefone --inquilino <id> --configuracao <apelido> --telefone <so digitos> [--com-efeito --mesma-conta]  (a conta e a mesma com outro numero; ensaio por padrao)
   malote entrada declarar       --inquilino <id> --fonte <nome> --configuracao <apelido> --pasta <caminho> --natureza completo|parcial [--titular-na-fonte <nome>]
   malote entrada listar         --inquilino <id>
   malote midia trazer           --inquilino <id> --material <caminho> [--conta pessoal|business]
@@ -2242,6 +2245,56 @@ function executarComAtor(
         throw erro;
       }
       escrever(`whatsapp/${apelido}  telefone: ${telefone}`);
+      return 0;
+    }
+
+    if (grupo === 'configuracao' && sub === 'trocar-telefone') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      const apelido = opcao(argumentos, 'configuracao');
+      const telefone = opcao(argumentos, 'telefone');
+      if (inquilino === undefined || apelido === undefined || telefone === undefined) {
+        escrever(
+          'Uso: malote configuracao trocar-telefone --inquilino <id> --configuracao <apelido> ' +
+            '--telefone <so digitos, com codigo do pais> [--com-efeito --mesma-conta]',
+        );
+        return 2;
+      }
+      if (!telefoneValido(telefone)) {
+        escrever('Telefone invalido: use so digitos, com codigo do pais (de 10 a 15).');
+        return 2;
+      }
+      const cfg = configuracaoPorApelido(registro, inquilino, 'whatsapp', apelido);
+      if (cfg === undefined) {
+        escrever(`Configuracao desconhecida: whatsapp/${apelido}`);
+        return 2;
+      }
+      if (cfg.telefone === null) {
+        escrever('A Configuracao nao tem telefone declarado: use configuracao definir-telefone.');
+        return 2;
+      }
+      if (mesmoTelefone(cfg.telefone, telefone)) {
+        escrever('Esse ja e o telefone desta Configuracao. Nada foi feito.');
+        return 0;
+      }
+      const outra = configuracaoComTelefoneEquivalente(registro, inquilino, telefone, cfg.id);
+      if (outra !== undefined) {
+        escrever(`Esse telefone ja pertence a Configuracao ${outra.apelido} deste Inquilino.`);
+        return 2;
+      }
+      if (!temBandeira(argumentos, 'com-efeito')) {
+        escrever(`ENSAIO  whatsapp/${apelido}  telefone: ${cfg.telefone} -> ${telefone}`);
+        escrever('Nao troca o vinculo, nao move Conversa, nao apaga nada: so o telefone declarado.');
+        escrever('O jid e o lid da conta ficam como o vinculo os mostrou, ate o vinculo novo os regravar.');
+        escrever('Para efetivar: --com-efeito --mesma-conta (afirma que a conta e a MESMA, com outro numero).');
+        return 0;
+      }
+      if (!temBandeira(argumentos, 'mesma-conta')) {
+        escrever('Falta --mesma-conta: efetivar afirma que a conta e a mesma, com outro numero. Nada foi feito.');
+        return 2;
+      }
+      trocarTelefoneDaConta(registro, cfg.id, telefone);
+      escrever(`whatsapp/${apelido}  telefone: ${cfg.telefone} -> ${telefone}`);
+      escrever('Para voltar: rode o mesmo comando com o numero anterior.');
       return 0;
     }
 
