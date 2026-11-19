@@ -1,4 +1,5 @@
 // src/adaptadores/whatsapp/pendentes-na-conexao.ts
+import { extrairFalha, type FalhaCapturada } from './falha-de-decifra.js';
 import {
   CONSTANTES_PADRAO,
   criarRecolhedor,
@@ -236,13 +237,16 @@ export const LINHAS_DA_BIBLIOTECA = {
 /** O que o logger embrulhado conta. Cada gancho ausente e uma linha que passa sem contar. */
 export interface GanchosDoLogger {
   aoFalhaDeDecifra?: () => void;
+  /** O registro estreito da falha (#1537): so a chave e a causa; o contador acima segue contando por Conexao. */
+  aoFalhaDeDecifraDetalhada?: (falha: FalhaCapturada) => void;
   aoReciboFalhou?: () => void;
   aoRecusa?: (motivo: 'limite' | 'nao-propria') => void;
 }
 
 /**
- * Embrulha o logger da biblioteca para CONTAR linhas conhecidas (so o numero: nenhum argumento da chamada, que traz
- * a chave com JID, e guardado). Tudo o mais passa intacto, inclusive os filhos (`child`). O embrulho intercepta o
+ * Embrulha o logger da biblioteca para CONTAR linhas conhecidas (so o numero; a unica excecao e a falha de decifra, que,
+ * quando o gancho detalhado existe, entrega o registro estreito de `falha-de-decifra.ts`: identificador, conversa, autor,
+ * direcao, tipo e causa; pilha, texto e o resto da linha nunca passam). Tudo o mais passa intacto, inclusive os filhos (`child`). O embrulho intercepta o
  * METODO, e nao o que o logger escreve: conta mesmo com o nivel desligado (o pino troca o metodo por um vazio, e o
  * embrulho ainda o ve chamado). Devolve `undefined` quando nao ha logger para embrulhar, e quem chama nao passa
  * nenhum: o socket usa o dele, e as contagens ficam INDISPONIVEIS.
@@ -268,7 +272,14 @@ export function observarLogger(base: unknown, ganchos: GanchosDoLogger | (() => 
         const funcao = valor as (...args: unknown[]) => unknown;
         if (propriedade === 'error') {
           return (...args: unknown[]): unknown => {
-            if (args.includes(LINHAS_DA_BIBLIOTECA.falhaDeDecifra)) avisar(g.aoFalhaDeDecifra);
+            if (args.includes(LINHAS_DA_BIBLIOTECA.falhaDeDecifra)) {
+              avisar(g.aoFalhaDeDecifra);
+              const detalhe = g.aoFalhaDeDecifraDetalhada;
+              if (detalhe !== undefined) {
+                const falha = extrairFalha(args);
+                if (falha !== undefined) avisar(() => detalhe(falha));
+              }
+            }
             if (args.includes(LINHAS_DA_BIBLIOTECA.reciboFalhou)) avisar(g.aoReciboFalhou);
             return funcao.apply(a, args);
           };

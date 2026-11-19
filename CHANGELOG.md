@@ -23,6 +23,15 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [0.53.0] — 2026-11-19
+
+Sem mudança na forma do Registro (v9) nem do Acervo (v33), e sem dependência nova.
+
+### Adicionado
+
+- **`configuracao trocar-telefone`: a conta que volta com outro número continua na mesma Configuração.** A regra "conta nova é Configuração nova" partiria cada Conversa direta em duas quando a plataforma devolve a conta, com o histórico, sob outro número. O comando troca só o telefone declarado de uma Configuração que já o tem, em ensaio por padrão (efetivar exige `--com-efeito --mesma-conta`), e abre uma Operação com o valor antes e depois. Não troca o vínculo, não move Conversa nem Mensagem; o ouvinte segue recusando um vínculo que não é o do telefone declarado, e o vínculo do número novo grava os endereços da conta. Não tem `desfazer`: volta-se rodando de novo com o número anterior.
+- **`ouvinte estado --json` traz `decifra`: quantas mensagens falharam na decifra e o que aconteceu com cada uma.** O ouvinte registra cada falha da biblioteca num arquivo por conta, confere se a Mensagem entrou no Acervo (na hora e a cada 5 minutos) e classifica cada identificador como já gravada, recuperada, perdida (mais de 1 hora sem entrar), incerta ou aberta, por dia, direção (recebida ou enviada por outro aparelho), tipo de conversa e causa. A contagem antiga de linhas de falha não separava reentrega de perda. O bloco é lido só dos arquivos, sem abrir o Acervo, e `null` com `decifraIndisponivel` é indisponível, nunca zero. O registro não escreve Mensagem, Chegada nem Operação. O arquivo tem endereços de conversa em claro (modo 0600, teto de 5 MiB, fora do backup).
+
 ## [0.52.0] — 2026-11-16
 
 Sem mudança na forma do Registro (v9) nem do Acervo (v33), e sem dependência nova.

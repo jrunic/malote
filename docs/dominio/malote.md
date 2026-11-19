@@ -885,7 +885,16 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Ator:** humano, via `configuracao criar --telefone` ou `configuracao definir-telefone`; ou o serviço do ouvinte, quando `ouvir --numero` informa o telefone de uma Configuração que ainda não o tem
 - **Entrada:** a Configuração de Adaptador (por id), o telefone (só dígitos, com código do país, de 10 a 15)
 - **Saída:** a Configuração com o telefone declarado
-- **Regras:** idempotente (o mesmo telefone não escreve nem abre Operação). Numa Configuração cujo telefone o vínculo **já conferiu**, trocar por outro é recusado: conta nova é Configuração nova. Duas Configurações de WhatsApp do mesmo Inquilino não podem ter o mesmo telefone, contando o mesmo celular com e sem o nono dígito.
+- **Regras:** idempotente (o mesmo telefone não escreve nem abre Operação). Numa Configuração cujo telefone o vínculo **já conferiu**, trocar por outro é recusado: conta nova é Configuração nova. **A exceção é a conta que continua a mesma com outro número**, e só pela Operação `trocar-telefone-da-conta`, abaixo. Duas Configurações de WhatsApp do mesmo Inquilino não podem ter o mesmo telefone, contando o mesmo celular com e sem o nono dígito.
+- **Não-funcionais:** Padrão
+
+### trocar-telefone-da-conta
+- **Ator:** humano, via `configuracao trocar-telefone` (local; o modo rede recusa)
+- **Entrada:** a Configuração de Adaptador (por apelido), o telefone novo (só dígitos, com código do país, de 10 a 15) e a afirmação explícita de que a conta é a **mesma**, com outro número (`--mesma-conta`, junto de `--com-efeito`)
+- **Saída:** a Configuração com o telefone declarado trocado, e uma Operação com o valor antes e depois
+- **Regras:** ensaio por padrão (mostra o antes e o depois, diz o que não faz, e não escreve nem abre Operação). Só vale para Configuração que **já tem** telefone declarado (para as outras, `declarar-telefone-da-conta`). Verificações, nesta ordem, cada uma com saída 2 e nada gravado: telefone inválido; Configuração desconhecida; Configuração sem telefone; o mesmo telefone, **contando o nono dígito** (idempotente, sai 0 sem Operação); telefone de **outra** Configuração do Inquilino; falta da afirmação. Mexe **só** no telefone declarado: o endereço do telefone, o endereço opaco e o instante da conferência que o vínculo gravou ficam até o vínculo novo os regravar, e a Conversa, a Mensagem e o Acervo não mudam. Como toda decisão de configuração do Registro, **não tem `desfazer`**: volta-se rodando o comando de novo com o número anterior, que a Operação guarda.
+- **Por que existe:** a plataforma pode devolver a conta, com o histórico, sob outro número. Uma Configuração nova partiria cada Conversa direta em duas (a Conversa direta pertence a uma só Configuração) e deixaria as Mensagens antigas presas à antiga, porque o Acervo recusa o mesmo identificador externo duas vezes. O guarda do ouvinte segue valendo: com o telefone trocado, o vínculo do número **novo** é conferido e grava os endereços da conta; o do número **antigo** sai 2.
+- **Risco:** se a conta **não** for a mesma, o Acervo recebe mensagens de outra pessoa nas mesmas Conversas, e voltar o telefone não devolve o que já chegou. Por isso há ensaio, afirmação explícita e, em produção, o pareamento com o titular diante do aparelho.
 - **Não-funcionais:** Padrão
 
 ### conferir-conta-do-vinculo
