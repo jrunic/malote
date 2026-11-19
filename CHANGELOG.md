@@ -23,6 +23,15 @@ commit `7a96bc4` (`chore: v0.31.0`), publicado pelo merge `795f4a8` (PR #25). O 
 público começa no commit "Initial public release": as entradas anteriores são o registro fiel
 do que foi publicado antes da abertura, e as tags delas pertencem ao repositório privado de origem.
 
+## [0.54.0] — 2026-11-20
+
+Sem mudança na forma do Registro (v9) nem do Acervo (v33), e sem dependência nova.
+
+### Adicionado
+
+- **A legenda de foto e de vídeo passa a ser o texto da Mensagem.** O texto que chega junto da mídia ficava só no Conteúdo Bruto: a Mensagem não tinha corpo e a busca não a achava (a do documento já era texto desde a v0.34.0). Agora a recepção ao vivo e a importação do backup do iPhone gravam a legenda de imagem e de vídeo como texto da Mensagem, e `buscar` a encontra. A gravação passa por uma porta nova do núcleo que escreve o texto de uma Mensagem existente e mantém o índice de busca.
+- **`legenda extrair`: o estoque das Mensagens já gravadas.** Grava como texto a legenda de foto, de vídeo e de documento que existe no Conteúdo Bruto (ao vivo) e a de imagem e vídeo no registro de mídia do Anexo (backup do iPhone). Ensaio por padrão (`--com-efeito --confirmo` para gravar), só alcança Mensagem sem texto e nunca sobrescreve, em lotes (padrão 500, uma transação por lote) e com o ouvinte no ar. Recusa, com saída 1 e nada gravado, quando o índice de busca por texto está defasado ou o Acervo está ocupado. É uma Operação com um efeito por Mensagem, que `operacao desfazer` reverte. O relatório traz só contagens.
+
 ## [0.53.0] — 2026-11-19
 
 Sem mudança na forma do Registro (v9) nem do Acervo (v33), e sem dependência nova.
