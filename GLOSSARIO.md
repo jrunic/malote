@@ -148,6 +148,10 @@ independente do autor estar resolvido. Gravada por cada Adaptador no momento
 da escrita, nunca inferida depois pela ausência de autor.
 *Evitar*: fromMe, direction, sentido, isFromMe.
 
+**Legenda**:
+O texto que a pessoa escreve junto de uma foto, de um vídeo ou de um documento. É o **texto da Mensagem** de mídia (o mesmo que a conversa e o texto estendido são para as outras), não um campo à parte: o texto nulo continua querendo dizer que a Mensagem não tem texto. A legenda de uma mensagem **citada** é da citada, nunca da Mensagem que a cita.
+*Evitar*: caption, descrição da mídia.
+
 **Participação**:
 A presença de uma Pessoa numa Conversa, com início e fim quando a Fonte os informa, e com o instante em que o malote a observou.
 *Evitar*: membro, participante (é o papel, não o vínculo), roster.
@@ -242,7 +246,7 @@ O estado de um Anexo no Destino de Mídia: presente (no disco ou, depois de veri
 O texto que o malote extrai de um Anexo de áudio, por reconhecimento de fala local. Não julga
 o conteúdo — resgata em texto o que foi dito, sem decidir o que importa. Aproximação de
 modelo, nunca fac-símile: o Anexo continua sendo a fonte de verdade.
-*Evitar*: transcript, legenda, subtítulo, resumo (resumo julga; transcrição não).
+*Evitar*: transcript, subtítulo, resumo (resumo julga; transcrição não). A *legenda* de uma foto ou de um vídeo é outra coisa: ver **Legenda**.
 
 **Metadados de Coletiva**:
 Assunto, descrição e imagem de uma Conversa coletiva, com quem alterou e quando. A recepção ao vivo

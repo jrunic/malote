@@ -618,6 +618,14 @@ Toda operação nomeia o Inquilino sobre o qual age. Não existe operação sem 
 - **Regras:** ensaio por padrão; com efeito exige confirmação. Reconhece só a forma medida e não duplica. Uma Operação por lote, que `desfazer-operacao` reverte enquanto o Anexo não foi baixado (o já baixado é recusado). Para baixar, `reprocessar-midia`.
 - **Não-funcionais:** idempotente; o relatório só traz contagens.
 
+### extrair-legenda-da-midia
+
+- **Ator:** humano
+- **Entrada:** Inquilino; opcionalmente o limite e o tamanho do lote; ensaio por padrão, `--com-efeito` com `--confirmo` para gravar
+- **Saída:** contagens, por origem e tipo, das legendas que o Conteúdo Bruto guarda e o texto da Mensagem ainda não tem; com efeito, o texto da Mensagem passa a ser a Legenda. Nunca traz o texto da legenda
+- **Regras:** só alcança Mensagem **sem texto** (nulo ou vazio) e nunca sobrescreve. **Ao vivo**, lê o Conteúdo Bruto da própria Mensagem (o tipo da mídia no evento, não o Anexo) e só a legenda da **própria mídia**, nunca a de uma mensagem citada; **backup do iPhone**, lê o título do registro de mídia do Anexo, só de imagem e de vídeo (no documento o título é o nome do arquivo). Nunca altera o Conteúdo Bruto, as Chegadas, os Anexos nem a Edição. A busca por texto se mantém consistente: o índice é de conteúdo externo, sem gatilho de atualização, então cada escrita **retira a entrada com o texto antigo (nulo ou vazio também), atualiza e põe a nova, nessa ordem**. Com efeito, **recusa se o índice já estiver defasado** (verificação na forma que compara o índice com o conteúdo) e a refaz depois.
+- **Não-funcionais:** idempotente. Uma Operação `por-efeito`, aberta antes dos lotes, com uma transação por lote (o ouvinte segue no ar) e um efeito por Mensagem; falha no meio de um lote deixa a Operação aberta com os lotes anteriores gravados, e repetir cria uma **segunda** Operação (a volta completa pede o `desfazer` das duas). `desfazer` devolve o texto ao de antes (nulo ou vazio), na mesma ordem do índice, e recusa a linha cujo texto já não é o que a Operação gravou. Não emite Chegada: quem acompanha pelo Marcador consulta `mensagens` ou `buscar` depois do estoque.
+
 ### consultar-chegadas
 
 - **Ator:** humano ou agente, por Chave de Acesso (rede) ou local
