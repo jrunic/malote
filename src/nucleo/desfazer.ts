@@ -1,5 +1,6 @@
 import { removerAnexoNuncaObtido } from './anexo-de-modelo.js';
 import { removerContatoCompartilhado } from './contato-compartilhado.js';
+import { restaurarTextoDeMensagem } from './texto-da-mensagem.js';
 import { removerCitacao } from './citacao.js';
 import type { Acervo } from './acervo.js';
 import { emOperacao, lerOperacao, type LinhaDeEfeito, type OperacaoVista } from './trilha.js';
@@ -217,6 +218,15 @@ function desfazerLinha(acervo: Acervo, l: LinhaDeEfeito, todas: LinhaDeEfeito[])
   // for a que o comando escreveu (mesmo id externo).
   if (l.tabela === 'mensagens' && l.campo === 'citada_id_externo' && l.antes === null && l.depois !== null) {
     return removerCitacao(acervo, l.chave, l.depois) ? null : 'a Mensagem ja nao tem essa Citacao — mudou depois, ou saiu';
+  }
+
+  // Legenda que o estoque (#1530) gravou como texto da Mensagem: desfazer devolve o texto ao de antes (nulo ou vazio) e
+  // refaz a entrada do indice de busca, mas so enquanto o texto for o que o comando escreveu. O texto que outro caminho
+  // escreveu depois nao se toca.
+  if (l.tabela === 'mensagens' && l.campo === 'conteudo' && l.depois !== null) {
+    return restaurarTextoDeMensagem(acervo, l.chave, l.depois, l.antes)
+      ? null
+      : 'a Mensagem ja nao tem esse texto — mudou depois, ou saiu';
   }
 
   // Anexo que o comando da imagem do modelo criou (#1242): desfazer e remover, mas so enquanto `nunca-obtido`. Midia ja baixada
