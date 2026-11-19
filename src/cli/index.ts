@@ -59,7 +59,13 @@ import {
   ReapontoInterrompidoError,
 } from '../adaptadores/whatsapp/reapontar-identificadores-serializados.js';
 import { extrairCitacoes } from '../adaptadores/whatsapp/extrair-citacoes.js';
+import { ehBancoOcupado } from '../nucleo/erro-de-banco.js';
 import { extrairImagensDeModelo } from '../adaptadores/whatsapp/extrair-imagem-de-modelo.js';
+import {
+  EstoqueDeLegendaInterrompidoError,
+  extrairLegendas,
+  IndiceDeBuscaDefasadoError,
+} from '../adaptadores/whatsapp/extrair-legenda.js';
 import { formatarAnexos, tipoGuardado } from './anexos-texto.js';
 import { cursorDaProximaPagina, listarAnexosDaConversa } from '../nucleo/anexos-da-conversa.js';
 import { identificadoresDoRemetente } from '../nucleo/remetente.js';
@@ -417,6 +423,7 @@ Titular (nao exige chave enquanto nao houver rede):
   malote transcricao estado      --inquilino <id> [--json]     (contagem por estado; se o motor esta configurado)
   malote midia extrair-duracao --inquilino <id> [--json]        (extrai duração do Conteúdo Bruto já gravado)
   malote contato-compartilhado extrair --inquilino <id> [--com-efeito --confirmo] [--json]  (preenche os contatos enviados em Mensagens já gravadas; ensaio por padrão)
+  malote legenda extrair --inquilino <id> [--limite <n>] [--tamanho-do-lote <n>] [--com-efeito --confirmo] [--json]  (grava como texto da Mensagem a legenda de foto, video e documento ja gravados; ensaio por padrao)
   malote citacao extrair --inquilino <id> [--desde <data>] [--ate <data>] [--limite <n>] [--com-efeito --confirmo] [--json]  (preenche a Citação das Mensagens já gravadas que respondem a outra; ensaio por padrão)
   malote servir     --porta <n> [--endereco <ip>] [--exposto] [--trabalhadores <n>] [--prazo <segundos>]
                                         (leituras em workers, 4 por padrao, com prazo de 25 s; passou do prazo: 504;
@@ -2088,6 +2095,76 @@ function executarComAtor(
           if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
         }
         return 0;
+      } finally {
+        acervo.fechar();
+      }
+    }
+
+    if (grupo === 'legenda' && sub === 'extrair') {
+      const inquilino = opcao(argumentos, 'inquilino');
+      if (inquilino === undefined) throw new Error('Informe --inquilino <id>.');
+      const comEfeito = temBandeira(argumentos, 'com-efeito');
+      if (comEfeito && !temBandeira(argumentos, 'confirmo')) {
+        throw new Error('Repita o comando com --confirmo para executar.');
+      }
+      const inteiro = (nome: string): number | undefined | null => {
+        const texto = opcao(argumentos, nome);
+        if (texto === undefined) return undefined;
+        const n = Number(texto);
+        return Number.isInteger(n) && n >= 1 ? n : null;
+      };
+      const limite = inteiro('limite');
+      const tamanhoDoLote = inteiro('tamanho-do-lote');
+      if (limite === null || tamanhoDoLote === null) {
+        escrever('--limite e --tamanho-do-lote precisam ser inteiros maiores que zero.');
+        return 2;
+      }
+      const acervo = acervoDoInquilino(registro, ambiente.dados, inquilino);
+      try {
+        let r;
+        try {
+          r = extrairLegendas(acervo, {
+            comEfeito,
+            ...(limite === undefined ? {} : { limite }),
+            ...(tamanhoDoLote === undefined ? {} : { tamanhoDoLote }),
+          });
+        } catch (erro) {
+          if (erro instanceof IndiceDeBuscaDefasadoError) {
+            escrever('O indice de busca por texto nao esta de acordo com as Mensagens: nada foi escrito (escrever por cima o corromperia).');
+            return 1;
+          }
+          if (erro instanceof EstoqueDeLegendaInterrompidoError) {
+            escrever(`Interrompido: ${erro.gravadas} Mensagem(ns) gravada(s) na Operacao ${erro.operacaoId}; repita o comando para completar (numa segunda Operacao).`);
+            escrever(`Para desfazer o que entrou: malote operacao desfazer ${erro.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
+            escrever(`Causa: ${String(erro.causa)}`);
+            return 1;
+          }
+          if (ehBancoOcupado(erro)) {
+            escrever('O Acervo esta ocupado (o ouvinte escrevendo): nada foi escrito pela verificacao do indice. Repita o comando.');
+            return 1;
+          }
+          throw erro;
+        }
+        if (temBandeira(argumentos, 'json')) {
+          escrever(JSON.stringify(r, null, 2));
+          return 0;
+        }
+        // So CONTAGENS: legenda e dado pessoal, e nunca vai a relatorio, log nem mensagem de erro.
+        escrever(
+          comEfeito
+            ? `Gravado: ${r.gravadas} legenda(s) como texto da Mensagem (de ${r.aGravar} candidata(s)).`
+            : `Ensaio: ${r.aGravar} legenda(s) a gravar como texto da Mensagem.`,
+        );
+        escrever(`  Ao vivo: ${r.aoVivo.imagem} imagem(ns), ${r.aoVivo.video} video(s), ${r.aoVivo.documento} documento(s).`);
+        escrever(`  Backup do iPhone: ${r.backup.imagem} imagem(ns), ${r.backup.video} video(s).`);
+        if (r.jaComTexto > 0) escrever(`  ${r.jaComTexto} ja tinha(m) texto no momento da escrita: ignorada(s).`);
+        if (r.ilegiveis > 0) escrever(`  ${r.ilegiveis} com Conteudo Bruto ilegivel.`);
+        if (r.indiceIntegro === false) escrever('ATENCAO: o indice de busca ficou defasado depois da escrita.');
+        if (r.operacaoId !== null) {
+          escrever(`Para desfazer: malote operacao desfazer ${r.operacaoId} --inquilino ${inquilino} --chave <valor> --com-efeito --confirmo`);
+        }
+        if (!comEfeito) escrever('Nada foi escrito. Repita com --com-efeito --confirmo.');
+        return r.indiceIntegro === false ? 1 : 0;
       } finally {
         acervo.fechar();
       }

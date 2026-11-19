@@ -3,6 +3,7 @@ import { impressaoDeEntradas } from '../impressao.js';
 import { existsSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { TIPO_ADMINISTRATIVO } from './codigos-de-evento.js';
+import { legendaDoRegistroDeMidia } from './legenda.js';
 
 /**
  * Leitor de material exportado do WhatsApp: backup de dispositivo iOS.
@@ -591,6 +592,12 @@ export function lerMaterial(
               : (midiaPorChave.get(r.ZMEDIAITEM) as LinhaCrua | undefined);
           const duracaoDeclarada =
             typeof daMidia?.['ZMOVIEDURATION'] === 'number' ? daMidia['ZMOVIEDURATION'] : undefined;
+          // A legenda de foto e de video do backup mora no registro de midia (#1530): vira o texto da Mensagem quando a linha
+          // da Mensagem nao tem texto (nulo ou vazio). Documento nao: o titulo dele e o nome do arquivo.
+          if (mensagem.texto === null || mensagem.texto === '') {
+            const legenda = legendaDoRegistroDeMidia(daMidia === undefined ? undefined : serializarLinha(daMidia), tipo);
+            if (legenda !== undefined) mensagem.texto = legenda;
+          }
           mensagem.anexo = {
             tipo,
             caminhoNaOrigem: r.ZMEDIALOCALPATH,
