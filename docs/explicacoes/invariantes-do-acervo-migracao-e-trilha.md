@@ -14,6 +14,7 @@ tags: [explicacao, invariantes, Node]
 
 Regras e decisões do repo **com o motivo e a medição que as sustentam**, movidas do `CONTEXTO.md` para que a carga default da sessão fique pequena. Leia antes de mexer no assunto; o `CONTEXTO.md` aponta para cá e nomeia as regras mais perigosas.
 
+- **O par `mensagens.conteudo` numa linha de efeito é a legenda que o estoque gravou (#1530), e o `desfazer` o trata como tal.** O texto de uma Mensagem existente só muda por essa porta (nulo ou vazio para a legenda, uma vez, e o `desfazer` volta ao de antes); a Edição tem tabela própria e não muda o texto. Uma Operação futura que grave esse par com outro propósito herdaria a restauração do `desfazer`: ela precisa de natureza própria e de um caso próprio, ou de outro campo.
 - **A migração relê a forma gravada DENTRO da transação, e a transação é `IMMEDIATE`.** O servidor e cada ouvinte abrem o
   Registro para escrita no boot e reiniciam juntos: lendo a forma fora da transação deferida, dois abridores aplicavam o mesmo
   passo e o segundo morria com `table ... already exists` (código de saída 1, que o unit não reinicia). Reproduzido em

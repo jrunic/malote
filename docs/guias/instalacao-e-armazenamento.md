@@ -133,6 +133,8 @@ conferir que nenhuma linha aponta para caminho que não existe, subir. O dado em
 
 ## Notas de armazenamento e execução
 
+- **O texto de uma Mensagem de foto ou de vídeo é a legenda (#1530).** O que a pessoa escreve junto da mídia é o texto da Mensagem, e o texto nulo quer dizer que não há legenda. As Mensagens gravadas antes dessa versão ficam com o texto nulo até `legenda extrair` (ensaio por padrão): ele grava a legenda que o Conteúdo Bruto guarda, em lotes, com o ouvinte no ar, e `operacao desfazer` o reverte. Rode-o depois de uma cópia consistente do Acervo (`VACUUM INTO`); ele recusa se o índice de busca por texto já estiver defasado, e o produto não reconstrói esse índice.
+
 - **`anexos.caminho` é RELATIVO ao Destino de Mídia do Inquilino, por desenho — o
   Destino nunca entra no Acervo (mesma razão de `midia trazer`/`midia reprocessar`).
   Todo consumidor que toca o arquivo em disco resolve via `lerDestinoDeMidia` + `join`
