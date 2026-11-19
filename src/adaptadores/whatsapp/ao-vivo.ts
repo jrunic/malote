@@ -37,6 +37,7 @@ import { ehCifrada, naturezaDoStub, textoDoStub } from './stubs-ao-vivo.js';
 import { desembrulhar, VIRAM_MENSAGEM } from './conteudo-de-mensagem.js';
 import { citacaoParaGravar } from './citacao.js';
 import type { OrigemDaChegada } from '../../nucleo/chegada.js';
+import { legendaDeImagemOuVideo } from './legenda.js';
 
 /**
  * Recepcao ao vivo do WhatsApp: o evento vira escrita pelas portas do nucleo.
@@ -425,6 +426,10 @@ function textoDe(rotulada: Record<string, unknown> | undefined | null): string |
     const legenda = (documento as Record<string, unknown>)['caption'];
     if (typeof legenda === 'string' && legenda !== '') return legenda;
   }
+  // A legenda da imagem e do video (#1530) e o texto da Mensagem, como a do documento: ela chega no objeto da propria
+  // midia e a recepcao a guardava so no Conteudo Bruto. Vazia ou so de espacos nao e legenda (o texto segue nulo).
+  const legendaDeMidia = legendaDeImagemOuVideo(message);
+  if (legendaDeMidia !== undefined) return legendaDeMidia;
   // O CORPO da mensagem de conta comercial (#1235), nas tres posicoes medidas. Rodape, titulo, botoes, links e a
   // imagem do cabecalho ficam so no Conteudo Bruto.
   return (

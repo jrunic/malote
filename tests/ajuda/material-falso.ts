@@ -56,6 +56,8 @@ export interface MensagemFalsa {
   nomesDosCartoes?: string;
   /** ZPUSHNAME. NAO modelado — testemunha do Conteudo Bruto. */
   nomeTransmitido?: string;
+  /** ZTITLE do item de midia: a LEGENDA de foto e de video (#1530); no documento e o nome do arquivo. */
+  titulo?: string;
 }
 
 export interface ConversaFalsa {
@@ -186,7 +188,7 @@ export function backupFalso(conteudo: {
       );
       CREATE TABLE ZWAMEDIAITEM (
         Z_PK INTEGER PRIMARY KEY, ZMEDIALOCALPATH TEXT, ZFILESIZE INTEGER, ZLATITUDE REAL,
-        ZMOVIEDURATION INTEGER, ZVCARDSTRING TEXT, ZVCARDNAME TEXT
+        ZMOVIEDURATION INTEGER, ZVCARDSTRING TEXT, ZVCARDNAME TEXT, ZTITLE TEXT
       );
       CREATE TABLE ZWAMESSAGE (
         Z_PK INTEGER PRIMARY KEY, ZSTANZAID TEXT, ZCHATSESSION INTEGER, ZFROMJID TEXT,
@@ -221,8 +223,8 @@ export function backupFalso(conteudo: {
 
     const porMidia = chat.prepare(
       `INSERT INTO ZWAMEDIAITEM
-         (Z_PK, ZMEDIALOCALPATH, ZFILESIZE, ZLATITUDE, ZMOVIEDURATION, ZVCARDSTRING, ZVCARDNAME)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (Z_PK, ZMEDIALOCALPATH, ZFILESIZE, ZLATITUDE, ZMOVIEDURATION, ZVCARDSTRING, ZVCARDNAME, ZTITLE)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const porMensagem = chat.prepare(
       `INSERT INTO ZWAMESSAGE
@@ -236,7 +238,7 @@ export function backupFalso(conteudo: {
     let pkDeMidia = 1;
     for (const m of dados.mensagens) {
       let idDeMidia: number | null = null;
-      if (m.caminhoDeMidia !== undefined || m.cartoes !== undefined) {
+      if (m.caminhoDeMidia !== undefined || m.cartoes !== undefined || m.titulo !== undefined) {
         idDeMidia = pkDeMidia++;
         porMidia.run(
           idDeMidia,
@@ -246,6 +248,7 @@ export function backupFalso(conteudo: {
           m.duracaoDeMidia ?? null,
           m.cartoes ?? null,
           m.nomesDosCartoes ?? null,
+          m.titulo ?? null,
         );
       }
       const conversa = dados.conversas.find((c) => c.pk === m.chatSessionPk);
